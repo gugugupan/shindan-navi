@@ -2,6 +2,8 @@
 
 TCG new-release calendar (static single page) for https://shindan-navi.app, hosted on Cloudflare Pages (project `shindan-navi`).
 
+Working notes for people and coding agents: `CLAUDE.md` (architecture, owner decisions, gotchas) and the skills in `.claude/skills/` — `update-data` (refresh and publish the release data) and `find-product-image` (replace placeholders with real package images, helper `scripts/add_thumb.py`).
+
 ## Layout
 
 - `src/template.html` — page markup, styles and script; `/*DATA*/` and `/*OFFICIAL*/` are filled at build time
