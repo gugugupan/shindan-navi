@@ -30,13 +30,16 @@ Serves from `dist/`. GA only loads on `shindan-navi.app`, so local previews are 
 
 ## Deploy
 
+Pushing to `main` runs `.github/workflows/deploy.yml`: build (with GA) and `wrangler pages deploy` to the `shindan-navi` Pages project. Repo secrets `CLOUDFLARE_API_TOKEN` (Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID` are required. The workflow only publishes; it never changes data — data updates are a separate local step that ends in a reviewed commit.
+
+Manual deploy from a laptop still works:
+
 ```bash
 npx wrangler@4 login
-npx wrangler@4 pages project create shindan-navi --production-branch main
 ./scripts/deploy.sh   # GA4 measurement ID defaults to G-Q4NENX804G; override with GA_ID=...
 ```
 
-Then in the Cloudflare dashboard: Workers & Pages → shindan-navi → Custom domains → add `shindan-navi.app` (and `www.shindan-navi.app`, redirected to the apex with a Redirect Rule).
+Custom domain (one-time, already done): Workers & Pages → shindan-navi → Custom domains → `shindan-navi.app`; `www` redirects to the apex with a Redirect Rule.
 
 ## GA events
 
