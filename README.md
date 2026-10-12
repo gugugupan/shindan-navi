@@ -5,10 +5,25 @@ TCG new-release calendar (static single page) for https://shindan-navi.app, host
 ## Layout
 
 - `src/template.html` — page markup, styles and script; `/*DATA*/` and `/*OFFICIAL*/` are filled at build time
-- `data/items.json` — releases merged from カードラボ and トレカの地図 (snapshot 2026-10-12)
-- `data/official-links.json` — official product page overrides by item id
+- `data/items.json` — releases merged from カードラボ and トレカの地図; ids are stable (`i` + hash of title + normalised name)
+- `data/overrides.json` — hand-made fixes by item id (`url`, `thumb`, `name`, `date`, `approx`, `hide: true`); `_name` and `note` are labels for people. Applied by both the updater and the build, never overwritten
+- `data/meta.json` — date of the last data update (shown as 更新日, used as sitemap lastmod)
+- `data/update-report.md` — what the last update changed
 - `public/` — copied as-is into `dist/` (`thumbs/`, `favicon.svg`, `_headers`)
 - `brand/` — logo mark and lockup SVGs (wordmark glyphs outlined from Dela Gothic One, OFL)
+
+## Updating the data
+
+A local, reviewed step — GitHub Actions never touches data.
+
+```bash
+.venv/bin/pip install fonttools brotli pillow   # once
+.venv/bin/python -I scripts/update_data.py --dry-run   # see what would change
+.venv/bin/python -I scripts/update_data.py             # write items.json, meta.json, new thumbs, update-report.md
+git diff data/ && git add data public/thumbs && git commit -m "Data update YYYY-MM-DD" && git push   # push = publish
+```
+
+It scrapes カードラボ (daily tables) and トレカの地図 (this month + 5), matches them to existing items by id or by close name within 90 days (so date changes and small renames keep their id, thumbnail and links), downloads トレカの地図 images for new items or to replace `approx` ones, drops items released more than 30 days ago, and keeps upcoming items that vanished from both sources (listed in the report — hide them via overrides if cancelled). It aborts without writing anything if a source returns nothing or the release count falls below 70% of what is already known. Unknown title labels are listed in the report so `GAME` can be extended.
 
 ## Pages
 

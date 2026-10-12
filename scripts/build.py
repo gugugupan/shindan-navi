@@ -35,14 +35,16 @@ GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポ�
        ('dragonball','DBフュージョンワールド','ドラゴンボールスーパーカードゲーム フュージョンワールド','フュージョンワールド'),
        ('digimon','デジモン','デジモンカードゲーム','デジカ')]
 
-links=json.load(open(os.path.join(ROOT,'data/official-links.json')))
+overrides=json.load(open(os.path.join(ROOT,'data/overrides.json')))
 it=json.load(open(os.path.join(ROOT,'data/items.json')))
 keep=['id','date','game','name','pack','box','url','thumb','approx']
 data=[]
 for i in it:
+    ov=overrides.get(i['id'],{})
+    if ov.get('hide'): continue
     d={k:i.get(k,'') for k in keep}
-    if d['id'] in links: d['url']=links[d['id']]
-    elif not any(urllib.parse.urlparse(d['url']).netloc.replace('www.','').endswith(x) for x in OFFDOM): d['url']=''
+    d.update({k:v for k,v in ov.items() if k in keep})
+    if 'url' not in ov and not any(urllib.parse.urlparse(d['url']).netloc.replace('www.','').endswith(x) for x in OFFDOM): d['url']=''
     if d['thumb'] and not d['thumb'].startswith('/'): d['thumb']='/'+d['thumb']
     data.append(d)
 data.sort(key=lambda d:(d['date'],d['game']))
