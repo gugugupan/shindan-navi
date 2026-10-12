@@ -1,0 +1,15 @@
+{
+  "name": "新弾ナビ｜TCG・トレカ新弾 発売日カレンダー",
+  "short_name": "新弾ナビ",
+  "lang": "ja",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eceef4",
+  "theme_color": "#3a43d0",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

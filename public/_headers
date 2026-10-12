@@ -1,0 +1,1 @@
+# Keep caching at Cloudflare defaults: long-lived immutable rules on unhashed paths can pin stale or fallback responses at the edge.
