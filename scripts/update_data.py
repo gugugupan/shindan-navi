@@ -272,6 +272,10 @@ def merge(existing, scraped, overrides, today, report, dry):
     return out
 
 
+def today_iso():
+    return os.environ.get('TODAY') or datetime.date.today().isoformat()
+
+
 def yen_text(n):
     return f'{n:,}円' if n else ''
 
@@ -309,13 +313,23 @@ def apply_official(items, today, report, dry, log):
                 if e['date'] is None:
                     report['official_undated'].append(f"[{e['game']}] {e['name']} — {e.get('date_text') or '日付未定'}  {e.get('url') or e['source_page']}")
                 continue
+            dup = next((y for y in items if y['game'] == e['game'] and y['date'] == e['date'] and same_product_name(y, e)), None)
+            if dup:
+                log.append(f"official {key}: skipped duplicate 「{e['name']}」 = 「{dup['name']}」")
+                continue
+            if any(o is not e and o['date'] == e['date'] and not o.get('match') and o['kind'] in ADD_KINDS
+                   and plain(e['name']) != plain(o['name']) and plain(e['name']) in plain(o['name']) for o in result['entries']):
+                continue  # a more specific listing of the same product (e.g. with its edition) is on the same page
             new = new_from_official(e, dry)
             if new['id'] in by_id:
                 continue
             look = [y for y in items if y['game'] == e['game'] and y['date'] == e['date'] and y['id'] not in matched
                     and official.sim(y['name'], e['name']) >= 0.3]
-            flag = f"  ⚠️ 既存と似ています: {look[0]['name']}（重複なら overrides で hide）" if look else ''
-            report['official_new'].append(f"{e['date']}  [{e['game']}] {e['name']}{(' ' + new['pack']) if new['pack'] else ''}{flag}")
+            if look:
+                # looks like an item we already list that the official run did not confirm: a person decides
+                report['official_review'].append(f"{e['date']}  [{e['game']}] 公式「{e['name']}」 ≒ 既存「{look[0]['name']}」  {e.get('url') or e['source_page']}")
+                continue
+            report['official_new'].append(f"{e['date']}  [{e['game']}] {e['name']}{(' ' + new['pack']) if new['pack'] else ''}")
             items.append(new)
             by_id[new['id']] = new
             matched.add(new['id'])
@@ -329,13 +343,34 @@ def apply_official(items, today, report, dry, log):
     return items
 
 
+def plain(name):
+    """Letters and digits only, for spotting the same product written two ways."""
+    return re.sub(r'[^0-9a-z\u3040-\u30ff\u4e00-\u9fff]', '', unicodedata.normalize('NFKC', name or '').lower())
+
+
+def same_product_name(item, entry):
+    a, b = plain(item['name']), plain(entry['name'])
+    code = product_code(entry['name'])
+    if code and code == product_code(item['name']):
+        return True
+    if len(min(a, b, key=len)) >= 6 and (a in b or b in a):
+        return True
+    qa, qb = re.findall(r'「([^」]{2,})」', item['name']), re.findall(r'「([^」]{2,})」', entry['name'])
+    return bool(qa and qb and plain(qa[0]) == plain(qb[0]))
+
+
 def fold_official(x, e, report, dry):
     x['source'] = e['source']
     x['official_name'] = e['name']
     x['sources'] = sorted(set(x.get('sources') or []) | {'official'})
     if e['date'] and e['date'] != x['date']:
-        report['moved'].append(f"{x['date']} → {e['date']}  [{x['game']}] {x['name']}（公式）")
-        x['date'] = e['date']
+        gap = abs((datetime.date.fromisoformat(e['date']) - datetime.date.fromisoformat(x['date'])).days)
+        if gap > 60 or (e['date'] < today_iso() <= x['date']):
+            # official pages sometimes carry a stale or copied date; a big jump needs a person to look
+            report['date_conflict'].append(f"[{x['game']}] {x['name']}  既存 {x['date']} / 公式 {e['date']}  {e.get('url') or e['source_page']}")
+        else:
+            report['moved'].append(f"{x['date']} → {e['date']}  [{x['game']}] {x['name']}（公式）")
+            x['date'] = e['date']
     if e.get('pack_yen') and e['pack_yen'] != yen_int(x.get('pack')):
         if x.get('pack'):
             report['price'].append(f"[{x['game']}] {x['name']}  pack: {x.get('pack')} → {yen_text(e['pack_yen'])}（公式）")
@@ -375,7 +410,9 @@ def yen_int(text):
 
 
 def write_report(path, report, counts, unknown, today, log=()):
-    titles = [('new', '新規'), ('official_new', '公式サイトから追加'), ('moved', '発売日の変更'), ('price', '価格の変更'), ('image', '画像を取得/差し替え'),
+    titles = [('new', '新規'), ('official_new', '公式サイトから追加'),
+              ('official_review', '公式にあるが既存と似ている（未追加・要確認：別商品なら手動で追加、同じなら対応不要）'), ('moved', '発売日の変更'),
+              ('date_conflict', '公式と既存で発売日が大きく違う（未適用・要確認）'), ('price', '価格の変更'), ('image', '画像を取得/差し替え'),
               ('official_unconfirmed', '公式サイトで確認できなかった今後の商品（公式を設定済みのタイトルのみ）'),
               ('official_undated', '公式で発表済み・発売日未定（未掲載）'),
               ('missing', 'ソースから消えた今後の商品（残しています。不要なら overrides で hide）'),
@@ -407,7 +444,7 @@ def main():
     if len(scraped) < MIN_RATIO * upcoming_before:
         sys.exit(f'abort: only {len(scraped)} releases scraped vs {upcoming_before} known for this month onward — nothing written')
     overrides = json.load(open(os.path.join(DATA, 'overrides.json')))
-    report = {k: [] for k in ('new', 'official_new', 'moved', 'price', 'image', 'official_unconfirmed', 'official_undated',
+    report = {k: [] for k in ('new', 'official_new', 'official_review', 'moved', 'date_conflict', 'price', 'image', 'official_unconfirmed', 'official_undated',
                               'missing', 'dropped', 'noimage')}
     items = merge(existing, scraped, overrides, today, report, dry)
     log = []

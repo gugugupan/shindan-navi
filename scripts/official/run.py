@@ -17,6 +17,7 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
@@ -64,7 +65,7 @@ Reply as {{"products": [{{
   "tentative": true when the name, date or price is provisional ((仮), 予定, 未定)
 }}]}}
 
-Rules: Japanese and English editions are separate products. Copy values from the page; never guess. Skip events, campaigns, card reveals and prizes that are not sold. Return {{"products": []}} if there are none.
+Rules: Japanese and English editions are separate products. "name" is the full product name including the set name (e.g. "Marvel: Darkhold Destiny Bundle", not just "Bundle"). A set or expansion by itself is not a product — list its packs, decks, boxes and bundles instead, and skip sets whose products are not named yet. Copy values from the page; never guess. Skip events, campaigns, card reveals and prizes that are not sold. Return {{"products": []}} if there are none.
 
 Page text:
 {text}"""
@@ -113,8 +114,39 @@ def parse_date(text):
 
 
 def yen(text):
-    m = re.search(r'(\d[\d,]*)\s*円', text or '')
-    return int(m.group(1).replace(',', '')) if m else None
+    if isinstance(text, (int, float)) and not isinstance(text, bool):
+        return int(text) or None
+    m = re.search(r'[¥￥]\s*(\d[\d,]*)|(\d[\d,]*)\s*円', str(text or ''))
+    return int((m.group(1) or m.group(2)).replace(',', '')) if m else None
+
+
+def infer_year(text, since, name='', announced=None):
+    """'11月14日（土）' without a year. With the announcement date, the first such day on or after it;
+    otherwise a year written in the product name, else the occurrence closest to `since`."""
+    m = re.search(r'(\d{1,2})\s*月\s*(\d{1,2})\s*日', text or '')
+    if not m:
+        return None
+    if announced and parse_date(announced):
+        a = datetime.date.fromisoformat(parse_date(announced))
+        for y in (a.year, a.year + 1):
+            try:
+                d = datetime.date(y, int(m.group(1)), int(m.group(2)))
+            except ValueError:
+                continue
+            if d >= a:
+                return d.isoformat()
+    ref = datetime.date.fromisoformat(since)
+    hinted = re.search(r'(20\d\d)', name or '')
+    years = [int(hinted.group(1))] if hinted else [ref.year - 1, ref.year, ref.year + 1]
+    best = None
+    for y in years:
+        try:
+            d = datetime.date(y, int(m.group(1)), int(m.group(2)))
+        except ValueError:
+            continue
+        if best is None or abs((d - ref).days) < abs((best - ref).days):
+            best = d
+    return best.isoformat() if best else None
 
 
 def clean_entry(e, game, source):
@@ -162,6 +194,73 @@ def from_pokemon_api(src, page, since):
                         'url': urllib.parse.urljoin('https://www.pokemon-card.com/', p.get('link_detailPage') or ''),
                         'image': urllib.parse.urljoin('https://www.pokemon-card.com/', p.get('tumbsImg') or ''),
                         'tentative': False, 'source': 'pokemon_api', 'source_page': page['url'].format(page=n)})
+    return out
+
+
+def _get(rec, path):
+    for part in path.split('.'):
+        rec = rec.get(part) if isinstance(rec, dict) else None
+    return rec
+
+
+def from_records(src, page, since):
+    """Structured product records, no LLM: a JSON endpoint ("json_path") or objects embedded in the page ("regex").
+    "fields" maps name / date / price / box / type / code / image / url to record keys;
+    "url_template" / "image_template" are str.format templates over the record (keys with - become _)."""
+    records = []
+    for url in page.get('urls') or [page['url']]:
+        try:
+            body = fetch(url, headers=page.get('headers')).decode('utf-8', 'ignore')
+        except urllib.error.HTTPError as ex:
+            if ex.code == 404 and page.get('urls'):
+                continue  # paged endpoints end with 404
+            raise
+        if page.get('regex'):
+            for m in re.finditer(page['regex'], body, re.S):
+                raw = m.group(1)
+                if page.get('single_quotes'):
+                    raw = re.sub(r"'([^'\\]*)'", r'"\1"', raw)
+                try:
+                    records.append(json.loads(raw))
+                except ValueError:
+                    continue
+        else:
+            data = json.loads(body)
+            records += (_get(data, page['json_path']) if page.get('json_path') else data) or []
+    f = page['fields']
+    out = []
+    for rec in records or []:
+        flat = {k.replace('-', '_'): v for k, v in rec.items()} if isinstance(rec, dict) else {}
+        date_text = str(_get(rec, f['date']) or '') if f.get('date') else ''
+        date = parse_date(date_text) or (infer_year(date_text, since, str(_get(rec, f['name']) or ''),
+                                                    str(_get(rec, f['announced']) or '') if f.get('announced') else None)
+                                         if page.get('infer_year') else None)
+        if date and date < since:
+            continue
+        if not date:
+            ym = re.search(r'(20\d\d)\s*年\s*(\d{1,2})\s*月', date_text)
+            if not ym or f'{int(ym.group(1)):04d}-{int(ym.group(2)):02d}' < since[:7]:
+                continue
+        link = ''
+        if page.get('url_template') and all(flat.get(k) in v for k, v in (page.get('url_when') or {}).items()):
+            link = page['url_template'].format(**flat)
+        elif f.get('url') and _get(rec, f['url']):
+            link = urllib.parse.urljoin(page.get('site') or page['url'], str(_get(rec, f['url'])))
+        image = ''
+        if page.get('image_template'):
+            image = page['image_template'].format(**flat)
+        elif f.get('image') and _get(rec, f['image']):
+            raw = str(_get(rec, f['image']))
+            base = page.get('image_base') if page.get('image_base') and not raw.startswith(('/', 'http')) else page.get('site') or page['url']
+            image = urllib.parse.urljoin(base, raw)
+        name = str(_get(rec, f['name']) or '').strip()
+        if not name:
+            continue
+        out.append({'game': src['game'], 'name': name, 'date': date, 'date_text': date_text,
+                    'pack_yen': yen(_get(rec, f['price'])) if f.get('price') else None,
+                    'box_yen': yen(_get(rec, f['box'])) if f.get('box') else None,
+                    'type': str(_get(rec, f['type']) or '') if f.get('type') else '', 'url': link or None, 'image': image or None,
+                    'tentative': not date, 'source': 'records', 'source_page': page['url'], 'editions': []})
     return out
 
 
@@ -296,6 +395,8 @@ def run_game(key, src, items, today, since, log, skip_ids=()):
         try:
             if page['kind'] == 'pokemon_api':
                 got = from_pokemon_api(src, page, since)
+            elif page['kind'] == 'records':
+                got = from_records(src, page, since)
             elif page['kind'] == 'news':
                 got = from_news(src, page, since, today, log)
             else:
@@ -359,7 +460,7 @@ def report(results, today, since, log):
 def main():
     load_env()
     sources = json.load(open(os.path.join(HERE, 'sources.json')))
-    keys = sys.argv[sys.argv.index('--games') + 1].split(',') if '--games' in sys.argv else list(sources)
+    keys = sys.argv[sys.argv.index('--games') + 1].split(',') if '--games' in sys.argv else [k for k in sources if not k.startswith('_')]
     today = datetime.date.today()
     since = today.isoformat()
     items = json.load(open(os.path.join(ROOT, 'data/items.json')))

@@ -1,27 +1,561 @@
 {
-  "pokemon": {
-    "game": "ポケモンカード",
-    "full_name": "ポケモンカードゲーム",
-    "pages": [
-      {"kind": "pokemon_api", "url": "https://www.pokemon-card.com/products/resultAPI.php?page={page}", "pages": 3,
-       "note": "official product DB; only lists released products"},
-      {"kind": "news", "url": "https://www.pokemon-card.com/info/", "link_prefix": "https://www.pokemon-card.com/info/0", "max_links": 40, "max_articles": 10,
-       "note": "upcoming products are announced here first"}
-    ]
-  },
-  "onepiece": {
-    "game": "ONE PIECE",
-    "full_name": "ONE PIECEカードゲーム",
-    "pages": [
-      {"kind": "listing", "url": "https://www.onepiece-cardgame.com/products/"}
-    ]
-  },
-  "mtg": {
-    "game": "MTG",
-    "full_name": "マジック：ザ・ギャザリング",
-    "pages": [
-      {"kind": "listing", "url": "https://mtg-jp.com/products/", "follow": "links", "max_follow": 5,
-       "note": "the list names sets; each set page lists the boosters, decks and bundles"}
-    ]
-  }
+ "_comment": "Official pages per title for scripts/official/run.py and update_data.py. Kinds: records (structured JSON / embedded objects, no LLM), pokemon_api, listing (LLM; \"follow\": \"links\" opens linked set pages), news (Jev picks product news, LLM reads articles). Not configured: Z/X (zxtcg.com refuses connections from outside Japan), My Little Pony (nothing upcoming). MTG English-only products are read from the Japanese site (its set articles list them); magic.wizards.com listed bare sets and duplicated them, so it is not used.",
+ "pokemon": {
+  "game": "ポケモンカード",
+  "full_name": "ポケモンカードゲーム",
+  "pages": [
+   {
+    "kind": "pokemon_api",
+    "url": "https://www.pokemon-card.com/products/resultAPI.php?page={page}",
+    "pages": 3,
+    "note": "official product DB; only lists released products"
+   },
+   {
+    "kind": "news",
+    "url": "https://www.pokemon-card.com/info/",
+    "link_prefix": "https://www.pokemon-card.com/info/0",
+    "max_links": 40,
+    "max_articles": 10,
+    "note": "upcoming products are announced here first"
+   }
+  ]
+ },
+ "onepiece": {
+  "game": "ONE PIECE",
+  "full_name": "ONE PIECEカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.onepiece-cardgame.com/products/"
+   }
+  ]
+ },
+ "mtg": {
+  "game": "MTG",
+  "full_name": "マジック：ザ・ギャザリング",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://mtg-jp.com/products/",
+    "follow": "links",
+    "max_follow": 5,
+    "note": "the list names sets; each set page lists the boosters, decks and bundles"
+   }
+  ]
+ },
+ "yugioh": {
+  "game": "遊戯王OCG",
+  "full_name": "遊戯王OCG デュエルモンスターズ",
+  "pages": [
+   {
+    "kind": "records",
+    "url": "https://www.yugioh-card.com/japan/products/",
+    "regex": "p\\[\\d+\\]=(\\{.*?\\});",
+    "single_quotes": true,
+    "fields": {
+     "name": "title",
+     "date": "release-date",
+     "price": "price-intax",
+     "type": "class-name"
+    },
+    "url_template": "https://www.yugioh-card.com/japan/products/{url}/",
+    "url_when": {
+     "detail": [
+      "page",
+      "ditem"
+     ]
+    },
+    "image_template": "https://www.yugioh-card.com/japan/products/{thumbnail}",
+    "note": "all products are an inline <script> array p[n]={...}; no XHR endpoint"
+   }
+  ],
+  "notes": "200 with curl, no block. Needs a new kind (inline_js / regex over <script>), no XHR endpoint exists — the data is in the page itself. Prices are 「1パック 198円」 strings. /japan/news/ is static but only regulation/event notices, not useful for products. yu-gi-oh.jp not needed."
+ },
+ "rushduel": {
+  "game": "遊戯王ラッシュデュエル",
+  "full_name": "遊戯王ラッシュデュエル",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.konami.com/yugioh/rushduel/products/",
+    "note": "static HTML, newest first: category, name, date, price, くわしく link"
+   }
+  ],
+  "notes": "200 with curl. Product names carry no 遊戯王RD prefix (the aggregator item is '遊戯王RD 情熱のジョインテック'). News /rushduel/news/{n} is campaigns/rules only."
+ },
+ "duelmasters": {
+  "game": "デュエル・マスターズ",
+  "full_name": "デュエル・マスターズ トレーディングカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://dm.takaratomy.co.jp/product/",
+    "note": "= 拡張パック tab (same list as /product/expansion/); static, newest first, code + name + 発売日 + price"
+   },
+   {
+    "kind": "listing",
+    "url": "https://dm.takaratomy.co.jp/product/deck/"
+   },
+   {
+    "kind": "listing",
+    "url": "https://dm.takaratomy.co.jp/product/others/",
+    "note": "神アート (DMART) and other sets, often with 「2026年12月中旬」 style dates"
+   },
+   {
+    "kind": "news",
+    "url": "https://dm.takaratomy.co.jp/news/products/",
+    "link_prefix": "https://dm.takaratomy.co.jp/product/",
+    "max_links": 20,
+    "max_articles": 5,
+    "note": "optional: 商品情報 news items link straight to product pages (relative /product/xxx/); repeated links to the same product dedupe by href"
+   }
+  ],
+  "notes": "200 with curl, WordPress. /product/ does NOT include decks/others — use the category URLs. No DM26-RP4 listed yet. RSS /product/feed/ exists (all categories, newest posts) if an rss kind is added later. Product pages are long (all history); upcoming items are at the top, within page_text's 40k limit."
+ },
+ "weiss": {
+  "game": "ヴァイスシュヴァルツ",
+  "full_name": "ヴァイスシュヴァルツ",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://ws-tcg.com/products/",
+    "note": "static; 'All Products' block newest first (page 1 reaches 2027-01-22 back to 2026-10-16); product links /products/{slug}/"
+   },
+   {
+    "kind": "listing",
+    "url": "https://ws-rose.com/products/",
+    "note": "ヴァイスシュヴァルツロゼ (WSR) — our data files WSR items under ヴァイスシュヴァルツ; dates as 2026/10/23"
+   },
+   {
+    "kind": "news",
+    "url": "https://ws-tcg.com/information/products/",
+    "link_prefix": "https://ws-tcg.com/information/",
+    "max_links": 30,
+    "max_articles": 6,
+    "note": "optional: 「商品情報 … 公開」 posts announce new sets; most other posts are sign-card reveals (Jev should drop)"
+   }
+  ],
+  "notes": "All 200 with curl. ws-tcg.com/products/ also has a 'Latest Products' carousel that repeats the newest items (dedupe handles it). No price in the list — prices are on each product page; add \"follow\": \"links\" (max_follow ~8) if prices are wanted. ws-tcg.com/information/ (all) is sparse."
+ },
+ "wsblau": {
+  "game": "ヴァイスシュヴァルツブラウ",
+  "full_name": "ヴァイスシュヴァルツブラウ",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://ws-blau.com/item/",
+    "note": "/products/ is 404; the list is /item/ (static, newest first, 98 items, 3 pages)"
+   }
+  ],
+  "notes": "200 with curl. No price in the list (on item pages; use follow links if needed). News at https://ws-blau.com/news/ if announcements are wanted."
+ },
+ "vanguard": {
+  "game": "ヴァンガード",
+  "full_name": "カードファイト!! ヴァンガード",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://cf-vanguard.com/products/",
+    "note": "static 'NEW RELEASE' block: 【code】 name, 2026/11/20(金) 発売, price; product pages /products/{booster|trial}/{code}/"
+   }
+  ],
+  "notes": "200 with curl. The NEW RELEASE block mixes card products with many supplies (deck holders, rubber mats, sleeves) — classifier must drop or tag SUPPLY. Names include furigana in parentheses, e.g. 運命星戦(うんめいせいせん). cf-vanguard.com/news/ redirects to an anime microsite; not useful."
+ },
+ "battlespirits": {
+  "game": "バトルスピリッツ",
+  "full_name": "バトルスピリッツ",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.battlespirits.com/product/",
+    "note": "/products/ (plural) 404s; /product/ is static, newest first: type, [code]name, 発売日, ¥price, 詳細情報"
+   }
+  ],
+  "notes": "200 with curl but the page is ~735 KB (whole history); upcoming items are first so page_text's 40k cut is fine. Premium Bandai items use お届け予定日 「2026年2月発送予定」 instead of 発売日. News index https://www.battlespirits.com/news/ (link_prefix https://www.battlespirits.com/news/2026/) is mostly campaigns."
+ },
+ "wixoss": {
+  "game": "WIXOSS",
+  "full_name": "WIXOSS -ウィクロス-",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.takaratomy.co.jp/products/wixoss/product/",
+    "note": "static, newest first: 拡張パック「name」 発売日：… 希望小売価格：￥440"
+   }
+  ],
+  "notes": "200 with curl. The list omits the product code (our item has 〔WX26-P2〕), so matching relies on the name. /products/wixoss/news/ is 404; there is a WordPress feed at /products/wixoss/feed/."
+ },
+ "vobaca": {
+  "game": "バボカ!!",
+  "full_name": "ハイキュー!! バボカ!! BREAK",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.takaratomy.co.jp/products/haikyuvobacabreak/product/",
+    "note": "static (Vue pagination, but all items are in the HTML): code, name, category, 発売日, price; ?cat=pack / ?cat=deck / ?cat=peripheral filters exist"
+   }
+  ],
+  "notes": "200 with curl. Top page https://www.takaratomy.co.jp/products/haikyuvobacabreak/ also shows both items; news at /products/haikyuvobacabreak/news/."
+ },
+ "unionarena": {
+  "game": "UNION ARENA",
+  "full_name": "UNION ARENA（ユニオンアリーナ）",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.unionarena-tcg.com/jp/products/",
+    "note": "static HTML, newest first: each card has type, name, 発売日 YYYY.MM.DD, price, ./boosters|decks|other/*.php link and img_thumbnail.png"
+   }
+  ],
+  "notes": "No JS needed. Page is ~226 KB and page_text is capped at 40,000 chars; the upcoming block starts ~11,000 chars in (after the title filter list), so it fits, but older items get cut, which is fine. The list does not show set codes (UA57BT, EX17BT...); they are only on the set pages / cardlist. Some entries show 予約受付期間 instead of 発売日 (premium-bandai style sets) and should be treated as undated."
+ },
+ "gundam": {
+  "game": "ガンダム",
+  "full_name": "ガンダムカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.gundam-gcg.com/jp/products/list.php",
+    "note": "static full product list, newest first: name with [GDxx] code, 発売日 YYYY.M.D, メーカー希望小売価格, link to /jp/products/gdxx.html, thumbnail"
+   }
+  ],
+  "notes": "No JS needed, page_text ~4.4 KB. /jp/products/ (the index) only shows a carousel of recent sets and lacks GD07; use list.php. Filter tabs are ?subcategory=product&tag=BOOSTERPACK etc. if ever needed; page 1 already has everything upcoming."
+ },
+ "dragonball": {
+  "game": "DBフュージョンワールド",
+  "full_name": "ドラゴンボールスーパーカードゲーム フュージョンワールド",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.dbs-cardgame.com/fw/jp/products/",
+    "note": "static; has a separate 今後発売予定の商品 (#comingsoon) block at the bottom with name [FBxx]/[FSxx], 発売日, price, /fw/jp/products/01_NNN.html link and image"
+   }
+  ],
+  "notes": "No JS needed, page_text ~4 KB. The 発売中 block above is paginated (?page=2#available) but irrelevant for upcoming items."
+ },
+ "digimon": {
+  "game": "デジモン",
+  "full_name": "デジモンカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://digimoncard.com/products/",
+    "note": "static full list, newest first: category, name with code, 発売日 or 発送時期, price, img_pkg.png"
+   }
+  ],
+  "notes": "No JS needed. Page is ~309 KB; page_text hits the 40,000-char cap but upcoming items are within the first ~1,000 chars. Product cards have no link to their own page (only a カードリスト link); set pages exist at /products/pack/ver27/ etc. (banner links at top). Official names say スターターデッキ where our data says スタートデッキ. Premium-bandai items use 発送時期 instead of 発売日."
+ },
+ "lorcana": {
+  "game": "ロルカナ",
+  "full_name": "ディズニー・ロルカナ・トレーディングカードゲーム",
+  "pages": [
+   {
+    "kind": "news",
+    "url": "https://www.takaratomy.co.jp/products/disneylorcana/news/products/",
+    "link_prefix": "https://www.takaratomy.co.jp/products/disneylorcana/news/products/",
+    "max_links": 20,
+    "max_articles": 5,
+    "note": "商品情報 news category; titles like 「10月16日（金）発売予定「ハイぺリアシティ」収録カードを全公開」. Fallback that works with run.py as is."
+   }
+  ],
+  "notes": "Static HTML, no block. Without follow_depth 2 the plain listing+follow reaches set pages that have no date. Official spelling is ハイぺリアシティ with a hiragana ぺ and a zero-width space (U+200B) in titles — normalise before matching. Company-wide pages (/release/product/, /products/category/trading_card.html) do not list Lorcana sets with dates."
+ },
+ "conan": {
+  "game": "名探偵コナン",
+  "full_name": "名探偵コナントレーディングカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.takaratomy.co.jp/products/conan-cardgame/products/",
+    "note": "static product list: name with CT-Pxx/CT-Dxx code, 発売日：YYYY年M月D日, 希望小売価格, link to /product/ct-pxx"
+   }
+  ],
+  "notes": "No JS needed, page_text ~8.5 KB. Note the path is /products/ (plural); /product/ redirects to the title top. Name in the list is 「拡張パック CT-P11「月下のSHOW TIME!」」 vs our 'Case-Booster11 月下のSHOW TIME！' — match on the CT-P11 code."
+ },
+ "horobeat": {
+  "game": "ホロビート",
+  "full_name": "ホロビートカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.takaratomy.co.jp/products/horobeat-cardgame/",
+    "note": "single-page site; the 商品情報 section holds all products. Product names are only in <img alt> (e.g. 'HB-BP01 ホロビートカードゲーム 拡張パック第一弾 ホロビート'), dates/prices in text"
+   }
+  ],
+  "notes": "No JS, no product sub-pages (only ./news/ and ./corocorobase-2026/). Body text is furigana-annotated, so page_text splits sentences into one-word lines (発売日：2026年11月14日 itself stays intact). Names come from image alt text, which page_text keeps as ![alt](src); each name is repeated 4x (pc/sp images). News index ./news/ exists if ever needed."
+ },
+ "shadowverse": {
+  "game": "Shadowverse EVOLVE",
+  "full_name": "Shadowverse EVOLVE（シャドウバース エボルヴ）",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://shadowverse-evolve.com/products/",
+    "note": "WordPress, static, newest first: name, 発売日 YYYY年M月D日, pack/box price, /products/<code>/ link, KV image"
+   }
+  ],
+  "notes": "No JS, no block, page_text ~2.6 KB. Category filters exist at /products/category/booster-pack/, built-deck/, goods/ but the all-products page already covers them."
+ },
+ "rebirth": {
+  "game": "Reバース",
+  "full_name": "Reバース for you",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://rebirth-fy.com/products/others/",
+    "note": "その他 category (sets); name, category, 'YYYY年MM月DD日(曜) 発売', link"
+   },
+   {
+    "kind": "listing",
+    "url": "https://rebirth-fy.com/products/booster-pack/",
+    "note": "booster category, same layout"
+   },
+   {
+    "kind": "listing",
+    "url": "https://rebirth-fy.com/products/trial-deck/",
+    "note": "trial deck category, same layout"
+   }
+  ],
+  "notes": "The combined list /products/category/ shows every category with dates but is served with HTTP 404 status (WordPress quirk; body is the real page), so run.py's urllib fetch would raise — use the three category pages (HTTP 200) instead, or let fetch accept a 404 body. /products/ itself is only a grid of title icons with no dates; /product/ is a real 404. News index /news/ (link_prefix https://rebirth-fy.com/news/products/) only has card-list posts for released sets. The line looks wound down (ありがとうセット = farewell set)."
+ },
+ "divinecross": {
+  "game": "DIVINE CROSS",
+  "full_name": "ディヴァインクロス（DIVINE CROSS）",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://divinecross.jp/products/",
+    "note": "WordPress list, newest first; static HTML has name + 発売日 + card counts and a 564x317 image per product. No price on the official site (list or detail). Upcoming items all sit on page 1 (of 10)."
+   }
+  ],
+  "notes": "No block. Official names drop the 'DIVINE CROSS' prefix and add 'ブースターパック' (e.g. 'ワナクリ2 ブースターパック' vs our 'DIVINE CROSS ワナクリ２'; full-width ２ in our data). Detail pages (/products/post-225-2/ etc.) only add 1パック6枚/1BOX20パック, no price."
+ },
+ "osica": {
+  "game": "OSICA",
+  "full_name": "OSICA（オシカ）トレーディングカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.osicatcg.com/products/list/",
+    "follow": "links",
+    "max_follow": 2,
+    "note": "the list names one series per row (title + 'YYYY.M.D 発売'); the series page (/products/<id>/) lists the starter deck, booster pack and supplies, each with 発売日 and 販売価格"
+   }
+  ],
+  "notes": "No block, static WordPress. /products/ (products-top) has the same first 6 series; /products/list/ is the full list. Series pages also contain supplies (sleeves), which classify() should drop or keep as supply."
+ },
+ "builddivide": {
+  "game": "ビルディバイド",
+  "full_name": "ビルディバイド -ブライト-",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://tcg.build-divide.com/bright/products",
+    "note": "static list, newest first: name, 発売日, pack price and box price (税込) per product"
+   }
+  ],
+  "notes": "No block. Detail pages are /bright/products/<id>. Price and date are in the list, so no follow is needed."
+ },
+ "xrossstars": {
+  "game": "Xross Stars",
+  "full_name": "Xross Stars（クロススターズ）",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://xross-stars.com/product",
+    "note": "Next.js but server-rendered: visible text has category, name, 発売日 YYYY/MM/DD and 希望小売価格 per product"
+   }
+  ],
+  "notes": "No block. The same data is in the RSC flight payload (self.__next_f.push) as JSON objects {slug, name, release_date (UTC ISO, e.g. 2026-10-29T15:00:00Z = 10/30 JST), price (int), thumbnail_url, image_url}. A future 'next_flight' kind could parse it without the LLM. Detail link = https://xross-stars.com/product/<slug>. The list also has many supplies (playmats, sleeves, card cases) on the same dates."
+ },
+ "kamitsubaki": {
+  "game": "KAMITSUBAKI",
+  "full_name": "KAMITSUBAKI CARD GAME（神椿TCG）",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://tcg.kamitsubaki.jp/products/",
+    "note": "static list (ALL tab): category, name, 【内容】, 発売日 'YYYY.M.D', 価格"
+   }
+  ],
+  "notes": "No block. The news index (/news/) has no product announcements (errata, events, tournaments only); the 2026 annual schedule (/news/2212/) is a single image. So the products page is the only usable official source, and its vol.7 date can't be trusted. The rule layer will drop vol.7 as before 'since' (wrong date), and the デラックスセット has no official source."
+ },
+ "ultraman": {
+  "game": "ウルトラマン",
+  "full_name": "ウルトラマン カードゲーム",
+  "pages": [
+   {
+    "kind": "records",
+    "urls": [
+     "https://api.ultraman-cardgame.com/api/v1/jp/card_bundles/categories/expansion_pack?page=1",
+     "https://api.ultraman-cardgame.com/api/v1/jp/card_bundles/categories/pre_constructed_deck?page=1",
+     "https://api.ultraman-cardgame.com/api/v1/jp/card_bundles/categories/others?page=1"
+    ],
+    "url": "https://ultraman-cardgame.com/",
+    "headers": {
+     "Referer": "https://ultraman-cardgame.com/"
+    },
+    "json_path": "data",
+    "fields": {
+     "name": "detail.caption_name",
+     "date": "detail.released_at",
+     "price": "detail.price",
+     "image": "detail.thumbnail_image_url",
+     "type": "type.value"
+    },
+    "url_template": "https://ultraman-cardgame.com/page/jp/product/product-detail/{id}",
+    "note": "product DB behind the Nuxt product list; new sets appear in the news API first (not read yet)"
+   }
+  ],
+  "notes": "No block. The /page/jp/products/products-list URL is a 404; the real list page is /page/jp/product/product-list (JS-rendered). Prices are strings like '242円（税込）' with mixed full-width/half-width parentheses. released_at is 'YYYY-MM-DD HH:MM:SS'. The API answered without the Referer header too, but send it to be polite."
+ },
+ "godzilla": {
+  "game": "ゴジラ",
+  "full_name": "ゴジラ カードゲーム（GODZILLA CARD GAME）",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://godzilla-cardgame.com/products/",
+    "note": "static WordPress list, newest first: category (拡張パック/構築デッキ/周辺商品), name, 発売日, 希望小売価格; 3 pages, upcoming items on page 1"
+   }
+  ],
+  "notes": "No block. Page 1 is mostly Bushiroad sleeves and deck holders (周辺商品) dated 11/6, which classify() should drop. Detail slugs: /products/sd03/ etc."
+ },
+ "palworld": {
+  "game": "パルワールド",
+  "full_name": "パルワールド オフィシャルカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://palworld-official-cardgame.com/products/",
+    "follow": "links",
+    "max_follow": 3,
+    "note": "list has name, category and 発売日 'YYYY.MM.DD' but no price; set pages (/products/td03 etc.) add 希望小売価格 (1個 / 1ボックス)"
+   }
+  ],
+  "notes": "No block. /products/ redirects to /products. The two trial decks are a single official entry and need edition splitting to match our two items. English/Chinese sites exist (en.palworld-official-cardgame.com); use JP only."
+ },
+ "lovelive": {
+  "game": "ラブライブ！OCG",
+  "full_name": "ラブライブ！シリーズ オフィシャルカードゲーム",
+  "pages": [
+   {
+    "kind": "records",
+    "urls": [
+     "https://llofficial-cardgame.com/manage/card-list-user/products?page=1&per_page=10",
+     "https://llofficial-cardgame.com/manage/card-list-user/products?page=2&per_page=10"
+    ],
+    "url": "https://llofficial-cardgame.com/products/",
+    "site": "https://llofficial-cardgame.com/",
+    "json_path": "items",
+    "infer_year": true,
+    "fields": {
+     "name": "name",
+     "date": "release_date",
+     "price": "price",
+     "url": "url",
+     "image": "image",
+     "announced": "post_date"
+    },
+    "image_base": "https://llofficial-cardgame.com/wordpress/wp-content/images/thumb/",
+    "note": "XHR behind /products/; dates usually have no year"
+   }
+  ],
+  "notes": "/products/ static HTML only shows 読み込み中... (JS-rendered) - use the JSON endpoint. No block. The site also has /schedule/ (also JS) and /news/category/products/ (static, but sparse)."
+ },
+ "fftcg": {
+  "game": "FFTCG",
+  "full_name": "ファイナルファンタジー・トレーディングカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.square-enix-shop.com/jp/ff-tcg/news/fftcg_2026_schedule.html",
+    "note": "official yearly release schedule; static HTML, 商品発売スケジュール table + one section per set with date and box image"
+   },
+   {
+    "kind": "listing",
+    "url": "https://www.square-enix-shop.com/jp/ff-tcg/news/fftcg_2027_schedule.html",
+    "note": "2027 schedule (currently 英雄の交響曲 3/26). URL has the year: add fftcg_2028_schedule.html when products/index.html links it"
+   }
+  ],
+  "notes": "No prices anywhere on the official site (schedule and products/booster.html both lack 円) - price stays from aggregators. Product images are relative (img/opus30_box.png). products/index.html just links the schedule pages. No block."
+ },
+ "fab": {
+  "game": "Flesh and Blood",
+  "full_name": "フレッシュ＆ブラッド",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://fabtcg.com/ja/coming-soon/",
+    "follow": "links",
+    "max_follow": 5,
+    "note": "近日公開予定: names + dates only; each product page has 発売日, 希望小売価格 (¥ JPY), SKU (-JP) and image"
+   }
+  ],
+  "notes": "https://fabtcg.com/jp redirects to the English root; the Japanese site is /ja/. /ja/coming-soon/ redirects to the percent-encoded /ja/近日公開予定/ (fine with urllib). Product URLs are percent-encoded Japanese slugs. Prices are written \"¥3,500 JPY\" (no 円) so the yen() fallback regex will miss them - rely on LLM price fields. No block (WordPress, static)."
+ },
+ "harrypotter": {
+  "game": "Harry Potter",
+  "full_name": "Harry Potter カードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://tcg.movic.jp/harrypotter/category/products/",
+    "note": "商品情報 category: every product with 発売日 and 希望小売価格 in the static HTML, newest first, banner image per entry"
+   }
+  ],
+  "notes": "Static WordPress, no block. Images are wide banners (harrypotter_cg_banner_*.jpg), not package shots. Only 6 products total, so no follow needed."
+ },
+ "acg": {
+  "game": "アニマルカードゲーム",
+  "full_name": "アニマルカードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://acgtcg.com/products.html",
+    "follow": "links",
+    "max_follow": 4,
+    "note": "list has name + 発売日 (［予定］); price and box image only on detail pages products_NN.html / products_TDn.html"
+   }
+  ],
+  "notes": "Plain static HTML, no block. Every detail link text is just 詳細はこちら (the product name precedes it in the text). Images have no alt text. Homepage お知らせ also logs product updates."
+ },
+ "fanstars": {
+  "game": "ファンスターズリーグ",
+  "full_name": "プロ野球 ファンスターズリーグ",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://www.fanstars-league.com/products/",
+    "note": "section 今後発売予定の商品 lists name, 発売日 and price; product pages /products/boosters/bbc04.php etc."
+   }
+  ],
+  "notes": "Static HTML (Bandai), no block. Prices written ￥550(税込) without 円 - yen() fallback misses them. One goods item uses a month-only date (2026.04)."
+ },
+ "gotoubun": {
+  "game": "五等分の花嫁",
+  "full_name": "五等分の花嫁 カードゲーム",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://5hanayome-cardgame.com/products/",
+    "note": "static list, newest first: name, 発売日, pack and box price; product pages /products/bp8 etc."
+   }
+  ],
+  "notes": "Bushiroad WordPress like Love Live, but this products list is server-rendered (no API needed). Paginated (14 pages) but page 1 holds all upcoming. No block."
+ },
+ "lycee": {
+  "game": "リセ",
+  "full_name": "リセ オーバーチュア",
+  "pages": [
+   {
+    "kind": "listing",
+    "url": "https://lycee-tcg.com/product/",
+    "follow": "links",
+    "max_follow": 2,
+    "note": "商品一覧: Ver.<name> + YYYY.MM.DD ON SALE, newest first; the set page (product/volNN_<brand>/) has 発売日 and 販売価格"
+   }
+  ],
+  "notes": "Static HTML (UTF-8 with BOM), no block. Each set's link text is only 商品情報 (the set name precedes it), and the newest set is also linked from an image banner. No box price on the set page (only pack price + 20 packs/box). Homepage news also announces new sets (\"10月30日発売決定！商品ページを公開しました\")."
+ }
 }
