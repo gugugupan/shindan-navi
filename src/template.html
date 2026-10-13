@@ -485,8 +485,13 @@ const state = {
 };
 
 const track = (name, params) => { try { if (window.gtag) window.gtag('event', name, params || {}); } catch (e) {} };
-const starKey = d => d.date+'|'+d.name;
-const stars = new Set(store.get('tcg.stars',[]));
+const starKey = d => d.id;
+// favourites used to be stored as "date|name"; map those to ids once, keep anything unknown as is
+const stars = new Set(store.get('tcg.stars',[]).map(k=>{
+  if(!String(k).includes('|')) return k;
+  const d=DATA.find(x=>x.date+'|'+x.name===k); return d?d.id:k;
+}));
+store.set('tcg.stars',[...stars]);
 const isStar = d => stars.has(starKey(d));
 const starFirst = (a,b) => (isStar(b)-isStar(a));
 const starBtn = (d,big) => `<button class="star${isStar(d)?' on':''}${big?' big':''}" data-star-id="${d.id}" aria-pressed="${isStar(d)}" aria-label="${isStar(d)?'お気に入りから外す':'お気に入りに追加'}">${isStar(d)?'★':'☆'}${big?`<span>${isStar(d)?'お気に入り済み':'お気に入りに追加'}</span>`:''}</button>`;
@@ -790,8 +795,7 @@ function buildIcs(items){
   const now=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z');
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//shindan-navi.app//新弾ナビ//JA','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:新弾ナビ'];
   items.forEach(d=>{
-    let h=0; for(const c of starKey(d)) h=(h*31+c.codePointAt(0))>>>0;
-    L.push('BEGIN:VEVENT',`UID:${ymd(d.date)}-${h.toString(36)}@shindan-navi.app`,`DTSTAMP:${now}`,
+    L.push('BEGIN:VEVENT',`UID:${d.id}@shindan-navi.app`,`DTSTAMP:${now}`,
       `DTSTART;VALUE=DATE:${ymd(d.date)}`,`DTEND;VALUE=DATE:${ymd(nextDay(d.date))}`,
       `SUMMARY:${icsEscape(eventTitle(d))}`,`DESCRIPTION:${icsEscape(eventDetails(d))}`,
       `URL:${d.url||OFFICIAL[d.game]||SITE_URL}`,'TRANSP:TRANSPARENT',

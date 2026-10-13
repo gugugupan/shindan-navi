@@ -23,6 +23,11 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sourcekey import canonical_url, is_official, make_source, product_code  # noqa: E402
 
+OFFICIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'official')
+# official-only entries of these kinds are added to the calendar; supplies are only counted
+ADD_KINDS = {'BOOSTER_PACK', 'DECK', 'PRODUCT_SET_OR_BOX'}
+PLACEHOLDER_IMG = re.compile(r'now[_-]?(printing|designing)|noimage|no[_-]image|dummy|comingsoon|coming[_-]soon', re.I)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'data')
 THUMBS = os.path.join(ROOT, 'public/thumbs')
@@ -190,6 +195,17 @@ def find_by_source(s, existing, used):
     return None
 
 
+def apply_overrides(items, overrides):
+    out = []
+    for item in items:
+        ov = overrides.get(item['id']) or {}
+        if ov.get('hide'):
+            continue
+        item.update({k: v for k, v in ov.items() if k not in ('hide', 'note') and not k.startswith('_')})
+        out.append(item)
+    return out
+
+
 def merge(existing, scraped, overrides, today, report, dry):
     cutoff = (today - datetime.timedelta(days=KEEP_PAST_DAYS)).isoformat()
     for e in existing:
@@ -248,13 +264,7 @@ def merge(existing, scraped, overrides, today, report, dry):
         if e['date'] >= today.isoformat():
             report['missing'].append(f"{e['date']}  [{e['game']}] {e['name']}")
         out.append(dict(e, sources=[]))
-    for item in out:
-        ov = overrides.get(item['id'])
-        if ov:
-            if ov.get('hide'):
-                item['hidden'] = True
-            item.update({k: v for k, v in ov.items() if k not in ('hide', 'note') and not k.startswith('_')})
-    out = [i for i in out if not i.get('hidden')]
+    out = apply_overrides(out, overrides)
     out.sort(key=lambda r: (r['date'], r['game'], r['name']))
     for i in out:
         if not i.get('thumb'):
@@ -262,8 +272,112 @@ def merge(existing, scraped, overrides, today, report, dry):
     return out
 
 
-def write_report(path, report, counts, unknown, today):
-    titles = [('new', '新規'), ('moved', '発売日の変更'), ('price', '価格の変更'), ('image', '画像を取得/差し替え'),
+def yen_text(n):
+    return f'{n:,}円' if n else ''
+
+
+def apply_official(items, today, report, dry, log):
+    """Read the official sites in scripts/official/sources.json and fold them into the merged items (official wins)."""
+    sys.path.insert(0, OFFICIAL_DIR)
+    import run as official  # noqa: E402
+    from common import load_env  # noqa: E402
+    load_env()
+    if not (os.environ.get('TYPESAFE_API_KEY') and os.environ.get('OPENROUTER_API_KEY')):
+        log.append('official: skipped (TYPESAFE_API_KEY / OPENROUTER_API_KEY not set in .env)')
+        return items
+    sources = json.load(open(os.path.join(OFFICIAL_DIR, 'sources.json')))
+    since = today.isoformat()
+    by_id = {x['id']: x for x in items}
+    matched = set()
+    covered = set()
+    for key, src in sources.items():
+        if key.startswith('_'):
+            continue
+        covered.add(src['game'])
+        result = official.run_game(key, src, items, since, since, log, skip_ids=matched)
+        supplies = 0
+        for e in result['entries']:
+            x = by_id.get(e.get('match'))
+            if x:
+                matched.add(x['id'])
+                fold_official(x, e, report, dry)
+                continue
+            if e['kind'] not in ADD_KINDS:
+                supplies += 1
+                continue
+            if not e['date'] or e['date'] < since:
+                if e['date'] is None:
+                    report['official_undated'].append(f"[{e['game']}] {e['name']} — {e.get('date_text') or '日付未定'}  {e.get('url') or e['source_page']}")
+                continue
+            new = new_from_official(e, dry)
+            if new['id'] in by_id:
+                continue
+            look = [y for y in items if y['game'] == e['game'] and y['date'] == e['date'] and y['id'] not in matched
+                    and official.sim(y['name'], e['name']) >= 0.3]
+            flag = f"  ⚠️ 既存と似ています: {look[0]['name']}（重複なら overrides で hide）" if look else ''
+            report['official_new'].append(f"{e['date']}  [{e['game']}] {e['name']}{(' ' + new['pack']) if new['pack'] else ''}{flag}")
+            items.append(new)
+            by_id[new['id']] = new
+            matched.add(new['id'])
+        if supplies:
+            log.append(f'official {key}: {supplies} supplies/accessories not added')
+    for x in items:
+        if x['game'] in covered and x['date'] >= since and x['id'] not in matched:
+            report['official_unconfirmed'].append(f"{x['date']}  [{x['game']}] {x['name']}")
+    usage = official.LEDGER.rows
+    log.append('official cost: ' + ', '.join(f"{p} {v['calls']} calls {v['prompt_tokens']}+{v['completion_tokens']} tok ${v['cost']:.4f}" for p, v in usage.items()))
+    return items
+
+
+def fold_official(x, e, report, dry):
+    x['source'] = e['source']
+    x['official_name'] = e['name']
+    x['sources'] = sorted(set(x.get('sources') or []) | {'official'})
+    if e['date'] and e['date'] != x['date']:
+        report['moved'].append(f"{x['date']} → {e['date']}  [{x['game']}] {x['name']}（公式）")
+        x['date'] = e['date']
+    if e.get('pack_yen') and e['pack_yen'] != yen_int(x.get('pack')):
+        if x.get('pack'):
+            report['price'].append(f"[{x['game']}] {x['name']}  pack: {x.get('pack')} → {yen_text(e['pack_yen'])}（公式）")
+        x['pack'] = yen_text(e['pack_yen'])
+    if e.get('box_yen') and not x.get('box'):
+        x['box'] = yen_text(e['box_yen'])
+    if e.get('url') and is_official(e['url']) and not is_official(x.get('url') or ''):
+        x['url'] = e['url']
+    img = e.get('image') or ''
+    if img and not PLACEHOLDER_IMG.search(img) and (not x.get('thumb') or x.get('approx')):
+        try:
+            if not dry:
+                x['thumb'] = save_thumb(img)
+            x['approx'] = False
+            report['image'].append(f"[{x['game']}] {x['name']}（公式）")
+        except Exception as ex:
+            report['image'].append(f"[{x['game']}] {x['name']} 公式画像の取得に失敗: {ex}")
+
+
+def new_from_official(e, dry):
+    item = dict(id=item_id(e['game'], e['name']), date=e['date'], game=e['game'], name=e['name'],
+                pack=yen_text(e.get('pack_yen')), box=yen_text(e.get('box_yen')),
+                url=e['url'] if e.get('url') and is_official(e['url']) else '', thumb='', approx=False,
+                sources=['official'], source=e['source'], official_name=e['name'])
+    img = e.get('image') or ''
+    if img and not PLACEHOLDER_IMG.search(img) and not dry:
+        try:
+            item['thumb'] = save_thumb(img)
+        except Exception:
+            pass
+    return item
+
+
+def yen_int(text):
+    m = re.search(r'(\d[\d,]*)\s*円', text or '')
+    return int(m.group(1).replace(',', '')) if m else None
+
+
+def write_report(path, report, counts, unknown, today, log=()):
+    titles = [('new', '新規'), ('official_new', '公式サイトから追加'), ('moved', '発売日の変更'), ('price', '価格の変更'), ('image', '画像を取得/差し替え'),
+              ('official_unconfirmed', '公式サイトで確認できなかった今後の商品（公式を設定済みのタイトルのみ）'),
+              ('official_undated', '公式で発表済み・発売日未定（未掲載）'),
               ('missing', 'ソースから消えた今後の商品（残しています。不要なら overrides で hide）'),
               ('dropped', f'発売から{KEEP_PAST_DAYS}日を過ぎて削除'), ('noimage', '画像なし（プレースホルダー表示）')]
     lines = [f'# データ更新レポート {today}', '',
@@ -274,6 +388,8 @@ def write_report(path, report, counts, unknown, today):
     for key, title in titles:
         rows = report[key]
         lines += [f'## {title}（{len(rows)}）', ''] + ([f'- {r}' for r in rows] or ['- なし']) + ['']
+    if log:
+        lines += ['## 公式サイト取得ログ', ''] + [f'- {x}' for x in log] + ['']
     open(path, 'w').write('\n'.join(lines))
 
 
@@ -291,11 +407,18 @@ def main():
     if len(scraped) < MIN_RATIO * upcoming_before:
         sys.exit(f'abort: only {len(scraped)} releases scraped vs {upcoming_before} known for this month onward — nothing written')
     overrides = json.load(open(os.path.join(DATA, 'overrides.json')))
-    report = {k: [] for k in ('new', 'moved', 'price', 'image', 'missing', 'dropped', 'noimage')}
+    report = {k: [] for k in ('new', 'official_new', 'moved', 'price', 'image', 'official_unconfirmed', 'official_undated',
+                              'missing', 'dropped', 'noimage')}
     items = merge(existing, scraped, overrides, today, report, dry)
+    log = []
+    if '--no-official' not in sys.argv:
+        items = apply_official(items, today, report, dry, log)
+        items = apply_overrides(items, overrides)
+        items.sort(key=lambda r: (r['date'], r['game'], r['name']))
+        report['noimage'] = [f"{i['date']}  [{i['game']}] {i['name']}  ({i['id']})" for i in items if not i.get('thumb')]
     counts = dict(clabo=len(clabo), torecamap=len(tm), combined=len(scraped), before=len(existing), after=len(items))
     report_path = os.path.join(DATA, 'update-report.md')
-    write_report(report_path, report, counts, unknown, today)
+    write_report(report_path, report, counts, unknown, today, log)
     if not dry:
         json.dump(items, open(os.path.join(DATA, 'items.json'), 'w'), ensure_ascii=False, indent=1)
         json.dump({'updated': today.isoformat()}, open(os.path.join(DATA, 'meta.json'), 'w'), indent=2)

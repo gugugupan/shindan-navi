@@ -79,6 +79,17 @@ Reply as {{"links": [{{"title": link text, "url": absolute URL}}]}} with at most
 Page text:
 {text}"""
 
+PAIR_PROMPT = """Card game: {full_name}, release date {date}.
+Official listings (from the publisher's site):
+{official}
+
+Calendar items (from shop aggregators; set names may be translated, e.g. スター・トレック = Star Trek, and editions are written as 日本語版 / 英語版 / EN):
+{items}
+
+Pair each official listing with the calendar item that is the same sellable product. Products sold only in English (bundles, scene boxes, collector's editions) match the English / EN calendar item. One calendar item may stand for several official variants (e.g. "統率者デッキ 日本語版" for four named decks): pair it with only the first such variant. Leave a listing unpaired when nothing matches. Each calendar item is used at most once.
+
+Reply as {{"pairs": [{{"official": <listing number>, "item": "<calendar item id>"}}]}}"""
+
 
 def norm(s):
     return re.sub(r'\s+', '', unicodedata.normalize('NFKC', s or '')).lower()
@@ -257,12 +268,28 @@ def match(entries, existing):
         if xid not in used:
             used[xid] = i
             entries[i]['match'], method[i] = xid, 'jev'
+    # what is still unpaired on the same day is usually a translation / edition question: let the LLM pair the group
+    for date in sorted({e['date'] for i, e in enumerate(entries) if i not in method and e['date']}):
+        left = [i for i, e in enumerate(entries) if i not in method and e['date'] == date]
+        free = [x for x in existing if x['id'] not in used and x['date'] == date]
+        if not left or not free:
+            continue
+        data = llm_json(EXTRACT_SYSTEM, PAIR_PROMPT.format(
+            full_name=entries[left[0]]['game'], date=date,
+            official='\n'.join(f"{n}. {entries[i]['name']} ({entries[i].get('type') or ''})" for n, i in enumerate(left)),
+            items='\n'.join(f"- {x['id']}: {x['name']}" for x in free)))
+        ok = {x['id'] for x in free}
+        for pr in data.get('pairs') or []:
+            n, xid = pr.get('official'), pr.get('item')
+            if isinstance(n, int) and 0 <= n < len(left) and xid in ok and xid not in used and left[n] not in method:
+                used[xid] = left[n]
+                entries[left[n]]['match'], method[left[n]] = xid, 'llm'
     for i, m in method.items():
         entries[i]['match_method'] = m
     return used
 
 
-def run_game(key, src, items, today, since, log):
+def run_game(key, src, items, today, since, log, skip_ids=()):
     started = time.time()
     entries = []
     for page in src['pages']:
@@ -279,7 +306,7 @@ def run_game(key, src, items, today, since, log):
             log.append(f"{key} {page['kind']} {page['url']}: FAILED {ex!r}")
     entries = [e for e in split_editions(dedupe(entries)) if e['date'] is None or e['date'] >= since]
     entries = classify(entries, src['full_name']) if entries else []
-    existing = [x for x in items if x['game'] == src['game'] and x['date'] >= since]
+    existing = [x for x in items if x['game'] == src['game'] and x['date'] >= since and x['id'] not in skip_ids]
     used = match(entries, existing) if entries else {}
     return {'key': key, 'game': src['game'], 'entries': entries, 'existing': existing, 'used': used, 'seconds': time.time() - started}
 
@@ -295,12 +322,12 @@ def report(results, today, since, log):
         price_n = sum(1 for x in hit if by[x['id']]['pack_yen'] and yen(x.get('pack')))
         only = [e for e in r['entries'] if not e.get('match')]
         n = len(r['existing'])
-        how = {m: sum(1 for e in r['entries'] if e.get('match_method') == m) for m in ('code', 'source', 'jev')}
+        how = {m: sum(1 for e in r['entries'] if e.get('match_method') == m) for m in ('code', 'source', 'jev', 'llm')}
         r['how'] = how
         lines.append(f"| {r['game']} | {n} | {len(hit)} | {len(hit) / n:.0%} | {date_ok}/{len(hit)} | {price_ok}/{price_n} | {len(only)} | {r['seconds']:.0f}s |" if n else
                      f"| {r['game']} | 0 | 0 | – | – | – | {len(only)} | {r['seconds']:.0f}s |")
     lines.append('')
-    lines += ['照合方法（件数）: ' + ' / '.join(f"{r['game']} 商品番号 {r['how']['code']}・公式ページ {r['how']['source']}・Jev {r['how']['jev']}" for r in results), '']
+    lines += ['照合方法（件数）: ' + ' / '.join(f"{r['game']} 商品番号 {r['how']['code']}・公式ページ {r['how']['source']}・Jev {r['how']['jev']}・LLM {r['how']['llm']}" for r in results), '']
     lines += ['## コスト', '', '| provider | calls | prompt tok | completion tok | cost (USD) | API time |', '|---|---|---|---|---|---|']
     for p, v in LEDGER.rows.items():
         lines.append(f"| {p} | {v['calls']} | {v['prompt_tokens']} | {v['completion_tokens']} | {v['cost']:.4f} | {v['seconds']:.0f}s |")
