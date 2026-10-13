@@ -1,0 +1,27 @@
+{
+  "pokemon": {
+    "game": "ポケモンカード",
+    "full_name": "ポケモンカードゲーム",
+    "pages": [
+      {"kind": "pokemon_api", "url": "https://www.pokemon-card.com/products/resultAPI.php?page={page}", "pages": 3,
+       "note": "official product DB; only lists released products"},
+      {"kind": "news", "url": "https://www.pokemon-card.com/info/", "link_prefix": "https://www.pokemon-card.com/info/0", "max_links": 40, "max_articles": 10,
+       "note": "upcoming products are announced here first"}
+    ]
+  },
+  "onepiece": {
+    "game": "ONE PIECE",
+    "full_name": "ONE PIECEカードゲーム",
+    "pages": [
+      {"kind": "listing", "url": "https://www.onepiece-cardgame.com/products/"}
+    ]
+  },
+  "mtg": {
+    "game": "MTG",
+    "full_name": "マジック：ザ・ギャザリング",
+    "pages": [
+      {"kind": "listing", "url": "https://mtg-jp.com/products/", "follow": "links", "max_follow": 5,
+       "note": "the list names sets; each set page lists the boosters, decks and bundles"}
+    ]
+  }
+}

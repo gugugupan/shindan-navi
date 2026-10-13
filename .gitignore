@@ -3,3 +3,6 @@ __pycache__/
 scripts/.pages.json
 .venv/
 .wrangler/
+.env
+scripts/official/cache/
+scripts/official/out/
