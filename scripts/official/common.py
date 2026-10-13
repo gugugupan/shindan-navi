@@ -49,18 +49,30 @@ class Ledger:
 LEDGER = Ledger()
 
 
+_FINAL = {}
+
+
 def fetch(url, headers=None, max_age=6 * 3600):
-    """GET with a small on-disk cache so reruns of the pilot don't hit the sites again."""
+    """GET with a small on-disk cache so reruns of the pilot don't hit the sites again. Remembers where redirects end."""
     os.makedirs(CACHE, exist_ok=True)
     path = os.path.join(CACHE, hashlib.sha1(url.encode()).hexdigest()[:16])
     if os.path.exists(path) and time.time() - os.path.getmtime(path) < max_age:
+        if os.path.exists(path + '.url'):
+            _FINAL[url] = open(path + '.url').read()
         return open(path, 'rb').read()
     req = urllib.request.Request(url, headers={'User-Agent': UA, **(headers or {})})
     with urllib.request.urlopen(req, timeout=40) as r:
         body = r.read()
+        _FINAL[url] = r.geturl()
     open(path, 'wb').write(body)
+    open(path + '.url', 'w').write(_FINAL[url])
     time.sleep(0.5)
     return body
+
+
+def final_url(url):
+    """URL after redirects for a page fetched in this run (or the URL itself)."""
+    return _FINAL.get(url, url)
 
 
 def page_text(html, base_url, limit=40000):

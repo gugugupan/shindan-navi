@@ -11,7 +11,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000311",
+   "key": "mtgrealityfracturebundleen",
+   "site": "official"
+  }
  },
  {
   "id": "if951a4d850",
@@ -25,7 +30,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000311",
+   "key": "mtgrealityfracturedraftnighten",
+   "site": "official"
+  }
  },
  {
   "id": "id570c07bd9",
@@ -39,7 +49,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000311",
+   "key": "mtgリアリティ・フラクチャーコレクター・ブースター日本語版",
+   "site": "official"
+  }
  },
  {
   "id": "i993a89ff90",
@@ -53,7 +68,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000311",
+   "key": "mtgリアリティ・フラクチャープレイ・ブースター日本語版",
+   "site": "official"
+  }
  },
  {
   "id": "i97d0c70232",
@@ -67,7 +87,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000311",
+   "key": "mtgリアリティ・フラクチャープレイ・ブースター英語版",
+   "site": "official"
+  }
  },
  {
   "id": "i987eb8d3ee",
@@ -81,7 +106,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000311",
+   "key": "mtgリアリティ・フラクチャー統率者デッキ日本語版",
+   "site": "official"
+  }
  },
  {
   "id": "i488e70cc69",
@@ -95,7 +125,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000311",
+   "key": "mtgリアリティ・フラクチャー統率者デッキ英語版",
+   "site": "official"
+  }
  },
  {
   "id": "i2f928577c4",
@@ -109,7 +144,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://shadowverse-evolve.com/products/bp22",
+   "key": "shadowverseevolveブースターパック第22弾「overthecalamity/オーバー・ザ・カラミティ」",
+   "site": "official"
+  }
  },
  {
   "id": "iba95233c80",
@@ -123,7 +163,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://palworld-official-cardgame.com/products/ss01",
+   "key": "パルワールドオフィシャルカードゲームスリーブ&カードセットvol.1",
+   "site": "official"
+  }
  },
  {
   "id": "ic4e51981e6",
@@ -138,7 +183,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/anm_bp",
+   "key": "wsブースターパックanemoi",
+   "site": "official"
+  }
  },
  {
   "id": "i6bcebca656",
@@ -153,7 +203,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://digimoncard.com/products/pack/ex-13",
+   "key": "EX-13",
+   "site": "official"
+  }
  },
  {
   "id": "i0b164e6eae",
@@ -167,7 +222,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://llofficial-cardgame.com/products/pbll_duo",
+   "key": "ラブライブ!ocgプレミアムブースターラブライブ!duo",
+   "site": "official"
+  }
  },
  {
   "id": "i08c65f9b52",
@@ -181,7 +241,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://square-enix-shop.com/jp/ff-tcg/products/starter.html#heavensward",
+   "key": "fftcgスターターセットファイナルファンタジーxiv:蒼天のイシュガルド日本語版",
+   "site": "official"
+  }
  },
  {
   "id": "i422c625a70",
@@ -195,7 +260,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://store.xross-stars.com/products/an01",
+   "key": "xrossstars1stanniv.collectionpremiumset",
+   "site": "official"
+  }
  },
  {
   "id": "i69c197985d",
@@ -210,7 +280,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://cf-vanguard.com/products/booster/dz-bt17",
+   "key": "VG-DZ-BT17",
+   "site": "official"
+  }
  },
  {
   "id": "ia5f12cdc9d",
@@ -224,7 +299,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mlptcg-jp.com/news/2026-09-04-%E3%83%95-%E3%83%BC%E3%82%B9%E3%82%BF%E3%83%BC%E3%83%8F-%E3%83%83%E3%82%AF%E3%81%AE%E7%AC%AC3%E5%BC%BE-%E3%83%8A%E3%82%A4%E3%83%88%E3%83%A1%E3%82%A2%E3%83%8A%E3%82%A4%E3%83%88-%E7%99%BA%E5%A3%B2%E6%B1%BA%E5%AE%9A-10",
+   "key": "マイリトルポニーtcgbp3ナイトメアナイト003-jp",
+   "site": "official"
+  }
  },
  {
   "id": "i73fea5ad97",
@@ -238,7 +318,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/starter/starter-26rsd10.php",
+   "key": "26RSD10",
+   "site": "official"
+  }
  },
  {
   "id": "i71f276ccdf",
@@ -252,7 +337,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/starter/starter-26rsd09.php",
+   "key": "26RSD09",
+   "site": "official"
+  }
  },
  {
   "id": "if68235e3a5",
@@ -267,7 +357,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://konami.com/yugioh/rushduel/products/ca01",
+   "key": "遊戯王rdcrossartcollection",
+   "site": "official"
+  }
  },
  {
   "id": "i7e6eea9071",
@@ -281,7 +376,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://rebirth-fy.com/products/others/as_re",
+   "key": "reバースforyouありがとうセットreバース",
+   "site": "official"
+  }
  },
  {
   "id": "i97563f43dc",
@@ -296,7 +396,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/boosters/stg-1.php",
+   "key": "UA57BT",
+   "site": "official"
+  }
  },
  {
   "id": "i98039c045e",
@@ -310,7 +415,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットキモリ・アチャモ・ミズゴロウ」",
+   "site": "official"
+  }
  },
  {
   "id": "i1a54455a55",
@@ -324,7 +434,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットサルノリ・ヒバニー・メッソン」",
+   "site": "official"
+  }
  },
  {
   "id": "ic2a22a366f",
@@ -338,7 +453,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットチコリータ・ヒノアラシ・ワニノコ」",
+   "site": "official"
+  }
  },
  {
   "id": "i038c758e08",
@@ -352,7 +472,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットツタージャ・ポカブ・ミジュマル」",
+   "site": "official"
+  }
  },
  {
   "id": "i29493cc593",
@@ -366,7 +491,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットナエトル・ヒコザル・ポッチャマ」",
+   "site": "official"
+  }
  },
  {
   "id": "id2a34ea948",
@@ -380,7 +510,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットニャオハ・ホゲータ・クワッス」",
+   "site": "official"
+  }
  },
  {
   "id": "i6e67d5a9f6",
@@ -394,7 +529,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットハリマロン・フォッコ・ケロマツ」",
+   "site": "official"
+  }
  },
  {
   "id": "i29ad66a326",
@@ -408,7 +548,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットフシギダネ・ヒトカゲ・ゼニガメ」",
+   "site": "official"
+  }
  },
  {
   "id": "ia74d0b2c77",
@@ -422,7 +567,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://30th.pokemon-card.com/product/cardset",
+   "key": "「30thcelebrationカードセットモクロー・ニャビー・アシマリ」",
+   "site": "official"
+  }
  },
  {
   "id": "ia946843f5d",
@@ -437,7 +587,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/disneylorcana/product/hyperia-city/booster-pack",
+   "key": "ディズニー・ロルカナ・tcg日本語版ブースターパックハイペリアシティ",
+   "site": "official"
+  }
  },
  {
   "id": "i9493e852c6",
@@ -451,7 +606,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/sts_td",
+   "key": "wsトライアルデッキステラソラ",
+   "site": "official"
+  }
  },
  {
   "id": "if644c4eb04",
@@ -466,7 +626,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/sts_bp",
+   "key": "wsブースターパックステラソラ",
+   "site": "official"
+  }
  },
  {
   "id": "i6d694751ac",
@@ -480,7 +645,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-blau.com/item/rsl_01b",
+   "key": "ws-bブースターパック少女☆歌劇レヴュースタァライト",
+   "site": "official"
+  }
  },
  {
   "id": "id31abc5716",
@@ -495,7 +665,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://dm.takaratomy.co.jp/product/dm26ex4",
+   "key": "DM26-EX4",
+   "site": "official"
+  }
  },
  {
   "id": "i0e1d2788a1",
@@ -510,7 +685,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/booster/booster-26rbs03.php",
+   "key": "26RBS03",
+   "site": "official"
+  }
  },
  {
   "id": "i8ab17e6066",
@@ -524,7 +704,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-219-3",
+   "key": "divinecrossprimal×hearts2",
+   "site": "official"
+  }
  },
  {
   "id": "if23510cfa1",
@@ -538,7 +723,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-219",
+   "key": "divinecrossとある魔術の禁書目録iii",
+   "site": "official"
+  }
  },
  {
   "id": "i8c9dfff7e2",
@@ -552,7 +742,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-219-4",
+   "key": "divinecrossコープスパーティーシリーズvol.4",
+   "site": "official"
+  }
  },
  {
   "id": "i52e5d76f3c",
@@ -566,7 +761,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-219-2",
+   "key": "divinecrossローゼンメイデン",
+   "site": "official"
+  }
  },
  {
   "id": "ibdc7364b63",
@@ -581,7 +781,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://zxtcg.com/product/ig_16.html",
+   "key": "IG16",
+   "site": "official"
+  }
  },
  {
   "id": "i2ccf9b786d",
@@ -595,7 +800,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products",
+   "key": "secretlairbundle",
+   "site": "official"
+  }
  },
  {
   "id": "id45b791d7f",
@@ -609,7 +819,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://acgtcg.com/products_22.html",
+   "key": "アニマルカードゲーム6弾ブースターパック「復讐のアニマ」",
+   "site": "official"
+  }
  },
  {
   "id": "i57abceeee5",
@@ -623,7 +838,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ultraman-cardgame.com/page/jp/product/product-detail/27",
+   "key": "SD04",
+   "site": "official"
+  }
  },
  {
   "id": "id550fec6c3",
@@ -637,7 +857,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ultraman-cardgame.com/page/jp/product/product-detail/26",
+   "key": "BP09",
+   "site": "official"
+  }
  },
  {
   "id": "i7139f79c99",
@@ -651,7 +876,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-rose.com/products/aug",
+   "key": "wsrブースターパックオーガスト",
+   "site": "official"
+  }
  },
  {
   "id": "i0b6dd27481",
@@ -666,7 +896,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://cf-vanguard.com/products/booster/dz-tbp02",
+   "key": "VG-DZ-TBP02",
+   "site": "official"
+  }
  },
  {
   "id": "i685917023a",
@@ -680,7 +915,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.movic.jp/harrypotter/products/998",
+   "key": "harrypotterカードゲームブースターパック「ハリー・ポッターと秘密の部屋」part.1",
+   "site": "official"
+  }
  },
  {
   "id": "i16132f9545",
@@ -694,7 +934,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/haikyuvobacabreak/product/hv-d04.html",
+   "key": "HV-D04",
+   "site": "official"
+  }
  },
  {
   "id": "i0f8cda7a5a",
@@ -708,7 +953,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/haikyuvobacabreak/product/HV-P04.html",
+   "key": "HV-P04",
+   "site": "official"
+  }
  },
  {
   "id": "i3a3d3d1341",
@@ -722,7 +972,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://llofficial-cardgame.com/products/lls_pocket",
+   "key": "ラブライブ!ocgコレクションクリアポケットラブライブ!サンシャイン!!",
+   "site": "official"
+  }
  },
  {
   "id": "if28e50f1b1",
@@ -736,7 +991,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://llofficial-cardgame.com/products/lls_binder",
+   "key": "ラブライブ!ocgコレクションクリアポケット&バインダーセットラブライブ!サンシャイン!!",
+   "site": "official"
+  }
  },
  {
   "id": "i18f22ab57e",
@@ -751,7 +1011,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/boosters/ex_rez.php",
+   "key": "EX17BT",
+   "site": "official"
+  }
  },
  {
   "id": "i5d2bd0be4d",
@@ -765,7 +1030,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://store.xross-stars.com/products/st04",
+   "key": "xrossstarsexスタートデッキ『crazyraccoon』",
+   "site": "official"
+  }
  },
  {
   "id": "i473a37b47f",
@@ -779,7 +1049,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://store.xross-stars.com/products/st03",
+   "key": "xrossstarsexスタートデッキ『ぶいすぽっ!』",
+   "site": "official"
+  }
  },
  {
   "id": "i1ac051e5ed",
@@ -794,7 +1069,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://xross-stars.com/product/BP05",
+   "key": "xrossstarsブースターパック第5弾『ignitionvortex』",
+   "site": "official"
+  }
  },
  {
   "id": "i024b28881f",
@@ -808,7 +1088,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://palworld-official-cardgame.com/products/bp02",
+   "key": "パルワールドオフィシャルカードゲームブースターパック第2弾「目覚めし伝説」",
+   "site": "official"
+  }
  },
  {
   "id": "ib743870d9b",
@@ -822,7 +1107,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.build-divide.com/bright/products/96",
+   "key": "ビルディバイドブライトブースターパックtvアニメ『needygirloverdose』",
+   "site": "official"
+  }
  },
  {
   "id": "ibfa9fb7dc2",
@@ -836,7 +1126,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://lycee-tcg.com/product/vol49_amusecraft",
+   "key": "リセオーバーチュアver.アミューズクラフト2.0",
+   "site": "official"
+  }
  },
  {
   "id": "id58a7f50a8",
@@ -850,7 +1145,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/gup_td_m",
+   "key": "wsトライアルデッキガールズ&パンツァー大洗女子学園",
+   "site": "official"
+  }
  },
  {
   "id": "i5181cb7965",
@@ -864,7 +1164,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/gup_td_o",
+   "key": "wsトライアルデッキガールズ&パンツァー無限軌道杯",
+   "site": "official"
+  }
  },
  {
   "id": "i37e1ce6a0f",
@@ -879,7 +1184,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/gup_bp",
+   "key": "wsブースターパックガールズ&パンツァー",
+   "site": "official"
+  }
  },
  {
   "id": "i33e11ae0e7",
@@ -893,7 +1203,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://5hanayome-cardgame.com/products/bp8",
+   "key": "五等分の花嫁カードゲームブースターパックvol.8恋と青春が最高潮!",
+   "site": "official"
+  }
  },
  {
   "id": "i567aa70cab",
@@ -908,7 +1223,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://onepiece-cardgame.com/products/eb05.html",
+   "key": "EB-05",
+   "site": "official"
+  }
  },
  {
   "id": "iee54c6341f",
@@ -923,7 +1243,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/wixoss/product/wx26_p2",
+   "key": "WX26-P2",
+   "site": "official"
+  }
  },
  {
   "id": "iba3d0d311c",
@@ -938,7 +1263,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://gundam-gcg.com/jp/products/gd06.html",
+   "key": "GD06",
+   "site": "official"
+  }
  },
  {
   "id": "ia3f16662fc",
@@ -953,7 +1283,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/conan-cardgame/product/ct-p11",
+   "key": "CT-P11",
+   "site": "official"
+  }
  },
  {
   "id": "i717cf9a163",
@@ -968,7 +1303,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://yugioh-card.com/japan/products/imph",
+   "key": "遊戯王immortalphoenix",
+   "site": "official"
+  }
  },
  {
   "id": "icdf5128fa0",
@@ -982,7 +1322,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://yugioh-card.com/japan/products",
+   "key": "遊戯王デュエリストカードプロテクターthechronicles罪宝狩りの悪魔(ots限定)",
+   "site": "official"
+  }
  },
  {
   "id": "idee7be4a77",
@@ -996,7 +1341,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://godzilla-cardgame.com/products/sd05",
+   "key": "ゴジラカードゲーム決戦開始!スタートデッキ緑「キングギドラ」",
+   "site": "official"
+  }
  },
  {
   "id": "i289d67247e",
@@ -1010,7 +1360,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://godzilla-cardgame.com/products/sd03",
+   "key": "ゴジラカードゲーム決戦開始!スタートデッキ赤「ゴジラ」",
+   "site": "official"
+  }
  },
  {
   "id": "iacb617f91e",
@@ -1024,7 +1379,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://godzilla-cardgame.com/products/sd04",
+   "key": "ゴジラカードゲーム決戦開始!スタートデッキ青「デストロイア」",
+   "site": "official"
+  }
  },
  {
   "id": "i45d2db390e",
@@ -1039,7 +1399,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://cf-vanguard.com/products/booster/dz-lbt03",
+   "key": "VG-DZ-LBT03",
+   "site": "official"
+  }
  },
  {
   "id": "ibbaf99e5d5",
@@ -1053,7 +1418,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://konami.com/yugioh/rushduel/products#cg2148",
+   "key": "遊戯王rd情熱のジョインテック",
+   "site": "official"
+  }
  },
  {
   "id": "ib31a5339e2",
@@ -1067,7 +1437,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://square-enix-shop.com/jp/ff-tcg/news/fftcg_2026_schedule.html#opus30",
+   "key": "fftcgブースターパック命の記憶日本語版",
+   "site": "official"
+  }
  },
  {
   "id": "i41e6228c69",
@@ -1081,7 +1456,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://fabtcg.com/ja/products/%e3%82%a2%e3%83%bc%e3%83%a2%e3%83%aa%e3%83%bc%e3%83%87%e3%83%83%e3%82%ad/%e3%82%a2%e3%83%bc%e3%83%a2%e3%83%aa%e3%83%bc%e3%83%87%e3%83%83%e3%82%ad-%e3%83%a2%e3%83%bc%e3%83%86%e3%82%a3%e3%83%9e%e3%83%bc%e5%8d%9a%e5%a3%ab",
+   "key": "フレッシュ&ブラッド日本語版アーモリーデッキ「モーティマー博士」",
+   "site": "official"
+  }
  },
  {
   "id": "i0664b4b5f6",
@@ -1095,7 +1475,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgstartrektmbeammeupbundleen",
+   "site": "official"
+  }
  },
  {
   "id": "i4650ed04ab",
@@ -1109,7 +1494,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgstartrektmbundleen",
+   "site": "official"
+  }
  },
  {
   "id": "ie021b364ff",
@@ -1123,7 +1513,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgstartrektmcommanderdeckscollector’seditionen",
+   "site": "official"
+  }
  },
  {
   "id": "iced9705939",
@@ -1137,7 +1532,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgstartrektmdraftnighten",
+   "site": "official"
+  }
  },
  {
   "id": "i9d9e1d5f63",
@@ -1151,7 +1551,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgstartrektmsceneboxen",
+   "site": "official"
+  }
  },
  {
   "id": "i049506e944",
@@ -1165,7 +1570,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/reading/publicity/0039603",
+   "key": "『マジック:ザ・ギャザリング|スター・トレック』コレクター・ブースターボックス",
+   "site": "official"
+  }
  },
  {
   "id": "iada8dbc292",
@@ -1179,7 +1589,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgスター・トレックコレクター・ブースター英語版",
+   "site": "official"
+  }
  },
  {
   "id": "i9aaf6249e5",
@@ -1193,7 +1608,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "",
+   "key": "mtgスター・トレックビギナー・ボックス英語版",
+   "site": "aggregator"
+  }
  },
  {
   "id": "i5e39b6f86b",
@@ -1207,7 +1627,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/reading/publicity/0039603",
+   "key": "『マジック:ザ・ギャザリング|スター・トレック』プレイ・ブースターボックス",
+   "site": "official"
+  }
  },
  {
   "id": "i71e995a18f",
@@ -1221,7 +1646,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgスター・トレックプレイ・ブースター英語版",
+   "site": "official"
+  }
  },
  {
   "id": "ie3ee4a626c",
@@ -1235,7 +1665,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/reading/publicity/0039603",
+   "key": "統率者デッキ「我々はボーグ」",
+   "site": "official"
+  }
  },
  {
   "id": "i3a9be8f7af",
@@ -1249,7 +1684,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgスター・トレック統率者デッキ英語版",
+   "site": "official"
+  }
  },
  {
   "id": "i3b8bfb0608",
@@ -1264,7 +1704,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/bdy_bp",
+   "key": "wsブースターパックbangdream![夢限大みゅーたいぷ]",
+   "site": "official"
+  }
  },
  {
   "id": "i9283eeb5df",
@@ -1278,7 +1723,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/horobeat-cardgame",
+   "key": "HB-BP01",
+   "site": "official"
+  }
  },
  {
   "id": "ia50858341b",
@@ -1292,7 +1742,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/horobeat-cardgame",
+   "key": "HB-SD01",
+   "site": "official"
+  }
  },
  {
   "id": "i211d05c30d",
@@ -1306,7 +1761,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://takaratomy.co.jp/products/horobeat-cardgame",
+   "key": "HB-SD02",
+   "site": "official"
+  }
  },
  {
   "id": "i461df622aa",
@@ -1320,7 +1780,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://llofficial-cardgame.com/products/bp08_mt",
+   "key": "ラブライブ!ocgブースターパックまじかる♡とり~と",
+   "site": "official"
+  }
  },
  {
   "id": "i89dd89579d",
@@ -1335,7 +1800,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://zxtcg.com/product/ig_17.html",
+   "key": "IG17",
+   "site": "official"
+  }
  },
  {
   "id": "i8aac8240d6",
@@ -1349,7 +1819,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://cf-vanguard.com/products/trial/dz-ss20",
+   "key": "VG-DZ-SS20",
+   "site": "official"
+  }
  },
  {
   "id": "i74178d8e02",
@@ -1363,7 +1838,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://cf-vanguard.com/products/trial/dz-ss21",
+   "key": "VG-DZ-SS21",
+   "site": "official"
+  }
  },
  {
   "id": "id32809feaf",
@@ -1378,7 +1858,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://onepiece-cardgame.com/products/op18.html",
+   "key": "OP-18",
+   "site": "official"
+  }
  },
  {
   "id": "iea23293b02",
@@ -1393,7 +1878,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/booster/booster-77.php",
+   "key": "BS77",
+   "site": "official"
+  }
  },
  {
   "id": "ic294461329",
@@ -1408,7 +1898,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://yugioh-card.com/japan/products/rv02",
+   "key": "遊戯王revolutionbooster-方界・マリンセス・ゴーストリック-",
+   "site": "official"
+  }
  },
  {
   "id": "i1a5460ea49",
@@ -1422,7 +1917,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-225-6",
+   "key": "divinecrossスペシャルセット2026年夏りっく☆じあ〜す",
+   "site": "official"
+  }
  },
  {
   "id": "i15f574f8a0",
@@ -1436,7 +1936,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-225-7",
+   "key": "divinecrossスペシャルセット2026年夏刹那にかける恋はなび",
+   "site": "official"
+  }
  },
  {
   "id": "ie612b5b1b5",
@@ -1450,7 +1955,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-225",
+   "key": "divinecrossワナクリ2",
+   "site": "official"
+  }
  },
  {
   "id": "i053e013b75",
@@ -1464,7 +1974,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-225-5",
+   "key": "divinecross七つの大罪黙示録の四騎士vol.2",
+   "site": "official"
+  }
  },
  {
   "id": "i264ae8b6eb",
@@ -1478,7 +1993,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-225-4",
+   "key": "divinecross履いてください、鷹峰さん",
+   "site": "official"
+  }
  },
  {
   "id": "i2215c38b55",
@@ -1492,7 +2012,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-225-3",
+   "key": "divinecross白恋サクラ*グラム",
+   "site": "official"
+  }
  },
  {
   "id": "i54a2126ff2",
@@ -1506,7 +2031,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://divinecross.jp/products/post-225-2",
+   "key": "divinecross賭ケグルイ",
+   "site": "official"
+  }
  },
  {
   "id": "ia409ab5aa5",
@@ -1520,7 +2050,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://shadowverse-evolve.com/products/cp05",
+   "key": "shadowverseevolveコラボパック「グランブルーファンタジー」",
+   "site": "official"
+  }
  },
  {
   "id": "i3df6c92b9a",
@@ -1535,7 +2070,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/boosters/dgm-1.php",
+   "key": "UA58BT",
+   "site": "official"
+  }
  },
  {
   "id": "ibc1061b460",
@@ -1550,7 +2090,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/boosters/ex_mgs.php",
+   "key": "EX18BT",
+   "site": "official"
+  }
  },
  {
   "id": "i46d437b41b",
@@ -1564,7 +2109,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.build-divide.com/bright/products/98",
+   "key": "ビルディバイドブライトブースターパックtvアニメ『上伊那ぼたん、酔へる姿は百合の花』",
+   "site": "official"
+  }
  },
  {
   "id": "ibb6fcbf5d7",
@@ -1579,7 +2129,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/p30_wsbp",
+   "key": "wsブースターパックpersona30thanniversary",
+   "site": "official"
+  }
  },
  {
   "id": "i7123f1dbcf",
@@ -1593,7 +2148,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "",
+   "key": "kamitsubakicardgameスターターデッキデラックスセット",
+   "site": "aggregator"
+  }
  },
  {
   "id": "i6fe09e1a3c",
@@ -1607,7 +2167,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.kamitsubaki.jp/products",
+   "key": "kamitsubakicardgameスターターデッキヰ世界情緒・氷夏至",
+   "site": "official"
+  }
  },
  {
   "id": "i35af8fe7ed",
@@ -1621,7 +2186,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.kamitsubaki.jp/products",
+   "key": "kamitsubakicardgameスターターデッキ春猿火・夕凪機",
+   "site": "official"
+  }
  },
  {
   "id": "i4f8a73ae0e",
@@ -1635,7 +2205,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.kamitsubaki.jp/products",
+   "key": "kamitsubakicardgameブースターパック第7弾「鳴動の因果」",
+   "site": "official"
+  }
  },
  {
   "id": "i1466e59a49",
@@ -1649,7 +2224,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ultraman-cardgame.com/page/jp/product/product-detail/29",
+   "key": "ウルトラマンカードゲームエクストラデッキ02ssss.gridman",
+   "site": "official"
+  }
  },
  {
   "id": "i81d3a47970",
@@ -1663,7 +2243,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ultraman-cardgame.com/page/jp/product/product-detail/28",
+   "key": "ウルトラマンカードゲームエクストラブースターパック01夢のunion",
+   "site": "official"
+  }
  },
  {
   "id": "i04a2479f95",
@@ -1677,7 +2262,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://cf-vanguard.com/products/trial/dz-ss22",
+   "key": "VG-DZ-SS22",
+   "site": "official"
+  }
  },
  {
   "id": "i256d6698e9",
@@ -1691,7 +2281,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://digimoncard.com/products/deck/st-26",
+   "key": "ST-26",
+   "site": "official"
+  }
  },
  {
   "id": "i7994e6df7d",
@@ -1705,7 +2300,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://digimoncard.com/products/deck/st-25",
+   "key": "ST-25",
+   "site": "official"
+  }
  },
  {
   "id": "i32a7e53bb2",
@@ -1720,7 +2320,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://digimoncard.com/products/pack/ver27",
+   "key": "デジモンカードゲームブースターパックignitionofx【bt‐27】",
+   "site": "official"
+  }
  },
  {
   "id": "i1dd6263f0e",
@@ -1734,7 +2339,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://yu-gi-oh.jp/news/oid-2588",
+   "key": "遊戯王thechroniclesdeckdxマギストス",
+   "site": "official"
+  }
  },
  {
   "id": "ia056773d09",
@@ -1748,7 +2358,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/other/new_card_selection/mha.php",
+   "key": "unionarenanewcardselection僕のヒーローアカデミア",
+   "site": "official"
+  }
  },
  {
   "id": "i935b8004bf",
@@ -1762,7 +2377,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/decks/upd-1.php",
+   "key": "UA59ST",
+   "site": "official"
+  }
  },
  {
   "id": "i95d50f07ba",
@@ -1777,7 +2397,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/boosters/upd-1.php",
+   "key": "UA59BT",
+   "site": "official"
+  }
  },
  {
   "id": "i9abefff717",
@@ -1791,7 +2416,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.build-divide.com/bright/products/99",
+   "key": "ビルディバイドブライトプレミアムブースターパック『劇場版魔法少女まどか☆マギカ〈ワルプルギスの廻天〉』",
+   "site": "official"
+  }
  },
  {
   "id": "i1b1d17098b",
@@ -1805,7 +2435,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "",
+   "key": "wsトライアルデッキ魔法少女ノ魔女裁判",
+   "site": "aggregator"
+  }
  },
  {
   "id": "i85a470b95c",
@@ -1820,7 +2455,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://dbs-cardgame.com/fw/jp/products/01_477.html",
+   "key": "FB12",
+   "site": "official"
+  }
  },
  {
   "id": "i092252f4a5",
@@ -1834,7 +2474,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://dbs-cardgame.com/fw/jp/products/01_479.html",
+   "key": "FS14",
+   "site": "official"
+  }
  },
  {
   "id": "i7bf93fcc2b",
@@ -1848,7 +2493,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://dbs-cardgame.com/fw/jp/products/01_478.html",
+   "key": "FS13",
+   "site": "official"
+  }
  },
  {
   "id": "ice65b2f048",
@@ -1862,7 +2512,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://osicatcg.com/products/17438",
+   "key": "osicaスターターデッキtvアニメ「その着せ替え人形は恋をする」season2",
+   "site": "official"
+  }
  },
  {
   "id": "iab7db6aae7",
@@ -1876,7 +2531,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://osicatcg.com/products/17438",
+   "key": "osicaブースターパックtvアニメ「その着せ替え人形は恋をする」season2",
+   "site": "official"
+  }
  },
  {
   "id": "i3b995d8848",
@@ -1890,7 +2550,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://palworld-official-cardgame.com/products/td03",
+   "key": "パルワールドオフィシャルカードゲームトライアルデッキ「果てなき飛翔ブルー・パープル」",
+   "site": "official"
+  }
  },
  {
   "id": "iedb5712954",
@@ -1904,7 +2569,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://palworld-official-cardgame.com/products/td03",
+   "key": "パルワールドオフィシャルカードゲームトライアルデッキ「果てなき飛翔レッド・グリーン」",
+   "site": "official"
+  }
  },
  {
   "id": "i82538905e8",
@@ -1918,7 +2588,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://tcg.build-divide.com/bright/products/100",
+   "key": "ビルディバイドブライトブースターパックtvアニメ「黄泉のツガイ」",
+   "site": "official"
+  }
  },
  {
   "id": "ic06615e4de",
@@ -1933,7 +2608,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/cpk_pb",
+   "key": "wsプレミアムブースター超かぐや姫!",
+   "site": "official"
+  }
  },
  {
   "id": "i9bb7c6bfb0",
@@ -1947,7 +2627,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-rose.com/products/plt",
+   "key": "wsrブースターパックぱれっと",
+   "site": "official"
+  }
  },
  {
   "id": "i12b54dd665",
@@ -1962,7 +2647,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://cf-vanguard.com/products/booster/dz-ss23",
+   "key": "VG-DZ-SS23",
+   "site": "official"
+  }
  },
  {
   "id": "i20e3cd2cb2",
@@ -1976,7 +2666,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/starter/starter-26rsd11.php",
+   "key": "26RSD11",
+   "site": "official"
+  }
  },
  {
   "id": "i42b757712d",
@@ -1990,7 +2685,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://fanstars-league.com/products/boosters/bbc04.php",
+   "key": "プロ野球ファンスターズリーグブースターパックセ・リーグ2026vol.4",
+   "site": "official"
+  }
  },
  {
   "id": "iddcdc99fa5",
@@ -2004,7 +2704,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://fanstars-league.com/products/boosters/bbp04.php",
+   "key": "プロ野球ファンスターズリーグブースターパックパ・リーグ2026vol.4",
+   "site": "official"
+  }
  },
  {
   "id": "i488df6f459",
@@ -2018,7 +2723,12 @@
   "approx": false,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://llofficial-cardgame.com/products/pbls_duo",
+   "key": "ラブライブ!ocgプレミアムブースターラブライブ!サンシャイン!!duo",
+   "site": "official"
+  }
  },
  {
   "id": "i1e70d88b0f",
@@ -2032,7 +2742,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://yu-gi-oh.jp/news/3gvviz282ko",
+   "key": "yu-gi-oh!thedarksideofdimensions10thanniversarymoviebox",
+   "site": "official"
+  }
  },
  {
   "id": "i0fe457dcab",
@@ -2047,7 +2762,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/azl_vol3_bp",
+   "key": "wsブースターパック「アズールレーン」vol.3",
+   "site": "official"
+  }
  },
  {
   "id": "if034bb2098",
@@ -2061,7 +2781,12 @@
   "approx": true,
   "sources": [
    "clabo"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/starter/starter-26rsd12.php",
+   "key": "26RSD12",
+   "site": "official"
+  }
  },
  {
   "id": "ib2053da170",
@@ -2076,7 +2801,12 @@
   "sources": [
    "clabo",
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/booster/booster-26rcb02.php",
+   "key": "26RCB02",
+   "site": "official"
+  }
  },
  {
   "id": "i0d5d1bbd5f",
@@ -2090,7 +2820,12 @@
   "approx": true,
   "sources": [
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/boosters/icg-1.php",
+   "key": "UA60BT",
+   "site": "official"
+  }
  },
  {
   "id": "i925873c6f8",
@@ -2104,7 +2839,12 @@
   "approx": true,
   "sources": [
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://ws-tcg.com/products/bpfd",
+   "key": "ブースターパック新日本プロレス×aew:forbiddendoor",
+   "site": "official"
+  }
  },
  {
   "id": "id93e43d933",
@@ -2118,7 +2858,12 @@
   "approx": false,
   "sources": [
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://battlespirits.com/product/booster/booster-26rbs04.php",
+   "key": "26RBS04",
+   "site": "official"
+  }
  },
  {
   "id": "i0516ecf0ba",
@@ -2132,6 +2877,11 @@
   "approx": true,
   "sources": [
    "torecamap"
-  ]
+  ],
+  "source": {
+   "url": "https://gundam-gcg.com/jp/products/gd07.html",
+   "key": "GD07",
+   "site": "official"
+  }
  }
 ]

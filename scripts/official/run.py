@@ -1,6 +1,9 @@
 """Pilot: read release info from official TCG sites and compare it with data/items.json.
 
-  .venv/bin/python -I scripts/official/run.py [--games pokemon,onepiece,mtg]
+  .venv/bin/python -I scripts/official/run.py [--games pokemon,onepiece,mtg] [--adopt-sources]
+
+--adopt-sources writes the official source (page + key) of every matched item back into data/items.json,
+so the next run pairs them by identity instead of asking Jev. Only the `source` field changes.
 
 Jev answers the choice questions (is this news about a new product, what kind of product is this,
 is this the same product as one we already list); the light LLM extracts fields from pages;
@@ -18,7 +21,10 @@ import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import LEDGER, ROOT, fetch, jev_choice, llm_json, load_env, page_text  # noqa: E402
+from common import LEDGER, ROOT, fetch, final_url, jev_choice, llm_json, load_env, page_text  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from sourcekey import make_source, product_code  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KINDS = {
@@ -105,7 +111,7 @@ def clean_entry(e, game, source):
     if date and not parse_date(date):
         date = None
     date = date or parse_date(e.get('release_date_text'))
-    return {'game': game, 'name': (e.get('name') or '').strip(), 'date': date, 'date_text': e.get('release_date_text'),
+    return {'game': game, 'name': (e.get('name') or '').strip(), 'date': date, 'date_text': e.get('release_date_text'), 'source_page': source,
             'pack_yen': e.get('price_pack_yen') if isinstance(e.get('price_pack_yen'), int) else yen(e.get('price_text')),
             'box_yen': e.get('price_box_yen') if isinstance(e.get('price_box_yen'), int) else None,
             'type': e.get('product_type'), 'url': e.get('url'), 'image': e.get('image_url'),
@@ -144,7 +150,7 @@ def from_pokemon_api(src, page, since):
                         'pack_yen': yen(p.get('priceTxt')), 'box_yen': None, 'type': p.get('productType'),
                         'url': urllib.parse.urljoin('https://www.pokemon-card.com/', p.get('link_detailPage') or ''),
                         'image': urllib.parse.urljoin('https://www.pokemon-card.com/', p.get('tumbsImg') or ''),
-                        'tentative': False, 'source': 'pokemon_api'})
+                        'tentative': False, 'source': 'pokemon_api', 'source_page': page['url'].format(page=n)})
     return out
 
 
@@ -211,13 +217,29 @@ def classify(entries, full_name):
 
 
 def match(entries, existing):
-    """Pair official entries with existing items: name similarity shortlists, Jev decides SAME / DIFFERENT."""
+    """Pair official entries with existing items. Identity first (product code, official page + key), so most
+    pairs need no model; what is left goes to Jev, shortlisted by shared official page, then by release date."""
+    used, method = {}, {}
+    for i, e in enumerate(entries):
+        e['source'] = make_source(final_url(e.get('url') or e['source_page']), e['name'], 'official')
+        code = product_code(e['name'])
+        for x in existing:
+            if x['id'] in used:
+                continue
+            xs = x.get('source') or {}
+            if (code and (product_code(xs.get('key', '')) == code or product_code(x['name']) == code)) or \
+                    (xs.get('url') == e['source']['url'] and xs.get('key') == e['source']['key']):
+                used[x['id']] = i
+                e['match'], method[i] = x['id'], 'code' if code else 'source'
+                break
     pairs = []
     for i, e in enumerate(entries):
-        # names differ in script (スター・トレック vs Star Trek), so items released within 3 days all go to Jev;
-        # undated or far-off entries fall back to the closest names
-        near = [x for x in existing if e['date'] and abs((datetime.date.fromisoformat(x['date']) - datetime.date.fromisoformat(e['date'])).days) <= 3]
-        cands = near or [x for x in sorted(existing, key=lambda x: -sim(x['name'], e['name']))[:3] if sim(x['name'], e['name']) >= 0.15]
+        if i in method:
+            continue
+        free = [x for x in existing if x['id'] not in used]
+        same_page = [x for x in free if (x.get('source') or {}).get('url') == e['source']['url']]
+        near = [x for x in free if e['date'] and abs((datetime.date.fromisoformat(x['date']) - datetime.date.fromisoformat(e['date'])).days) <= 3]
+        cands = same_page or near or [x for x in sorted(free, key=lambda x: -sim(x['name'], e['name']))[:3] if sim(x['name'], e['name']) >= 0.15]
         pairs += [(i, x['id']) for x in cands]
     by_id = {x['id']: x for x in existing}
     answers = jev_choice('Decide whether two TCG product listings refer to the same product.', {
@@ -231,11 +253,12 @@ def match(entries, existing):
         label, p = answers.get(f'm{j}', ('DIFFERENT', 0))
         if label == 'SAME' and p > best.get(i, (None, 0.5))[1]:
             best[i] = (xid, p)
-    used = {}
     for i, (xid, p) in sorted(best.items(), key=lambda kv: -kv[1][1]):
         if xid not in used:
             used[xid] = i
-            entries[i]['match'] = xid
+            entries[i]['match'], method[i] = xid, 'jev'
+    for i, m in method.items():
+        entries[i]['match_method'] = m
     return used
 
 
@@ -272,9 +295,12 @@ def report(results, today, since, log):
         price_n = sum(1 for x in hit if by[x['id']]['pack_yen'] and yen(x.get('pack')))
         only = [e for e in r['entries'] if not e.get('match')]
         n = len(r['existing'])
+        how = {m: sum(1 for e in r['entries'] if e.get('match_method') == m) for m in ('code', 'source', 'jev')}
+        r['how'] = how
         lines.append(f"| {r['game']} | {n} | {len(hit)} | {len(hit) / n:.0%} | {date_ok}/{len(hit)} | {price_ok}/{price_n} | {len(only)} | {r['seconds']:.0f}s |" if n else
                      f"| {r['game']} | 0 | 0 | – | – | – | {len(only)} | {r['seconds']:.0f}s |")
     lines.append('')
+    lines += ['照合方法（件数）: ' + ' / '.join(f"{r['game']} 商品番号 {r['how']['code']}・公式ページ {r['how']['source']}・Jev {r['how']['jev']}" for r in results), '']
     lines += ['## コスト', '', '| provider | calls | prompt tok | completion tok | cost (USD) | API time |', '|---|---|---|---|---|---|']
     for p, v in LEDGER.rows.items():
         lines.append(f"| {p} | {v['calls']} | {v['prompt_tokens']} | {v['completion_tokens']} | {v['cost']:.4f} | {v['seconds']:.0f}s |")
@@ -292,7 +318,7 @@ def report(results, today, since, log):
                 diffs.append(f"日付 公式={e['date'] or e['date_text']} / 既存={x['date']}")
             if e['pack_yen'] and yen(x.get('pack')) and e['pack_yen'] != yen(x.get('pack')):
                 diffs.append(f"価格 公式={e['pack_yen']}円 / 既存={x.get('pack')}")
-            lines.append(f"- {'⚠️' if diffs else '✅'} {x['date']} {x['name']}  ⇔  {e['name']}" + (f"（{'; '.join(diffs)}）" if diffs else ''))
+            lines.append(f"- {'⚠️' if diffs else '✅'} {x['date']} {x['name']}  ⇔  {e['name']} [{e.get('match_method')}]" + (f"（{'; '.join(diffs)}）" if diffs else ''))
         only = [e for e in r['entries'] if not e.get('match')]
         lines += ['', f'### 公式にあって既存データにないもの（{len(only)}）', '']
         for e in sorted(only, key=lambda e: (e['date'] or '9999', e['name'])):
@@ -315,6 +341,17 @@ def main():
         results.append(run_game(k, sources[k], items, today.isoformat(), since, log))
     out = os.path.join(HERE, 'out')
     os.makedirs(out, exist_ok=True)
+    if '--adopt-sources' in sys.argv:
+        by_id = {x['id']: x for x in items}
+        changed = 0
+        for r in results:
+            for e in r['entries']:
+                x = by_id.get(e.get('match'))
+                if x and x.get('source') != e['source']:
+                    x['source'] = e['source']
+                    changed += 1
+        json.dump(items, open(os.path.join(ROOT, 'data/items.json'), 'w'), ensure_ascii=False, indent=1)
+        log.append(f'adopted official sources for {changed} items')
     md = report(results, today.isoformat(), since, log)
     open(os.path.join(out, f'report-{today}.md'), 'w').write(md)
     json.dump([{**{k: v for k, v in r.items() if k not in ('existing', 'used')}} for r in results],

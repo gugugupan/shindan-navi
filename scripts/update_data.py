@@ -20,6 +20,9 @@ import urllib.request
 
 from PIL import Image
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sourcekey import canonical_url, is_official, make_source, product_code  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'data')
 THUMBS = os.path.join(ROOT, 'public/thumbs')
@@ -167,6 +170,26 @@ def save_thumb(url):
     return 'thumbs/' + name
 
 
+def find_by_source(s, existing, used):
+    """Same release by identity, before any name matching: official product code within the title,
+    then the official page (url + key, or a page that only one existing item points at)."""
+    free = [x for x in existing if x['id'] not in used and x['game'] == s['game']]
+    code = product_code(s['name'])
+    if code:
+        for x in free:
+            if product_code((x.get('source') or {}).get('key', '')) == code or product_code(x['name']) == code:
+                return x
+    if s['url'] and is_official(s['url']):
+        src = make_source(s['url'], s['name'])
+        same_page = [x for x in free if (x.get('source') or {}).get('url') == src['url']]
+        for x in same_page:
+            if x['source'].get('key') == src['key']:
+                return x
+        if len(same_page) == 1 and sum(1 for x in existing if (x.get('source') or {}).get('url') == src['url']) == 1:
+            return same_page[0]
+    return None
+
+
 def merge(existing, scraped, overrides, today, report, dry):
     cutoff = (today - datetime.timedelta(days=KEEP_PAST_DAYS)).isoformat()
     for e in existing:
@@ -179,7 +202,9 @@ def merge(existing, scraped, overrides, today, report, dry):
     out = []
     for s in sorted(scraped, key=lambda r: (r['date'], r['game'], r['name'])):
         sid = item_id(s['game'], s['name'])
-        e = by_id.get(sid) if sid not in used else None
+        e = find_by_source(s, existing, used)
+        if e is None and sid not in used:
+            e = by_id.get(sid)
         if e is None:
             # renamed or moved: same title, close name, within ~3 months
             cands = [x for x in existing if x['id'] not in used and x['game'] == s['game']
@@ -200,6 +225,8 @@ def merge(existing, scraped, overrides, today, report, dry):
             item.update(date=s['date'], name=s['name'], game=s['game'])
             if not item.get('url') and s['url']:
                 item['url'] = s['url']
+            if (item.get('source') or {}).get('site') != 'official' and s['url'] and is_official(s['url']):
+                item['source'] = make_source(s['url'], s['name'], 'official')
             if s['img'] and (not item.get('thumb') or item.get('approx')):
                 if not dry:
                     item['thumb'] = save_thumb(s['img'])
@@ -207,7 +234,9 @@ def merge(existing, scraped, overrides, today, report, dry):
                 report['image'].append(f"[{s['game']}] {s['name']}")
         else:
             item = dict(id=sid, date=s['date'], game=s['game'], name=s['name'], pack=s['pack'], box=s['box'],
-                        url=s['url'], thumb='', approx=False)
+                        url=s['url'], thumb='', approx=False,
+                        source=make_source(s['url'], s['name']) if s['url'] and is_official(s['url']) else
+                        {'url': '', 'key': make_source('', s['name'])['key'], 'site': 'aggregator'})
             if s['img'] and not dry:
                 item['thumb'] = save_thumb(s['img'])
             report['new'].append(f"{s['date']}  [{s['game']}] {s['name']}")

@@ -17,6 +17,10 @@ Division of work:
 
 `sources.json` lists the pages per title and how to read them: `pokemon_api` (official JSON product DB), `listing` (product list page; `"follow": "links"` opens the set pages it names), `news` (news index; Jev picks product news, the LLM reads the articles).
 
+## Matching
+
+Every entry gets a `source` (`scripts/sourcekey.py`): canonical official page after redirects + official product code or normalised name. Pairs are made by identity first — product code within the title, then page + key — and only the rest go to Jev, shortlisted by shared official page, then by release date. `--adopt-sources` writes the matched official source back into `data/items.json`; after one adopting run all 15 matches of the pilot pair by identity (Jev 0).
+
 ## Pilot results (2026-10-13)
 
 | Title | Existing | Found on official site | Date | Price | Official only |
@@ -29,5 +33,6 @@ About $0.016 (OpenRouter) + Jev per full run, ~20 s.
 
 Findings:
 - pokemon-card.com's product DB lists upcoming sets once announced; the news index adds things like series logos and figures that the LLM correctly drops.
-- MTG misses are mostly matching, not extraction: the official article names products in katakana (スター・トレック) while the aggregators use English (Star Trek), and Jev stays at DIFFERENT (p≈0.6–0.7). Aggregators also merge variants (one 統率者デッキ entry vs four official decks) and split JP/EN where the official article lists one product.
+- MTG English-only products (Bundle, Scene Box, Collector's Edition decks) have their official page on magic.wizards.com, which the pilot does not read yet; add it as a source to pair them.
+- MTG misses were mostly matching, not extraction: the official article names products in katakana (スター・トレック) while the aggregators use English (Star Trek), and Jev stays at DIFFERENT (p≈0.6–0.7). Aggregators also merge variants (one 統率者デッキ entry vs four official decks) and split JP/EN where the official article lists one product.
 - Two aggregator items are absent from the official article (Draft Night, ビギナー・ボックス — the latter was cancelled), i.e. the official source can catch aggregator mistakes.
