@@ -147,6 +147,7 @@ tr.tl td div::after{content:"";flex:1;height:2px;background:var(--foil)}
 tr.tl td span{background:var(--foil);padding:2px 10px;border-radius:999px}
 td.d{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
 td.p{font-family:var(--mono);font-size:12.5px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.p .pb{display:block;font-size:10.5px;color:var(--muted)}
 td .th{width:40px}
 td.nm{min-width:260px}
 .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;white-space:nowrap}
@@ -373,6 +374,7 @@ tbody tr.starred td.nm{font-weight:700}
   td.gm{grid-area:game}
   td.nm{grid-area:name;min-width:0;font-size:13.5px;font-weight:500;line-height:1.4}
   td.p{text-align:left;font-size:12px;color:var(--muted);display:inline}
+  td.p .pb{display:inline;margin-left:3px}
   td.p1{grid-area:price}
   td.bx{display:none}
   td.lk{grid-area:link;margin-top:4px}
@@ -569,7 +571,7 @@ document.getElementById('chips').addEventListener('click',e=>{
 });
 
 function pkBtn(d){
-  const pr=d.pack?`<span class="pr">${esc(d.pack)}${d.box?` · BOX ${esc(d.box)}`:''}</span>`:'';
+  const pr=d.pack?`<span class="pr">${esc(d.pack)}${d.box?` · BOX ${esc(d.box)}${d.per_box?`（${d.per_box}パック）`:''}`:''}</span>`:'';
   return `<div class="pkw${isStar(d)?' on':''}"><button class="pk" style="--h:${HUE[d.game]}" data-id="${d.id}" title="${esc(d.game+' / '+d.name)}">${thumb(d)}<span class="t"><span class="g">${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></button>${starBtn(d)}</div>`;
 }
 
@@ -649,7 +651,7 @@ function renderTable(list){
     <td class="gm"><span class="tag" style="--h:${HUE[d.game]}"><i></i>${esc(d.game)}</span></td>
     <td class="nm">${esc(d.name)}${d.approx?'<span class="ap">参考画像</span>':''}</td>
     <td class="p p1">${esc(d.pack||'—')}</td>
-    <td class="p bx">${esc(d.box||'—')}</td>
+    <td class="p bx">${esc(d.box||'—')}${d.box&&d.per_box?`<small class="pb">${d.per_box}パック</small>`:''}</td>
     <td class="lk">${[d.url?`<a href="${esc(d.url)}" target="_blank" rel="noopener">商品</a>`:'',OFFICIAL[d.game]?`<a href="${esc(OFFICIAL[d.game])}" target="_blank" rel="noopener">公式</a>`:''].filter(Boolean).join(' · ')}</td></tr>`;
   });
   if(!lineDone && list.length) h+=line;
@@ -735,7 +737,8 @@ function openDetail(items,title,keepOpen){
     <h4>${esc(d.name)}</h4>
     <dl><dt>発売日</dt><dd>${fmtDate(d.date)}</dd>
     <dt>価格</dt><dd>${esc(d.pack||'—')}</dd>
-    ${d.box?`<dt>1BOX</dt><dd>${esc(d.box)}</dd>`:''}</dl>
+    ${d.box?`<dt>1BOX</dt><dd>${esc(d.box)}${d.per_box?`（${d.per_box}パック入り）`:''}</dd>`:''}
+    ${d.per_pack?`<dt>内容</dt><dd>${d.per_box||(d.packN||0)<1000?'1パック':'1セット'}${d.per_pack}枚入り</dd>`:''}</dl>
     ${d.approx?'<p class="ap" style="display:inline-block;margin:8px 0 0">参考画像（実際の商品と異なる場合あり）</p>':''}
     <p class="dl-links">${d.date>=TODAY?`<button class="calbtn" data-cal-id="${d.id}">📅 カレンダーに追加</button>`:''}${linkList(d).join('')}</p>
   </div></div>`).join('');
@@ -773,7 +776,7 @@ const eventTitle = d => `【発売日】${d.name}`;
 const eventDetails = d => [
   `タイトル: ${d.game}`,
   d.pack ? `価格: ${d.pack}` : '',
-  d.box ? `1BOX: ${d.box}` : '',
+  d.box ? `1BOX: ${d.box}${d.per_box?`（${d.per_box}パック入り）`:''}` : '',
   d.url ? `公式: ${d.url}` : (OFFICIAL[d.game] ? `公式: ${OFFICIAL[d.game]}` : ''),
   `新弾ナビ: ${SITE_URL}`
 ].filter(Boolean).join('\n');

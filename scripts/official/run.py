@@ -58,6 +58,8 @@ Reply as {{"products": [{{
   "price_text": the price as written, or null,
   "price_pack_yen": integer price (tax included) of one pack or one item, or null,
   "price_box_yen": integer price (tax included) of one box, or null,
+  "packs_per_box": integer number of packs in one box, or null,
+  "cards_per_pack": integer number of cards in one pack (or in the deck / set), or null,
   "product_type": short Japanese label such as 拡張パック / 強化拡張パック / 構築デッキ / スターターデッキ / セット / サプライ,
   "editions": list of language editions this entry is sold in, e.g. ["日本語版"], ["英語版"], ["日本語版", "英語版"]; [] if the page does not say,
   "url": link to this product's own page if the page has one, else null,
@@ -66,6 +68,23 @@ Reply as {{"products": [{{
 }}]}}
 
 Rules: Japanese and English editions are separate products. "name" is the full product name including the set name (e.g. "Marvel: Darkhold Destiny Bundle", not just "Bundle"). A set or expansion by itself is not a product — list its packs, decks, boxes and bundles instead, and skip sets whose products are not named yet. Copy values from the page; never guess. Skip events, campaigns, card reveals and prizes that are not sold. Return {{"products": []}} if there are none.
+
+Page text:
+{text}"""
+
+DETAIL_PROMPT = """Card game: {full_name}
+Product: {name}
+Page: {url}
+This is the official page of the product above, or a page that lists it. Read the box and contents details of THIS product only.
+
+Reply as {{
+  "price_pack_yen": integer price (tax included) of one pack or one item, or null,
+  "price_box_yen": integer price (tax included) of one box, or null,
+  "packs_per_box": integer number of packs in one box, or null,
+  "cards_per_pack": integer number of cards in one pack (or in the deck / set), or null
+}}
+
+Rules: copy values from the page; never guess or compute. Use null for anything the page does not state for this product. 「1パック5枚入り」 → cards_per_pack 5; 「1BOX 10パック入り」 → packs_per_box 10.
 
 Page text:
 {text}"""
@@ -157,9 +176,23 @@ def clean_entry(e, game, source):
     return {'game': game, 'name': (e.get('name') or '').strip(), 'date': date, 'date_text': e.get('release_date_text'), 'source_page': source,
             'pack_yen': e.get('price_pack_yen') if isinstance(e.get('price_pack_yen'), int) else yen(e.get('price_text')),
             'box_yen': e.get('price_box_yen') if isinstance(e.get('price_box_yen'), int) else None,
+            'per_box': count(e.get('packs_per_box')), 'per_pack': count(e.get('cards_per_pack')),
             'type': e.get('product_type'), 'url': e.get('url'), 'image': e.get('image_url'),
             'tentative': bool(e.get('tentative')), 'source': source,
             'editions': [x for x in (e.get('editions') or []) if isinstance(x, str)]}
+
+
+def count(v):
+    return v if isinstance(v, int) and 0 < v < 1000 else None
+
+
+def product_details(full_name, name, url):
+    """Box price and contents of one product read from its own page: {pack_yen, box_yen, per_box, per_pack}."""
+    html = fetch(url, max_age=14 * 24 * 3600)
+    data = llm_json(EXTRACT_SYSTEM, DETAIL_PROMPT.format(full_name=full_name, name=name, url=url, text=page_text(html, url)), max_tokens=300)
+    yen_or_none = lambda v: v if isinstance(v, int) and v > 0 else None
+    return {'pack_yen': yen_or_none(data.get('price_pack_yen')), 'box_yen': yen_or_none(data.get('price_box_yen')),
+            'per_box': count(data.get('packs_per_box')), 'per_pack': count(data.get('cards_per_pack'))}
 
 
 def split_editions(entries):

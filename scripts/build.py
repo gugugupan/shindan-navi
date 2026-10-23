@@ -37,7 +37,7 @@ GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポ�
 
 overrides=json.load(open(os.path.join(ROOT,'data/overrides.json')))
 it=json.load(open(os.path.join(ROOT,'data/items.json')))
-keep=['id','date','game','name','pack','box','url','thumb','approx']
+keep=['id','date','game','name','pack','box','per_box','per_pack','url','thumb','approx']
 data=[]
 for i in it:
     ov=overrides.get(i['id'],{})

@@ -14,7 +14,9 @@ import json
 import os
 import re
 import sys
+import time
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -377,6 +379,9 @@ def fold_official(x, e, report, dry):
         x['pack'] = yen_text(e['pack_yen'])
     if e.get('box_yen') and not x.get('box'):
         x['box'] = yen_text(e['box_yen'])
+    for k in ('per_box', 'per_pack'):
+        if e.get(k) and not x.get(k):
+            x[k] = e[k]
     if e.get('url') and is_official(e['url']) and not is_official(x.get('url') or ''):
         x['url'] = e['url']
     img = e.get('image') or ''
@@ -395,6 +400,7 @@ def new_from_official(e, dry):
                 pack=yen_text(e.get('pack_yen')), box=yen_text(e.get('box_yen')),
                 url=e['url'] if e.get('url') and is_official(e['url']) else '', thumb='', approx=False,
                 sources=['official'], source=e['source'], official_name=e['name'])
+    item.update({k: e[k] for k in ('per_box', 'per_pack') if e.get(k)})
     img = e.get('image') or ''
     if img and not PLACEHOLDER_IMG.search(img) and not dry:
         try:
@@ -402,6 +408,76 @@ def new_from_official(e, dry):
         except Exception:
             pass
     return item
+
+
+def sold_by_box(x, pack_yen=None):
+    """Packs under 1,000円 are sold by the box; decks and sets are sold one by one."""
+    price = yen_int(x.get('pack')) or pack_yen
+    return price < 1000 if price else not re.search(r'デッキ|セット|deck|set', x['name'], re.I)
+
+
+def needs_box_info(x):
+    return not x.get('per_pack') or (sold_by_box(x) and not (x.get('box') and x.get('per_box')))
+
+
+def product_page(x):
+    if x.get('url') and is_official(x['url']):
+        return x['url']
+    src = x.get('source') or {}
+    return src['url'] if src.get('site') == 'official' and src.get('url') else ''
+
+
+def fill_box_info(items, today, report, log):
+    """Open each upcoming item's own official page for what the listings left out: box price, packs per box, cards per pack."""
+    sys.path.insert(0, OFFICIAL_DIR)
+    import run as official  # noqa: E402
+    from common import load_env  # noqa: E402
+    load_env()
+    if not os.environ.get('OPENROUTER_API_KEY'):
+        log.append('box info: skipped (OPENROUTER_API_KEY not set in .env)')
+        return
+    sources = json.load(open(os.path.join(OFFICIAL_DIR, 'sources.json')))
+    full_name = {v['game']: v['full_name'] for k, v in sources.items() if not k.startswith('_')}
+    todo = [x for x in items if x['date'] >= today.isoformat() and needs_box_info(x) and product_page(x)]
+    failed = 0
+    for x in todo:
+        got = None
+        for wait in (0, 10):
+            time.sleep(wait)
+            try:
+                got = official.product_details(full_name.get(x['game'], x['game']), x.get('official_name') or x['name'], product_page(x))
+                break
+            except urllib.error.HTTPError as ex:
+                err = ex
+                if ex.code not in (429, 503):
+                    break
+            except Exception as ex:
+                err = ex
+                break
+        if got is None:
+            failed += 1
+            log.append(f"box info: {x['name']} {product_page(x)} FAILED {err!r}")
+            continue
+        added = []
+        if got['per_pack'] and not x.get('per_pack'):
+            x['per_pack'] = got['per_pack']
+            added.append(f"{got['per_pack']}枚入り")
+        if not x.get('pack') and got['pack_yen']:
+            x['pack'] = yen_text(got['pack_yen'])
+            added.append(f"価格 {x['pack']}")
+        if sold_by_box(x, got['pack_yen']):
+            if got['per_box'] and not x.get('per_box'):
+                x['per_box'] = got['per_box']
+                added.append(f"{got['per_box']}パック入り")
+            if not x.get('box') and got['box_yen']:
+                x['box'] = yen_text(got['box_yen'])
+                added.append(f"BOX {x['box']}")
+            elif not x.get('box') and x.get('per_box') and yen_int(x.get('pack')):
+                x['box'] = yen_text(yen_int(x['pack']) * x['per_box'])
+                added.append(f"BOX {x['box']}（{yen_text(yen_int(x['pack']))}×{x['per_box']}）")
+        if added:
+            report['box'].append(f"{x['date']}  [{x['game']}] {x['name']}: {' / '.join(added)}")
+    log.append(f'box info: {len(todo)} product pages read, {len(report["box"])} items filled, {failed} failed')
 
 
 def yen_int(text):
@@ -412,7 +488,7 @@ def yen_int(text):
 def write_report(path, report, counts, unknown, today, log=()):
     titles = [('new', '新規'), ('official_new', '公式サイトから追加'),
               ('official_review', '公式にあるが既存と似ている（未追加・要確認：別商品なら手動で追加、同じなら対応不要）'), ('moved', '発売日の変更'),
-              ('date_conflict', '公式と既存で発売日が大きく違う（未適用・要確認）'), ('price', '価格の変更'), ('image', '画像を取得/差し替え'),
+              ('date_conflict', '公式と既存で発売日が大きく違う（未適用・要確認）'), ('price', '価格の変更'), ('box', 'BOX情報の追加'), ('image', '画像を取得/差し替え'),
               ('official_unconfirmed', '公式サイトで確認できなかった今後の商品（公式を設定済みのタイトルのみ）'),
               ('official_undated', '公式で発表済み・発売日未定（未掲載）'),
               ('missing', 'ソースから消えた今後の商品（残しています。不要なら overrides で hide）'),
@@ -444,12 +520,13 @@ def main():
     if len(scraped) < MIN_RATIO * upcoming_before:
         sys.exit(f'abort: only {len(scraped)} releases scraped vs {upcoming_before} known for this month onward — nothing written')
     overrides = json.load(open(os.path.join(DATA, 'overrides.json')))
-    report = {k: [] for k in ('new', 'official_new', 'official_review', 'moved', 'date_conflict', 'price', 'image', 'official_unconfirmed', 'official_undated',
+    report = {k: [] for k in ('new', 'official_new', 'official_review', 'moved', 'date_conflict', 'price', 'box', 'image', 'official_unconfirmed', 'official_undated',
                               'missing', 'dropped', 'noimage')}
     items = merge(existing, scraped, overrides, today, report, dry)
     log = []
     if '--no-official' not in sys.argv:
         items = apply_official(items, today, report, dry, log)
+        fill_box_info(items, today, report, log)
         items = apply_overrides(items, overrides)
         items.sort(key=lambda r: (r['date'], r['game'], r['name']))
         report['noimage'] = [f"{i['date']}  [{i['game']}] {i['name']}  ({i['id']})" for i in items if not i.get('thumb')]
