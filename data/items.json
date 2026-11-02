@@ -1,196 +1,5 @@
 [
  {
-  "id": "i0bfb9ecc55",
-  "date": "2026-10-02",
-  "game": "MTG",
-  "name": "MTG Reality Fracture Bundle EN",
-  "pack": "7,656円",
-  "box": "",
-  "url": "https://mtg-jp.com/products/0000311/",
-  "thumb": "thumbs/c18ab96378ee.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000311",
-   "key": "mtgrealityfracturebundleen",
-   "site": "official"
-  }
- },
- {
-  "id": "if951a4d850",
-  "date": "2026-10-02",
-  "game": "MTG",
-  "name": "MTG Reality Fracture Draft Night EN",
-  "pack": "13,728円",
-  "box": "",
-  "url": "https://mtg-jp.com/products/0000311/",
-  "thumb": "thumbs/ef6477d55bc3.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000311",
-   "key": "mtgrealityfracturedraftnighten",
-   "site": "official"
-  }
- },
- {
-  "id": "id570c07bd9",
-  "date": "2026-10-02",
-  "game": "MTG",
-  "name": "MTG リアリティ・フラクチャー コレクター・ブースター 日本語版",
-  "pack": "3,212円",
-  "box": "",
-  "url": "https://mtg-jp.com/products/0000311/",
-  "thumb": "thumbs/d4656194bead.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000311",
-   "key": "mtgリアリティ・フラクチャーコレクター・ブースター日本語版",
-   "site": "official"
-  }
- },
- {
-  "id": "i993a89ff90",
-  "date": "2026-10-02",
-  "game": "MTG",
-  "name": "MTG リアリティ・フラクチャー プレイ・ブースター 日本語版",
-  "pack": "627円",
-  "box": "",
-  "url": "https://mtg-jp.com/products/0000311/",
-  "thumb": "thumbs/18f7f76f22c1.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000311",
-   "key": "mtgリアリティ・フラクチャープレイ・ブースター日本語版",
-   "site": "official"
-  }
- },
- {
-  "id": "i97d0c70232",
-  "date": "2026-10-02",
-  "game": "MTG",
-  "name": "MTG リアリティ・フラクチャー プレイ・ブースター 英語版",
-  "pack": "748円",
-  "box": "",
-  "url": "https://mtg-jp.com/products/0000311/",
-  "thumb": "thumbs/b9c55bb0be55.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000311",
-   "key": "mtgリアリティ・フラクチャープレイ・ブースター英語版",
-   "site": "official"
-  }
- },
- {
-  "id": "i987eb8d3ee",
-  "date": "2026-10-02",
-  "game": "MTG",
-  "name": "MTG リアリティ・フラクチャー 統率者デッキ 日本語版",
-  "pack": "5,830円",
-  "box": "",
-  "url": "https://mtg-jp.com/products/0000311/",
-  "thumb": "thumbs/608b7a9b0e63.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000311",
-   "key": "mtgリアリティ・フラクチャー統率者デッキ日本語版",
-   "site": "official"
-  }
- },
- {
-  "id": "i488e70cc69",
-  "date": "2026-10-02",
-  "game": "MTG",
-  "name": "MTG リアリティ・フラクチャー 統率者デッキ 英語版",
-  "pack": "6,985円",
-  "box": "",
-  "url": "https://mtg-jp.com/products/0000311/",
-  "thumb": "thumbs/06e70362533e.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000311",
-   "key": "mtgリアリティ・フラクチャー統率者デッキ英語版",
-   "site": "official"
-  }
- },
- {
-  "id": "i2f928577c4",
-  "date": "2026-10-02",
-  "game": "Shadowverse EVOLVE",
-  "name": "Shadowverse EVOLVE ブースターパック第22弾 「Over the Calamity/オーバー・ザ・カラミティ」",
-  "pack": "440円",
-  "box": "",
-  "url": "https://shadowverse-evolve.com/products/bp22",
-  "thumb": "thumbs/2585441a4fef.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://shadowverse-evolve.com/products/bp22",
-   "key": "shadowverseevolveブースターパック第22弾「overthecalamity/オーバー・ザ・カラミティ」",
-   "site": "official"
-  }
- },
- {
-  "id": "iba95233c80",
-  "date": "2026-10-02",
-  "game": "パルワールド",
-  "name": "パルワールド オフィシャルカードゲーム スリーブ＆カードセット Vol.1",
-  "pack": "4,400円",
-  "box": "",
-  "url": "https://palworld-official-cardgame.com/products/ss01",
-  "thumb": "thumbs/8ba26f65765f.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://palworld-official-cardgame.com/products/ss01",
-   "key": "パルワールドオフィシャルカードゲームスリーブ&カードセットvol.1",
-   "site": "official"
-  }
- },
- {
-  "id": "ic4e51981e6",
-  "date": "2026-10-02",
-  "game": "ヴァイスシュヴァルツ",
-  "name": "WS ブースターパック anemoi",
-  "pack": "440円",
-  "box": "4400円(税込)",
-  "url": "https://ws-tcg.com/products/anm_bp/",
-  "thumb": "thumbs/ba11db74611a.jpg",
-  "approx": false,
-  "sources": [
-   "clabo",
-   "torecamap"
-  ],
-  "source": {
-   "url": "https://ws-tcg.com/products/anm_bp",
-   "key": "wsブースターパックanemoi",
-   "site": "official"
-  }
- },
- {
   "id": "i6bcebca656",
   "date": "2026-10-03",
   "game": "デジモン",
@@ -201,8 +10,7 @@
   "thumb": "thumbs/5227b79df934.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://digimoncard.com/products/pack/ex-13",
@@ -278,8 +86,7 @@
   "thumb": "thumbs/aa21215a6e67.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/booster/dz-bt17",
@@ -355,8 +162,7 @@
   "thumb": "thumbs/a0cf15102a8f.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://konami.com/yugioh/rushduel/products/ca01",
@@ -395,8 +201,7 @@
   "thumb": "thumbs/0d34b607504b.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://unionarena-tcg.com/jp/products/boosters/stg-1.php",
@@ -596,8 +401,7 @@
   "thumb": "thumbs/2f91c69fe746.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://takaratomy.co.jp/products/disneylorcana/news/products/117302",
@@ -637,8 +441,7 @@
   "thumb": "thumbs/be3fad70ee99.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://ws-tcg.com/products/sts_bp",
@@ -678,8 +481,7 @@
   "thumb": "thumbs/dbf4642ef810.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://dm.takaratomy.co.jp/product/dm26ex4",
@@ -699,8 +501,7 @@
   "thumb": "thumbs/d408c5ca8c3c.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://battlespirits.com/product/booster/booster-26rbs03.php",
@@ -800,8 +601,7 @@
   "thumb": "thumbs/51fbb3276b5d.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://zxtcg.com/product/ig_16.html",
@@ -820,8 +620,7 @@
   "thumb": "thumbs/b0664252b81b.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000311",
@@ -841,8 +640,7 @@
   "thumb": "thumbs/e6f75d25bdc4.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://acgtcg.com/products_22.html",
@@ -864,8 +662,7 @@
   "thumb": "thumbs/06e86bb724a0.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://ultraman-cardgame.com/page/jp/product/product-detail/27",
@@ -886,8 +683,7 @@
   "thumb": "thumbs/b1d9d0f92846.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://ultraman-cardgame.com/page/jp/product/product-detail/26",
@@ -928,9 +724,7 @@
   "thumb": "thumbs/43657ff5ab2c.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/booster/dz-tbp02",
@@ -952,8 +746,7 @@
   "thumb": "thumbs/382c8716cfa9.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://tcg.movic.jp/harrypotter/products/998",
@@ -974,8 +767,7 @@
   "thumb": "thumbs/7743ab173b6a.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://takaratomy.co.jp/products/haikyuvobacabreak/product/hv-d04.html",
@@ -996,8 +788,7 @@
   "thumb": "thumbs/01e77ddf0a0d.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://takaratomy.co.jp/products/haikyuvobacabreak/product/HV-P04.html",
@@ -1019,8 +810,7 @@
   "thumb": "thumbs/e2e59c8dd031.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://llofficial-cardgame.com/products/lls_pocket",
@@ -1041,8 +831,7 @@
   "thumb": "thumbs/e986bf8bbe48.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://llofficial-cardgame.com/products/lls_binder",
@@ -1063,9 +852,7 @@
   "thumb": "thumbs/c01ef3e5a19b.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://unionarena-tcg.com/jp/products/boosters/ex_rez.php",
@@ -1087,8 +874,7 @@
   "thumb": "thumbs/d5d69fa4d78a.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://xross-stars.com/product/ST04",
@@ -1109,8 +895,7 @@
   "thumb": "thumbs/5ac3db5e5dbd.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://xross-stars.com/product/ST03",
@@ -1131,9 +916,7 @@
   "thumb": "thumbs/1e6c38a1f796.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://xross-stars.com/product/BP05",
@@ -1155,8 +938,7 @@
   "thumb": "thumbs/057ab709d6aa.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://palworld-official-cardgame.com/products/bp02",
@@ -1178,8 +960,7 @@
   "thumb": "thumbs/f2d09b99a7ff.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://tcg.build-divide.com/bright/products/96",
@@ -1201,8 +982,7 @@
   "thumb": "thumbs/871de5dba0eb.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://lycee-tcg.com/product/vol49_amusecraft",
@@ -1224,8 +1004,7 @@
   "thumb": "thumbs/8d4a243ddcd6.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://ws-tcg.com/products/gup_td_o",
@@ -1246,8 +1025,7 @@
   "thumb": "thumbs/cefabe8c0640.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://ws-tcg.com/products/gup_td_m",
@@ -1268,9 +1046,7 @@
   "thumb": "thumbs/46147f452fdf.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://ws-tcg.com/products/gup_bp",
@@ -1348,9 +1124,7 @@
   "thumb": "thumbs/43fa11ca6c15.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://onepiece-cardgame.com/products/eb05.html",
@@ -1370,9 +1144,7 @@
   "url": "https://www.onepiece-cardgame.com/products/heroines-box.html",
   "thumb": "thumbs/bcdc0743552d.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://onepiece-cardgame.com/products/heroines-box.html",
    "key": "公認店限定onepieceカードゲームonepieceheroinespreciousbox",
@@ -1391,9 +1163,7 @@
   "thumb": "thumbs/e0c1999fcc16.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://takaratomy.co.jp/products/wixoss/product/wx26_p2",
@@ -1413,9 +1183,7 @@
   "thumb": "thumbs/0d63b99f828e.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://gundam-gcg.com/jp/products/gd06.html",
@@ -1436,9 +1204,7 @@
   "thumb": "thumbs/8dfe4e52c131.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://takaratomy.co.jp/products/conan-cardgame/product/ct-p11",
@@ -1460,9 +1226,7 @@
   "thumb": "thumbs/b67e7426d1cb.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official",
-   "torecamap"
+   "clabo"
   ],
   "source": {
    "url": "https://yugioh-card.com/japan/products/imph",
@@ -1484,8 +1248,7 @@
   "thumb": "thumbs/f533d814ce70.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://yugioh-card.com/japan/products",
@@ -1510,10 +1273,10 @@
   ],
   "source": {
    "url": "https://godzilla-cardgame.com/products/sd05",
-   "key": "決戦開始!スタートデッキ緑「キングギドラ」",
+   "key": "構築デッキ決戦開始!スタートデッキ緑「キングギドラ」",
    "site": "official"
   },
-  "official_name": "決戦開始！スタートデッキ 緑「キングギドラ」",
+  "official_name": "構築デッキ 決戦開始！スタートデッキ 緑「キングギドラ」",
   "per_pack": 54
  },
  {
@@ -1532,10 +1295,10 @@
   ],
   "source": {
    "url": "https://godzilla-cardgame.com/products/sd03",
-   "key": "決戦開始!スタートデッキ赤「ゴジラ」",
+   "key": "構築デッキ決戦開始!スタートデッキ赤「ゴジラ」",
    "site": "official"
   },
-  "official_name": "決戦開始！スタートデッキ 赤「ゴジラ」",
+  "official_name": "構築デッキ 決戦開始！スタートデッキ 赤「ゴジラ」",
   "per_pack": 54
  },
  {
@@ -1554,10 +1317,10 @@
   ],
   "source": {
    "url": "https://godzilla-cardgame.com/products/sd04",
-   "key": "決戦開始!スタートデッキ青「デストロイア」",
+   "key": "構築デッキ決戦開始!スタートデッキ青「デストロイア」",
    "site": "official"
   },
-  "official_name": "決戦開始！スタートデッキ 青「デストロイア」",
+  "official_name": "構築デッキ 決戦開始！スタートデッキ 青「デストロイア」",
   "per_pack": 54
  },
  {
@@ -1572,7 +1335,6 @@
   "approx": false,
   "sources": [
    "clabo",
-   "official",
    "torecamap"
   ],
   "source": {
@@ -1588,14 +1350,15 @@
   "id": "i83b1cc8870",
   "date": "2026-11-07",
   "game": "デュエル・マスターズ",
-  "name": "DM26-EX5 デュエル・マスターズTCG デュエマプレイス・コラボパック 「電脳対戦 -WAR OF PLAY'S-」",
-  "pack": "385円",
+  "name": "DM26-EX5 デュエマプレイス・コラボパック 「電脳対戦 -WAR OF PLAY'S-」",
+  "pack": "385円(税込)",
   "box": "6,160円",
   "url": "https://dm.takaratomy.co.jp/product/dm26ex5/",
   "thumb": "thumbs/9a71f354e738.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://dm.takaratomy.co.jp/product/dm26ex5",
@@ -1792,10 +1555,10 @@
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
-   "key": "beammeupbundle",
+   "key": "マジック:ザ・ギャザリング|スター・トレックbeammeupbundle",
    "site": "official"
   },
-  "official_name": "Beam Me Up Bundle"
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック Beam Me Up Bundle"
  },
  {
   "id": "i4650ed04ab",
@@ -1813,10 +1576,10 @@
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
-   "key": "bundle",
+   "key": "マジック:ザ・ギャザリング|スター・トレックbundle",
    "site": "official"
   },
-  "official_name": "Bundle"
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック Bundle"
  },
  {
   "id": "ie021b364ff",
@@ -1829,14 +1592,15 @@
   "thumb": "thumbs/6661a60180d7.jpg",
   "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
-   "url": "https://mtg-jp.com/reading/publicity/0039603",
-   "key": "collector'seditioncommanderdeck「federationfleet」",
+   "url": "https://mtg-jp.com/products/0000312",
+   "key": "マジック:ザ・ギャザリング|スター・トレックcollector'seditioncommanderdeck(全4種)",
    "site": "official"
   },
-  "official_name": "Collector's Edition Commander Deck「Federation Fleet」",
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック Collector's Edition Commander deck（全4種）",
   "per_pack": 100
  },
  {
@@ -1874,10 +1638,10 @@
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
-   "key": "scenebox(全2種)",
+   "key": "マジック:ザ・ギャザリング|スター・トレックscenebox(全2種)",
    "site": "official"
   },
-  "official_name": "Scene Box（全2種）"
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック Scene Box（全2種）"
  },
  {
   "id": "i049506e944",
@@ -1913,13 +1677,17 @@
   "thumb": "thumbs/25300abc3cf2.jpg",
   "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
-   "url": "https://magic.wizards.com/en/products/star-trek",
-   "key": "mtgスター・トレックコレクター・ブースター英語版",
+   "url": "https://mtg-jp.com/products/0000312",
+   "key": "マジック:ザ・ギャザリング|スター・トレックコレクター・ブースター英語版",
    "site": "official"
-  }
+  },
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック コレクター・ブースター 英語版",
+  "per_box": 12,
+  "per_pack": 15
  },
  {
   "id": "i9aaf6249e5",
@@ -1969,19 +1737,22 @@
   "game": "MTG",
   "name": "MTG スター・トレック プレイ・ブースター 英語版",
   "pack": "946円",
-  "box": "",
+  "box": "28,380円",
   "url": "https://magic.wizards.com/en/products/star-trek",
   "thumb": "thumbs/b996b42dcb22.jpg",
   "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
-   "url": "https://mtg-jp.com/reading/publicity/0039603",
-   "key": "『マジック:ザ・ギャザリング|スター・トレック』プレイ・ブースター",
+   "url": "https://mtg-jp.com/products/0000312",
+   "key": "マジック:ザ・ギャザリング|スター・トレックプレイ・ブースター英語版",
    "site": "official"
   },
-  "official_name": "『マジック：ザ・ギャザリング | スター・トレック』プレイ・ブースター"
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック プレイ・ブースター 英語版",
+  "per_box": 30,
+  "per_pack": 14
  },
  {
   "id": "ie3ee4a626c",
@@ -2016,14 +1787,16 @@
   "thumb": "thumbs/9cb013a96a7c.jpg",
   "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
-   "url": "https://mtg-jp.com/reading/publicity/0039603",
-   "key": "統率者デッキ「惑星連邦宇宙艦隊」",
+   "url": "https://mtg-jp.com/products/0000312",
+   "key": "マジック:ザ・ギャザリング|スター・トレック統率者デッキ(全4種)英語版",
    "site": "official"
   },
-  "official_name": "統率者デッキ「惑星連邦宇宙艦隊」"
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック 統率者デッキ（全4種） 英語版",
+  "per_pack": 100
  },
  {
   "id": "ic89b0452e5",
@@ -2093,13 +1866,15 @@
   "url": "",
   "thumb": "thumbs/b30a2909d83e.jpg",
   "approx": false,
-  "sources": [],
+  "sources": [
+   "official"
+  ],
   "source": {
-   "url": "https://mtg-jp.com/reading/publicity/0039603",
-   "key": "統率者デッキ「上陸班」",
+   "url": "https://mtg-jp.com/products/0000312",
+   "key": "マジック:ザ・ギャザリング|スター・トレック統率者デッキ(全4種)日本語版",
    "site": "official"
   },
-  "official_name": "統率者デッキ「上陸班」",
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック 統率者デッキ（全4種） 日本語版",
   "per_pack": 100
  },
  {
@@ -2268,8 +2043,7 @@
   "thumb": "thumbs/10814d52f614.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss20",
@@ -2289,8 +2063,7 @@
   "thumb": "thumbs/815860687780.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss21",
@@ -2309,9 +2082,7 @@
   "url": "https://cf-vanguard.com/products/trial/dz-ss21p/",
   "thumb": "thumbs/c203af3c826f.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss21p",
    "key": "VG-DZ-SS21P",
@@ -2330,9 +2101,7 @@
   "url": "https://cf-vanguard.com/products/trial/dz-ss20p/",
   "thumb": "thumbs/666eff19f019.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss20p",
    "key": "VG-DZ-SS20P",
@@ -2596,17 +2365,20 @@
   "pack": "440円",
   "box": "5,280円",
   "url": "https://shadowverse-evolve.com/products/cp05/",
-  "thumb": "thumbs/9145ffe809dd.jpg",
-  "approx": true,
+  "thumb": "thumbs/009b041a4122.jpg",
+  "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
    "url": "https://shadowverse-evolve.com/products",
    "key": "コラボパック「グランブルーファンタジー」",
    "site": "official"
   },
-  "official_name": "コラボパック「グランブルーファンタジー」"
+  "official_name": "コラボパック「グランブルーファンタジー」",
+  "per_pack": 8,
+  "per_box": 12
  },
  {
   "id": "i3df6c92b9a",
@@ -2800,7 +2572,7 @@
    "official"
   ],
   "source": {
-   "url": "https://tcg.kamitsubaki.jp/products?doing_wp_cron=1792765842.1869399547576904296875",
+   "url": "https://tcg.kamitsubaki.jp/products",
    "key": "スターターデッキヰ世界情緒・氷夏至",
    "site": "official"
   },
@@ -2822,7 +2594,7 @@
    "official"
   ],
   "source": {
-   "url": "https://tcg.kamitsubaki.jp/products?doing_wp_cron=1792765842.1869399547576904296875",
+   "url": "https://tcg.kamitsubaki.jp/products",
    "key": "スターターデッキ春猿火・夕凪機",
    "site": "official"
   },
@@ -2844,7 +2616,7 @@
    "official"
   ],
   "source": {
-   "url": "https://tcg.kamitsubaki.jp/products?doing_wp_cron=1792765842.1869399547576904296875",
+   "url": "https://tcg.kamitsubaki.jp/products",
    "key": "ブースターパックvol.7「鳴動の因果」",
    "site": "official"
   },
@@ -2906,8 +2678,7 @@
   "thumb": "thumbs/ddf736056f41.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss22",
@@ -3068,6 +2839,28 @@
   "official_name": "ブースターパック ウマ娘 プリティーダービー",
   "per_pack": 8,
   "per_box": 16
+ },
+ {
+  "id": "icb3284593f",
+  "date": "2026-12-11",
+  "game": "ゴジラ",
+  "name": "拡張パック ブースターパック『君臨するゼロ』",
+  "pack": "440円",
+  "box": "5,280円",
+  "url": "https://godzilla-cardgame.com/products/bp05/",
+  "thumb": "thumbs/caf3d6989887.jpg",
+  "approx": false,
+  "sources": [
+   "official"
+  ],
+  "source": {
+   "url": "https://godzilla-cardgame.com/products/bp05",
+   "key": "拡張パックブースターパック『君臨するゼロ』",
+   "site": "official"
+  },
+  "official_name": "拡張パック ブースターパック『君臨するゼロ』",
+  "per_pack": 7,
+  "per_box": 12
  },
  {
   "id": "i9abefff717",
@@ -3343,19 +3136,22 @@
   "game": "ヴァイスシュヴァルツ",
   "name": "WSR ブースターパック ぱれっと",
   "pack": "550円",
-  "box": "",
+  "box": "5,500円",
   "url": "https://ws-rose.com/products/plt",
   "thumb": "thumbs/3cf6e19a8e54.jpg",
-  "approx": true,
+  "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
    "url": "https://ws-rose.com/products/plt",
    "key": "ブースターパックぱれっと",
    "site": "official"
   },
-  "official_name": "ブースターパック ぱれっと"
+  "official_name": "ブースターパック ぱれっと",
+  "per_pack": 6,
+  "per_box": 10
  },
  {
   "id": "i12b54dd665",
@@ -3369,7 +3165,6 @@
   "approx": false,
   "sources": [
    "clabo",
-   "official",
    "torecamap"
   ],
   "source": {
@@ -3386,7 +3181,7 @@
   "date": "2026-12-19",
   "game": "ONE PIECE",
   "name": "スタートデッキ バロックワークス【ST-38】",
-  "pack": "1,320円",
+  "pack": "1,430円",
   "box": "",
   "url": "https://www.onepiece-cardgame.com/products/st38.html",
   "thumb": "thumbs/d7b127c030fc.jpg",
@@ -3407,7 +3202,7 @@
   "date": "2026-12-19",
   "game": "ONE PIECE",
   "name": "スタートデッキ 砂漠の王女と海賊たち【ST-37】",
-  "pack": "1,320円",
+  "pack": "1,430円",
   "box": "",
   "url": "https://www.onepiece-cardgame.com/products/st37.html",
   "thumb": "thumbs/dc04ddad5419.jpg",
@@ -3523,7 +3318,8 @@
   "thumb": "thumbs/e29258169009.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://yugioh-card.com/japan/products",
@@ -3984,8 +3780,10 @@
   "box": "5,280円",
   "url": "",
   "thumb": "thumbs/231941ad3fb0.jpg",
-  "approx": true,
-  "sources": [],
+  "approx": false,
+  "sources": [
+   "official"
+  ],
   "source": {
    "url": "https://shadowverse-evolve.com/products",
    "key": "ブースターパック「舞い踊る六華」",
@@ -4030,7 +3828,7 @@
    "official"
   ],
   "source": {
-   "url": "https://palworld-official-cardgame.com/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%83%91%e3%83%83%e3%82%af%e7%ac%ac3%e5%bc%be%e3%80%8c%e6%9e%9c%e3%81%a6%e3%81%aa%e3%81%8d%e9%a3%9b%e7%bf%94%e3%80%8d",
+   "url": "https://palworld-official-cardgame.com/products/bp03",
    "key": "ブースターパック第3弾「果てなき飛翔」",
    "site": "official"
   },
@@ -4043,13 +3841,14 @@
   "date": "2027-01-29",
   "game": "ヴァイスシュヴァルツ",
   "name": "ブースターパック 魔法少女リリカルなのは EXCEEDS Gun Blaze Vengeance",
-  "pack": "440円",
+  "pack": "440円(税込)",
   "box": "4,400円",
   "url": "https://ws-tcg.com/products/ngb_bp/",
   "thumb": "thumbs/0304c9bd8671.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://ws-tcg.com/products/ngb_bp",
@@ -4130,18 +3929,44 @@
   "date": "2027-02-05",
   "game": "ヴァイスシュヴァルツ",
   "name": "ブースターパック ネコぱら セカイコネクト/ラブプロジェクト",
-  "pack": "",
-  "box": "",
+  "pack": "550円",
+  "box": "5,500円",
   "url": "https://ws-rose.com/products/nkp",
   "thumb": "thumbs/0428f0db04ad.jpg",
-  "approx": true,
-  "sources": [],
+  "approx": false,
+  "sources": [
+   "official"
+  ],
   "source": {
    "url": "https://ws-rose.com/products/nkp",
    "key": "ブースターパックネコぱらセカイコネクト/ラブプロジェクト",
    "site": "official"
   },
-  "official_name": "ブースターパック ネコぱら セカイコネクト/ラブプロジェクト"
+  "official_name": "ブースターパック ネコぱら セカイコネクト/ラブプロジェクト",
+  "per_pack": 6,
+  "per_box": 10
+ },
+ {
+  "id": "i02fc1a6222",
+  "date": "2027-02-12",
+  "game": "Flesh and Blood",
+  "name": "疫禍襲来",
+  "pack": "",
+  "box": "5,760円",
+  "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/obk/",
+  "thumb": "thumbs/b8e04084747e.jpg",
+  "approx": false,
+  "sources": [
+   "official"
+  ],
+  "source": {
+   "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/obk",
+   "key": "疫禍襲来",
+   "site": "official"
+  },
+  "official_name": "疫禍襲来",
+  "per_pack": 9,
+  "per_box": 24
  },
  {
   "id": "id799a8a6eb",
@@ -4213,13 +4038,14 @@
   "date": "2027-02-12",
   "game": "ヴァイスシュヴァルツ",
   "name": "ブースターパック 魔法少女ノ魔女裁判",
-  "pack": "440円",
+  "pack": "440円(税込)",
   "box": "4,400円",
   "url": "https://ws-tcg.com/products/mjs_bp_ws/",
   "thumb": "thumbs/9bf4b071e219.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://ws-tcg.com/products/mjs_bp_ws",
@@ -4252,17 +4078,62 @@
   "official_name": "合奏のシャーマンバンデット"
  },
  {
+  "id": "i4179ea7356",
+  "date": "2027-02-26",
+  "game": "UNION ARENA",
+  "name": "ブースターパック 君のことが大大大大大好きな100人の彼女 Vol.2",
+  "pack": "385円",
+  "box": "6,160円",
+  "url": "https://www.unionarena-tcg.com/jp/products/boosters/ex_rly.php",
+  "thumb": "thumbs/497774bd47bc.jpg",
+  "approx": false,
+  "sources": [
+   "official"
+  ],
+  "source": {
+   "url": "https://unionarena-tcg.com/jp/products/boosters/ex_rly.php",
+   "key": "ブースターパック君のことが大大大大大好きな100人の彼女vol.2",
+   "site": "official"
+  },
+  "official_name": "ブースターパック 君のことが大大大大大好きな100人の彼女 Vol.2",
+  "per_pack": 8,
+  "per_box": 16
+ },
+ {
+  "id": "i1bf58666ea",
+  "date": "2027-02-26",
+  "game": "ビルディバイド",
+  "name": "ブースターパック TVアニメ『Fate/strange Fake』",
+  "pack": "400円",
+  "box": "6,400円",
+  "url": "https://tcg.build-divide.com/bright/products/102",
+  "thumb": "thumbs/d64f71984e88.jpg",
+  "approx": false,
+  "sources": [
+   "official"
+  ],
+  "source": {
+   "url": "https://tcg.build-divide.com/bright/products/102",
+   "key": "ブースターパックtvアニメ『fate/strangefake』",
+   "site": "official"
+  },
+  "official_name": "ブースターパック TVアニメ『Fate/strange Fake』",
+  "per_pack": 7,
+  "per_box": 16
+ },
+ {
   "id": "i8d59bc4bf4",
   "date": "2027-02-27",
   "game": "ガンダム",
   "name": "Cosmic Crisis [EB02]",
-  "pack": "250円",
+  "pack": "250円(税込)",
   "box": "",
   "url": "https://www.gundam-gcg.com/jp/products/eb02.html",
   "thumb": "thumbs/517489ee2ca5.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://gundam-gcg.com/jp/products/eb02.html",
@@ -4413,10 +4284,10 @@
   ],
   "source": {
    "url": "https://square-enix-shop.com/jp/ff-tcg/news/fftcg_2027_schedule.html",
-   "key": "ブースターパック英雄の交響曲日本語版",
+   "key": "英雄の交響曲(symphonyofheroes)ブースターパック日本語版",
    "site": "official"
   },
-  "official_name": "ブースターパック 英雄の交響曲 日本語版",
+  "official_name": "英雄の交響曲（Symphony of Heroes） ブースターパック 日本語版",
   "per_box": 18,
   "per_pack": 12
  },
@@ -4435,10 +4306,10 @@
   ],
   "source": {
    "url": "https://square-enix-shop.com/jp/ff-tcg/news/fftcg_2027_schedule.html",
-   "key": "ブースターパック英雄の交響曲英語版",
+   "key": "英雄の交響曲(symphonyofheroes)ブースターパック英語版",
    "site": "official"
   },
-  "official_name": "ブースターパック 英雄の交響曲 英語版",
+  "official_name": "英雄の交響曲（Symphony of Heroes） ブースターパック 英語版",
   "per_box": 18,
   "per_pack": 12
  },
