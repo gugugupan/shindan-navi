@@ -52,8 +52,20 @@ GET /api/v1/events/meta
     "categories": [{ "code", "count" }],
     "types": [{ "game_code", "code", "name", "count" }] }
 
+GET /api/v1/events/days         same filters as /events (no limit/cursor)
+→ { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... } }] }   only days with count > 0
+
 Errors: 400 { "error": "<message>" } for bad params.
 ```
+
+Clarifications:
+
+- `mode=in_person` and `mode=online` both match `hybrid`. With `pref`, in-person/hybrid events match by venue region; online events are excluded.
+- `meta.games` always lists all four games; a game without data has `record_count: 0`, `fetched_at: null`, `complete: false`, `window: null`.
+- `count` and `days` include cancelled/postponed events; the page marks them.
+- `meta.types[].name` is a short button label maintained in the API per `event_type_code` (e.g. `standard_battle` → スタンダードバトル), not the series name.
+- Meta counts are global, not per current filter (no facet counts this round).
+- The page only sends `days=weekend|weekday`.
 
 ## Ownership this round
 
