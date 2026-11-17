@@ -23,6 +23,29 @@ test('fee: free and plain yen amounts only', () => {
   assert.deepEqual(parseFee(''), { fee_amount: null, fee_currency: null, fee_text: null });
 });
 
+test('fee: NFKC single amounts are accepted', () => {
+  const ok = {
+    '５００円': 500, '現金300円': 300, '参加費200円': 200, '参加費：300円': 300, '参加費 300円': 300,
+    '1,000円': 1000, '１，０００円': 1000, '300円（税込）': 300, '300円(税込)': 300, '現金300円（税込）': 300,
+    '¥300': 300, '￥３００': 300, '無料': 0, '0円': 0, '０円': 0, '参加費無料': 0, '参加費0円': 0,
+  };
+  for (const [raw, amount] of Object.entries(ok)) {
+    assert.deepEqual(parseFee(raw), { fee_amount: amount, fee_currency: 'JPY', fee_text: raw }, raw);
+  }
+});
+
+test('fee: conditional, ranged, multi-amount and purchase fees stay null', () => {
+  for (const raw of [
+    '1パック購入', '１パック購入、学生無料', '300円（高校生以下無料）', '300円（小中高生200円）',
+    '200円（商品500円購入で参加費無料）', '現金300円または350円以上のお買い物', '300円orワンオーダー',
+    '2パック購入或いは200円', '関連商品購入：300円', '100円　（見学は無料です）', '300円(税込) ※現金支払いのみ',
+    '300円～500円', '300-500円', '100', '1,00円', '300円 エントリー方法：2F受付30分前から先着', 'お一人300円/大人のみ',
+    '2時間毎にドリンク1本付き300円', '無料（要予約）',
+  ]) {
+    assert.deepEqual(parseFee(raw), { fee_amount: null, fee_currency: null, fee_text: raw }, raw);
+  }
+});
+
 test('prefecture codes follow ISO 3166-2:JP order', () => {
   assert.equal(PREF_CODE['北海道'], 'JP-01');
   assert.equal(PREF_CODE['東京都'], 'JP-13');

@@ -54,12 +54,17 @@ export function detailUrl(row) {
   return `${SOURCE_ORIGIN}/event/detail/${row.event_holding_id}/${seg(row.trainers_flg)}/${seg(row.shop_id)}/${seg(row.event_date_params)}/${seg(row.date_id)}`;
 }
 
+// Single unconditional amounts only; conditional, ranged, multi-amount or purchase-based fees stay null.
+const FEE_FREE = /^(?:参加費:?)?(?:無料|0円)$/;
+const FEE_AMOUNT = /^(?:(?:現金|参加費):?)?(?:(\d{1,3}(?:,\d{3})+|\d+)円|¥(\d{1,3}(?:,\d{3})+|\d+))(?:\(税込\))?$/;
+
 export function parseFee(raw) {
   const t = text(raw);
   if (t === null) return { fee_amount: null, fee_currency: null, fee_text: null };
-  if (/^(無料|0円|０円)$/.test(t)) return { fee_amount: 0, fee_currency: 'JPY', fee_text: t };
-  const m = t.replace(/,/g, '').match(/^(?:([0-9]+)円|[¥￥]([0-9]+))$/);
-  if (m) return { fee_amount: Number(m[1] ?? m[2]), fee_currency: 'JPY', fee_text: t };
+  const s = t.normalize('NFKC').replace(/\s+/g, '');
+  if (FEE_FREE.test(s)) return { fee_amount: 0, fee_currency: 'JPY', fee_text: t };
+  const m = s.match(FEE_AMOUNT);
+  if (m) return { fee_amount: Number((m[1] ?? m[2]).replace(/,/g, '')), fee_currency: 'JPY', fee_text: t };
   return { fee_amount: null, fee_currency: null, fee_text: t };
 }
 
