@@ -20,15 +20,33 @@ function dateOption(value) {
   return value;
 }
 
+// Internal game code → Japanese-edition title pattern in TCG+ masterdata. IDs are resolved live, never assumed.
+export const GAMES = {
+  OPCG: { title: /^ONE\s*PIECE\b/i },
+  UATCG: { title: /^UNION\s*ARENA\b/i },
+  CONAN: { title: /コナン|CONAN/i }
+};
+
+export function resolveGameTitle(master, gameCode, expectedId = null) {
+  if (!Array.isArray(master?.game_title)) fail('Missing game-title directory.');
+  const spec = GAMES[gameCode] || fail(`Unsupported game code: ${gameCode}`);
+  const matches = master.game_title.filter(entry => typeof entry.title === 'string' && spec.title.test(entry.title) && /^ja$/i.test(entry.language_code || ''));
+  if (matches.length !== 1) fail(`Masterdata has ${matches.length} Japanese-edition titles for ${gameCode}; cannot verify a game_title_id.`);
+  const game = matches[0];
+  if (expectedId != null && String(game.id) !== String(expectedId)) fail(`Game ID ${expectedId} is not the Japanese ${gameCode} title in masterdata (found ${game.id}).`);
+  return game;
+}
+
 export function parseScrapeOptions(args) {
-  const options = { gameTitleId: 8, country: 'JP', pageSize: 20, maxPages: 10000, from: null, until: null, help: false };
-  const names = { '--game-title-id': 'gameTitleId', '--page-size': 'pageSize', '--max-pages': 'maxPages', '--from': 'from', '--until': 'until' };
+  const options = { game: 'OPCG', gameTitleId: null, country: 'JP', pageSize: 20, maxPages: 10000, from: null, until: null, help: false };
+  const names = { '--game': 'game', '--game-title-id': 'gameTitleId', '--page-size': 'pageSize', '--max-pages': 'maxPages', '--from': 'from', '--until': 'until' };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--help') { options.help = true; continue; }
     const name = names[args[i]];
     if (!name) fail(`Unknown option: ${args[i]}`);
     const value = args[++i];
-    options[name] = ['from', 'until'].includes(name) ? dateOption(value) : positiveInt(value, name);
+    if (name === 'game') { if (!Object.hasOwn(GAMES, value || '')) fail(`--game must be one of ${Object.keys(GAMES).join(', ')}.`); options.game = value; }
+    else options[name] = ['from', 'until'].includes(name) ? dateOption(value) : positiveInt(value, name);
   }
   if (![20, 40, 60, 80, 100].includes(options.pageSize)) fail('Page size must be one of the website options: 20, 40, 60, 80, 100.');
   if (options.maxPages > 10000) fail('Maximum page budget is 10000.');
@@ -69,15 +87,22 @@ export function prefectureNames(master) {
   return names;
 }
 
-export function projectEvent(row, prefNames = new Map()) {
+const flagOrNull = value => value == null ? null : value === true || value === 1 || value === '1' ? true : value === false || value === 0 || value === '0' ? false : fail('Unexpected boolean flag value in an event record.');
+const intOrNull = (value, label) => value == null || value === '' ? null : /^(0|[1-9]\d*)$/.test(String(value)) ? Number(value) : fail(`Invalid ${label}.`);
+
+export function formatNames(master) {
+  return new Map(Object.values(master.game_format || {}).filter(f => f && typeof f.format_name === 'string').map(f => [String(f.id), redactText(f.format_name)]));
+}
+
+export function projectEvent(row, prefNames = new Map(), gameCode = 'OPCG', formats = new Map()) {
   if (!row || typeof row !== 'object' || Array.isArray(row)) fail('Invalid event record.');
   const id = String(positiveInt(row.id, 'event ID'));
   const title = row.event_title ?? row.title ?? row.event_series_title;
-  if (typeof title !== 'string' || !title.trim()) fail('Missing event title; source field mapping needs review.');
+  if (title != null && typeof title !== 'string') fail('Unexpected event title type; source field mapping needs review.');
   const groupId = row.event_series_id == null ? null : String(positiveInt(row.event_series_id, 'event-series ID'));
   return {
-    source: 'bandai_tcg_plus', external_id: id, game_code: 'OPCG',
-    title: redactText(title), event_series_id: groupId,
+    source: 'bandai_tcg_plus', external_id: id, game_code: gameCode,
+    title: title && title.trim() ? redactText(title) : null, event_series_id: groupId,
     event_series_title: textOrNull(row.event_series_title ?? row.series_title),
     canonical_url: `https://www.bandai-tcg-plus.com/event/${id}`,
     start_datetime_source: textOrNull(row.start_datetime),
@@ -86,7 +111,7 @@ export function projectEvent(row, prefNames = new Map()) {
     organizer_id: row.organizer_id == null ? null : String(positiveInt(row.organizer_id, 'organizer ID')),
     venue_name: textOrNull(row.organizer_name), country_code: 'JP',
     pref_code_source: scalarOrNull(row.pref_code), pref_name: textOrNull(row.pref_name ?? prefNames.get(String(row.pref_code))),
-    city_address: textOrNull(row.city_address), street_address: textOrNull(row.street_address),
+    city_address: textOrNull(row.city_address ?? row.city_code), street_address: textOrNull(row.street_address),
     postcode: scalarOrNull(row.postcode), online_flag_source: scalarOrNull(row.online_flag),
     entry_fee_source: scalarOrNull(row.entry_fee ?? row.entryFee), entry_fee_currency_code: textOrNull(row.entry_fee_currency_code),
     entry_fee_hidden_source: scalarOrNull(row.entry_fee_hidden ?? row.hidden_entry_fee),
@@ -95,6 +120,14 @@ export function projectEvent(row, prefNames = new Map()) {
     apply_start_datetime_source: textOrNull(row.apply_start_datetime),
     apply_end_datetime_source: textOrNull(row.apply_end_datetime),
     application_open_source: scalarOrNull(row.applicationOpen),
+    game_title_language_source: textOrNull(row.game_title_language),
+    series_type_source: scalarOrNull(row.series_type),
+    entry_type_source: intOrNull(row.entry_type, 'entry type'),
+    team_count_source: intOrNull(row.team_count, 'team count'),
+    is_over_max_join_count_source: flagOrNull(row.is_over_max_join_count),
+    no_use_tcg_plus_source: flagOrNull(row.no_use_tcg_plus),
+    participation_condition: textOrNull(row.participation_condition_by_admin),
+    game_format_names: Array.isArray(row.game_format_ids) ? row.game_format_ids.map(f => formats.get(String(f)) ?? null) : null,
     registration_status: 'unknown'
   };
 }
@@ -106,10 +139,10 @@ function successCode(response) {
 
 export async function collectCompetitions(options, { fetchImpl = fetch, sleep = delay, requests = [], onProgress = () => {} } = {}) {
   const master = successCode(await requestJson(new URL('/api/masterdata', API), fetchImpl, requests));
-  if (!Array.isArray(master.game_title)) fail('Missing game-title directory.');
-  const game = master.game_title.find(entry => String(entry.id) === String(options.gameTitleId));
-  if (!game || !/ONE\s*PIECE/i.test(game.title || '') || !/^ja$/i.test(game.language_code || '')) fail('Game ID is not verified as Japanese ONE PIECE in masterdata.');
+  const game = resolveGameTitle(master, options.game, options.gameTitleId);
+  options = { ...options, gameTitleId: Number(game.id) };
   const prefNames = prefectureNames(master);
+  const formats = formatNames(master);
   const events = [];
   const ids = new Set();
   let expectedTotal;
@@ -124,7 +157,7 @@ export async function collectCompetitions(options, { fetchImpl = fetch, sleep = 
     expectedTotal = total;
     if (!Array.isArray(body.event_list) || body.event_list.length > options.pageSize) fail('Invalid event_list response.');
     for (const row of body.event_list) {
-      const event = projectEvent(row, prefNames);
+      const event = projectEvent(row, prefNames, options.game, formats);
       if (ids.has(event.external_id)) fail('Duplicate event ID; source pagination is unstable.');
       let scopeMatch = row.game_title_id == null ? 'query_only' : 'direct_game';
       if (row.game_title_id != null && String(row.game_title_id) !== String(options.gameTitleId)) {
@@ -139,6 +172,7 @@ export async function collectCompetitions(options, { fetchImpl = fetch, sleep = 
         scopeMatch = 'series_game_membership';
       }
       if (row.country_code != null && row.country_code !== options.country) fail('Source returned an event for another country.');
+      if (row.game_title_language != null && !/^ja$/i.test(row.game_title_language)) fail('Source returned an event for another language edition.');
       ids.add(event.external_id);
       event.source_game_title_id = row.game_title_id == null ? null : String(row.game_title_id);
       event.game_scope_match = scopeMatch;
@@ -148,7 +182,8 @@ export async function collectCompetitions(options, { fetchImpl = fetch, sleep = 
     onProgress({ pages, collected: events.length, source_total: total });
     if (events.length > total) fail('Event count exceeds source total.');
     if (events.length === total) return {
-      selected_game: { external_id: String(game.id), title: redactText(game.title), language_code: game.language_code },
+      selected_game: { external_id: String(game.id), title: redactText(game.title), language_code: game.language_code, game_title_code: game.game_title_code ?? null },
+      query: Object.fromEntries(eventListUrl(options, 0).searchParams),
       coverage: { complete_for_source_total: true, source_total: total, collected: events.length, pages },
       events
     };
@@ -162,7 +197,7 @@ export async function runScrape(options, { collector = collectCompetitions, outR
   await fs.mkdir(out, { recursive: true, mode: 0o700 });
   const report = {
     started_at: new Date().toISOString(), source: 'bandai_tcg_plus', transport,
-    query: { game_title_id: options.gameTitleId, country_code: options.country, from: options.from, until: options.until, application_open_only: false },
+    query: { game: options.game, game_title_id: options.gameTitleId, country_code: options.country, from: options.from, until: options.until, application_open_only: false },
     requests: [],
     coverage_note: 'All records counted by this source query. Source defaults, archive retention, unpublished/private events and date-boundary semantics are not independently verified.',
     field_mapping_note: 'Observed public event-list fields. Source date/time, fee, status and hidden-field flags are preserved without inference.'
@@ -177,7 +212,7 @@ export async function runScrape(options, { collector = collectCompetitions, outR
     await fs.writeFile(path.join(out, 'competitions.schema.json'), JSON.stringify(schema, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
     await fs.writeFile(dataPath + '.part', JSON.stringify(result.events, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
     await fs.rename(dataPath + '.part', dataPath);
-    Object.assign(report, { status: result.events.length ? 'collected' : 'empty', selected_game: result.selected_game, coverage: result.coverage, data_file: 'competitions.json', schema_file: 'competitions.schema.json' });
+    Object.assign(report, { status: result.events.length ? 'collected' : 'empty', selected_game: result.selected_game, source_query: result.query, coverage: result.coverage, data_file: 'competitions.json', schema_file: 'competitions.schema.json' });
   } catch (error) {
     report.status = 'failed';
     report.error = redactText(error.message);
@@ -191,7 +226,7 @@ export async function runScrape(options, { collector = collectCompetitions, outR
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const options = parseScrapeOptions(process.argv.slice(2));
-    if (options.help) console.log('ONE PIECE Japan event collector\n[--game-title-id 8] [--page-size 20] [--max-pages 10000] [--from YYYY-MM-DD] [--until YYYY-MM-DD]\nExhausts the public source event list. No database import, browser actions or deployment.');
+    if (options.help) console.log('TCG+ Japan event collector (direct transport)\n[--game OPCG|UATCG|CONAN] [--game-title-id N] [--page-size 20] [--max-pages 10000] [--from YYYY-MM-DD] [--until YYYY-MM-DD]\nExhausts the public source event list. No database import, browser actions or deployment.');
     else process.exitCode = (await runScrape(options)).exitCode;
   } catch (error) { console.error(redactText(error.message)); process.exitCode = 1; }
 }

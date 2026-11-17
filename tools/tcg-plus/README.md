@@ -16,6 +16,19 @@ The page filters by prefecture, venue/address, inclusive date range, weekday and
 
 The viewer is an isolated data-review tool. It does not change the production template, release data or deployments. The partial/full status and source-declared total are shown explicitly. Browser verification is available with `node viewer/check.mjs` from this tool directory, using an installed Chrome; it checks the default snapshot and writes ignored screenshots and a checked export under the viewer output directory.
 
+## Event calendar data (`data/events/`)
+
+```bash
+cd tools/tcg-plus
+node scrape-browser.mjs --game UATCG --profile <chrome-profile-dir> --page-size 100 --from 2026-11-18
+node export-events.mjs out/events-<run>/ --from 2026-11-18 --until 2027-02-18 [--note "spot-check …"] [--dry-run]
+```
+
+- `--game` is `OPCG` or `UATCG`; the `game_title_id` is resolved from live `/api/masterdata` (exactly one Japanese-edition title must match) and `--game-title-id` only double-checks it. `CONAN` is accepted but fails: TCG+ masterdata has no 名探偵コナン title.
+- `--profile` (or `TCG_PLUS_PROFILE`) points at an existing dedicated Chrome profile where the site's consent/region choice was already made. Only one Chrome may use it at a time, so run games one after another.
+- `export-events.mjs` normalizes `competitions.json` to `contracts/event.schema.json` (`normalize.mjs`), validates every month file and `_run.json` with Ajv, and only then replaces `data/events/<GAME>/`. Incomplete runs (distinct ids ≠ source total), a query that does not cover the window, or any schema error write nothing.
+- Mapping decisions: fees are always `null` (the list API omits `hidden_entry_fee`; sampled events report `0` with the fee hidden). `registration_status` follows the site's own label logic: `open`/`waitlist` only for `status_id=11` + `applicationOpen=1` + application start passed; `not_open` before the start; `closed` for status 21+. Times are kept only when the source zone is UTC+9; a fully hidden date (`start_datetime_hidden_type=2`) is skipped. Organizer phone/SNS, geo and free-text notes are never projected.
+
 ## Collect individual competitions
 
 The separate collector targets Japanese ONE PIECE events across Japan:

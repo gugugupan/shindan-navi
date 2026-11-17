@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
-  "title": "ONE PIECE Japan competition list",
+  "title": "TCG+ Japan competition list",
   "description": "Public TCG+ event-list fields. Source timestamps and status values are not normalized or inferred. Coverage and query criteria are in the sibling report.json.",
   "type": "array",
   "items": {
@@ -10,10 +10,10 @@
     "properties": {
       "source": { "enum": ["bandai_tcg_plus"] },
       "external_id": { "$ref": "#/definitions/id" },
-      "game_code": { "enum": ["OPCG"] },
+      "game_code": { "enum": ["OPCG", "UATCG", "CONAN"] },
       "source_game_title_id": { "type": ["string", "null"] },
       "game_scope_match": { "enum": ["direct_game", "series_game_membership", "query_only"] },
-      "title": { "type": "string", "minLength": 1 },
+      "title": { "type": ["string", "null"] },
       "event_series_id": { "anyOf": [{ "$ref": "#/definitions/id" }, { "type": "null" }] },
       "event_series_title": { "$ref": "#/definitions/text" },
       "canonical_url": { "type": "string", "pattern": "^https://www\\.bandai-tcg-plus\\.com/event/[1-9][0-9]*$" },
@@ -39,6 +39,14 @@
       "apply_start_datetime_source": { "$ref": "#/definitions/text" },
       "apply_end_datetime_source": { "$ref": "#/definitions/text" },
       "application_open_source": { "$ref": "#/definitions/scalar" },
+      "game_title_language_source": { "$ref": "#/definitions/text" },
+      "series_type_source": { "$ref": "#/definitions/scalar" },
+      "entry_type_source": { "type": ["integer", "null"] },
+      "team_count_source": { "type": ["integer", "null"] },
+      "is_over_max_join_count_source": { "type": ["boolean", "null"] },
+      "no_use_tcg_plus_source": { "type": ["boolean", "null"] },
+      "participation_condition": { "$ref": "#/definitions/text" },
+      "game_format_names": { "type": ["array", "null"], "items": { "$ref": "#/definitions/text" } },
       "registration_status": { "enum": ["unknown"] }
     }
   },
