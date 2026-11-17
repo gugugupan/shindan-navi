@@ -17,7 +17,8 @@ data/events/<GAME>/_run.json        last accepted run (run.schema.json)
 
 ## Normalization rules
 
-- `id` = `tcgp:<event id>` or `ptcg:<stable source id>`. Same source record → same id across runs.
+- `id` = `tcgp:<event id>`, `ptcg:<event_holding_id>` or `conan:<fingerprint>`. Same source record → same id across runs.
+- `conan:` is provisional: the Takara Tomy event search exposes no event or store id, so the id is a hash of series option, store name, store address and start-time text. A change to any of these yields a new id. Replace it when the source offers a stable key.
 - Times: `starts_at` etc. are ISO 8601 with offset (`2026-12-05T13:00:00+09:00`); `timezone` is `Asia/Tokyo` for Japanese venues. Date-only events: `time_precision: "date"`, `starts_at: null`.
 - Unknown is `null` / `"unknown"`, never guessed. Hidden fee → `fee_amount: null`. Fee 0 only when the source states free / 0円. Capacity is 定員, not remaining seats.
 - `registration_status: "open"` only when the source explicitly says applications are open now; otherwise `unknown`.
@@ -67,7 +68,7 @@ Clarifications:
 - Meta counts are global, not per current filter (no facet counts this round).
 - Shared events: the same `id` may appear in several game files (e.g. BANDAI CARD GAMES shared series listed under OPCG and UATCG). The importer stores one event with multiple games; `game=` matches any of them. API events carry `game_codes` (all games, sorted) in addition to `game_code` (first of `game_codes`).
 - Team events: when the source capacity counts teams, not players, `capacity` is `null` and the source wording goes to `eligibility_text`.
-- Sources: OPCG and UATCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the official 名探偵コナン カードゲーム site (`conan:`, `conan_official`) because TCG+ does not list it.
+- Sources: OPCG and UATCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the Takara Tomy official event search (https://www.takaratomy.co.jp/products/conan-cardgame/eventsearch; `conan:`, `conan_official`) because the game is not a Bandai title and TCG+ does not list it.
 - The page only sends `days=weekend|weekday`.
 
 ## Ownership this round
