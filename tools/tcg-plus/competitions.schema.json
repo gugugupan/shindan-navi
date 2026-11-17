@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "ONE PIECE Japan competition list",
+  "description": "Public TCG+ event-list fields. Source timestamps and status values are not normalized or inferred. Coverage and query criteria are in the sibling report.json.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["source", "external_id", "game_code", "title", "event_series_id", "event_series_title", "canonical_url", "start_datetime_source", "start_datetime_hidden_type_source", "timezone_source", "organizer_id", "venue_name", "country_code", "pref_code_source", "pref_name", "city_address", "street_address", "postcode", "online_flag_source", "entry_fee_source", "entry_fee_currency_code", "entry_fee_hidden_source", "capacity_source", "capacity_hidden_source", "status_id_source", "is_canceled_source", "apply_start_datetime_source", "apply_end_datetime_source", "registration_status"],
+    "properties": {
+      "source": { "enum": ["bandai_tcg_plus"] },
+      "external_id": { "$ref": "#/definitions/id" },
+      "game_code": { "enum": ["OPCG"] },
+      "source_game_title_id": { "type": ["string", "null"] },
+      "game_scope_match": { "enum": ["direct_game", "series_game_membership", "query_only"] },
+      "title": { "type": "string", "minLength": 1 },
+      "event_series_id": { "anyOf": [{ "$ref": "#/definitions/id" }, { "type": "null" }] },
+      "event_series_title": { "$ref": "#/definitions/text" },
+      "canonical_url": { "type": "string", "pattern": "^https://www\\.bandai-tcg-plus\\.com/event/[1-9][0-9]*$" },
+      "start_datetime_source": { "$ref": "#/definitions/text" },
+      "start_datetime_hidden_type_source": { "$ref": "#/definitions/scalar" },
+      "timezone_source": { "$ref": "#/definitions/scalar" },
+      "organizer_id": { "anyOf": [{ "$ref": "#/definitions/id" }, { "type": "null" }] },
+      "venue_name": { "$ref": "#/definitions/text" },
+      "country_code": { "enum": ["JP"] },
+      "pref_code_source": { "$ref": "#/definitions/scalar" },
+      "pref_name": { "$ref": "#/definitions/text" },
+      "city_address": { "$ref": "#/definitions/text" },
+      "street_address": { "$ref": "#/definitions/text" },
+      "postcode": { "$ref": "#/definitions/scalar" },
+      "online_flag_source": { "$ref": "#/definitions/scalar" },
+      "entry_fee_source": { "$ref": "#/definitions/scalar" },
+      "entry_fee_currency_code": { "$ref": "#/definitions/text" },
+      "entry_fee_hidden_source": { "$ref": "#/definitions/scalar" },
+      "capacity_source": { "$ref": "#/definitions/scalar" },
+      "capacity_hidden_source": { "$ref": "#/definitions/scalar" },
+      "status_id_source": { "$ref": "#/definitions/scalar" },
+      "is_canceled_source": { "$ref": "#/definitions/scalar" },
+      "apply_start_datetime_source": { "$ref": "#/definitions/text" },
+      "apply_end_datetime_source": { "$ref": "#/definitions/text" },
+      "application_open_source": { "$ref": "#/definitions/scalar" },
+      "registration_status": { "enum": ["unknown"] }
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "text": { "type": ["string", "null"] },
+    "scalar": { "type": ["string", "number", "boolean", "null"] }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "shindan-tcg-plus-probe",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node probe.mjs",
+    "trial": "node trial.mjs",
+    "scrape": "node scrape-browser.mjs",
+    "scrape:direct": "node scrape.mjs",
+    "viewer": "node build-viewer.mjs",
+    "doctor": "node probe.mjs --doctor",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": { "playwright-core": "1.65.1" }
+}

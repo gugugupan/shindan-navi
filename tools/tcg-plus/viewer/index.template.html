@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="color-scheme" content="light">
+  <title>ONE PIECE 赛事筛选 · TCG Navi</title>
+  <style>
+    :root{color-scheme:light;--paper:#f6f5f0;--ink:#1c302e;--muted:#697773;--line:#dce3dc;--green:#235b49;--soft:#eaf1eb;--gold:#97701e}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","PingFang SC","Microsoft YaHei",sans-serif}button,input,select{font:inherit}button,a,input,select{touch-action:manipulation}button{cursor:pointer}button:disabled{cursor:default;opacity:.4}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #a6c9b5;outline-offset:3px}header,main,footer{max-width:1240px;margin:auto;padding-left:28px;padding-right:28px}header{height:84px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em;font-size:15px}.brand-mark{width:28px;height:32px;position:relative;border:2px solid var(--green);border-radius:5px;transform:rotate(-9deg)}.brand-mark:after{content:"";position:absolute;inset:5px -6px -5px 6px;border:2px solid var(--green);border-radius:5px;background:var(--paper);z-index:-1}.header-note{font-size:12px;color:var(--muted)}.intro{padding:36px 0 24px;display:flex;justify-content:space-between;gap:24px;align-items:flex-end}.eyebrow{font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--green);margin:0 0 8px}h1{font-size:clamp(25px,4vw,35px);letter-spacing:-.035em;line-height:1.3;margin:0 0 10px}p{margin:0}.lead{color:var(--muted);font-size:14px}.total{text-align:right;white-space:nowrap}.total strong{font-size:35px;font-weight:650;letter-spacing:-.04em}.total span{font-size:12px;color:var(--muted);display:block}.coverage{padding:12px 16px;background:#fff8e8;border:1px solid #eadfc4;border-radius:9px;display:flex;gap:12px;align-items:baseline;font-size:12px;color:#705a2d;margin-bottom:20px}.coverage b{white-space:nowrap;font-size:11px;letter-spacing:.03em}.filters{background:#fff;border:1px solid var(--line);border-radius:13px;padding:22px;box-shadow:0 4px 16px #22372a04}.filter-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.filter-heading h2{font-size:14px;margin:0}.zone{font-size:11px;color:var(--muted)}.fields{display:grid;grid-template-columns:1fr 1.3fr 1fr 1fr;gap:16px}.field{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;min-width:0}input,select{width:100%;height:42px;min-width:0;padding:8px 11px;border:1px solid #cfd8d0;border-radius:7px;background:#fff;color:var(--ink);font-weight:400}input::placeholder{color:#97a09b;font-size:12px}fieldset{padding:0;border:0;margin:0;min-width:0}legend{font-size:12px;font-weight:600;padding:0;margin-bottom:8px}.secondary{display:flex;align-items:flex-end;gap:28px;margin-top:20px;flex-wrap:wrap}.weekday-group{display:flex;gap:6px}.day{position:relative;display:grid;place-items:center;width:37px;height:36px;cursor:pointer;font-size:12px}.day input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}.day span{display:grid;place-items:center;width:100%;height:100%;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--muted)}.day input:checked+span{background:var(--soft);border-color:#b7ccbd;color:var(--green);font-weight:700}.day input:focus-visible+span{outline:3px solid #a6c9b5}.times{display:flex;gap:9px;align-items:center}.times input{width:110px;height:36px;padding:5px 8px;font-size:13px}.times label{display:block}.dash{color:#97a09b}.actions{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.button{border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);padding:8px 12px;font-size:12px;font-weight:600}.primary{background:var(--green);border-color:var(--green);color:#fff}.text-button{border:0;background:none;color:var(--muted);padding:8px 3px;font-size:12px}.filter-note{font-size:11px;color:var(--muted);margin-top:14px}.error{color:#ac3e35;font-size:12px;margin-top:12px}.result-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:30px 0 13px}.result-heading h2{font-size:16px;margin:0}.result-heading h2 span{font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}.export{font-size:12px;color:var(--green);border:0;background:transparent;padding:8px 0}.table{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}.table-head,.event-row{display:grid;grid-template-columns:136px minmax(180px,1.1fr) minmax(200px,1fr) 112px;gap:18px;padding:16px 22px;align-items:center}.table-head{font-size:11px;color:var(--muted);background:#eef1eb;border-bottom:1px solid var(--line)}.event-row{border-bottom:1px solid #edf0e9;min-height:112px}.event-row:last-child{border-bottom:0}.event-date{font-size:12px;color:#53635c}.event-time{font-size:22px;line-height:1.4;font-weight:650;letter-spacing:-.025em}.event-weekday{color:var(--muted);margin-left:5px;font-size:10px}.event-title{font-size:13px;font-weight:650;line-height:1.6;margin-bottom:5px}.event-id{font-size:10px;color:#86918a;letter-spacing:.04em}.event-venue{font-size:13px;font-weight:550}.event-address{font-size:11px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}.pref{font-size:10px;color:var(--green);padding:2px 6px;background:var(--soft);border-radius:4px;display:inline-block;margin-bottom:4px}.detail-link{font-size:12px;text-decoration:none;color:var(--green);border:1px solid #cbdace;padding:7px 9px;border-radius:6px;text-align:center;display:block}.detail-link:hover{background:var(--soft)}.small-note{font-size:10px;color:var(--muted);display:block;margin-top:5px}.canceled{font-size:10px;font-weight:500;color:#a84d40;margin-left:8px}.empty{padding:56px 20px;text-align:center}.empty h3{font-size:16px;margin:0 0 8px}.empty p{color:var(--muted);font-size:13px}.pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 0}.pagination-info{font-size:12px;color:var(--muted)}.pagination-buttons{display:flex;align-items:center;gap:10px}.page-number{font-size:12px;min-width:60px;text-align:center}footer{border-top:1px solid var(--line);padding-top:20px;padding-bottom:28px;font-size:11px;color:var(--muted);margin-top:20px}footer p+p{margin-top:4px}[hidden]{display:none!important}@media(max-width:900px){.fields{grid-template-columns:1fr 1fr}.secondary{gap:18px}.actions{margin-left:0}.table-head,.event-row{grid-template-columns:110px minmax(160px,1fr) minmax(160px,1fr);gap:12px;padding:16px}.event-link{grid-column:2/4;justify-self:start}.table-head span:last-child{display:none}.detail-link{display:inline-block}.event-row{min-height:140px}}@media(max-width:560px){header,main,footer{padding-left:16px;padding-right:16px}header{height:64px}.header-note{font-size:10px}.intro{padding:26px 0 20px;align-items:flex-start}.total strong{font-size:26px}.total span{font-size:10px}.lead{font-size:12px;max-width:230px}.coverage{flex-direction:column;gap:4px;padding:12px}.filters{padding:16px}.filter-heading{align-items:flex-start}.zone{max-width:130px;text-align:right}.fields{gap:12px}.secondary{display:block}.time-fieldset{margin-top:16px}.actions{margin-top:16px}.filter-note{line-height:1.8}.weekday-group{gap:5px}.day{width:34px}.times input{width:125px}.table-head{display:none}.event-row{grid-template-columns:90px minmax(0,1fr);gap:10px;padding:17px 14px}.event-title{font-size:13px}.event-location{grid-column:2}.event-link{grid-column:2}.event-time{font-size:20px}.result-heading{margin-top:24px}.result-heading h2 span{display:block;margin:2px 0 0}.pagination{align-items:flex-start}.pagination-buttons{gap:5px}.pagination-info{max-width:120px}.page-number{min-width:48px}.button{padding:8px 10px}}
+  </style>
+</head>
+<body>
+  <header><div class="brand"><span class="brand-mark" aria-hidden="true"></span>TCG NAVI</div><span class="header-note">ONE PIECE · 赛事数据预览</span></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">FIND YOUR NEXT MATCH</p><h1>找到适合你的比赛</h1><p class="lead">按地区与开赛时间，查看已收集的日本赛事。</p></div><div class="total"><strong id="total-count">—</strong><span>已收集场次</span></div></section>
+    <aside class="coverage" aria-label="数据覆盖范围"><b id="coverage-label">部分数据</b><p id="coverage-text">正在读取本地快照…</p></aside>
+    <section class="filters" aria-label="赛事筛选">
+      <div class="filter-heading"><h2>筛选比赛</h2><span class="zone">显示与筛选时间均为日本时间 JST</span></div>
+      <form id="filters">
+        <div class="fields">
+          <label class="field" for="prefecture">都道府县<select id="prefecture"><option value="">日本全国</option></select></label>
+          <label class="field" for="venue">门店或来源地址<input id="venue" type="search" placeholder="例如：池袋、AKIHABARA" autocomplete="off"></label>
+          <label class="field" for="date-from">开始日期<input id="date-from" type="date"></label>
+          <label class="field" for="date-until">结束日期（含当天）<input id="date-until" type="date"></label>
+        </div>
+        <div class="secondary">
+          <fieldset><legend>星期</legend><div class="weekday-group" id="weekdays"></div></fieldset>
+          <fieldset class="time-fieldset"><legend>开赛时间段</legend><div class="times"><label><input id="time-from" type="time" aria-label="最早开赛时间"></label><span class="dash">—</span><label><input id="time-until" type="time" aria-label="最晚开赛时间（不含）"></label></div></fieldset>
+          <div class="actions"><button class="button primary" id="workday" type="button">11月 · 工作日 9–18</button><button class="text-button" id="reset" type="button">重置筛选</button></div>
+        </div>
+        <p class="filter-note">最晚时间不含该时刻。仅筛选开赛时间，不保证整场在该时段内结束；工作日快捷筛选未排除日本节假日。</p>
+        <p class="error" id="filter-error" role="alert" hidden></p>
+      </form>
+    </section>
+    <section aria-label="比赛列表">
+      <div class="result-heading"><h2><strong id="result-count">—</strong> 场匹配<span id="result-caption">按开赛时间排序</span></h2><button id="export" class="export" type="button">导出筛选结果 ↗</button></div>
+      <p id="announcement" class="small-note" role="status" aria-live="polite"></p>
+      <div class="table"><div class="table-head" aria-hidden="true"><span>开赛日期 / 时间</span><span>比赛</span><span>门店 / 地区</span><span>详情</span></div><div id="results"></div><div id="empty" class="empty" hidden><h3>当前快照中没有匹配场次</h3><p>试着放宽地区或时间范围。部分数据中未找到，不代表官网没有该赛事。</p></div></div>
+      <nav class="pagination" aria-label="结果分页"><span class="pagination-info" id="page-info"></span><div class="pagination-buttons"><button class="button" id="previous" type="button">← 上一页</button><span class="page-number" id="page-number"></span><button class="button" id="next" type="button">下一页 →</button></div></nav>
+    </section>
+  </main>
+  <footer><p id="snapshot-info"></p><p>这是已保存的数据快照，报名余位与参加条件请以 TCG+ 详情为准。来源地址可能不完整；日期或时区未确认的场次不会匹配开赛时间筛选。</p></footer>
+  <script id="dataset" type="application/json">/* VIEWER_DATA */</script>
+  <script>
+    'use strict';
+    /* VIEWER_MODEL */
+    const data = JSON.parse(document.getElementById('dataset').textContent);
+    const number = new Intl.NumberFormat('zh-CN');
+    const $ = id => document.getElementById(id);
+    const weekdays = ['周日','周一','周二','周三','周四','周五','周六'];
+    const pageSize = 50;
+    let page = 1;
+    let filtered = [];
+    function element(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+    for (const day of [1,2,3,4,5,6,0]) {
+      const label = element('label','day');
+      const input = document.createElement('input');
+      input.type = 'checkbox'; input.value = day; input.checked = true; input.setAttribute('aria-label', weekdays[day]);
+      label.append(input, element('span','',weekdays[day].slice(1)));
+      $('weekdays').append(label);
+    }
+    const regions = new Map();
+    for (const event of data.events) if (event.prefecture) {
+      const region = regions.get(event.prefecture) || {name:event.prefectureName,count:0};
+      region.count++; regions.set(event.prefecture, region);
+    }
+    for (const [code, region] of [...regions].sort((a,b)=>a[0].localeCompare(b[0]))) {
+      const option = element('option','',`${region.name} (${number.format(region.count)})`);option.value=code;$('prefecture').append(option);
+    }
+    $('total-count').textContent = number.format(data.meta.count);
+    $('coverage-label').textContent = data.meta.complete ? '本次查询已完整取得' : '部分数据';
+    $('coverage-text').textContent = `当前快照 ${number.format(data.meta.count)} 场` + (data.meta.declaredTotal ? ` / 来源声明 ${number.format(data.meta.declaredTotal)} 场。` : '。') + (data.meta.complete ? '覆盖范围以该次查询为准。' : '尚未覆盖全部赛事，筛选结果只来自这份快照。');
+    $('snapshot-info').textContent = `ONE PIECE · 日本 · 数据范围 ${data.meta.firstDate} 至 ${data.meta.lastDate}` + (data.meta.observedAt ? ` · 快照时间 ${new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Tokyo',dateStyle:'medium',timeStyle:'short'}).format(new Date(data.meta.observedAt))} JST` : '');
+    const firstMonth = data.meta.firstDate.slice(0,7);
+    $('workday').textContent = `${Number(firstMonth.slice(5))}月 · 工作日 9–18`;
+    function readFilters() {
+      return {prefecture:$('prefecture').value,venue:$('venue').value,from:$('date-from').value,until:$('date-until').value,timeFrom:$('time-from').value,timeUntil:$('time-until').value,weekdays:[...$('weekdays').querySelectorAll('input:checked')].map(input=>Number(input.value))};
+    }
+    function render() {
+      const totalPages = Math.max(1,Math.ceil(filtered.length/pageSize));
+      page = Math.min(Math.max(page,1),totalPages);
+      const fragment = document.createDocumentFragment();
+      for (const event of filtered.slice((page-1)*pageSize,page*pageSize)) {
+        const row = element('article','event-row');row.dataset.id=event.id;
+        const datetime = element('div','event-datetime');
+        const date = element('div','event-date',event.date || '日期待确认');
+        if (event.weekday !== null) date.append(element('span','event-weekday',weekdays[event.weekday]));
+        datetime.append(date,element('div','event-time',event.time || '时间待确认'));
+        if (event.dateBasis !== 'JST') datetime.append(element('span','small-note','来源日期 · 时刻未确认'));
+        const title = element('div','event-main');const name=element('div','event-title',event.title);
+        if (event.canceled) name.append(element('span','canceled','已取消'));
+        title.append(name,element('div','event-id',`#${event.id}`));
+        const location=element('div','event-location');
+        location.append(element('span','pref',event.prefectureName),element('div','event-venue',event.venue),element('div','event-address',event.address || '来源地址未提供'));
+        const details=element('div','event-link');
+        if(event.url){const link=element('a','detail-link','TCG+ 详情 ↗');link.href=event.url;link.target='_blank';link.rel='noopener noreferrer';link.setAttribute('aria-label',`${event.venue} ${event.date || ''} ${event.time || ''} 的 TCG+ 详情`);details.append(link);}else details.append(element('span','small-note','链接待确认'));
+        row.append(datetime,title,location,details);fragment.append(row);
+      }
+      $('results').replaceChildren(fragment);$('empty').hidden=filtered.length>0;
+      $('result-count').textContent=number.format(filtered.length);
+      $('page-info').textContent=filtered.length ? `显示 ${number.format((page-1)*pageSize+1)}–${number.format(Math.min(page*pageSize,filtered.length))} / ${number.format(filtered.length)}` : '当前没有匹配记录';
+      $('page-number').textContent=`${page} / ${totalPages}`;
+      $('previous').disabled=page===1;$('next').disabled=page===totalPages;$('export').disabled=!filtered.length;
+      $('announcement').textContent=`共 ${number.format(filtered.length)} 场匹配，第 ${page} 页。`;
+    }
+    function apply() {
+      const filters=readFilters();let error='';
+      if(filters.from&&filters.until&&filters.from>filters.until)error='结束日期不能早于开始日期。';
+      else if(filters.timeFrom&&filters.timeUntil&&filters.timeFrom>=filters.timeUntil)error='最晚开赛时间需要晚于最早开赛时间。';
+      $('filter-error').textContent=error;$('filter-error').hidden=!error;
+      filtered=error?[]:filterEvents(data.events,filters);page=1;render();
+    }
+    function reset() {
+      $('prefecture').value='';$('venue').value='';$('date-from').value=data.meta.firstDate;$('date-until').value=data.meta.lastDate;
+      $('time-from').value='';$('time-until').value='';
+      for(const input of $('weekdays').querySelectorAll('input'))input.checked=true;
+      apply();
+    }
+    $('filters').addEventListener('submit',event=>event.preventDefault());
+    $('filters').addEventListener('input',apply);
+    $('filters').addEventListener('change',apply);
+    $('reset').addEventListener('click',reset);
+    $('workday').addEventListener('click',()=>{
+      const end=new Date(Date.UTC(Number(firstMonth.slice(0,4)),Number(firstMonth.slice(5)),0)).toISOString().slice(0,10);
+      $('date-from').value=data.meta.firstDate;$('date-until').value=end<data.meta.lastDate?end:data.meta.lastDate;
+      $('time-from').value='09:00';$('time-until').value='18:00';
+      for(const input of $('weekdays').querySelectorAll('input'))input.checked=Number(input.value)>=1&&Number(input.value)<=5;
+      apply();
+    });
+    $('previous').addEventListener('click',()=>{page--;render();});
+    $('next').addEventListener('click',()=>{page++;render();});
+    $('export').addEventListener('click',()=>{
+      const payload={meta:data.meta,filters:readFilters(),matchingCount:filtered.length,events:filtered};
+      const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+      const link=document.createElement('a');link.href=url;link.download='onepiece-filtered-events.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    });
+    reset();
+  </script>
+</body>
+</html>

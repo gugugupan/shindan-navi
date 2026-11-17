@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromium } from 'playwright-core';
+
+const here=path.dirname(fileURLToPath(import.meta.url));
+const out=path.resolve(here,'../out/competition-viewer');
+const browser=await chromium.launch({channel:'chrome',headless:true});
+try {
+  const page=await browser.newPage({viewport:{width:1440,height:1050},locale:'zh-CN'});
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.route(/^https?:/,route=>route.abort());
+  await page.goto(pathToFileURL(path.join(out,'index.html')).href);
+  await page.waitForFunction(()=>document.querySelector('#result-count').textContent!=='—');
+  assert.equal(await page.locator('#total-count').textContent(),'9,800');
+  assert.equal(await page.locator('#result-count').textContent(),'9,800');
+  assert.equal(await page.locator('.event-row').count(),50);
+  assert.equal(await page.locator('#coverage-label').textContent(),'部分数据');
+  const first=await page.locator('.event-row').first().getAttribute('data-id');
+  await page.getByRole('button',{name:'下一页 →'}).click();
+  assert.notEqual(await page.locator('.event-row').first().getAttribute('data-id'),first);
+  await page.locator('#prefecture').selectOption('JP-13');
+  await page.locator('#workday').click();
+  assert.equal(await page.locator('#time-from').inputValue(),'09:00');
+  assert.equal(await page.locator('#time-until').inputValue(),'18:00');
+  assert.equal(await page.locator('#date-until').inputValue(),'2026-11-30');
+  assert.ok(await page.locator('.event-row').count()>0);
+  assert.ok((await page.locator('.pref').allTextContents()).every(text=>text==='東京都'));
+  const matches=await page.locator('#result-count').textContent();
+  await page.locator('#venue').fill('no_such_venue_zzzzzz');
+  assert.equal(await page.locator('#result-count').textContent(),'0');
+  assert.equal(await page.locator('#empty').isVisible(),true);
+  await page.locator('#venue').fill('');
+  assert.equal(await page.locator('#result-count').textContent(),matches);
+  const downloadPromise=page.waitForEvent('download');
+  await page.locator('#export').click();
+  const download=await downloadPromise;
+  await download.saveAs(path.join(out,'checked-filter-export.json'));
+  const exported=JSON.parse(await fs.readFile(path.join(out,'checked-filter-export.json'),'utf8'));
+  assert.equal(exported.events.length,Number(matches.replaceAll(',','')));
+  assert.equal(exported.meta.complete,false);
+  for(const event of exported.events){
+    assert.equal(event.prefecture,'JP-13');
+    assert.ok(event.date>='2026-11-18'&&event.date<='2026-11-30');
+    assert.ok(event.weekday>=1&&event.weekday<=5);
+    assert.ok(event.time>='09:00'&&event.time<'18:00');
+  }
+  await page.screenshot({path:path.join(out,'desktop.png'),fullPage:false});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:path.join(out,'mobile.png'),fullPage:false});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await page.locator('#time-until').fill('08:00');
+  assert.equal(await page.locator('#filter-error').isVisible(),true);
+  assert.equal(await page.locator('#result-count').textContent(),'0');
+  await page.locator('#reset').click();
+  assert.equal(await page.locator('#result-count').textContent(),'9,800');
+  assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({status:'PASS',loaded:9800,tokyoNovemberWeekdayDaytime:exported.events.length,checks:['pagination','location and time filters','empty state','JSON export','mobile overflow','invalid range','reset','no browser errors'],screenshots:[path.join(out,'desktop.png'),path.join(out,'mobile.png')]}));
+} finally {await browser.close();}

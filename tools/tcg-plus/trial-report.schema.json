@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "TCG+ read-only series trial report",
+  "description": "A sampling report, not a production event import. A failed run never contains partial series records.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "started_at", "finished_at", "status", "requests"],
+  "properties": {
+    "$schema": { "enum": ["report.schema.json"] },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["failed", "series_sample_collected", "series_trial_empty"] },
+    "error": { "type": "string", "minLength": 1 },
+    "requests": { "type": "array", "items": { "$ref": "#/definitions/request" } },
+    "selected_game": { "$ref": "#/definitions/game" },
+    "country_code": { "enum": ["JP"] },
+    "pages": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "declared_total": { "type": "integer", "minimum": 0 },
+    "collected": { "type": "integer", "minimum": 0 },
+    "complete_series_listing": { "type": "boolean" },
+    "multiple_pages_fetched": { "type": "boolean" },
+    "api_code_semantics_verified": { "enum": [false] },
+    "scope": { "type": "string", "minLength": 1 },
+    "series": { "type": "array", "items": { "$ref": "#/definitions/series" } }
+  },
+  "oneOf": [
+    {
+      "properties": { "status": { "enum": ["failed"] } },
+      "required": ["error"],
+      "not": {
+        "anyOf": [
+          { "required": ["series"] },
+          { "required": ["selected_game"] },
+          { "required": ["collected"] }
+        ]
+      }
+    },
+    {
+      "properties": {
+        "status": { "enum": ["series_sample_collected"] },
+        "collected": { "minimum": 1 },
+        "series": { "minItems": 1 }
+      },
+      "required": ["selected_game", "country_code", "pages", "declared_total", "collected", "complete_series_listing", "multiple_pages_fetched", "api_code_semantics_verified", "scope", "series"],
+      "not": { "required": ["error"] }
+    },
+    {
+      "properties": {
+        "status": { "enum": ["series_trial_empty"] },
+        "collected": { "enum": [0] },
+        "declared_total": { "enum": [0] },
+        "series": { "maxItems": 0 },
+        "complete_series_listing": { "enum": [true] }
+      },
+      "required": ["selected_game", "country_code", "pages", "declared_total", "collected", "complete_series_listing", "multiple_pages_fetched", "api_code_semantics_verified", "scope", "series"],
+      "not": { "required": ["error"] }
+    }
+  ],
+  "definitions": {
+    "sourceId": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "nullableText": { "type": ["string", "null"] },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "status", "duration_ms"],
+      "properties": {
+        "url": { "type": "string", "pattern": "^https://api\\.bandai-tcg-plus\\.com/api/(masterdata|user/eventseries)(\\?|$)" },
+        "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "api_code": { "type": "number" }
+      }
+    },
+    "game": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_id", "title", "language_code", "source_game_title_code"],
+      "properties": {
+        "external_id": { "$ref": "#/definitions/sourceId" },
+        "title": { "type": "string", "minLength": 1 },
+        "language_code": { "$ref": "#/definitions/nullableText" },
+        "source_game_title_code": { "$ref": "#/definitions/nullableText" }
+      }
+    },
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_id", "title", "canonical_url", "apply_start_date", "apply_end_date", "display_apply_period", "series_type"],
+      "properties": {
+        "external_id": { "$ref": "#/definitions/sourceId" },
+        "title": { "type": "string", "minLength": 1 },
+        "canonical_url": { "type": "string", "pattern": "^https://www\\.bandai-tcg-plus\\.com/series/[1-9][0-9]*$" },
+        "apply_start_date": { "$ref": "#/definitions/nullableText" },
+        "apply_end_date": { "$ref": "#/definitions/nullableText" },
+        "display_apply_period": { "$ref": "#/definitions/nullableText" },
+        "series_type": { "type": ["number", "null"] }
+      }
+    }
+  }
+}
