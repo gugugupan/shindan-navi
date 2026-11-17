@@ -139,7 +139,7 @@ export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: str
 }
 
 const SELECT = `SELECT
-  e.id, e.game_code, e.source_code, e.external_id, e.source_url,
+  e.id, e.game_codes, e.source_code, e.external_id, e.source_url,
   g.source_id AS g_source_id, g.name AS g_name, g.category AS g_category, g.event_type_code AS g_event_type_code,
   e.name, e.attendance_mode,
   e.venue_id, v.name AS v_name, v.source_id AS v_source_id, v.country_code AS v_country_code,
@@ -153,14 +153,18 @@ const SELECT = `SELECT
 const FROM = `FROM events e JOIN event_groups g ON g.id = e.event_group_id`;
 
 function whereClause(q: Filters): { sql: string; binds: unknown[] } {
-  const parts = ['e.missing_since IS NULL', 'e.starts_on >= ?', 'e.starts_on < ?'];
+  const parts = ['e.game_codes IS NOT NULL', 'e.starts_on >= ?', 'e.starts_on < ?'];
   const binds: unknown[] = [q.from, q.until];
+  const marks = (values: string[]) => values.map(() => '?').join(', ');
   const inList = (col: string, values: string[]) => {
     if (!values.length) return;
-    parts.push(`${col} IN (${values.map(() => '?').join(', ')})`);
+    parts.push(`${col} IN (${marks(values)})`);
     binds.push(...values);
   };
-  inList('e.game_code', q.games);
+  if (q.games.length) {
+    parts.push(`EXISTS (SELECT 1 FROM event_games eg WHERE eg.event_id = e.id AND eg.missing_since IS NULL AND eg.game_code IN (${marks(q.games)}))`);
+    binds.push(...q.games);
+  }
   if (q.prefs.length) {
     inList('e.region_code', q.prefs);
     parts.push(`e.attendance_mode <> 'online'`);
@@ -183,9 +187,11 @@ function whereClause(q: Filters): { sql: string; binds: unknown[] } {
 type Row = Record<string, unknown>;
 
 export function rowToEvent(r: Row) {
+  const gameCodes = String(r.game_codes).split(',').sort();
   return {
     id: r.id,
-    game_code: r.game_code,
+    game_code: gameCodes[0],
+    game_codes: gameCodes,
     source_code: r.source_code,
     external_id: r.external_id,
     source_url: r.source_url,
@@ -253,16 +259,16 @@ export async function listEvents(db: D1Database, params: URLSearchParams) {
 
 export async function listDays(db: D1Database, params: URLSearchParams) {
   const where = whereClause(parseFilters(params));
-  const { results } = await db
-    .prepare(`SELECT e.starts_on AS date, e.game_code, COUNT(*) AS n ${FROM}\nWHERE ${where.sql}\nGROUP BY e.starts_on, e.game_code\nORDER BY e.starts_on, e.game_code`)
-    .bind(...where.binds)
-    .all<Row>();
-  const days: Array<{ date: string; count: number; by_game: Record<string, number> }> = [];
-  for (const r of results) {
-    let day = days[days.length - 1];
-    if (!day || day.date !== r.date) days.push((day = { date: r.date as string, count: 0, by_game: {} }));
-    day.count += Number(r.n);
-    day.by_game[r.game_code as string] = Number(r.n);
-  }
+  // A shared event counts once in count and once per member game in by_game.
+  const [totals, perGame] = await db.batch<Row>([
+    db.prepare(`SELECT e.starts_on AS date, COUNT(*) AS n ${FROM}\nWHERE ${where.sql}\nGROUP BY e.starts_on ORDER BY e.starts_on`)
+      .bind(...where.binds),
+    db.prepare(`SELECT e.starts_on AS date, m.game_code, COUNT(*) AS n ${FROM}
+JOIN event_games m ON m.event_id = e.id AND m.missing_since IS NULL
+WHERE ${where.sql}\nGROUP BY e.starts_on, m.game_code ORDER BY e.starts_on, m.game_code`).bind(...where.binds),
+  ]);
+  const days = totals.results.map((r) => ({ date: r.date as string, count: Number(r.n), by_game: {} as Record<string, number> }));
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  for (const r of perGame.results) byDate.get(r.date as string)!.by_game[r.game_code as string] = Number(r.n);
   return { days };
 }

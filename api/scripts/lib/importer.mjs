@@ -13,7 +13,7 @@ export const CONTRACTS_DIR = join(REPO_DIR, 'contracts');
 export const DEFAULT_DATA_DIR = join(REPO_DIR, 'data', 'events');
 
 export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG'];
-const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg' };
+const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan' };
 // 9999-12-31T23:59:59Z: date-only events sort after timed ones on the same day.
 export const NULL_SORT = 253402300799;
 const MAX_ERRORS = 50;
@@ -127,7 +127,19 @@ export function loadAll(dataDir, games) {
     ? readdirSync(dataDir).filter((d) => !d.startsWith('.') && statSync(join(dataDir, d)).isDirectory()).sort()
     : [];
   const wanted = games?.length ? games : present;
-  return wanted.map((g) => loadGame(dataDir, g));
+  const results = wanted.map((g) => loadGame(dataDir, g));
+  // Shared events must be identical apart from game_code / last_seen_at; otherwise the last game read wins.
+  const seen = new Map();
+  for (const r of results) {
+    if (r.errors.length) continue;
+    for (const ev of r.events) {
+      const key = JSON.stringify(eventContent(ev));
+      const prev = seen.get(ev.id);
+      if (prev && prev.key !== key) r.warnings.push(`${ev.id}: differs from the copy in ${prev.game}; using ${r.game}`);
+      seen.set(ev.id, { key, game: r.game });
+    }
+  }
+  return results;
 }
 
 const sha1 = (s) => createHash('sha1').update(s).digest('hex');
@@ -145,7 +157,7 @@ export function sqlLiteral(v) {
 export function groupId(ev) {
   const g = ev.group;
   const key = g.source_id !== null ? `s${g.source_id}` : `h${sha1(JSON.stringify([g.name, g.category, g.event_type_code])).slice(0, 16)}`;
-  return `${ev.source_code}:${ev.game_code}:${key}`;
+  return `${ev.source_code}:${key}`;
 }
 
 export function venueId(ev) {
@@ -159,22 +171,27 @@ export function venueId(ev) {
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;
 
 const EVENT_COLS = [
-  'id', 'game_code', 'event_group_id', 'venue_id', 'region_code', 'source_code', 'external_id', 'source_url',
+  'id', 'event_group_id', 'venue_id', 'region_code', 'source_code', 'external_id', 'source_url',
   'name', 'attendance_mode', 'starts_on', 'ends_on', 'starts_at', 'ends_at', 'starts_sort', 'timezone',
   'time_precision', 'format_text', 'eligibility_text', 'capacity', 'fee_amount', 'fee_currency', 'fee_text',
   'registration_method', 'registration_platform', 'registration_url', 'registration_opens_at',
   'registration_closes_at', 'registration_status', 'event_status', 'source_status_text', 'last_seen_at',
-  'content_hash', 'last_import_id', 'missing_since', 'created_at', 'updated_at',
+  'content_hash', 'created_at', 'updated_at',
 ];
-const GROUP_COLS = ['id', 'game_code', 'source_code', 'source_id', 'name', 'category', 'event_type_code', 'content_hash', 'created_at', 'updated_at'];
+const MEMBER_COLS = ['event_id', 'game_code', 'last_import_id', 'missing_since', 'created_at'];
+const GROUP_COLS = ['id', 'source_code', 'source_id', 'name', 'category', 'event_type_code', 'content_hash', 'created_at', 'updated_at'];
 const VENUE_COLS = ['id', 'source_code', 'source_id', 'name', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code', 'content_hash', 'created_at', 'updated_at'];
 const IMPORT_COLS = ['id', 'game_code', 'source_code', 'fetched_at', 'window_from', 'window_until', 'source_total', 'record_count', 'complete', 'collector_version', 'query_json', 'notes_json', 'run_hash', 'imported_at'];
 
-function eventRow(ev, run, now) {
-  const { last_seen_at, ...content } = ev;
+/** Event content minus the fields that legitimately differ between copies (game file, run time). */
+export function eventContent(ev) {
+  const { last_seen_at, game_code, ...content } = ev;
+  return content;
+}
+
+function eventRow(ev, now) {
   return {
     id: ev.id,
-    game_code: ev.game_code,
     event_group_id: groupId(ev),
     venue_id: ev.venue ? venueId(ev) : null,
     region_code: ev.venue?.region_code ?? null,
@@ -204,21 +221,19 @@ function eventRow(ev, run, now) {
     registration_status: ev.registration_status,
     event_status: ev.event_status,
     source_status_text: ev.source_status_text,
-    last_seen_at,
+    last_seen_at: ev.last_seen_at,
     // last_seen_at changes every run, so it is left out: updated_at only moves on real changes.
-    content_hash: sha1(JSON.stringify(content)),
-    last_import_id: importId(run),
-    missing_since: null,
+    content_hash: sha1(JSON.stringify(eventContent(ev))),
     created_at: now,
     updated_at: now,
   };
 }
 
-function upsertStatements(table, cols, rows, updateCols) {
+function upsertStatements(table, cols, rows, updateCols, conflict = 'id', tracksContent = true) {
   const head = `INSERT INTO ${table} (${cols.join(', ')}) VALUES\n`;
-  const tail = `\nON CONFLICT(id) DO UPDATE SET\n  ${[
+  const tail = `\nON CONFLICT(${conflict}) DO UPDATE SET\n  ${[
     ...updateCols.map((c) => `${c} = excluded.${c}`),
-    `updated_at = CASE WHEN ${table}.content_hash = excluded.content_hash THEN ${table}.updated_at ELSE excluded.updated_at END`,
+    ...(tracksContent ? [`updated_at = CASE WHEN ${table}.content_hash = excluded.content_hash THEN ${table}.updated_at ELSE excluded.updated_at END`] : []),
   ].join(',\n  ')}`;
   const out = [];
   let batch = [];
@@ -240,14 +255,16 @@ function upsertStatements(table, cols, rows, updateCols) {
 
 /**
  * SQL statements (without trailing semicolons) that load the accepted games.
- * Upserts by id; events of a game that are inside a complete run's window but absent from it get
- * missing_since and drop out of the API. Nothing is deleted.
+ * Upserts by id. An event listed under several games is stored once with one event_games row per
+ * game. A complete run marks only its own game's memberships inside its window as missing when the
+ * run no longer lists them; events with no remaining membership drop out of the API. Nothing is deleted.
  */
 export function buildStatements(accepted, { now = Math.floor(Date.now() / 1000) } = {}) {
   const imports = [];
   const groups = new Map();
   const venues = new Map();
-  const events = [];
+  const events = new Map();
+  const members = [];
   for (const { run, events: evs } of accepted) {
     imports.push({
       id: importId(run),
@@ -269,7 +286,6 @@ export function buildStatements(accepted, { now = Math.floor(Date.now() / 1000) 
       const g = ev.group;
       groups.set(groupId(ev), {
         id: groupId(ev),
-        game_code: ev.game_code,
         source_code: ev.source_code,
         source_id: g.source_id,
         name: g.name,
@@ -283,7 +299,8 @@ export function buildStatements(accepted, { now = Math.floor(Date.now() / 1000) 
         const v = ev.venue;
         venues.set(venueId(ev), { id: venueId(ev), source_code: ev.source_code, ...v, content_hash: sha1(JSON.stringify(v)), created_at: now, updated_at: now });
       }
-      events.push(eventRow(ev, run, now));
+      events.set(ev.id, eventRow(ev, now));
+      members.push({ event_id: ev.id, game_code: ev.game_code, last_import_id: importId(run), missing_since: null, created_at: now });
     }
   }
   const nonKey = (cols) => cols.filter((c) => !['id', 'created_at', 'updated_at'].includes(c));
@@ -296,15 +313,20 @@ export function buildStatements(accepted, { now = Math.floor(Date.now() / 1000) 
   }
   statements.push(...upsertStatements('venues', VENUE_COLS, [...venues.values()], nonKey(VENUE_COLS)));
   statements.push(...upsertStatements('event_groups', GROUP_COLS, [...groups.values()], nonKey(GROUP_COLS)));
-  statements.push(...upsertStatements('events', EVENT_COLS, events, nonKey(EVENT_COLS)));
+  statements.push(...upsertStatements('events', EVENT_COLS, [...events.values()], nonKey(EVENT_COLS)));
+  statements.push(...upsertStatements('event_games', MEMBER_COLS, members, ['last_import_id', 'missing_since'], 'event_id, game_code', false));
   for (const { run } of accepted) {
     if (!run.complete) continue;
     statements.push(
-      `UPDATE events SET missing_since = ${sqlLiteral(run.fetched_at)}\n` +
-        `WHERE game_code = ${sqlLiteral(run.game_code)} AND last_import_id <> ${sqlLiteral(importId(run))}` +
-        ` AND missing_since IS NULL AND starts_on >= ${sqlLiteral(run.window.from)} AND starts_on < ${sqlLiteral(run.window.until)}`,
+      `UPDATE event_games SET missing_since = ${sqlLiteral(run.fetched_at)}\n` +
+        `WHERE game_code = ${sqlLiteral(run.game_code)} AND last_import_id <> ${sqlLiteral(importId(run))} AND missing_since IS NULL\n` +
+        `  AND event_id IN (SELECT id FROM events WHERE starts_on >= ${sqlLiteral(run.window.from)} AND starts_on < ${sqlLiteral(run.window.until)})`,
     );
   }
+  statements.push(
+    `UPDATE events SET game_codes = (SELECT group_concat(game_code, ',') FROM\n` +
+      `  (SELECT game_code FROM event_games WHERE event_id = events.id AND missing_since IS NULL ORDER BY game_code))`,
+  );
   return statements;
 }
 

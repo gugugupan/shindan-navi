@@ -18,7 +18,7 @@ INSERT INTO games (code, name, slug, sort_order) VALUES
 CREATE TABLE imports (
   id TEXT PRIMARY KEY,
   game_code TEXT NOT NULL REFERENCES games(code),
-  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players')),
+  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official')),
   fetched_at TEXT NOT NULL,
   window_from TEXT NOT NULL,
   window_until TEXT NOT NULL CHECK (window_until > window_from),
@@ -34,10 +34,11 @@ CREATE TABLE imports (
 
 CREATE INDEX idx_imports_game ON imports(game_code, imported_at);
 
+-- Groups and events are not tied to one game: shared series (e.g. BANDAI CARD GAMES) list the same
+-- event under several games. Game membership lives in event_games.
 CREATE TABLE event_groups (
   id TEXT PRIMARY KEY,
-  game_code TEXT NOT NULL REFERENCES games(code),
-  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players')),
+  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official')),
   source_id TEXT,
   name TEXT NOT NULL CHECK (length(name) > 0),
   category TEXT NOT NULL CHECK (category IN ('tournament', 'casual', 'teaching', 'festival', 'other', 'unknown')),
@@ -47,11 +48,11 @@ CREATE TABLE event_groups (
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX idx_groups_game_type ON event_groups(game_code, event_type_code);
+CREATE INDEX idx_groups_type ON event_groups(event_type_code);
 
 CREATE TABLE venues (
   id TEXT PRIMARY KEY,
-  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players')),
+  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official')),
   source_id TEXT,
   name TEXT NOT NULL CHECK (length(name) > 0),
   country_code TEXT CHECK (country_code IS NULL OR country_code GLOB '[A-Z][A-Z]'),
@@ -65,15 +66,16 @@ CREATE TABLE venues (
   updated_at INTEGER NOT NULL
 );
 
--- game_code and region_code duplicate the group's game and the venue's region so the
--- main filters can use one index each.
+-- region_code duplicates the venue's region so the prefecture filter can use an index.
 CREATE TABLE events (
-  id TEXT PRIMARY KEY CHECK (id GLOB 'tcgp:?*' OR id GLOB 'ptcg:?*'),
-  game_code TEXT NOT NULL REFERENCES games(code),
+  id TEXT PRIMARY KEY CHECK (id GLOB 'tcgp:?*' OR id GLOB 'ptcg:?*' OR id GLOB 'conan:?*'),
+  -- Sorted, comma-separated games whose membership is not missing; NULL hides the event.
+  -- Derived from event_games by the importer.
+  game_codes TEXT,
   event_group_id TEXT NOT NULL REFERENCES event_groups(id),
   venue_id TEXT REFERENCES venues(id),
   region_code TEXT CHECK (region_code IS NULL OR region_code GLOB 'JP-[0-4][0-9]'),
-  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players')),
+  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official')),
   external_id TEXT NOT NULL CHECK (length(external_id) > 0),
   source_url TEXT NOT NULL CHECK (source_url GLOB 'https://*'),
   name TEXT NOT NULL CHECK (length(name) > 0),
@@ -94,7 +96,7 @@ CREATE TABLE events (
   fee_currency TEXT CHECK (fee_currency IS NULL OR fee_currency GLOB '[A-Z][A-Z][A-Z]'),
   fee_text TEXT,
   registration_method TEXT NOT NULL CHECK (registration_method IN ('first_come', 'lottery', 'walk_in', 'invitation', 'other', 'unknown')),
-  registration_platform TEXT CHECK (registration_platform IS NULL OR registration_platform IN ('bandai_tcg_plus', 'pokemon_players', 'store', 'other')),
+  registration_platform TEXT CHECK (registration_platform IS NULL OR registration_platform IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official', 'store', 'other')),
   registration_url TEXT CHECK (registration_url IS NULL OR registration_url GLOB 'https://*'),
   registration_opens_at TEXT,
   registration_closes_at TEXT,
@@ -103,17 +105,25 @@ CREATE TABLE events (
   source_status_text TEXT,
   last_seen_at TEXT NOT NULL,
   content_hash TEXT NOT NULL,
-  last_import_id TEXT NOT NULL REFERENCES imports(id),
-  -- fetched_at of the first complete run that no longer contained this event; hidden from the API while set.
-  missing_since TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   CHECK (time_precision = 'date' OR starts_at IS NOT NULL),
   UNIQUE (source_code, external_id)
 );
 
-CREATE INDEX idx_events_game_date ON events(game_code, starts_on, starts_sort, id);
 CREATE INDEX idx_events_region_date ON events(region_code, starts_on, starts_sort, id);
 CREATE INDEX idx_events_date ON events(starts_on, starts_sort, id);
 CREATE INDEX idx_events_group ON events(event_group_id);
 CREATE INDEX idx_events_venue ON events(venue_id);
+
+CREATE TABLE event_games (
+  event_id TEXT NOT NULL REFERENCES events(id),
+  game_code TEXT NOT NULL REFERENCES games(code),
+  last_import_id TEXT NOT NULL REFERENCES imports(id),
+  -- fetched_at of the first complete run of this game that no longer contained the event.
+  missing_since TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (event_id, game_code)
+);
+
+CREATE INDEX idx_event_games_game ON event_games(game_code, last_import_id);

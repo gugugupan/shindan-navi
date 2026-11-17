@@ -23,18 +23,23 @@ describe.runIf(process.env.PERF)('20k events', () => {
       'from=2026-11-18&until=2027-02-18&game=OPCG&pref=JP-13',
       'from=2026-12-01&until=2027-01-01&days=weekend&fee=free&category=tournament',
       'from=2026-11-18&until=2027-02-18&type=meetup&limit=200',
+      'from=2026-11-18&until=2027-02-18&game=PTCG',
     ]) {
       const s = performance.now();
       const r = await api(db, `/api/v1/events?${q}`);
       expect(r.status).toBe(200);
       timings[q] = Math.round(performance.now() - s);
     }
-    const s = performance.now();
+    let s = performance.now();
+    await api(db, '/api/v1/events/days?from=2026-11-18&until=2027-02-18');
+    timings.days = Math.round(performance.now() - s);
+    s = performance.now();
     await api(db, '/api/v1/events/meta');
     timings.meta = Math.round(performance.now() - s);
     const plan = db.db.prepare(`EXPLAIN QUERY PLAN SELECT e.id FROM events e JOIN event_groups g ON g.id = e.event_group_id
-      WHERE e.missing_since IS NULL AND e.starts_on >= ? AND e.starts_on < ? AND e.game_code IN (?) AND e.region_code IN (?)
-      ORDER BY e.starts_on, e.starts_sort, e.id LIMIT 101`).all('2026-11-18', '2027-02-18', 'OPCG', 'JP-13').map((r: any) => r.detail);
+      WHERE e.game_codes IS NOT NULL AND e.starts_on >= ? AND e.starts_on < ? AND e.region_code IN (?)
+      AND EXISTS (SELECT 1 FROM event_games eg WHERE eg.event_id = e.id AND eg.missing_since IS NULL AND eg.game_code IN (?))
+      ORDER BY e.starts_on, e.starts_sort, e.id LIMIT 101`).all('2026-11-18', '2027-02-18', 'JP-13', 'OPCG').map((r: any) => r.detail);
     console.log({
       writeFiles: Math.round(t1 - t0), validateAndBuildSql: Math.round(t2 - t1), statements: stmts.length,
       sqlBytes: stmts.reduce((n: number, x: string) => n + x.length, 0), firstImport: Math.round(t3 - t2), reimport: Math.round(t4 - t3),

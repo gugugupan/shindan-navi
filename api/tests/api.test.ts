@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { api, newDb, sampleEvents, synthetic, writeDataDir, importDir, type Ev } from './helpers';
+import { api, asApi, newDb, sampleEvents, synthetic, writeDataDir, importDir, type Ev } from './helpers';
 import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 const NULL_SORT = 253402300799;
@@ -38,7 +38,7 @@ describe('GET /api/v1/events', () => {
     const byId = new Map(r.body.events.map((e: Ev) => [e.id, e]));
     for (const ev of sampleEvents()) {
       // Key order matters too: compare serialized JSON.
-      expect(JSON.stringify(byId.get(ev.id) ?? (await fetchAll(`from=${ev.starts_on}&until=2027-02-18`)).find((e) => e.id === ev.id))).toBe(JSON.stringify(ev));
+      expect(JSON.stringify(byId.get(ev.id) ?? (await fetchAll(`from=${ev.starts_on}&until=2027-02-18`)).find((e) => e.id === ev.id))).toBe(JSON.stringify(asApi(ev)));
     }
     expect(r.headers.get('cache-control')).toBe('no-store');
   });

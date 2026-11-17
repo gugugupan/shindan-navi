@@ -46,11 +46,15 @@ Tests use the same stand-in.
   `starts_on` month, `starts_on` inside the run window, `ends_on >= starts_on`, `datetime` precision has `starts_at`,
   `record_count` = events in files.
 - A game with any error is rejected as a whole (nothing written for it); other games still import; exit code 1.
+- Shared events: the same `id` under several games (e.g. BANDAI CARD GAMES series in OPCG and UATCG) is stored
+  once, with one `event_games` row per game. Copies should be identical apart from `game_code`/`last_seen_at`;
+  if not, the importer warns and the last game read wins.
 - Upserts by id (events), by source id or content hash (groups, venues). `updated_at` only moves when content changes
   (`last_seen_at` excluded). Re-importing the same files is a no-op apart from `imports.imported_at`.
-- Nothing is deleted. When the run is `complete`, events of that game **inside its window** that the run no longer
-  contains get `missing_since` and are hidden from the API; they reappear if a later run contains them. Incomplete
-  runs hide nothing. Events outside the new window (e.g. past days after the window moves) are left as they are.
+- Nothing is deleted. When the run is `complete`, that game's memberships (`event_games`) **inside its window** that
+  the run no longer contains get `missing_since`; other games' memberships of a shared event are untouched. An event
+  is hidden from the API only when no membership is left; it reappears if a later run lists it. Incomplete runs hide
+  nothing. Events outside the new window (e.g. past days after the window moves) are left as they are.
 - One `imports` row per game run (`<GAME>:<fetched_at>`); meta reports the latest one per game.
 - Groups and venues sharing a `source_id` are stored once; if two events disagree about the same group/venue, the
   last one read wins.
@@ -58,9 +62,10 @@ Tests use the same stand-in.
 
 ## Schema
 
-`migrations/0001_init.sql`: `games` (seeded), `imports`, `event_groups`, `venues`, `events`. Source identity lives on
-`events` (`source_code`, `external_id`, `UNIQUE`). `events` duplicates `game_code` and the venue's `region_code` so the
-main filters each use one index. `starts_sort` = Unix seconds of `starts_at`, or 253402300799 for date-only events,
+`migrations/0001_init.sql`: `games` (seeded), `imports`, `event_groups`, `venues`, `events`, `event_games`. Source
+identity lives on `events` (`source_code`, `external_id`, `UNIQUE`). `events.game_codes` caches the sorted visible
+member games (NULL = hidden) and `events.region_code` copies the venue's region for its index. 0001 was edited
+before any release; run `npm run db:reset` if you have an older local database. `starts_sort` = Unix seconds of `starts_at`, or 253402300799 for date-only events,
 which gives the "starts_at nulls last" order and the keyset `(starts_on, starts_sort, id)`.
 
 ## API notes
@@ -70,6 +75,8 @@ which gives the "starts_at nulls last" order and the keyset `(starts_on, starts_
 - `limit` above 200 is clamped to 200; non-integers or < 1 are 400.
 - `cursor` is bound to the filters (not to `limit`); reusing it with other filters is 400.
 - `count` ignores the cursor and is capped at 10000.
+- `game` matches any member game; events carry `game_codes` (sorted alphabetically) and `game_code` = `game_codes[0]`.
+  `/events/days` counts a shared event once in `count` and under each member game in `by_game`.
 - `pref` matches the venue's `region_code` (in-person and hybrid) and excludes `attendance_mode = online`.
 - `mode=in_person` and `mode=online` both also match `hybrid`.
 - `/events/days` takes the same filters, ignores `limit`/`cursor`, and lists only days with matches;

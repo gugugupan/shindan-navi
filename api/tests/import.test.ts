@@ -45,7 +45,8 @@ describe('importer', () => {
     importDir(db, writeDataDir(rest, { OPCG: run('OPCG', rest.length, { fetched_at: '2026-11-20T00:00:00Z' }) }), 2_000);
     const q = '/api/v1/events?from=2026-11-18&until=2027-02-18&limit=200';
     expect((await api(db, q)).body.events.map((e: Ev) => e.id)).not.toContain(gone.id);
-    expect(db.db.prepare('SELECT missing_since FROM events WHERE id = ?').get(gone.id)!.missing_since).toBe('2026-11-20T00:00:00Z');
+    expect(db.db.prepare('SELECT missing_since FROM event_games WHERE event_id = ?').get(gone.id)!.missing_since).toBe('2026-11-20T00:00:00Z');
+    expect(db.db.prepare('SELECT game_codes FROM events WHERE id = ?').get(gone.id)!.game_codes).toBeNull();
     expect((await api(db, '/api/v1/events/meta')).body.games[0].record_count).toBe(rest.length);
 
     importDir(db, writeDataDir(evs, { OPCG: run('OPCG', evs.length, { fetched_at: '2026-11-21T00:00:00Z' }) }), 3_000);
@@ -57,11 +58,11 @@ describe('importer', () => {
     const evs = synthetic(40).filter((e) => e.game_code === 'OPCG');
     importDir(db, writeDataDir(evs), 1_000);
     importDir(db, writeDataDir(evs.slice(0, 2), { OPCG: run('OPCG', 2, { fetched_at: '2026-11-20T00:00:00Z', complete: false }) }), 2_000);
-    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE missing_since IS NULL').get()!.n).toBe(evs.length);
+    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE game_codes IS NOT NULL').get()!.n).toBe(evs.length);
     // A later window: old events before it are left alone.
     const later = evs.filter((e) => e.starts_on >= '2026-12-18');
     importDir(db, writeDataDir(later, { OPCG: run('OPCG', later.length, { fetched_at: '2026-12-18T00:00:00Z', window: { from: '2026-12-18', until: '2027-03-18' } }) }), 3_000);
-    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE missing_since IS NULL').get()!.n).toBe(evs.length);
+    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE game_codes IS NOT NULL').get()!.n).toBe(evs.length);
   });
 
   it('rejects a game whose files break the contract and still imports the others', () => {
@@ -76,7 +77,7 @@ describe('importer', () => {
     expect(errs.OPCG).toEqual([]);
     expect(errs.UATCG.join('\n')).toMatch(/fee_amount/);
     expect(errs.CONAN.join('\n')).toMatch(/_run.json missing/);
-    const games = db.db.prepare('SELECT DISTINCT game_code g FROM events ORDER BY g').all().map((r: Ev) => r.g);
+    const games = db.db.prepare('SELECT DISTINCT game_code g FROM event_games ORDER BY g').all().map((r: Ev) => r.g);
     expect(games).toEqual(['OPCG', 'PTCG']);
   });
 
@@ -100,6 +101,15 @@ describe('importer', () => {
     expect(loadAll(dir)[0].errors.join('\n')).toMatch(/in 2027-01.json/);
   });
 
+  it('accepts the conan source', async () => {
+    const db = newDb();
+    const evs = synthetic(8).filter((e) => e.game_code === 'CONAN');
+    expect(evs[0].id).toMatch(/^conan:/);
+    expect(importDir(db, writeDataDir(evs)).flatMap((r) => r.errors)).toEqual([]);
+    const r = await api(db, '/api/v1/events?from=2026-11-18&until=2027-02-18&game=CONAN');
+    expect(r.body.events.map((e: Ev) => e.source_code)).toEqual(evs.map(() => 'conan_official'));
+  });
+
   it('escapes quotes and keeps statements under the D1 size limit', () => {
     const evs = synthetic(2000).map((e, i) => (i === 0 ? { ...e, name: "O'Brien's 'quoted' ; DROP TABLE events; --" } : e));
     const dir = writeDataDir(evs);
@@ -109,5 +119,79 @@ describe('importer', () => {
     db.execAll(stmts);
     expect(db.db.prepare('SELECT name FROM events WHERE id = ?').get(evs[0].id)!.name).toBe(evs[0].name);
     expect(toSqlFile(stmts).endsWith(';\n')).toBe(true);
+  });
+});
+
+describe('shared events', () => {
+  // SYNTHETIC: one event listed under both OPCG and UATCG, identical apart from game_code.
+  const base = synthetic(16);
+  const shared: Ev = { ...base.find((e) => e.game_code === 'OPCG')!, id: 'tcgp:shared1', external_id: 'shared1', name: '【SYNTHETIC】shared series' };
+  const opcg = [...base.filter((e) => e.game_code === 'OPCG'), shared];
+  const uatcg = [...base.filter((e) => e.game_code === 'UATCG'), { ...shared, game_code: 'UATCG', last_seen_at: '2026-11-18T01:00:00Z' }];
+  const q = '/api/v1/events?from=2026-11-18&until=2027-02-18&limit=200';
+
+  function load() {
+    const db = newDb();
+    const results = importDir(db, writeDataDir([...opcg, ...uatcg]), 1_000);
+    expect(results.flatMap((r) => [...r.errors, ...r.warnings])).toEqual([]);
+    return db;
+  }
+
+  it('stores one event with both games and returns game_codes', async () => {
+    const db = load();
+    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE id = ?').get(shared.id)!.n).toBe(1);
+    const all = (await api(db, q)).body;
+    expect(all.count).toBe(opcg.length + uatcg.length - 1);
+    const ev = all.events.find((e: Ev) => e.id === shared.id);
+    expect(ev.game_code).toBe('OPCG');
+    expect(ev.game_codes).toEqual(['OPCG', 'UATCG']);
+    for (const g of ['OPCG', 'UATCG']) {
+      const r = (await api(db, `${q}&game=${g}`)).body;
+      expect(r.events.map((e: Ev) => e.id)).toContain(shared.id);
+      expect(r.count).toBe((g === 'OPCG' ? opcg : uatcg).length);
+    }
+    expect((await api(db, `${q}&game=OPCG,UATCG`)).body.count).toBe(all.count);
+  });
+
+  it('counts the event once per day and once per member game in by_game', async () => {
+    const db = load();
+    const day = (await api(db, `/api/v1/events/days?from=${shared.starts_on}&until=${new Date(Date.parse(`${shared.starts_on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`)).body.days[0];
+    const others = base.filter((e) => e.starts_on === shared.starts_on);
+    expect(day.count).toBe(others.length + 1);
+    expect(day.by_game.OPCG).toBe(others.filter((e) => e.game_code === 'OPCG').length + 1);
+    expect(day.by_game.UATCG).toBe(others.filter((e) => e.game_code === 'UATCG').length + 1);
+  });
+
+  it('keeps per-game meta and missing handling separate', async () => {
+    const db = load();
+    let meta = (await api(db, '/api/v1/events/meta')).body;
+    expect(meta.games.find((g: Ev) => g.code === 'UATCG').record_count).toBe(uatcg.length);
+    const total = meta.categories.reduce((n: number, c: Ev) => n + c.count, 0);
+    expect(total).toBe(opcg.length + uatcg.length - 1);
+
+    // UATCG's complete run drops the shared event: it stays visible through OPCG only.
+    const uatcg2 = uatcg.filter((e) => e.id !== shared.id);
+    importDir(db, writeDataDir(uatcg2, { UATCG: run('UATCG', uatcg2.length, { fetched_at: '2026-11-19T00:00:00Z' }) }), 2_000);
+    let ev = (await api(db, q)).body.events.find((e: Ev) => e.id === shared.id);
+    expect(ev.game_codes).toEqual(['OPCG']);
+    expect((await api(db, `${q}&game=UATCG`)).body.events.map((e: Ev) => e.id)).not.toContain(shared.id);
+    meta = (await api(db, '/api/v1/events/meta')).body;
+    expect(meta.categories.reduce((n: number, c: Ev) => n + c.count, 0)).toBe(total);
+
+    // OPCG drops it too: hidden everywhere, row kept.
+    const opcg2 = opcg.filter((e) => e.id !== shared.id);
+    importDir(db, writeDataDir(opcg2, { OPCG: run('OPCG', opcg2.length, { fetched_at: '2026-11-19T00:00:00Z' }) }), 3_000);
+    expect((await api(db, q)).body.events.map((e: Ev) => e.id)).not.toContain(shared.id);
+    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE id = ?').get(shared.id)!.n).toBe(1);
+
+    // Back in UATCG only.
+    importDir(db, writeDataDir(uatcg, { UATCG: run('UATCG', uatcg.length, { fetched_at: '2026-11-20T00:00:00Z' }) }), 4_000);
+    ev = (await api(db, q)).body.events.find((e: Ev) => e.id === shared.id);
+    expect(ev).toMatchObject({ game_code: 'UATCG', game_codes: ['UATCG'] });
+  });
+
+  it('warns when shared copies differ', () => {
+    const dir = writeDataDir([...opcg, ...uatcg.map((e) => (e.id === shared.id ? { ...e, name: 'different' } : e))]);
+    expect(loadAll(dir).flatMap((r) => r.warnings).join('\n')).toMatch(/tcgp:shared1: differs from the copy in OPCG/);
   });
 });

@@ -15,6 +15,7 @@ export interface GameLoad {
 
 export function loadGame(dataDir: string, game: string): GameLoad;
 export function loadAll(dataDir: string, games?: string[]): GameLoad[];
+export function eventContent(ev: Record<string, any>): Record<string, any>;
 export function sqlLiteral(v: unknown): string;
 export function groupId(ev: Record<string, any>): string;
 export function venueId(ev: Record<string, any>): string;

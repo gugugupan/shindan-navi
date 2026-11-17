@@ -11,7 +11,8 @@ export const WINDOW = { from: '2026-11-18', until: '2027-02-18' };
 export const sampleEvents = (): Ev[] =>
   JSON.parse(readFileSync(join(REPO_DIR, 'contracts/fixtures/sample-events.json'), 'utf8'));
 
-const SOURCE: Record<string, string> = { OPCG: 'bandai_tcg_plus', UATCG: 'bandai_tcg_plus', CONAN: 'bandai_tcg_plus', PTCG: 'pokemon_players' };
+export const SOURCE: Record<string, string> = { OPCG: 'bandai_tcg_plus', UATCG: 'bandai_tcg_plus', CONAN: 'conan_official', PTCG: 'pokemon_players' };
+const PREFIX: Record<string, string> = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan' };
 
 export function run(game: string, count: number, extra: Ev = {}): Ev {
   return {
@@ -43,7 +44,6 @@ export function synthetic(n: number, seed = 0): Ev[] {
   for (let i = 0; i < n; i++) {
     const k = i + seed;
     const game = games[k % 4];
-    const ptcg = game === 'PTCG';
     const ext = `syn${String(k).padStart(6, '0')}`;
     const startsOn = addDays(WINDOW.from, (k * 7) % 92);
     const online = k % 11 === 0;
@@ -54,7 +54,7 @@ export function synthetic(n: number, seed = 0): Ev[] {
     const [pref, prefName] = prefs[vk % prefs.length];
     const fee = fees[k % 3];
     out.push({
-      id: `${ptcg ? 'ptcg' : 'tcgp'}:${ext}`,
+      id: `${PREFIX[SOURCE[game]]}:${ext}`,
       game_code: game,
       source_code: SOURCE[game],
       external_id: ext,
@@ -120,4 +120,10 @@ export function newDb(): SqliteD1 {
 export async function api(db: SqliteD1, path: string): Promise<{ status: number; body: any; headers: Headers }> {
   const res = await worker.fetch(new Request(`http://localhost${path}`), { DB: db as unknown as D1Database });
   return { status: res.status, body: await res.json(), headers: res.headers };
+}
+
+/** The API shape of a single-game event from the data files. */
+export function asApi(ev: Ev): Ev {
+  const { id, game_code, ...rest } = ev;
+  return { id, game_code, game_codes: [game_code], ...rest };
 }
