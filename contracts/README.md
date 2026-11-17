@@ -45,7 +45,7 @@ GET /api/v1/events
   cursor=<opaque>
 → { "events": [Event], "next_cursor": string|null, "count": number }
    Event = event.schema.json item; order starts_on, starts_at (nulls last), id.
-   count = total matches for the filters (capped at 10000).
+   count = exact total matches for the filters (no cap).
 
 GET /api/v1/events/meta
 → { "games": [{ "code", "name", "slug", "record_count", "fetched_at", "complete", "window": {"from","until"} }],
