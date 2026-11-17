@@ -56,7 +56,7 @@ export function detailUrl(row) {
 
 // Single unconditional amounts only; conditional, ranged, multi-amount or purchase-based fees stay null.
 const FEE_FREE = /^(?:参加費:?)?(?:無料|0円)$/;
-const FEE_AMOUNT = /^(?:(?:現金|参加費):?)?(?:(\d{1,3}(?:,\d{3})+|\d+)円|¥(\d{1,3}(?:,\d{3})+|\d+))(?:\(税込\))?$/;
+const FEE_AMOUNT = /^(?:(?:現金|参加費|一人):?)?(?:(\d{1,3}(?:,\d{3})+|\d+)円|¥(\d{1,3}(?:,\d{3})+|\d+))(?:\(税込\))?(?:\((?:現金のみ|現金決済のみ)\)|\/現金のみ)?!*$/;
 
 export function parseFee(raw) {
   const t = text(raw);
