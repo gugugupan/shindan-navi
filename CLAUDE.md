@@ -36,7 +36,7 @@ Local preview: serve `dist/` (launch config `tcg-calendar`, port 5260). GA only 
 - `source` = where the release lives on its original site: `{url, key, site}`. `url` is the canonical official page (redirects resolved), `key` the official product code (OP-18, UA57BT, VG-DZ-BT17 … via `scripts/sourcekey.py`) or else the normalised name, `site` is `official` or `aggregator` (only seen on カードラボ / トレカの地図). **De-duplication goes by source first** — same product code within a title, or same page + key — and only falls back to name similarity / Jev when that fails. When the official pilot matches an item it can adopt the official source (`--adopt-sources`), so the next run pairs it by identity.
 - `overrides.json`: hand fixes by id — `url`, `thumb` (`""` pins the placeholder), `name`, `date`, `approx`, `hide: true`. `_name` / `note` are labels for people. Applied by both the updater and the build; never overwritten.
 - `approx: true` = stand-in image (key visual, other edition). Shown with 参考画像; the updater swaps in a real source image when one appears.
-- Favourites are keyed by `date|name` in the viewer's localStorage (`tcg.stars`), not by id.
+- Favourites are keyed by item id in the viewer's localStorage (`tcg.stars`); legacy `date|name` keys are migrated on load.
 - Items with no image (or no price) are left out of Product JSON-LD — Google flags Product without `image` as critical. `hasMerchantReturnPolicy` / `shippingDetails` warnings are expected (we don't sell anything); don't fake them.
 
 ## Decisions the owner made (keep them)
