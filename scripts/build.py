@@ -235,6 +235,38 @@ def render(pg):
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
 
+# /events/ is a noindex preview: kept out of the sitemap, .pages.json (OG images) and the site nav
+EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
+def render_events():
+    src=open(os.path.join(ROOT,'src/events.html')).read()
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE))):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    title=re.search(r'<title>(.*?)</title>',src).group(1)
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{title}</title>
+<meta name="description" content="ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカードの店舗大会・交流会・体験会を開催日・都道府県・参加費で探せるイベントカレンダー。">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
 shutil.copytree(os.path.join(ROOT,'public'),dist)
@@ -243,6 +275,8 @@ for pg in pages:
     d=os.path.join(dist,pg['path'].strip('/'))
     os.makedirs(d,exist_ok=True)
     open(os.path.join(d,'index.html'),'w').write(render(pg))
+os.makedirs(os.path.join(dist,'events'),exist_ok=True)
+open(os.path.join(dist,'events/index.html'),'w').write(render_events())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 sm.append('</urlset>')
