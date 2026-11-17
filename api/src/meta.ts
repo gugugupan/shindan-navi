@@ -1,6 +1,7 @@
-import { CATEGORIES, PREFECTURES, TYPE_NAMES } from './constants';
+import { CATEGORIES, PREFECTURES, TYPE_LABELS } from './constants';
 
-// Facet counts cover each game's current data: visible events inside the window of its latest import.
+// Counts are global (independent of any event filter) over each game's current data:
+// visible events inside the window of its latest import.
 const CURRENT = `WITH latest AS (
   SELECT i.game_code, i.window_from, i.window_until FROM imports i
   WHERE i.id = (SELECT j.id FROM imports j WHERE j.game_code = i.game_code ORDER BY j.imported_at DESC, j.fetched_at DESC LIMIT 1)
@@ -40,7 +41,7 @@ WHERE g.event_type_code IS NOT NULL GROUP BY g.game_code, g.event_type_code ORDE
     types: types.results.map((r) => ({
       game_code: r.game_code,
       code: r.event_type_code,
-      name: TYPE_NAMES[r.game_code as string]?.[r.event_type_code as string] ?? r.event_type_code,
+      name: TYPE_LABELS[r.event_type_code as string] ?? r.event_type_code,
       count: Number(r.n),
     })),
   };

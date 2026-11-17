@@ -61,7 +61,7 @@ export function synthetic(n: number, seed = 0): Ev[] {
       source_url: `https://example.invalid/synthetic/${ext}`,
       group: { source_id: gk % 2 ? `g${gk}` : null, name: `【SYNTHETIC】group ${gk}`, category: cats[gk], event_type_code: types[gk % 3] },
       name: `【SYNTHETIC】event ${k}`,
-      attendance_mode: online ? 'online' : 'in_person',
+      attendance_mode: online ? 'online' : k % 13 === 0 ? 'hybrid' : 'in_person',
       venue: online ? null : { name: `【SYNTHETIC】shop ${vk}`, source_id: vk % 2 ? `v${vk}` : null, country_code: 'JP', region_code: pref, region_name: prefName, city: null, address: null, postal_code: null },
       starts_on: startsOn,
       ends_on: null,
@@ -82,7 +82,7 @@ export function synthetic(n: number, seed = 0): Ev[] {
       registration_opens_at: null,
       registration_closes_at: null,
       registration_status: regs[k % regs.length],
-      event_status: 'scheduled',
+      event_status: k % 17 === 0 ? 'cancelled' : k % 19 === 0 ? 'postponed' : 'scheduled',
       source_status_text: 'SYNTHETIC',
       last_seen_at: '2026-11-18T00:00:00Z',
     });

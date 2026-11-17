@@ -60,7 +60,7 @@ function parseDays(params: URLSearchParams): number[] {
   return [...out].sort();
 }
 
-function fingerprint(q: Omit<EventQuery, 'limit' | 'after'>): string {
+function fingerprint(q: Filters): string {
   const s = JSON.stringify([q.from, q.until, q.games, q.prefs, q.categories, q.types, q.days, q.fees, q.registration, q.modes]);
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
@@ -98,7 +98,9 @@ function decodeCursor(cursor: string, fp: string): [string, number, string] {
   return [v[2], v[3], v[4]];
 }
 
-export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: string } {
+type Filters = Omit<EventQuery, 'limit' | 'after'>;
+
+export function parseFilters(params: URLSearchParams): Filters {
   const from = single(params, 'from');
   const until = single(params, 'until');
   if (!from) throw new BadRequest('from is required');
@@ -109,7 +111,7 @@ export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: str
 
   const types = list(params, 'type', undefined, TYPE_RE);
   if (types.length > MAX_TYPES) throw new BadRequest(`at most ${MAX_TYPES} type values`);
-  const base = {
+  return {
     from,
     until,
     games: list(params, 'game', GAME_CODES),
@@ -121,7 +123,10 @@ export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: str
     registration: list(params, 'registration', REGISTRATION_STATUSES),
     modes: list(params, 'mode', ATTENDANCE_MODES),
   };
+}
 
+export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: string } {
+  const base = parseFilters(params);
   let limit = DEFAULT_LIMIT;
   const rawLimit = single(params, 'limit');
   if (rawLimit !== null) {
@@ -147,7 +152,7 @@ const SELECT = `SELECT
 
 const FROM = `FROM events e JOIN event_groups g ON g.id = e.event_group_id`;
 
-function whereClause(q: EventQuery): { sql: string; binds: unknown[] } {
+function whereClause(q: Filters): { sql: string; binds: unknown[] } {
   const parts = ['e.missing_since IS NULL', 'e.starts_on >= ?', 'e.starts_on < ?'];
   const binds: unknown[] = [q.from, q.until];
   const inList = (col: string, values: string[]) => {
@@ -163,7 +168,9 @@ function whereClause(q: EventQuery): { sql: string; binds: unknown[] } {
   inList('g.category', q.categories);
   inList('g.event_type_code', q.types);
   inList('e.registration_status', q.registration);
-  inList('e.attendance_mode', q.modes);
+  // Hybrid events count as both in_person and online.
+  const modes = q.modes.some((m) => m === 'in_person' || m === 'online') ? [...new Set([...q.modes, 'hybrid'])].sort() : q.modes;
+  inList('e.attendance_mode', modes);
   // days are validated integers 0..6, so they are inlined.
   if (q.days.length) parts.push(`CAST(strftime('%w', e.starts_on) AS INTEGER) IN (${q.days.join(', ')})`);
   if (q.fees.length) {
@@ -242,4 +249,20 @@ export async function listEvents(db: D1Database, params: URLSearchParams) {
     next_cursor: more ? encodeCursor(q.fp, [last.starts_on as string, Number(last.starts_sort), last.id as string]) : null,
     count: Number(count.results[0]?.n ?? 0),
   };
+}
+
+export async function listDays(db: D1Database, params: URLSearchParams) {
+  const where = whereClause(parseFilters(params));
+  const { results } = await db
+    .prepare(`SELECT e.starts_on AS date, e.game_code, COUNT(*) AS n ${FROM}\nWHERE ${where.sql}\nGROUP BY e.starts_on, e.game_code\nORDER BY e.starts_on, e.game_code`)
+    .bind(...where.binds)
+    .all<Row>();
+  const days: Array<{ date: string; count: number; by_game: Record<string, number> }> = [];
+  for (const r of results) {
+    let day = days[days.length - 1];
+    if (!day || day.date !== r.date) days.push((day = { date: r.date as string, count: 0, by_game: {} }));
+    day.count += Number(r.n);
+    day.by_game[r.game_code as string] = Number(r.n);
+  }
+  return { days };
 }

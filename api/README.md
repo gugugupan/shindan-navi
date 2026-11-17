@@ -1,6 +1,6 @@
 # Events API (local only)
 
-Cloudflare Worker + D1 that serves `GET /api/v1/events` and `GET /api/v1/events/meta` as specified in
+Cloudflare Worker + D1 that serves `GET /api/v1/events`, `/api/v1/events/days` and `/api/v1/events/meta` as specified in
 [`../contracts/README.md`](../contracts/README.md), and serves the built site from `../dist` on the same origin.
 
 **Local only.** No remote D1 exists: `database_id` in `wrangler.jsonc` is a placeholder. Do not run
@@ -70,8 +70,12 @@ which gives the "starts_at nulls last" order and the keyset `(starts_on, starts_
 - `limit` above 200 is clamped to 200; non-integers or < 1 are 400.
 - `cursor` is bound to the filters (not to `limit`); reusing it with other filters is 400.
 - `count` ignores the cursor and is capped at 10000.
-- `pref` matches the venue's `region_code` and excludes `attendance_mode = online`.
+- `pref` matches the venue's `region_code` (in-person and hybrid) and excludes `attendance_mode = online`.
+- `mode=in_person` and `mode=online` both also match `hybrid`.
+- `/events/days` takes the same filters, ignores `limit`/`cursor`, and lists only days with matches;
+  `by_game` has only games with matches that day.
 - `days` uses the weekday of `starts_on` (already a Tokyo date).
-- All `event_status` values are returned; the client decides how to show cancelled/postponed events.
-- Meta facet counts (prefectures, categories, types) cover visible events inside each game's latest window.
-  Type names come from `TYPE_NAMES` in `src/constants.ts`; unknown codes use the code itself.
+- All `event_status` values are returned and counted (`count`, `days`); the page marks cancelled/postponed events.
+- Meta counts (prefectures, categories, types) are global, not per filter, and cover visible events inside each
+  game's latest window. `meta.games` always lists all four games. Type labels come from `TYPE_LABELS` in
+  `src/constants.ts` (per `event_type_code`); codes without a label use the code itself.

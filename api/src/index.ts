@@ -1,4 +1,4 @@
-import { BadRequest, listEvents } from './events';
+import { BadRequest, listDays, listEvents } from './events';
 import { getMeta } from './meta';
 
 export interface Env {
@@ -15,13 +15,19 @@ function json(body: unknown, status = 200, extra: Record<string, string> = {}): 
   return new Response(JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
 }
 
+const ROUTES: Record<string, (db: D1Database, params: URLSearchParams) => Promise<unknown>> = {
+  '/api/v1/events': listEvents,
+  '/api/v1/events/days': listDays,
+  '/api/v1/events/meta': (db) => getMeta(db),
+};
+
 async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
-  const route = url.pathname === '/api/v1/events' ? 'events' : url.pathname === '/api/v1/events/meta' ? 'meta' : null;
-  if (!route) return json({ error: 'not found' }, 404);
+  const handler = ROUTES[url.pathname];
+  if (!handler) return json({ error: 'not found' }, 404);
   if (request.method !== 'GET' && request.method !== 'HEAD') return json({ error: 'method not allowed' }, 405, { allow: 'GET, HEAD' });
   let res: Response;
   try {
-    res = json(route === 'events' ? await listEvents(env.DB, url.searchParams) : await getMeta(env.DB));
+    res = json(await handler(env.DB, url.searchParams));
   } catch (e) {
     if (e instanceof BadRequest) return json({ error: e.message }, 400);
     console.error(e);

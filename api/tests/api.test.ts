@@ -57,7 +57,10 @@ describe('GET /api/v1/events', () => {
     ['fee=unknown', (e) => e.fee_amount === null],
     ['fee=free,unknown', (e) => e.fee_amount === 0 || e.fee_amount === null],
     ['registration=open', (e) => e.registration_status === 'open'],
-    ['mode=online', (e) => e.attendance_mode === 'online'],
+    ['mode=online', (e) => ['online', 'hybrid'].includes(e.attendance_mode)],
+    ['mode=in_person', (e) => ['in_person', 'hybrid'].includes(e.attendance_mode)],
+    ['mode=hybrid', (e) => e.attendance_mode === 'hybrid'],
+    ['pref=JP-13&mode=online', (e) => e.attendance_mode === 'hybrid' && e.venue?.region_code === 'JP-13'],
     ['game=UATCG&pref=JP-14&fee=paid&days=weekend', (e) => e.game_code === 'UATCG' && e.venue?.region_code === 'JP-14' && e.fee_amount > 0 && [0, 6].includes(dow(e.starts_on))],
   ];
   for (const [q, pred] of cases) {
@@ -168,6 +171,42 @@ describe('GET /api/v1/events', () => {
     const { default: worker } = await import('../src/index');
     const res = await worker.fetch(new Request('http://localhost/api/v1/events', { method: 'POST' }), { DB: db as unknown as D1Database });
     expect(res.status).toBe(405);
+  });
+});
+
+describe('GET /api/v1/events/days', () => {
+  const daysOf = (evs: Ev[]) => {
+    const m = new Map<string, Ev>();
+    for (const e of evs) {
+      const d = m.get(e.starts_on) ?? { date: e.starts_on, count: 0, by_game: {} };
+      d.count++;
+      d.by_game[e.game_code] = (d.by_game[e.game_code] ?? 0) + 1;
+      m.set(e.starts_on, d);
+    }
+    return [...m.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+  };
+
+  for (const q of ['', '&game=OPCG,PTCG', '&pref=JP-13&days=weekend', '&mode=online&fee=free']) {
+    it(`matches /events for "${q}"`, async () => {
+      const r = await api(db, `/api/v1/events/days?from=2026-11-18&until=2027-02-18${q}`);
+      expect(r.status).toBe(200);
+      const expected = daysOf(await fetchAll(`from=2026-11-18&until=2027-02-18${q}`, 200));
+      expect(expected.length).toBeGreaterThan(0);
+      expect(r.body).toEqual({ days: expected });
+      expect(r.body.days.every((d: Ev) => d.count > 0)).toBe(true);
+    });
+  }
+
+  it('includes cancelled and postponed events in days and count', async () => {
+    expect(all.some((e) => e.event_status === 'cancelled') && all.some((e) => e.event_status === 'postponed')).toBe(true);
+    const r = await api(db, '/api/v1/events/days?from=2026-11-18&until=2027-02-18');
+    expect(r.body.days.reduce((n: number, d: Ev) => n + d.count, 0)).toBe(all.length);
+  });
+
+  it('validates filters like /events and ignores limit/cursor', async () => {
+    expect((await api(db, '/api/v1/events/days?from=2026-11-18')).status).toBe(400);
+    expect((await api(db, '/api/v1/events/days?from=2026-11-18&until=2026-12-01&game=MTG')).status).toBe(400);
+    expect((await api(db, '/api/v1/events/days?from=2026-11-18&until=2026-12-01&limit=0&cursor=x')).status).toBe(200);
   });
 });
 

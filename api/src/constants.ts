@@ -17,8 +17,10 @@ export const PREFECTURES: ReadonlyArray<readonly [string, string]> = [
   ['JP-46', '鹿児島県'], ['JP-47', '沖縄県'],
 ];
 
-// Display names for event_type_code values confirmed from official pages; unknown codes fall back to the code.
-export const TYPE_NAMES: Record<string, Record<string, string>> = {
-  OPCG: { standard_battle: 'スタンダードバトル', meetup: '交流会' },
-  PTCG: { gym_battle: 'ジムバトル' },
+// Short button labels per event_type_code (shared across games); codes without a label are shown as-is.
+export const TYPE_LABELS: Record<string, string> = {
+  standard_battle: 'スタンダードバトル',
+  meetup: '交流会',
+  gym_battle: 'ジムバトル',
+  city_league: 'シティリーグ',
 };
