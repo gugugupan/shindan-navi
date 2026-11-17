@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://shindan-navi.app/contracts/run.schema.json",
+  "title": "Accepted collection run (data/events/<GAME>/_run.json)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["game_code", "source_code", "fetched_at", "window", "query", "source_total", "record_count", "complete", "collector_version", "notes"],
+  "properties": {
+    "game_code": { "enum": ["OPCG", "UATCG", "CONAN", "PTCG"] },
+    "source_code": { "enum": ["bandai_tcg_plus", "pokemon_players"] },
+    "fetched_at": { "type": "string", "pattern": "Z$" },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "until"],
+      "properties": {
+        "from": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "until": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "query": { "type": "object", "description": "Source query parameters actually used (no credentials)." },
+    "source_total": { "type": ["integer", "null"], "description": "Total the source declared for the query; null when the source gives none." },
+    "record_count": { "type": "integer", "minimum": 0, "description": "Events written for the window." },
+    "complete": { "type": "boolean", "description": "true only when distinct ids fetched == source_total (or equivalent proof) for the query." },
+    "collector_version": { "type": "string" },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}
