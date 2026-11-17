@@ -1,5 +1,6 @@
 <title>TCGイベントカレンダー｜新弾ナビ</title>
 <style>/*SITE_CSS*/</style>
+<style>/*EVENT_FONTS*/</style>
 <style>
 /* /events/: reuses the site stylesheet above (tokens, chips, seg, .ag day groups); only event-specific parts live here */
 .evlabel{font-family:var(--display);font-weight:400;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow);white-space:nowrap}
@@ -205,7 +206,7 @@ const MODES = [['','すべて'],['in_person','会場'],['online','オンライ�
 const DAYS = [['','すべて'],['weekend','土日'],['weekday','平日']];
 const QUICK = [['upcoming','これから'],['today','今日'],['weekend','今週末'],['nextweek','来週'],['month','今月'],['custom','日付指定']];
 const DOW = ['日','月','火','水','木','金','土'];
-const MAX_DAYS = 92, PAGE_SIZE = 50, CAL_PAGES = 15;
+const MAX_DAYS = 92, PAGE_SIZE = 50;
 
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store = { get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
@@ -561,27 +562,21 @@ document.getElementById('results').addEventListener('click',e=>{
   const m=e.target.closest('[data-month]'); if(m){ commit({month:m.dataset.month}); }
 });
 
-// ---- month calendar: per-day counts from the paged list endpoint
+// ---- month calendar: per-day counts from /events/days
 async function loadCal(){
   const my=gen, signal=ctrl.signal, ym=state.month;
-  const from=ym+'-01', until=addM(ym,1)+'-01';
   renderCal(null);
-  const counts={}; let cursor=null, pages=0, n=null;
-  try{
-    do{
-      const q=apiQuery(state,[from,until]); q.set('limit',200); if(cursor) q.set('cursor',cursor);
-      const r=await api('/events',q,signal);
-      if(my!==gen) return;
-      if(n==null) n=r.count;
-      (r.events||[]).forEach(e=>{ const c=counts[e.starts_on]||(counts[e.starts_on]={all:0}); c.all++; c[e.game_code]=(c[e.game_code]||0)+1; });
-      cursor=r.next_cursor; pages++;
-    }while(cursor && pages<CAL_PAGES);
-  }catch(err){
+  let r;
+  try{ r=await api('/events/days',apiQuery(state,[ym+'-01',addM(ym,1)+'-01']),signal); }
+  catch(err){
     if(err.name==='AbortError'||my!==gen) return;
     renderCal({error:err}); return;
   }
-  total=n; renderHead();
-  renderCal({counts,total:n,partial:!!cursor});
+  if(my!==gen) return;
+  const counts={};
+  (r.days||[]).forEach(d=>{ counts[d.date]={all:d.count,...(d.by_game||{})}; });
+  total=(r.days||[]).reduce((t,d)=>t+d.count,0); renderHead();
+  renderCal({counts,total});
 }
 function calBounds(){
   const ws=(meta&&meta.games||[]).filter(g=>g.window&&g.record_count>0);
@@ -594,7 +589,7 @@ function renderCal(data){
   const ym=state.month, [y,m]=ym.split('-').map(Number);
   const [lo,hi]=calBounds();
   const head=`<div class="ecal-head"><button class="ib" data-month="${addM(ym,-1)}" aria-label="前月"${ym<=lo?' disabled':''}>‹</button><b>${y}年${m}月</b><button class="ib" data-month="${addM(ym,1)}" aria-label="翌月"${ym>=hi?' disabled':''}>›</button>
-    <span class="sub">${data&&data.counts?`この月 <b>${data.total>=10000?'10,000+':data.total.toLocaleString('ja-JP')}</b> 件${data.partial?'（日別件数は一部）':''}`:''}</span></div>`;
+    <span class="sub">${data&&data.counts?`この月 <b>${data.total>=10000?'10,000+':data.total.toLocaleString('ja-JP')}</b> 件`:''}</span></div>`;
   if(data&&data.error){ el.innerHTML=`<div class="ecal">${head}<div class="state err" role="alert" style="border:0;border-radius:0"><b>イベント情報を読み込めませんでした</b><span>通信状況を確認して、しばらくしてからもう一度お試しください。</span><button class="sbtn ghost" id="retry">再読み込み</button></div></div>`; return; }
   const first=ym+'-01', start=addD(first,-dowOf(first)), days=diffD(first,addM(ym,1)+'-01');
   const cells=Math.ceil((dowOf(first)+days)/7)*7;

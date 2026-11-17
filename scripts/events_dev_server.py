@@ -114,9 +114,10 @@ class Api:
         games = []
         for code, name, slug in GAMES:
             n = sum(1 for e in ev if e['game_code'] == code)
+            has = n > 0
             games.append({'code': code, 'name': name, 'slug': slug, 'record_count': n,
-                          'fetched_at': None if code in self.empty else '2026-11-18T00:12:00Z', 'complete': code != 'UATCG',
-                          'window': {'from': WINDOW[0], 'until': WINDOW[1]}})
+                          'fetched_at': '2026-11-18T00:12:00Z' if has else None, 'complete': has and code != 'UATCG',
+                          'window': {'from': WINDOW[0], 'until': WINDOW[1]} if has else None})
         pc = cnt(lambda e: e['venue'] and e['venue']['region_code'])
         types = {}
         for e in ev:
@@ -129,7 +130,7 @@ class Api:
                 'categories': [{'code': k, 'count': v} for k, v in sorted(cnt(lambda e: e['group']['category']).items())],
                 'types': sorted(types.values(), key=lambda t: (t['game_code'], -t['count']))}
 
-    def query(self, q):
+    def query(self, q, days_only=False):
         one = lambda k: (q.get(k) or [''])[0]
         lst = lambda k: [x for x in one(k).split(',') if x]
         f, u = one('from'), one('until')
@@ -156,9 +157,17 @@ class Api:
                 fa = e['fee_amount']
                 if ('free' if fa == 0 else 'unknown' if fa is None else 'paid') not in fees: return False
             if regs and e['registration_status'] not in regs: return False
-            if modes and e['attendance_mode'] not in modes and not (e['attendance_mode'] == 'hybrid'): return False
+            if modes and e['attendance_mode'] not in (modes | ({'hybrid'} if modes & {'in_person', 'online'} else set())): return False
             return True
         hits = [e for e in self.events if ok(e)]
+        if days_only:
+            out = []
+            for e in hits:
+                if not out or out[-1]['date'] != e['starts_on']:
+                    out.append({'date': e['starts_on'], 'count': 0, 'by_game': {}})
+                out[-1]['count'] += 1
+                out[-1]['by_game'][e['game_code']] = out[-1]['by_game'].get(e['game_code'], 0) + 1
+            return 200, {'days': out}
         try:
             limit = max(1, min(200, int(one('limit') or 100)))
             off = int(base64.urlsafe_b64decode(one('cursor')).decode()) if one('cursor') else 0
@@ -191,6 +200,8 @@ def main():
                 code, body = 500, {'error': 'mock failure'}
             elif p.path == '/api/v1/events/meta':
                 code, body = 200, api.meta()
+            elif p.path == '/api/v1/events/days':
+                code, body = api.query(urllib.parse.parse_qs(p.query), days_only=True)
             elif p.path == '/api/v1/events':
                 code, body = api.query(urllib.parse.parse_qs(p.query))
             else:
