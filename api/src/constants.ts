@@ -23,4 +23,9 @@ export const TYPE_LABELS: Record<string, string> = {
   meetup: '交流会',
   gym_battle: 'ジムバトル',
   city_league: 'シティリーグ',
+  major_tournament: '大型大会',
+  trainers_league: 'トレーナーズリーグ',
+  gym_event: 'ジムイベント',
+  campaign: 'キャンペーン',
+  organizer_event: 'オーガナイザーイベント',
 };
