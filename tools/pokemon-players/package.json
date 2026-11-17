@@ -1,0 +1,11 @@
+{
+  "name": "shindan-pokemon-players-collector",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "collect": "node collect.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": { "ajv": "8.17.1", "playwright-core": "1.65.1" }
+}
