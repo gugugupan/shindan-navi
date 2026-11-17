@@ -49,15 +49,15 @@ Tests use the same stand-in.
 - Shared events: the same `id` under several games (e.g. BANDAI CARD GAMES series in OPCG and UATCG) is stored
   once, with one `event_games` row per game. Copies should be identical apart from `game_code`/`last_seen_at`;
   if not, the importer warns and the last game read wins.
-- Upserts by id (events), by source id or content hash (groups, venues). `updated_at` only moves when content changes
+- Upserts events by id. Groups and venues are keyed by their full content (source_id plus every field): a source
+  group can carry different categories per event, and a TCG+ venue source_id is an organizer id spanning several
+  addresses, so the API returns exactly each event's own group and venue. `updated_at` only moves when content changes
   (`last_seen_at` excluded). Re-importing the same files is a no-op apart from `imports.imported_at`.
 - Nothing is deleted. When the run is `complete`, that game's memberships (`event_games`) **inside its window** that
   the run no longer contains get `missing_since`; other games' memberships of a shared event are untouched. An event
   is hidden from the API only when no membership is left; it reappears if a later run lists it. Incomplete runs hide
   nothing. Events outside the new window (e.g. past days after the window moves) are left as they are.
 - One `imports` row per game run (`<GAME>:<fetched_at>`); meta reports the latest one per game.
-- Groups and venues sharing a `source_id` are stored once; if two events disagree about the same group/venue, the
-  last one read wins.
 - Statements are chunked to < 80 KB (D1 limit 100 KB). 20k events: ~145 statements, ~11 MB of SQL.
 
 ## Schema
@@ -74,7 +74,7 @@ which gives the "starts_at nulls last" order and the keyset `(starts_on, starts_
   `cursor` may appear once.
 - `limit` above 200 is clamped to 200; non-integers or < 1 are 400.
 - `cursor` is bound to the filters (not to `limit`); reusing it with other filters is 400.
-- `count` ignores the cursor and is capped at 10000.
+- `count` ignores the cursor and is the exact total (no cap; the date range is limited to 92 days).
 - `game` matches any member game; events carry `game_codes` (sorted alphabetically) and `game_code` = `game_codes[0]`.
   `/events/days` counts a shared event once in `count` and under each member game in `by_game`.
 - `pref` matches the venue's `region_code` (in-person and hybrid) and excludes `attendance_mode = online`.

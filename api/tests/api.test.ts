@@ -120,7 +120,7 @@ describe('GET /api/v1/events', () => {
     expect(p2.body.events.map((e: Ev) => e.id)).toEqual(evs.sort(cmp).slice(20, 40).map((e) => e.id));
   });
 
-  it('caps count at 10000 and limit at 200', async () => {
+  it('returns the exact count and caps limit at 200', async () => {
     const r = await api(db, '/api/v1/events?from=2026-11-18&until=2027-02-18&limit=500');
     expect(r.status).toBe(200);
     expect(r.body.events.length).toBe(200);

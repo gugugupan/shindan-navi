@@ -154,18 +154,17 @@ export function sqlLiteral(v) {
   return `'${String(v).replaceAll("'", "''")}'`;
 }
 
+// Groups and venues are keyed by their full content, not by source_id: one source group can carry
+// different categories/types per event (PTCG), and a TCG+ venue source_id is an organizer id that
+// spans several addresses. Every event therefore gets back exactly the group and venue it was imported with.
 export function groupId(ev) {
   const g = ev.group;
-  const key = g.source_id !== null ? `s${g.source_id}` : `h${sha1(JSON.stringify([g.name, g.category, g.event_type_code])).slice(0, 16)}`;
-  return `${ev.source_code}:${key}`;
+  return `${ev.source_code}:${sha1(JSON.stringify([g.source_id, g.name, g.category, g.event_type_code])).slice(0, 20)}`;
 }
 
 export function venueId(ev) {
   const v = ev.venue;
-  const key = v.source_id !== null
-    ? `s${v.source_id}`
-    : `h${sha1(JSON.stringify([v.name, v.country_code, v.region_code, v.region_name, v.city, v.address, v.postal_code])).slice(0, 16)}`;
-  return `${ev.source_code}:${key}`;
+  return `${ev.source_code}:${sha1(JSON.stringify([v.name, v.source_id, v.country_code, v.region_code, v.region_name, v.city, v.address, v.postal_code])).slice(0, 20)}`;
 }
 
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;

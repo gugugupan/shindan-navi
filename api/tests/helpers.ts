@@ -122,6 +122,18 @@ export async function api(db: SqliteD1, path: string): Promise<{ status: number;
   return { status: res.status, body: await res.json(), headers: res.headers };
 }
 
+/**
+ * SYNTHETIC events that reuse one group source_id with different categories/types and one venue source_id
+ * with different addresses and regions, as the real sources do.
+ */
+export function conflicting(n: number): Ev[] {
+  return synthetic(n, 5000).map((e, i) => ({
+    ...e,
+    group: { ...e.group, source_id: 'g-shared', name: '【SYNTHETIC】shared group', category: ['tournament', 'teaching', 'casual'][i % 3], event_type_code: ['gym_battle', null][i % 2] },
+    venue: e.venue && { ...e.venue, source_id: 'org-1', address: `【SYNTHETIC】address ${i % 4}`, postal_code: `100-000${i % 4}`, region_code: ['JP-14', 'JP-04'][i % 2], region_name: ['神奈川県', '宮城県'][i % 2] },
+  }));
+}
+
 /** The API shape of a single-game event from the data files. */
 export function asApi(ev: Ev): Ev {
   const { id, game_code, ...rest } = ev;
