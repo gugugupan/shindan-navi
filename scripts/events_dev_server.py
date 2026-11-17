@@ -13,7 +13,9 @@ import json
 import os
 import random
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, 'dist')
@@ -107,13 +109,18 @@ class Api:
         fixture = json.load(open(FIXTURE, encoding='utf-8'))
         self.events = sorted([e for e in fixture if e['game_code'] not in empty_games] + synth(empty_games), key=sort_key)
         self.empty = empty_games
+        self.force_count = None
+        for i, e in enumerate(self.events):
+            # every 25th Bandai event is shared by OPCG and UATCG, like TCG+ shared series
+            e['game_codes'] = ['OPCG', 'UATCG'] if e['game_code'] in ('OPCG', 'UATCG') and i % 25 == 0 else [e['game_code']]
+            e['game_code'] = e['game_codes'][0]
 
     def meta(self):
         ev = self.events
         cnt = lambda f: {k: sum(1 for e in ev if f(e) == k) for k in {f(e) for e in ev}}
         games = []
         for code, name, slug in GAMES:
-            n = sum(1 for e in ev if e['game_code'] == code)
+            n = sum(1 for e in ev if code in e['game_codes'])
             has = n > 0
             games.append({'code': code, 'name': name, 'slug': slug, 'record_count': n,
                           'fetched_at': '2026-11-18T00:12:00Z' if has else None, 'complete': has and code != 'UATCG',
@@ -123,7 +130,7 @@ class Api:
         for e in ev:
             c = e['group']['event_type_code']
             if c:
-                k = (e['game_code'], c)
+                k = (e['game_codes'][0], c)
                 types.setdefault(k, {'game_code': k[0], 'code': c, 'name': e['group']['name'], 'count': 0})['count'] += 1
         return {'games': games,
                 'prefectures': [{'code': f'JP-{i + 1:02d}', 'name': p, 'count': pc.get(f'JP-{i + 1:02d}', 0)} for i, p in enumerate(PREFS)],
@@ -148,7 +155,7 @@ class Api:
 
         def ok(e):
             if not (f <= e['starts_on'] < u): return False
-            if games and e['game_code'] not in games: return False
+            if games and not games & set(e['game_codes']): return False
             if prefs and not (e['venue'] and e['venue']['region_code'] in prefs): return False
             if cats and e['group']['category'] not in cats: return False
             if types and e['group']['event_type_code'] not in types: return False
@@ -166,7 +173,8 @@ class Api:
                 if not out or out[-1]['date'] != e['starts_on']:
                     out.append({'date': e['starts_on'], 'count': 0, 'by_game': {}})
                 out[-1]['count'] += 1
-                out[-1]['by_game'][e['game_code']] = out[-1]['by_game'].get(e['game_code'], 0) + 1
+                for g in e['game_codes']:
+                    out[-1]['by_game'][g] = out[-1]['by_game'].get(g, 0) + 1
             return 200, {'days': out}
         try:
             limit = max(1, min(200, int(one('limit') or 100)))
@@ -175,7 +183,7 @@ class Api:
             return 400, {'error': 'bad limit or cursor'}
         page = hits[off:off + limit]
         nxt = base64.urlsafe_b64encode(str(off + limit).encode()).decode() if off + limit < len(hits) else None
-        return 200, {'events': page, 'next_cursor': nxt, 'count': min(len(hits), 10000)}
+        return 200, {'events': page, 'next_cursor': nxt, 'count': self.force_count if self.force_count is not None else min(len(hits), 10000)}
 
 
 def main():
@@ -184,8 +192,13 @@ def main():
     ap.add_argument('--fail', action='store_true', help='answer every API call with 500')
     ap.add_argument('--latency', type=int, default=0, help='ms delay on API calls')
     ap.add_argument('--empty-game', action='append', default=['CONAN'], help='game code with no data (default CONAN)')
+    ap.add_argument('--report-count', type=int, help='force /events count to this value (e.g. 10000 to test the capped display)')
+    ap.add_argument('--api-proxy', help='forward /api/* to a running API instead of the mock, e.g. http://localhost:8787')
+    ap.add_argument('--fail-days', action='store_true', help='answer /events/days with 500')
     args = ap.parse_args()
     api = Api(set(args.empty_game))
+    if args.report_count is not None:
+        api.force_count = args.report_count
 
     class H(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **k):
@@ -196,10 +209,24 @@ def main():
             if not p.path.startswith('/api/'):
                 return super().do_GET()
             time.sleep(args.latency / 1000)
+            if args.api_proxy:
+                try:
+                    with urllib.request.urlopen(args.api_proxy.rstrip('/') + self.path, timeout=30) as r:
+                        code, raw = r.status, r.read()
+                except urllib.error.HTTPError as e:
+                    code, raw = e.code, e.read()
+                self.send_response(code)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Content-Length', str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+                return
             if args.fail:
                 code, body = 500, {'error': 'mock failure'}
             elif p.path == '/api/v1/events/meta':
                 code, body = 200, api.meta()
+            elif p.path == '/api/v1/events/days' and args.fail_days:
+                code, body = 500, {'error': 'mock failure'}
             elif p.path == '/api/v1/events/days':
                 code, body = api.query(urllib.parse.parse_qs(p.query), days_only=True)
             elif p.path == '/api/v1/events':
