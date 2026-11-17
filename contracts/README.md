@@ -65,6 +65,9 @@ Clarifications:
 - `count` and `days` include cancelled/postponed events; the page marks them.
 - `meta.types[].name` is a short button label maintained in the API per `event_type_code` (e.g. `standard_battle` → スタンダードバトル), not the series name.
 - Meta counts are global, not per current filter (no facet counts this round).
+- Shared events: the same `id` may appear in several game files (e.g. BANDAI CARD GAMES shared series listed under OPCG and UATCG). The importer stores one event with multiple games; `game=` matches any of them. API events carry `game_codes` (all games, sorted) in addition to `game_code` (first of `game_codes`).
+- Team events: when the source capacity counts teams, not players, `capacity` is `null` and the source wording goes to `eligibility_text`.
+- Sources: OPCG and UATCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the official 名探偵コナン カードゲーム site (`conan:`, `conan_official`) because TCG+ does not list it.
 - The page only sends `days=weekend|weekday`.
 
 ## Ownership this round

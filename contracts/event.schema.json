@@ -42,9 +42,9 @@
         "event_status", "source_status_text", "last_seen_at"
       ],
       "properties": {
-        "id": { "type": "string", "pattern": "^(tcgp|ptcg):[A-Za-z0-9_-]+$", "description": "<source prefix>:<external_id>. Never derived from date, name or venue." },
+        "id": { "type": "string", "pattern": "^(tcgp|ptcg|conan):[A-Za-z0-9_-]+$", "description": "<source prefix>:<external_id>. Never derived from date, name or venue." },
         "game_code": { "$ref": "#/definitions/gameCode" },
-        "source_code": { "enum": ["bandai_tcg_plus", "pokemon_players"] },
+        "source_code": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official"] },
         "external_id": { "type": "string", "minLength": 1 },
         "source_url": { "type": "string", "pattern": "^https://" },
         "group": {
@@ -74,7 +74,7 @@
         "fee_currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
         "fee_text": { "$ref": "#/definitions/nullableText" },
         "registration_method": { "enum": ["first_come", "lottery", "walk_in", "invitation", "other", "unknown"] },
-        "registration_platform": { "enum": ["bandai_tcg_plus", "pokemon_players", "store", "other", null] },
+        "registration_platform": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official", "store", "other", null] },
         "registration_url": { "type": ["string", "null"], "pattern": "^https://" },
         "registration_opens_at": { "$ref": "#/definitions/nullableDateTime" },
         "registration_closes_at": { "$ref": "#/definitions/nullableDateTime" },
