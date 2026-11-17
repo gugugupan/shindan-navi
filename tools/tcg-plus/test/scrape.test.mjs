@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { collectCompetitions, eventListUrl, parseScrapeOptions, prefectureNames, projectEvent, runScrape } from '../scrape.mjs';
+import { collectCompetitions, eventListUrl, parseScrapeOptions, prefectureNames, projectEvent, resolveGameTitle, runScrape } from '../scrape.mjs';
+import { splitBrowserArgs } from '../scrape-browser.mjs';
 
 // All API responses here are synthetic; live validation is tracked separately.
 const defaults = parseScrapeOptions([]);
@@ -53,7 +54,8 @@ test('rejects duplicates, drifting totals, early short pages, missing IDs and wr
     [[master, { ...page(1, 1, 1), event_list: [{ title: 'No ID' }] }], /Invalid event ID/],
     [[master, { ...page(1, 1, 1), event_list: [{ ...rows(1, 1)[0], game_title_id: 9 }] }], /another game/],
     [[master, { ...page(1, 1, 1), event_list: [{ ...rows(1, 1)[0], country_code: 'US' }] }], /another country/],
-    [[{ ...master, game_title: [{ id: 8, title: 'ONE PIECE', language_code: 'EN' }] }], /not verified/],
+    [[{ ...master, game_title: [{ id: 8, title: 'ONE PIECE', language_code: 'EN' }] }], /0 Japanese-edition titles/],
+    [[master, { ...page(1, 1, 1), event_list: [{ ...rows(1, 1)[0], game_title_language: 'EN' }] }], /another language/],
     [[{ code: 500, game_title: master.game_title }], /Unexpected source API code/]
   ]) await assert.rejects(collectCompetitions(defaults, harness(responses).dependencies), message);
 });
@@ -135,6 +137,32 @@ test('successful collection exports a standalone JSON array and its schema', asy
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
+test('resolves each game title from masterdata and rejects a mismatched ID', () => {
+  const directory = { game_title: [{ id: 8, title: 'ONE PIECE CARD GAME', language_code: 'JA' }, { id: 4, title: 'ONE PIECE CARD GAME', language_code: 'EN' }, { id: 9, title: 'UNION ARENA', language_code: 'JA' }] };
+  assert.equal(resolveGameTitle(directory, 'OPCG').id, 8);
+  assert.equal(resolveGameTitle(directory, 'UATCG').id, 9);
+  assert.throws(() => resolveGameTitle(directory, 'UATCG', 8), /not the Japanese UATCG/);
+  assert.throws(() => resolveGameTitle(directory, 'CONAN'), /0 Japanese-edition titles for CONAN/);
+  assert.equal(parseScrapeOptions(['--game', 'UATCG']).game, 'UATCG');
+});
+
+test('UNION ARENA collection uses the resolved ID and labels records UATCG', async () => {
+  const uaMaster = { code: 200, game_title: [{ id: 9, title: 'UNION ARENA', language_code: 'JA' }] };
+  const h = harness([uaMaster, { code: 200, total: 1, event_list: [{ ...rows(1, 1)[0], game_title_id: '9', game_format_ids: [15] }] }]);
+  const result = await collectCompetitions(parseScrapeOptions(['--game', 'UATCG']), h.dependencies);
+  assert.equal(h.urls[1].searchParams.get('game_title_id'), '9');
+  assert.equal(result.events[0].game_code, 'UATCG');
+  assert.equal(result.query.game_title_id, '9');
+});
+
 test('rejects invalid dates, limits and unsupported filters before fetching', () => {
-  for (const args of [['--from', '2026-02-30'], ['--until'], ['--from', '2026-12-01', '--until', '2026-11-01'], ['--page-size', '500'], ['--max-pages', '10001'], ['--game-title-id', '0'], ['--country', 'US']]) assert.throws(() => parseScrapeOptions(args));
+  for (const args of [['--game', 'PTCG'], ['--from', '2026-02-30'], ['--until'], ['--from', '2026-12-01', '--until', '2026-11-01'], ['--page-size', '500'], ['--max-pages', '10001'], ['--game-title-id', '0'], ['--country', 'US']]) assert.throws(() => parseScrapeOptions(args));
+});
+
+test('browser profile comes from --profile, then TCG_PLUS_PROFILE, then the tool default', () => {
+  assert.equal(splitBrowserArgs(['--profile', '/tmp/p', '--game', 'OPCG'], {}).profile, '/tmp/p');
+  assert.deepEqual(splitBrowserArgs(['--profile', '/tmp/p', '--game', 'OPCG'], {}).rest, ['--game', 'OPCG']);
+  assert.equal(splitBrowserArgs([], { TCG_PLUS_PROFILE: '/tmp/env' }).profile, '/tmp/env');
+  assert.match(splitBrowserArgs([], {}).profile, /\.session\/chrome$/);
+  assert.throws(() => splitBrowserArgs(['--profile'], {}));
 });
