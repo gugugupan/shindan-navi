@@ -40,7 +40,7 @@ test('hidden time, hidden capacity and full events stay unknown or waitlist', ()
   assert.equal(event.venue.postal_code, null);
   assert.equal(event.format_text, 'Official Rule / Standard Regulation');
   assert.equal(event.group.event_type_code, 'championship_qualifier');
-  assert.equal(event.registration_method, 'other');
+  assert.equal(event.registration_method, 'lottery');
   assert.equal(event.registration_status, 'waitlist');
 });
 

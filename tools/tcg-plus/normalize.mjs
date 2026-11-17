@@ -13,7 +13,13 @@ const SERIES_RULES = [
   [/ティーチング|体験会|講習|教室|はじめて|初めて|ビギナー/, 'teaching', 'teaching'],
   [/CHAMPIONSHIP|チャンピオンシップ/i, 'tournament', /予選/, 'championship_qualifier', 'championship'],
   [/スタンダードバトル|Standard\s*Battle/i, 'tournament', 'standard_battle'],
+  [/マッチングバトル/, 'tournament', 'matching_battle'],
+  [/フラッグシップバトルEX/i, 'tournament', 'flagship_battle_ex'],
   [/フラッグシップバトル|Flagship\s*Battle/i, 'tournament', 'flagship_battle'],
+  [/エクストラグランドバトル/, 'tournament', 'extra_grand_battle'],
+  [/8パックバトル/, 'tournament', 'eight_pack_battle'],
+  [/クルーバトル/, 'tournament', 'crew_battle'],
+  [/発売記念イベント/, 'other', 'release_event'],
   [/ユニチケゲットバトル/, 'tournament', 'unichike_get_battle'],
   [/ユニオンレア争奪バトル/, 'tournament', 'union_rare_battle'],
   [/ONE\s*BATTLE\s*CUP/i, 'tournament', 'one_battle_cup'],
@@ -90,7 +96,8 @@ export function eventStatus(record) {
   return 'unknown';
 }
 
-const ENTRY_METHOD = { 1: 'first_come', 2: 'lottery', 3: 'other' };
+// Live pages: 1 = 先着順での当選, 2 and 3 = 事前応募による抽選.
+const ENTRY_METHOD = { 1: 'first_come', 2: 'lottery', 3: 'lottery' };
 
 function postalCode(value) {
   const digits = value == null ? '' : String(value).trim();
