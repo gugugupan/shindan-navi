@@ -39,7 +39,7 @@ Local preview: serve `dist/` (launch config `tcg-calendar`, port 5260). GA only 
 - `overrides.json`: hand fixes by id — `url`, `thumb` (`""` pins the placeholder), `name`, `date`, `approx`, `hide: true`. `_name` / `note` are labels for people. Applied by both the updater and the build; never overwritten.
 - `approx: true` = stand-in image (key visual, other edition). Shown with 参考画像; the updater swaps in a real source image when one appears.
 - Favourites are keyed by `date|name` in the viewer's localStorage (`tcg.stars`), not by id.
-- Items with no image (or no price) are left out of Product JSON-LD — Google flags Product without `image` as critical. `hasMerchantReturnPolicy` / `shippingDetails` warnings are expected (we don't sell anything); don't fake them.
+- Calendar pages describe release lists with ItemList JSON-LD, including entries without images or prices. They are aggregations, not single-product or merchant pages: do not add Product/Offer markup, infer stock from release dates, or invent reviews, ratings, shipping or return policies to satisfy shopping-result warnings.
 
 ## Decisions the owner made (keep them)
 

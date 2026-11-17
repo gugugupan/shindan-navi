@@ -60,8 +60,6 @@ def jd(s):
 def fmt(s,year=False):
     x=jd(s); return (f'{x.year}/' if year else '')+f'{x.month}/{x.day}({DOW[x.weekday()]})'
 def mlabel(ym): y,m=ym.split('-'); return f'{int(y)}年{int(m)}月'
-def yen(s):
-    m=re.search(r'\d[\d,]*',s or ''); return int(m.group().replace(',','')) if m else None
 upd=jd(UPDATED); upd_label=f'{upd.year}年{upd.month}月{upd.day}日'
 
 def static_list(items,heading,note,show_game=True):
@@ -80,15 +78,6 @@ def static_list(items,heading,note,show_game=True):
         out.append('</ul></div>')
     out.append('</div></section>')
     return ''.join(out)
-
-def product_ld(d,page_url):
-    price=yen(d['pack'])
-    desc=f"{d['game']}の新商品。{fmt(d['date'],True)}発売、{d['pack']}（税込）"+(f"、1BOX {d['box']}" if d['box'] else '')+'。'
-    p={'@type':'Product','name':d['name'],'description':desc,'image':SITE+d['thumb'],'brand':{'@type':'Brand','name':d['game']},'releaseDate':d['date']}
-    if price:
-        p['offers']={'@type':'Offer','price':price,'priceCurrency':'JPY','url':d['url'] or page_url,
-                     'availability':'https://schema.org/PreOrder' if d['date']>TODAY else 'https://schema.org/InStock'}
-    return p
 
 # extra names people search with, per main title
 ALIAS={'pokemon':['ポケモンカード','ポケカ','PTCG'],'onepiece':['ワンピースカード','ワンピカード','ワンピ'],
@@ -186,10 +175,10 @@ def render(pg):
     if pg['crumbs']:
         ld.append({'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
             {'@type':'ListItem','position':i+1,'name':n,**({'item':SITE+h} if h else {'item':url})} for i,(n,h) in enumerate(pg['crumbs'])]})
-    items=[d for d in pg['ld_items'] if d['thumb'] and yen(d['pack'])][:60]
+    items=pg['ld_items']
     if items:
         ld.append({'@context':'https://schema.org','@type':'ItemList','name':pg['h1'],'numberOfItems':len(items),
-            'itemListElement':[{'@type':'ListItem','position':i+1,'item':product_ld(d,url)} for i,d in enumerate(items)]})
+            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],**({'url':d['url']} if d['url'] else {})} for i,d in enumerate(items)]})
     ldjs=''.join(f'<script type="application/ld+json">{json.dumps(x,ensure_ascii=False).replace("</","<\\/")}</script>' for x in ld)
     head=f"""<!doctype html>
 <html lang="ja">
