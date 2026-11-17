@@ -3,7 +3,6 @@ import { ATTENDANCE_MODES, CATEGORIES, FEES, GAME_CODES, REGISTRATION_STATUSES }
 export const DEFAULT_LIMIT = 100;
 export const MAX_LIMIT = 200;
 export const MAX_RANGE_DAYS = 92;
-export const COUNT_CAP = 10000;
 // Keeps the bound-parameter total under D1's 100 per query.
 export const MAX_TYPES = 20;
 
@@ -244,7 +243,7 @@ export async function listEvents(db: D1Database, params: URLSearchParams) {
   const [page, count] = await db.batch<Row>([
     db.prepare(`${SELECT}\n${FROM}\nLEFT JOIN venues v ON v.id = e.venue_id\nWHERE ${pageWhere}\nORDER BY e.starts_on, e.starts_sort, e.id\nLIMIT ?`)
       .bind(...pageBinds, q.limit + 1),
-    db.prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 ${FROM}\nWHERE ${where.sql}\nLIMIT ${COUNT_CAP})`).bind(...where.binds),
+    db.prepare(`SELECT COUNT(*) AS n ${FROM}\nWHERE ${where.sql}`).bind(...where.binds),
   ]);
   const rows = page.results;
   const more = rows.length > q.limit;
