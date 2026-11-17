@@ -6,3 +6,5 @@ scripts/.pages.json
 .env
 scripts/official/cache/
 scripts/official/out/
+.verify/
+node_modules/

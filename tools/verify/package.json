@@ -1,0 +1,8 @@
+{
+  "name": "shindan-verify",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": { "browser": "node browser.mjs" },
+  "dependencies": { "playwright-core": "1.64.1" }
+}

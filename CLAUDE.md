@@ -26,6 +26,8 @@ python3 -I scripts/build.py                       # → dist/ (needs .venv for f
 .venv/bin/python -I scripts/update_data.py --dry-run
 .venv/bin/python -I scripts/add_thumb.py <id> <image-url> [--approx] [--note "..."]
 python3 -I scripts/og.py                          # after a build; re-render public/og/*.png (headless Chrome)
+.venv/bin/python -I scripts/verify_release.py --today YYYY-MM-DD   # pre-merge gate: data diff vs main, build, JSON-LD
+node tools/verify/browser.mjs --today YYYY-MM-DD                 # same date; headless Chrome, desktop + mobile (npm ci in tools/verify once)
 ```
 
 Local preview: serve `dist/` (launch config `tcg-calendar`, port 5260). GA only loads on `shindan-navi.app`, so previews are not tracked.
