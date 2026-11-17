@@ -42,4 +42,6 @@ export const TYPE_LABELS: Record<string, string> = {
   one_battle_cup: 'ONE BATTLE CUP',
   unichike_get_battle: 'ユニチケゲットバトル',
   union_rare_battle: 'ユニオンレア争奪バトル',
+  challenge: 'チャレンジ戦',
+  fan_meeting: 'ファンミーティング',
 };
