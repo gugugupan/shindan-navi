@@ -6,8 +6,8 @@ Cloudflare Worker + D1 that serves `GET /api/v1/events`, `/api/v1/events/days` a
 The Worker config is `../wrangler.jsonc` (one Worker, `shindan-navi`, for site + API); every script here passes
 `--config ../wrangler.jsonc`. Its `database_id` is a placeholder. Remote commands use `../wrangler.remote.json`, written
 by `scripts/remote-config.mjs` from env `D1_DATABASE_ID` (git-ignored; the id is never printed or committed).
-Deploys happen only through `.github/workflows/deploy.yml` (or `../scripts/deploy.sh`); the only remote command here
-is `npm run import:remote -- --yes`.
+Deploys happen only through `.github/workflows/deploy.yml` (or `../scripts/deploy.sh`); the only remote commands here
+are `npm run import:remote -- --plan` (reads) and `-- --yes` (writes).
 
 ## Setup
 
@@ -25,14 +25,14 @@ python3 -I ../scripts/build.py      # optional: builds ../dist so the page is se
 | `npm run dev:node` | Same, without workerd: imports into `.local/events.sqlite3` and serves the same Worker handler on Node (see below). |
 | `npm run import` | Import only (local D1 via `wrangler d1 migrations apply/execute --local`). |
 | `npm run import:sqlite` | Import only, into `.local/events.sqlite3`. |
-| `npm run import:remote` | Validate and write `.local/import.sql`, print the write estimate and the wrangler commands. Needs `D1_DATABASE_ID`. Add `-- --yes` to apply to the production D1. |
+| `npm run import:remote` | Needs `D1_DATABASE_ID`. Validate and estimate a first import (no remote call); `-- --plan` reads the remote rows and prints the exact plan; `-- --yes` migrates, plans and applies to the production D1. See "Remote import". |
 | `npm run db:migrate` | Apply `migrations/` to the local D1. |
-| `npm run db:reset` | Delete the local D1 and SQLite file; the next import rebuilds them from git. |
+| `npm run db:reset` | Delete the local D1 and SQLite file; the next import rebuilds them from git. Needed once for databases created before `0001_events.sql`. |
 | `npm test` | Vitest: filters, pagination, validation, meta, importer. `PERF=1 npx vitest run tests/perf.test.ts` runs a 20k-event benchmark. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run bundle` | `wrangler deploy --dry-run` with the root config into `.local/bundle`: checks config, assets and bundling; uploads nothing. Build `../dist` first to check the assets. |
 
-Importer options: `node scripts/import-events.mjs [--data DIR] [--games OPCG,PTCG] [--target wrangler|sqlite|remote] [--sqlite FILE] [--out FILE] [--dry-run] [--yes] [--allow-over-free-limit]`.
+Importer options: `node scripts/import-events.mjs [--data DIR] [--games OPCG,PTCG] [--target sqlite|wrangler|remote] [--sqlite FILE] [--out FILE] [--dry-run] [--plan] [--yes] [--max-writes N]`.
 `dev-node.mjs` takes `--port`, `--sqlite` and `--dist`.
 The generated SQL is kept at `.local/import.sql`.
 
@@ -48,86 +48,101 @@ Tests use the same stand-in.
 ## Import behaviour
 
 - Reads `data/events/<GAME>/_run.json` and `<YYYY-MM>.json`, validates them against `contracts/*.schema.json`
-  plus: game/source match the directory and run, `id` = `<tcgp|ptcg>:<external_id>`, no duplicate ids, file month =
-  `starts_on` month, `starts_on` inside the run window, `ends_on >= starts_on`, `datetime` precision has `starts_at`,
-  `record_count` = events in files.
+  plus: game/source match the directory and run, `id` = `<tcgp|ptcg|conan>:<external_id>`, no duplicate ids, file
+  month = `starts_on` month, `starts_on` inside the run window, `ends_on >= starts_on`, `datetime` precision has
+  `starts_at`, `record_count` = events in files.
 - A game with any error is rejected as a whole (nothing written for it); other games still import; exit code 1.
-- Shared events: the same `id` under several games (e.g. BANDAI CARD GAMES series in OPCG and UATCG) is stored
-  once, with one `event_games` row per game. Copies should be identical apart from `game_code`/`last_seen_at`;
-  if not, the importer warns and the last game read wins.
-- Upserts events by id. Groups and venues are keyed by their full content (source_id plus every field): a source
-  group can carry different categories per event, and a TCG+ venue source_id is an organizer id spanning several
-  addresses, so the API returns exactly each event's own group and venue. `updated_at` only moves when content changes
-  (`last_seen_at` excluded). Re-importing the same files is a no-op apart from `imports.imported_at`.
-- Nothing is deleted. When the run is `complete`, that game's memberships (`event_games`) **inside its window** that
-  the run no longer contains get `missing_since`; other games' memberships of a shared event are untouched. An event
-  is hidden from the API only when no membership is left; it reappears if a later run lists it. Incomplete runs hide
-  nothing. Events outside the new window (e.g. past days after the window moves) are left as they are.
-- One `imports` row per game run (`<GAME>:<fetched_at>`); meta reports the latest one per game.
-- Statements are chunked to < 80 KB (D1 limit 100 KB). 20k events: ~145 statements, ~11 MB of SQL; the full data set
-  (~33k events) is ~490 statements, ~30 MB (`wrangler d1 execute --file` accepts up to 5 GiB).
-- `events.game_codes` is rewritten only where it changes.
-
-## Remote import
-
-`D1_DATABASE_ID=<id> npm run import:remote -- --yes` runs `wrangler d1 migrations apply --remote` and
-`wrangler d1 execute --remote --file .local/import.sql` with `../wrangler.remote.json`. Without `--yes` (or with
-`--dry-run`) it stops after printing the summary. A rejected game blocks it.
-
-Consistency: the SQL is upserts plus `UPDATE`s, never `DELETE`, so no reader can see an empty or truncated table. D1 appears
-to run an uploaded file inside one transaction (its docs say a file with its own `BEGIN TRANSACTION` fails with "cannot
-start a transaction within a transaction"; not verified against a real D1), so a failed import should roll back; even
-without that, a partial import leaves
-every event in its old or new state and re-running finishes it. During a large import D1 is busy and API misses may
-be slow; edge-cached responses keep serving.
-
-### Write budget
-
-D1 bills rows written, and each index adds one row per written row. The importer prints an upper bound
-(`rows × (1 + indexes)` per table, plus `game_codes`). With the current data (2026-11-18):
-
-| Table | Rows | Indexes | Rows written |
-| --- | ---: | ---: | ---: |
-| events | 32,980 | 6 | 230,860 |
-| event_games | 32,984 | 2 | 98,952 |
-| events.game_codes | 32,980 | 0 | 32,980 (first import; later only changes) |
-| venues | 4,167 | 1 | 8,334 |
-| event_groups / imports | 58 / 4 | 2 / 2 | 186 |
-| **Total** | | | **~371,000** |
-
-The upserts rewrite every event and membership on every import (`last_seen_at`, `last_import_id`), so a re-import
-costs about the same minus `game_codes` (~338,000). The D1 Free plan allows 100,000 rows written per day and then
-rejects every query (the API included) until 00:00 UTC. Even OPCG alone (~150,000) does not fit, so a full import
-needs Workers Paid, or a schema/importer change (fewer `events` indexes, skipping unchanged rows); the importer
-refuses estimates over 100,000 unless `--allow-over-free-limit` is passed.
-
-Reads: `/events/meta` and `count`/`days` scan the matching events (up to all ~33k rows, several times for meta), so one
-uncached page view reads on the order of 100k–300k rows (estimate, not measured on D1). The edge cache bounds this per
-distinct URL and colo, but the Free plan's 5M rows read/day still allows only a few dozen uncached page views.
+  The remote target refuses to run at all while a game is rejected.
+- **Diff, not replace.** The importer first reads the database's current rows (`id, content_hash, game_mask,
+  starts_on, loc, …` for every event, plus `imports`), then writes only:
+  - new events (insert) and events whose `content_hash` changed (full rewrite; `created_at` kept);
+  - `game_mask` changes: an event gains the bit of every game listing it, and a **complete** run clears its game's
+    bit on events in its window that it no longer lists (mask 0 hides the event; rows are never deleted; it
+    reappears when listed again). Incomplete runs hide nothing; events outside the window are left alone;
+  - an `imports` row per new run (`<GAME>:<fetched_at>`), and the two `site_meta` rows (`meta`, `state`) when
+    anything changed. `state.version` = import time; the Worker's cache key includes it.
+  An unchanged re-import writes nothing. The upsert also checks `content_hash`/`game_mask` in its `WHERE`, so a
+  stale diff cannot rewrite matching rows.
+- `content_hash` covers the event without `game_code` and `last_seen_at` (the API derives `last_seen_at` from the
+  newest import of the event's games).
+- Shared events: the same `id` under several games is stored once; `game_mask` holds every listing game. Copies
+  should be identical apart from `game_code`/`last_seen_at`; if not, the importer warns and the last game read wins.
+- Meta (game windows, prefecture / online / category / type counts over each game's latest window) is computed in
+  the importer from the post-import state and stored as JSON, so `/events/meta` reads one row.
+- Statements are chunked to < 80 KB (D1 limit 100 KB). A first import of the current data (~33k events) is ~360
+  statements, ~34 MB of SQL (`wrangler d1 execute --file` accepts up to 5 GiB).
 
 ## Schema
 
-`migrations/0001_init.sql`: `games` (seeded), `imports`, `event_groups`, `venues`, `events`, `event_games`. Source
-identity lives on `events` (`source_code`, `external_id`, `UNIQUE`). `events.game_codes` caches the sorted visible
-member games (NULL = hidden) and `events.region_code` copies the venue's region for its index. 0001 was edited
-before any release; run `npm run db:reset` if you have an older local database. `starts_sort` = Unix seconds of `starts_at`, or 253402300799 for date-only events,
-which gives the "starts_at nulls last" order and the keyset `(starts_on, starts_sort, id)`.
+`migrations/0001_events.sql` (replaced the never-deployed `0001_init.sql`; run `npm run db:reset` for older local
+databases): `games` (seeded, with the `game_mask` bit), `imports`, `events`, `site_meta`, all `WITHOUT ROWID`.
+`events` is one wide row per event: group (`group_*`, `category`, `event_type_code`) and venue (`venue_json`,
+`region_code`) are stored inline, because joins cost a row read per event on D1. `loc` is the location filter key
+(venue prefecture, or `online` without a venue). The only secondary index is `idx_events_loc(loc, starts_on,
+starts_sort)`; the API never looks events up by group or venue, so the old group/venue/membership tables and
+their indexes are gone. `starts_sort` = Unix seconds of `starts_at`, or 253402300799 for date-only events, which
+gives the "starts_at nulls last" order and the keyset `(starts_on, starts_sort, id)`.
+
+## D1 budget (Free plan: 100,000 rows written, 5,000,000 rows read per UTC day)
+
+Writes (D1 counts each table row and each index entry; `--plan` prints the exact numbers for a given state):
+
+| Import | Rows written |
+| --- | ---: |
+| First import of the current data (32,980 events, 4 runs) | ~65,966 (events 2 × 32,980, imports 4, site_meta 2) |
+| Re-import with nothing changed | 0 |
+| Typical refresh | 2 × changed events + 1 × membership changes + new runs + 2 |
+
+The importer refuses to apply a plan above `--max-writes` (default 90,000). If a future first import is bigger,
+split it with `--games` across UTC days. Free-plan limits are per day across everything, so check the dashboard
+before a large import on a day that already had one.
+
+Reads per import: the state read (one row per existing event and import, ~33k) plus one primary-key lookup per
+written row.
+
+Reads per uncached page load, measured on the current data with SQLite (rows the query steps through; D1 may also
+count the index entry, so up to ~2×). Every query is a `SEARCH events USING INDEX idx_events_loc (loc=? AND
+starts_on>? AND starts_on<?)`; with several locations SQLite stops each one after `limit` rows.
+
+| Location | `/events` first page (50) | `/events/days` month | `/events/days` 92 days | meta / version |
+| --- | ---: | ---: | ---: | ---: |
+| 東京都 (largest, 3,797 events / 92 days) | 51 | 1,693 | 3,797 | 1 + 1 |
+| median prefecture (429 / 92 days) | ≤ 51 | 161 | 429 | 1 + 1 |
+| 5 largest prefectures | 132 | 5,629 | 12,637 | 1 + 1 |
+
+The page loads `/events/days` for the selected range (92 days in the list's default これから, one month in the
+calendar) plus the first `/events` page, so an uncached Tokyo list view costs ~3,900 rows (median ~480). Cached
+responses cost nothing; each isolate re-reads the 1-row data version at most once a minute.
+
+## Remote import
+
+```
+D1_DATABASE_ID=<id> npm run import:remote                # first-import estimate, no remote call
+D1_DATABASE_ID=<id> npm run import:remote -- --plan      # read remote rows, print the exact plan (reads ~33k rows)
+D1_DATABASE_ID=<id> npm run import:remote -- --yes       # migrations apply, read, plan, execute --file
+```
+
+`--plan` and `--yes` need the data directory committed: tracked in git and clean. A symlinked or untracked
+`data/events` (as in some worktrees) is refused — run the import from a checkout where the data is committed.
+
+Consistency: the SQL never deletes or empties a table, so readers see each event in its old or new state. Whether D1
+runs an uploaded file as one transaction is not documented (its import guide only says to remove `BEGIN
+TRANSACTION`/`COMMIT`); a partial import is safe to re-run. D1 is single-threaded per database: while a large import
+runs, API misses queue and may fail with an "overloaded" error, which the Worker returns as 500 (never cached);
+cached responses keep serving. Daily refreshes are small diffs, so this mainly concerns the first import.
 
 ## API notes
 
-- Unknown query parameters are ignored; empty list values (`game=`) mean "no filter"; `from`, `until`, `limit`,
-  `cursor` may appear once.
+- Unknown query parameters are 400 (they would otherwise bypass the cache); empty list values (`game=`) mean "no
+  filter"; `from`, `until`, `limit`, `cursor` may appear once.
+- `pref` is required: 1-5 of `JP-01`..`JP-47` / `online`.
 - `limit` above 200 is clamped to 200; non-integers or < 1 are 400.
 - `cursor` is bound to the filters (not to `limit`); reusing it with other filters is 400.
-- `count` ignores the cursor and is the exact total (no cap; the date range is limited to 92 days).
+- `/events` has no `count`; `/events/days` gives per-day totals for the same filters.
 - `game` matches any member game; events carry `game_codes` (sorted alphabetically) and `game_code` = `game_codes[0]`.
   `/events/days` counts a shared event once in `count` and under each member game in `by_game`.
-- `pref` matches the venue's `region_code` (in-person and hybrid) and excludes `attendance_mode = online`.
 - `mode=in_person` and `mode=online` both also match `hybrid`.
-- `/events/days` takes the same filters, ignores `limit`/`cursor`, and lists only days with matches;
-  `by_game` has only games with matches that day.
+- `/events/days` lists only days with matches; `by_game` has only games with matches that day.
 - `days` uses the weekday of `starts_on` (already a Tokyo date).
-- All `event_status` values are returned and counted (`count`, `days`); the page marks cancelled/postponed events.
-- Meta counts (prefectures, categories, types) are global, not per filter, and cover visible events inside each
-  game's latest window. `meta.games` always lists all four games. Type labels come from `TYPE_LABELS` in
-  `src/constants.ts` (per `event_type_code`); codes without a label use the code itself.
+- All `event_status` values are returned and counted; the page marks cancelled/postponed events.
+- Type labels come from `TYPE_LABELS` in `src/constants.ts` (per `event_type_code`); codes without a label use the code itself.
