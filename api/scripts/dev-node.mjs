@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fallback for machines where workerd cannot run (macOS < 13.5): serves the same Worker fetch
 // handler on Node with the SQLite file written by `import-events.mjs --target sqlite`, plus ../dist.
-// Asset handling only approximates Workers static assets (index.html for directories, .html suffix).
+// Asset handling approximates Workers static assets (see resolveAsset); public/_headers is not applied.
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, extname, resolve, sep } from 'node:path';
@@ -30,18 +30,27 @@ const TYPES = {
   '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml', '.webmanifest': 'application/manifest+json',
 };
 
-function staticFile(pathname) {
+const isFile = (p) => existsSync(p) && statSync(p).isFile();
+
+// Mirrors html_handling "auto-trailing-slash": /dir -> 307 /dir/, /dir/index.html -> 307 /dir/,
+// /page.html -> 307 /page; everything else is served as-is or falls through to 404.html.
+function resolveAsset(pathname) {
   const p = resolve(dist, `.${decodeURIComponent(pathname)}`);
-  if (p !== dist && !p.startsWith(dist + sep)) return null;
-  for (const c of [p, join(p, 'index.html'), `${p}.html`]) {
-    if (existsSync(c) && statSync(c).isFile()) return c;
-  }
-  return null;
+  if (p !== dist && !p.startsWith(dist + sep)) return { file: null };
+  if (pathname.endsWith('/index.html') && isFile(p)) return { redirect: pathname.slice(0, -'index.html'.length) };
+  if (pathname.endsWith('.html') && isFile(p)) return { redirect: pathname.slice(0, -'.html'.length) };
+  if (pathname.endsWith('/')) return { file: isFile(join(p, 'index.html')) ? join(p, 'index.html') : null };
+  if (isFile(p)) return { file: p };
+  if (isFile(`${p}.html`)) return { file: `${p}.html` };
+  if (isFile(join(p, 'index.html'))) return { redirect: `${pathname}/` };
+  return { file: null };
 }
 
 const ASSETS = {
   async fetch(req) {
-    const file = staticFile(new URL(req.url).pathname);
+    const url = new URL(req.url);
+    const { file, redirect } = resolveAsset(url.pathname);
+    if (redirect) return new Response(null, { status: 307, headers: { location: redirect + url.search } });
     if (!file) {
       const nf = join(dist, '404.html');
       return existsSync(nf) ? new Response(readFileSync(nf), { status: 404, headers: { 'content-type': TYPES['.html'] } }) : new Response('Not found', { status: 404 });

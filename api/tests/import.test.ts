@@ -1,39 +1,47 @@
 import { describe, expect, it } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { api, importDir, newDb, run, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
-import { buildStatements, loadAll, toSqlFile } from '../scripts/lib/importer.mjs';
+import { ALL_PREFS, api, importDir, newDb, run, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
+import { emptyState, estimateCost, loadAll, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
 import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 const snapshot = (db: SqliteD1) => ({
   events: db.db.prepare('SELECT * FROM events ORDER BY id').all(),
-  groups: db.db.prepare('SELECT * FROM event_groups ORDER BY id').all(),
-  venues: db.db.prepare('SELECT * FROM venues ORDER BY id').all(),
+  imports: db.db.prepare('SELECT * FROM imports ORDER BY id').all(),
+  meta: db.db.prepare('SELECT * FROM site_meta ORDER BY key').all(),
 });
+const mask = (db: SqliteD1, id: string) => db.db.prepare('SELECT game_mask m FROM events WHERE id = ?').get(id)!.m;
+const visible = (db: SqliteD1) => db.db.prepare('SELECT COUNT(*) n FROM events WHERE game_mask <> 0').get()!.n;
+const Q = `/api/v1/events?from=2026-11-18&until=2027-02-18&limit=200&${ALL_PREFS}`;
 
 describe('importer', () => {
-  it('is idempotent: re-importing the same files changes nothing but imported_at', () => {
+  it('writes nothing when the same files are imported again', () => {
     const db = newDb();
     const dir = writeDataDir([...sampleEvents(), ...synthetic(300)]);
-    importDir(db, dir, 1_000);
+    const first = importDir(db, dir, 1_000).plan;
+    expect(first.stats).toMatchObject({ inserted: 303, rewritten: 0, mask_updates: 0, imports: 4, site_meta: 2 });
     const before = snapshot(db);
-    importDir(db, dir, 2_000);
+    const again = importDir(db, dir, 2_000).plan;
+    expect(again.statements).toEqual([]);
+    expect(again.version).toBeNull();
     expect(snapshot(db)).toEqual(before);
-    expect(db.db.prepare('SELECT COUNT(*) n FROM imports').get()!.n).toBe(4);
-    expect(db.db.prepare('SELECT DISTINCT imported_at t FROM imports').all().map((r: Ev) => r.t)).toEqual([2_000]);
   });
 
-  it('bumps updated_at only for changed events and ignores last_seen_at', () => {
+  it('rewrites only changed events, serves last_seen_at from the import and bumps the data version', async () => {
     const db = newDb();
     const evs = synthetic(20);
-    const dir = writeDataDir(evs);
-    importDir(db, dir, 1_000);
+    importDir(db, writeDataDir(evs), 1_000);
     const changed = evs.map((e, i) => ({ ...e, last_seen_at: '2026-11-19T00:00:00Z', name: i === 0 ? `${e.name} (renamed)` : e.name }));
     const runs = Object.fromEntries(['OPCG', 'UATCG', 'CONAN', 'PTCG'].map((g) => [g, run(g, 5, { fetched_at: '2026-11-19T00:00:00Z' })]));
-    importDir(db, writeDataDir(changed, runs), 2_000);
-    const rows = db.db.prepare('SELECT id, updated_at, created_at, last_seen_at FROM events ORDER BY id').all();
+    const plan = importDir(db, writeDataDir(changed, runs), 2_000).plan;
+    expect(plan.stats).toMatchObject({ inserted: 0, rewritten: 1, mask_updates: 0, imports: 4 });
+    expect(estimateCost(plan.stats, emptyState()).rowsWritten).toBe(2 + 4 + 2);
+    const rows = db.db.prepare('SELECT id, updated_at, created_at FROM events ORDER BY id').all();
     expect(rows.filter((r: Ev) => r.updated_at === 2_000).map((r: Ev) => r.id)).toEqual([evs[0].id]);
-    expect(rows.every((r: Ev) => r.created_at === 1_000 && r.last_seen_at === '2026-11-19T00:00:00Z')).toBe(true);
+    expect(rows.every((r: Ev) => r.created_at === 1_000)).toBe(true);
+    const got = (await api(db, Q)).body.events;
+    expect(got.every((e: Ev) => e.last_seen_at === '2026-11-19T00:00:00Z')).toBe(true);
+    expect(JSON.parse(String(db.db.prepare("SELECT value FROM site_meta WHERE key = 'state'").get()!.value)).version).toBe('2000');
   });
 
   it('hides events missing from a complete run, keeps them in the table, and restores them when they return', async () => {
@@ -43,14 +51,13 @@ describe('importer', () => {
     const gone = evs[3];
     const rest = evs.filter((e) => e !== gone);
     importDir(db, writeDataDir(rest, { OPCG: run('OPCG', rest.length, { fetched_at: '2026-11-20T00:00:00Z' }) }), 2_000);
-    const q = '/api/v1/events?from=2026-11-18&until=2027-02-18&limit=200';
-    expect((await api(db, q)).body.events.map((e: Ev) => e.id)).not.toContain(gone.id);
-    expect(db.db.prepare('SELECT missing_since FROM event_games WHERE event_id = ?').get(gone.id)!.missing_since).toBe('2026-11-20T00:00:00Z');
-    expect(db.db.prepare('SELECT game_codes FROM events WHERE id = ?').get(gone.id)!.game_codes).toBeNull();
+    expect((await api(db, Q)).body.events.map((e: Ev) => e.id)).not.toContain(gone.id);
+    expect(mask(db, gone.id)).toBe(0);
     expect((await api(db, '/api/v1/events/meta')).body.games[0].record_count).toBe(rest.length);
 
-    importDir(db, writeDataDir(evs, { OPCG: run('OPCG', evs.length, { fetched_at: '2026-11-21T00:00:00Z' }) }), 3_000);
-    expect((await api(db, q)).body.events.map((e: Ev) => e.id)).toContain(gone.id);
+    const back = importDir(db, writeDataDir(evs, { OPCG: run('OPCG', evs.length, { fetched_at: '2026-11-21T00:00:00Z' }) }), 3_000).plan;
+    expect(back.stats).toMatchObject({ inserted: 0, rewritten: 0, mask_updates: 1 });
+    expect((await api(db, Q)).body.events.map((e: Ev) => e.id)).toContain(gone.id);
   });
 
   it('does not hide anything for incomplete runs or outside the run window', async () => {
@@ -58,11 +65,11 @@ describe('importer', () => {
     const evs = synthetic(40).filter((e) => e.game_code === 'OPCG');
     importDir(db, writeDataDir(evs), 1_000);
     importDir(db, writeDataDir(evs.slice(0, 2), { OPCG: run('OPCG', 2, { fetched_at: '2026-11-20T00:00:00Z', complete: false }) }), 2_000);
-    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE game_codes IS NOT NULL').get()!.n).toBe(evs.length);
+    expect(visible(db)).toBe(evs.length);
     // A later window: old events before it are left alone.
     const later = evs.filter((e) => e.starts_on >= '2026-12-18');
     importDir(db, writeDataDir(later, { OPCG: run('OPCG', later.length, { fetched_at: '2026-12-18T00:00:00Z', window: { from: '2026-12-18', until: '2027-03-18' } }) }), 3_000);
-    expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE game_codes IS NOT NULL').get()!.n).toBe(evs.length);
+    expect(visible(db)).toBe(evs.length);
   });
 
   it('rejects a game whose files break the contract and still imports the others', () => {
@@ -77,8 +84,8 @@ describe('importer', () => {
     expect(errs.OPCG).toEqual([]);
     expect(errs.UATCG.join('\n')).toMatch(/fee_amount/);
     expect(errs.CONAN.join('\n')).toMatch(/_run.json missing/);
-    const games = db.db.prepare('SELECT DISTINCT game_code g FROM event_games ORDER BY g').all().map((r: Ev) => r.g);
-    expect(games).toEqual(['OPCG', 'PTCG']);
+    const masks = db.db.prepare('SELECT DISTINCT game_mask m FROM events ORDER BY m').all().map((r: Ev) => r.m);
+    expect(masks).toEqual([1, 8]);
   });
 
   it('checks ids, months, window and record_count', () => {
@@ -106,14 +113,14 @@ describe('importer', () => {
     const evs = synthetic(8).filter((e) => e.game_code === 'CONAN');
     expect(evs[0].id).toMatch(/^conan:/);
     expect(importDir(db, writeDataDir(evs)).flatMap((r) => r.errors)).toEqual([]);
-    const r = await api(db, '/api/v1/events?from=2026-11-18&until=2027-02-18&game=CONAN');
+    const r = await api(db, `/api/v1/events?from=2026-11-18&until=2027-02-18&game=CONAN&${ALL_PREFS}`);
     expect(r.body.events.map((e: Ev) => e.source_code)).toEqual(evs.map(() => 'conan_official'));
   });
 
   it('escapes quotes and keeps statements under the D1 size limit', () => {
     const evs = synthetic(2000).map((e, i) => (i === 0 ? { ...e, name: "O'Brien's 'quoted' ; DROP TABLE events; --" } : e));
     const dir = writeDataDir(evs);
-    const stmts = buildStatements(loadAll(dir).filter((r) => !r.errors.length));
+    const stmts = planImport(loadAll(dir).filter((r) => !r.errors.length)).statements;
     expect(Math.max(...stmts.map((s: string) => Buffer.byteLength(s)))).toBeLessThan(100_000);
     const db = newDb();
     db.execAll(stmts);
@@ -128,7 +135,9 @@ describe('shared events', () => {
   const shared: Ev = { ...base.find((e) => e.game_code === 'OPCG')!, id: 'tcgp:shared1', external_id: 'shared1', name: '【SYNTHETIC】shared series' };
   const opcg = [...base.filter((e) => e.game_code === 'OPCG'), shared];
   const uatcg = [...base.filter((e) => e.game_code === 'UATCG'), { ...shared, game_code: 'UATCG', last_seen_at: '2026-11-18T01:00:00Z' }];
-  const q = '/api/v1/events?from=2026-11-18&until=2027-02-18&limit=200';
+  const q = Q;
+  const total = async (db: SqliteD1, extra = '') =>
+    (await api(db, `/api/v1/events/days?from=2026-11-18&until=2027-02-18&${ALL_PREFS}${extra}`)).body.days.reduce((n: number, d: Ev) => n + d.count, 0);
 
   function load() {
     const db = newDb();
@@ -141,21 +150,21 @@ describe('shared events', () => {
     const db = load();
     expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE id = ?').get(shared.id)!.n).toBe(1);
     const all = (await api(db, q)).body;
-    expect(all.count).toBe(opcg.length + uatcg.length - 1);
+    expect(await total(db)).toBe(opcg.length + uatcg.length - 1);
     const ev = all.events.find((e: Ev) => e.id === shared.id);
     expect(ev.game_code).toBe('OPCG');
     expect(ev.game_codes).toEqual(['OPCG', 'UATCG']);
     for (const g of ['OPCG', 'UATCG']) {
       const r = (await api(db, `${q}&game=${g}`)).body;
       expect(r.events.map((e: Ev) => e.id)).toContain(shared.id);
-      expect(r.count).toBe((g === 'OPCG' ? opcg : uatcg).length);
+      expect(await total(db, `&game=${g}`)).toBe((g === 'OPCG' ? opcg : uatcg).length);
     }
-    expect((await api(db, `${q}&game=OPCG,UATCG`)).body.count).toBe(all.count);
+    expect(await total(db, '&game=OPCG,UATCG')).toBe(await total(db));
   });
 
   it('counts the event once per day and once per member game in by_game', async () => {
     const db = load();
-    const day = (await api(db, `/api/v1/events/days?from=${shared.starts_on}&until=${new Date(Date.parse(`${shared.starts_on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`)).body.days[0];
+    const day = (await api(db, `/api/v1/events/days?${ALL_PREFS}&from=${shared.starts_on}&until=${new Date(Date.parse(`${shared.starts_on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`)).body.days[0];
     const others = base.filter((e) => e.starts_on === shared.starts_on);
     expect(day.count).toBe(others.length + 1);
     expect(day.by_game.OPCG).toBe(others.filter((e) => e.game_code === 'OPCG').length + 1);

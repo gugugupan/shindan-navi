@@ -1,7 +1,7 @@
 // Opt-in: PERF=1 npx vitest run tests/perf.test.ts — 20k SYNTHETIC events through the importer and API.
 import { describe, expect, it } from 'vitest';
 import { api, newDb, synthetic, writeDataDir } from './helpers';
-import { buildStatements, loadAll } from '../scripts/lib/importer.mjs';
+import { emptyState, loadAll, planImport } from '../scripts/lib/importer.mjs';
 
 describe.runIf(process.env.PERF)('20k events', () => {
   it('imports and queries within budget', async () => {
@@ -10,20 +10,20 @@ describe.runIf(process.env.PERF)('20k events', () => {
     const t1 = performance.now();
     const loaded = loadAll(dir);
     expect(loaded.flatMap((r) => r.errors)).toEqual([]);
-    const stmts = buildStatements(loaded);
+    const stmts = planImport(loaded, emptyState()).statements;
     const t2 = performance.now();
     const db = newDb();
     db.execAll(stmts);
     const t3 = performance.now();
-    db.execAll(stmts);
+    db.execAll(planImport(loaded, db.readState()).statements);
     const t4 = performance.now();
     const timings: Record<string, number> = {};
     for (const q of [
-      'from=2026-11-18&until=2027-02-18',
+      'from=2026-11-18&until=2027-02-18&pref=JP-13',
       'from=2026-11-18&until=2027-02-18&game=OPCG&pref=JP-13',
-      'from=2026-12-01&until=2027-01-01&days=weekend&fee=free&category=tournament',
-      'from=2026-11-18&until=2027-02-18&type=meetup&limit=200',
-      'from=2026-11-18&until=2027-02-18&game=PTCG',
+      'from=2026-12-01&until=2027-01-01&days=weekend&fee=free&category=tournament&pref=JP-13,JP-14',
+      'from=2026-11-18&until=2027-02-18&type=meetup&limit=200&pref=JP-27',
+      'from=2026-11-18&until=2027-02-18&game=PTCG&pref=JP-13,JP-14,JP-27,JP-40,online',
     ]) {
       const s = performance.now();
       const r = await api(db, `/api/v1/events?${q}`);
@@ -31,19 +31,15 @@ describe.runIf(process.env.PERF)('20k events', () => {
       timings[q] = Math.round(performance.now() - s);
     }
     let s = performance.now();
-    await api(db, '/api/v1/events/days?from=2026-11-18&until=2027-02-18');
+    await api(db, '/api/v1/events/days?from=2026-11-18&until=2027-02-18&pref=JP-13');
     timings.days = Math.round(performance.now() - s);
     s = performance.now();
     await api(db, '/api/v1/events/meta');
     timings.meta = Math.round(performance.now() - s);
-    const plan = db.db.prepare(`EXPLAIN QUERY PLAN SELECT e.id FROM events e JOIN event_groups g ON g.id = e.event_group_id
-      WHERE e.game_codes IS NOT NULL AND e.starts_on >= ? AND e.starts_on < ? AND e.region_code IN (?)
-      AND EXISTS (SELECT 1 FROM event_games eg WHERE eg.event_id = e.id AND eg.missing_since IS NULL AND eg.game_code IN (?))
-      ORDER BY e.starts_on, e.starts_sort, e.id LIMIT 101`).all('2026-11-18', '2027-02-18', 'JP-13', 'OPCG').map((r: any) => r.detail);
     console.log({
       writeFiles: Math.round(t1 - t0), validateAndBuildSql: Math.round(t2 - t1), statements: stmts.length,
       sqlBytes: stmts.reduce((n: number, x: string) => n + x.length, 0), firstImport: Math.round(t3 - t2), reimport: Math.round(t4 - t3),
-      timings, plan,
+      timings,
     });
   });
 });

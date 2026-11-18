@@ -1,1 +1,10 @@
 # Keep caching at Cloudflare defaults: long-lived immutable rules on unhashed paths can pin stale or fallback responses at the edge.
+
+# Cloudflare Pages added these two by default; Workers static assets do not.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Version preview URLs (and workers.dev, if ever enabled) must not be indexed next to shindan-navi.app.
+https://:version.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex

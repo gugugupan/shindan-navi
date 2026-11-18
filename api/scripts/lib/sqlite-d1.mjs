@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { API_DIR } from './importer.mjs';
+import { API_DIR, stateEventsSql, stateFromRows, stateImportsSql } from './importer.mjs';
 
 const MIGRATIONS_DIR = join(API_DIR, 'migrations');
 
@@ -81,6 +81,17 @@ export class SqliteD1 {
       this.execAll([readFileSync(join(MIGRATIONS_DIR, name), 'utf8'), `INSERT INTO d1_migrations (name) VALUES ('${name.replaceAll("'", "''")}')`]);
     }
     return this;
+  }
+  /** The importer's view of this database (see importer.mjs stateFromRows). */
+  readState() {
+    const events = [];
+    for (let after = null; ; ) {
+      const page = this.db.prepare(stateEventsSql(after, 5000)).all();
+      events.push(...page);
+      if (page.length < 5000) break;
+      after = page[page.length - 1].id;
+    }
+    return stateFromRows(events, this.db.prepare(stateImportsSql()).all());
   }
   close() {
     this.db.close();

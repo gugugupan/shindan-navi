@@ -1,6 +1,6 @@
 # 新弾ナビ
 
-TCG new-release calendar (static single page) for https://shindan-navi.app, hosted on Cloudflare Pages (project `shindan-navi`).
+TCG new-release calendar (static pages) and TCG event calendar (`/events/`, API + D1) for https://shindan-navi.app, served by one Cloudflare Worker (`shindan-navi`, config `wrangler.jsonc`).
 
 Working notes for people and coding agents: `CLAUDE.md` (architecture, owner decisions, gotchas) and the skills in `.claude/skills/` — `update-data` (refresh and publish the release data) and `find-product-image` (replace placeholders with real package images, helper `scripts/add_thumb.py`).
 
@@ -29,7 +29,7 @@ It scrapes カードラボ (daily tables) and トレカの地図 (this month + 5
 
 ## Pages
 
-Built by `scripts/build.py`: `/` (all titles), one page per main title (`/pokemon/`, `/onepiece/`, `/mtg/`, `/yugioh/`, `/duelmasters/`, `/weiss/`, `/unionarena/`, `/gundam/`, `/dragonball/`, `/digimon/`) and one per month (`/2026-10/` …). Each page has its own title/description/canonical, a static release list in the HTML, JSON-LD (BreadcrumbList / ItemList of Product), and the calendar app pre-filtered via `PAGE`. Also writes `sitemap.xml` and `robots.txt`; `public/404.html` stops Pages from serving the home page for unknown paths. `data/meta.json` holds the data snapshot date shown as 更新日 and used as sitemap lastmod.
+Built by `scripts/build.py`: `/` (all titles), one page per main title (`/pokemon/`, `/onepiece/`, `/mtg/`, `/yugioh/`, `/duelmasters/`, `/weiss/`, `/unionarena/`, `/gundam/`, `/dragonball/`, `/digimon/`) and one per month (`/2026-10/` …). Each page has its own title/description/canonical, a static release list in the HTML, JSON-LD (BreadcrumbList / ItemList of Product), and the calendar app pre-filtered via `PAGE`. Also builds `/events/` (from `src/events.html`; data from `/api/v1/`; left out with `BUILD_EVENTS=0`) and writes `sitemap.xml` (incl. `/events/`) and `robots.txt`; `public/404.html` is served with status 404 for unknown paths (`not_found_handling: 404-page`). `data/meta.json` holds the data snapshot date shown as 更新日 and used as sitemap lastmod.
 
 OGP images: `python3 -I scripts/og.py` (after a build) renders `public/og/*.png` with headless Chrome. Re-run it when the game list or thumbnails change.
 
@@ -47,16 +47,31 @@ Serves from `dist/`. GA only loads on `shindan-navi.app`, so local previews are 
 
 ## Deploy
 
-Pushing to `main` runs `.github/workflows/deploy.yml`: build (with GA) and `wrangler pages deploy` to the `shindan-navi` Pages project. Repo secrets `CLOUDFLARE_API_TOKEN` (Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID` are required. The workflow only publishes; it never changes data — data updates are a separate local step that ends in a reviewed commit.
+Pushing to `main` runs `.github/workflows/deploy.yml`. It never changes data and never touches D1 — data updates and event imports are separate local steps (see `api/README.md`). Who serves `shindan-navi.app` is the repository variable `LIVE_HOST`:
 
-Manual deploy from a laptop still works:
+| `LIVE_HOST` | Pages project `shindan-navi` | Worker `shindan-navi` |
+| --- | --- | --- |
+| unset / `pages` (until the cutover) | built with `BUILD_EVENTS=0` (no `/events/`, no `/api/` there) and deployed: the live site keeps updating | built with `/events/` and deployed to its version preview URL, only if the `D1_DATABASE_ID` secret is set |
+| `worker` (after the cutover) | skipped | deployed with the `shindan-navi.app` custom domain; fails if `D1_DATABASE_ID` is empty |
+
+The committed `wrangler.jsonc` has no route: only `api/scripts/remote-config.mjs --domain` (used when `LIVE_HOST=worker`, or by hand during the cutover) adds the custom domain, so merging never moves the domain by itself. `workers_dev` is off; version preview URLs are on and answer with `X-Robots-Tag: noindex`.
+
+Repo secrets and variables:
+
+- `CLOUDFLARE_API_TOKEN` — Account: Cloudflare Pages Edit (until Pages is retired), Workers Scripts Edit, Account Settings Read; Zone `shindan-navi.app`: Workers Routes Edit, DNS Edit, Zone Read (custom domain). No D1 permissions: deploys only bind the database by id; imports run locally with your own login.
+- `CLOUDFLARE_ACCOUNT_ID`.
+- `D1_DATABASE_ID` — id of the `shindan-navi-events` D1 database. Never commit it.
+- Variable `LIVE_HOST` — see above.
+
+Manual deploys from a laptop (`npx wrangler login` first; `GA_ID` defaults to G-Q4NENX804G):
 
 ```bash
-npx wrangler@4 login
-./scripts/deploy.sh   # GA4 measurement ID defaults to G-Q4NENX804G; override with GA_ID=...
+./scripts/deploy.sh pages                              # live site until the cutover
+D1_DATABASE_ID=... ./scripts/deploy.sh worker          # Worker, preview URL only
+D1_DATABASE_ID=... ./scripts/deploy.sh worker --domain # Worker + shindan-navi.app (cutover)
 ```
 
-Custom domain (one-time, already done): Workers & Pages → shindan-navi → Custom domains → `shindan-navi.app`; `www` redirects to the apex with a Redirect Rule.
+Cutover (once): remove `shindan-navi.app` from the Pages project's custom domains, run `./scripts/deploy.sh worker --domain`, then set `LIVE_HOST=worker`. Rollback: remove the domain from the Worker (Settings → Domains & Routes), add it back to the Pages project, set `LIVE_HOST=pages` (or delete it) and run `./scripts/deploy.sh pages`. `www` redirects to the apex with a zone Redirect Rule either way.
 
 ## GA events
 

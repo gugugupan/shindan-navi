@@ -4,7 +4,7 @@
 // Without ROUNDTRIP_DATA it runs on the sample fixture plus SYNTHETIC conflicting groups/venues and a shared event.
 import { describe, expect, it } from 'vitest';
 import { api, conflicting, importDir, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
-import { loadAll } from '../scripts/lib/importer.mjs';
+import { locOf } from '../scripts/lib/importer.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
@@ -30,17 +30,24 @@ describe('round trip', () => {
       }
     }
     const dates = [...files.values()].map((f) => f.ev.starts_on).sort();
+    const locs = [...new Set([...files.values()].map((f) => locOf(f.ev)))].sort();
+    expect(locs).not.toContain(null);
     const seen = new Map<string, Ev>();
     let total = 0;
-    for (let from = dates[0]; from <= dates[dates.length - 1]; from = addDays(from, 92)) {
-      let cursor: string | null = null;
-      do {
-        const r = await api(db, `/api/v1/events?from=${from}&until=${addDays(from, 92)}&limit=200${cursor ? `&cursor=${cursor}` : ''}`);
-        expect(r.status).toBe(200);
-        if (!cursor) total += r.body.count;
-        for (const e of r.body.events) seen.set(e.id, e);
-        cursor = r.body.next_cursor;
-      } while (cursor);
+    for (let i = 0; i < locs.length; i += 5) {
+      const pref = locs.slice(i, i + 5).join(',');
+      for (let from = dates[0]; from <= dates[dates.length - 1]; from = addDays(from, 92)) {
+        const range = `from=${from}&until=${addDays(from, 92)}&pref=${pref}`;
+        const days = await api(db, `/api/v1/events/days?${range}`);
+        total += days.body.days.reduce((n: number, d: Ev) => n + d.count, 0);
+        let cursor: string | null = null;
+        do {
+          const r = await api(db, `/api/v1/events?${range}&limit=200${cursor ? `&cursor=${cursor}` : ''}`);
+          expect(r.status).toBe(200);
+          for (const e of r.body.events) seen.set(e.id, e);
+          cursor = r.body.next_cursor;
+        } while (cursor);
+      }
     }
     expect(seen.size).toBe(files.size);
     expect(total).toBe(files.size);

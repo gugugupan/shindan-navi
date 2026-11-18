@@ -1,4 +1,4 @@
-import { ATTENDANCE_MODES, CATEGORIES, FEES, GAME_CODES, REGISTRATION_STATUSES } from './constants';
+import { ATTENDANCE_MODES, CATEGORIES, FEES, GAMES, GAME_CODES, MAX_PREFS, ONLINE, REGISTRATION_STATUSES } from './constants';
 
 export const DEFAULT_LIMIT = 100;
 export const MAX_LIMIT = 200;
@@ -24,7 +24,7 @@ export interface EventQuery {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const PREF_RE = /^JP-(0[1-9]|[1-3][0-9]|4[0-7])$/;
+const PREF_RE = /^(JP-(0[1-9]|[1-3][0-9]|4[0-7])|online)$/;
 const TYPE_RE = /^[a-z0-9_]+$/;
 
 function dayNumber(name: string, s: string): number {
@@ -99,7 +99,16 @@ function decodeCursor(cursor: string, fp: string): [string, number, string] {
 
 type Filters = Omit<EventQuery, 'limit' | 'after'>;
 
-export function parseFilters(params: URLSearchParams): Filters {
+const FILTER_PARAMS = ['from', 'until', 'game', 'pref', 'category', 'type', 'days', 'fee', 'registration', 'mode'];
+export const EVENTS_PARAMS = [...FILTER_PARAMS, 'limit', 'cursor'];
+export const DAYS_PARAMS = FILTER_PARAMS;
+
+function rejectUnknown(params: URLSearchParams, allowed: readonly string[]) {
+  for (const k of params.keys()) if (!allowed.includes(k)) throw new BadRequest(`unknown parameter: ${k}`);
+}
+
+export function parseFilters(params: URLSearchParams, allowed: readonly string[] = DAYS_PARAMS): Filters {
+  rejectUnknown(params, allowed);
   const from = single(params, 'from');
   const until = single(params, 'until');
   if (!from) throw new BadRequest('from is required');
@@ -108,13 +117,16 @@ export function parseFilters(params: URLSearchParams): Filters {
   if (span <= 0) throw new BadRequest('until must be after from');
   if (span > MAX_RANGE_DAYS) throw new BadRequest(`until must be at most ${MAX_RANGE_DAYS} days after from`);
 
+  const prefs = list(params, 'pref', undefined, PREF_RE);
+  if (!prefs.length) throw new BadRequest('pref is required (JP-01..JP-47 or online)');
+  if (prefs.length > MAX_PREFS) throw new BadRequest(`at most ${MAX_PREFS} pref values`);
   const types = list(params, 'type', undefined, TYPE_RE);
   if (types.length > MAX_TYPES) throw new BadRequest(`at most ${MAX_TYPES} type values`);
   return {
     from,
     until,
     games: list(params, 'game', GAME_CODES),
-    prefs: list(params, 'pref', undefined, PREF_RE),
+    prefs,
     categories: list(params, 'category', CATEGORIES),
     types,
     days: parseDays(params),
@@ -125,7 +137,7 @@ export function parseFilters(params: URLSearchParams): Filters {
 }
 
 export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: string } {
-  const base = parseFilters(params);
+  const base = parseFilters(params, EVENTS_PARAMS);
   let limit = DEFAULT_LIMIT;
   const rawLimit = single(params, 'limit');
   if (rawLimit !== null) {
@@ -137,47 +149,55 @@ export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: str
   return { ...base, limit, after: cursor ? decodeCursor(cursor, fp) : null, fp };
 }
 
+/** One spelling per filter set, so equivalent URLs share a cache entry. */
+export function canonicalFilters(q: Filters): URLSearchParams {
+  const out = new URLSearchParams({ from: q.from, until: q.until });
+  const lists: Array<[string, readonly (string | number)[]]> = [
+    ['game', q.games], ['pref', q.prefs], ['category', q.categories], ['type', q.types], ['days', q.days],
+    ['fee', q.fees], ['registration', q.registration], ['mode', q.modes],
+  ];
+  for (const [k, v] of lists) if (v.length) out.set(k, v.join(','));
+  return out;
+}
+
+export function canonicalEventQuery(q: EventQuery & { fp: string }): URLSearchParams {
+  const out = canonicalFilters(q);
+  out.set('limit', String(q.limit));
+  if (q.after) out.set('cursor', encodeCursor(q.fp, q.after));
+  return out;
+}
+
 const SELECT = `SELECT
-  e.id, e.game_codes, e.source_code, e.external_id, e.source_url,
-  g.source_id AS g_source_id, g.name AS g_name, g.category AS g_category, g.event_type_code AS g_event_type_code,
-  e.name, e.attendance_mode,
-  e.venue_id, v.name AS v_name, v.source_id AS v_source_id, v.country_code AS v_country_code,
-  v.region_code AS v_region_code, v.region_name AS v_region_name, v.city AS v_city, v.address AS v_address,
-  v.postal_code AS v_postal_code,
-  e.starts_on, e.ends_on, e.starts_at, e.ends_at, e.timezone, e.time_precision, e.format_text,
-  e.eligibility_text, e.capacity, e.fee_amount, e.fee_currency, e.fee_text, e.registration_method,
-  e.registration_platform, e.registration_url, e.registration_opens_at, e.registration_closes_at,
-  e.registration_status, e.event_status, e.source_status_text, e.last_seen_at, e.starts_sort`;
+  id, game_mask, source_code, external_id, source_url, group_source_id, group_name, category, event_type_code,
+  name, attendance_mode, venue_json, starts_on, ends_on, starts_at, ends_at, timezone, time_precision, format_text,
+  eligibility_text, capacity, fee_amount, fee_currency, fee_text, registration_method, registration_platform,
+  registration_url, registration_opens_at, registration_closes_at, registration_status, event_status,
+  source_status_text, starts_sort`;
 
-const FROM = `FROM events e JOIN event_groups g ON g.id = e.event_group_id`;
-
-function whereClause(q: Filters): { sql: string; binds: unknown[] } {
-  const parts = ['e.game_codes IS NOT NULL', 'e.starts_on >= ?', 'e.starts_on < ?'];
-  const binds: unknown[] = [q.from, q.until];
-  const marks = (values: string[]) => values.map(() => '?').join(', ');
+// Every shape starts with loc + starts_on so idx_events_loc(loc, starts_on, starts_sort) bounds the scan.
+export function whereClause(q: Filters): { sql: string; binds: unknown[] } {
+  const marks = (values: readonly unknown[]) => values.map(() => '?').join(', ');
+  const parts = [q.prefs.length === 1 ? 'loc = ?' : `loc IN (${marks(q.prefs)})`, 'starts_on >= ?', 'starts_on < ?', 'game_mask <> 0'];
+  const binds: unknown[] = [...q.prefs, q.from, q.until];
   const inList = (col: string, values: string[]) => {
     if (!values.length) return;
     parts.push(`${col} IN (${marks(values)})`);
     binds.push(...values);
   };
   if (q.games.length) {
-    parts.push(`EXISTS (SELECT 1 FROM event_games eg WHERE eg.event_id = e.id AND eg.missing_since IS NULL AND eg.game_code IN (${marks(q.games)}))`);
-    binds.push(...q.games);
+    parts.push('(game_mask & ?) <> 0');
+    binds.push(GAMES.filter((g) => q.games.includes(g.code)).reduce((m, g) => m | g.bit, 0));
   }
-  if (q.prefs.length) {
-    inList('e.region_code', q.prefs);
-    parts.push(`e.attendance_mode <> 'online'`);
-  }
-  inList('g.category', q.categories);
-  inList('g.event_type_code', q.types);
-  inList('e.registration_status', q.registration);
+  inList('category', q.categories);
+  inList('event_type_code', q.types);
+  inList('registration_status', q.registration);
   // Hybrid events count as both in_person and online.
   const modes = q.modes.some((m) => m === 'in_person' || m === 'online') ? [...new Set([...q.modes, 'hybrid'])].sort() : q.modes;
-  inList('e.attendance_mode', modes);
+  inList('attendance_mode', modes);
   // days are validated integers 0..6, so they are inlined.
-  if (q.days.length) parts.push(`CAST(strftime('%w', e.starts_on) AS INTEGER) IN (${q.days.join(', ')})`);
+  if (q.days.length) parts.push(`CAST(strftime('%w', starts_on) AS INTEGER) IN (${q.days.join(', ')})`);
   if (q.fees.length) {
-    const fee = { free: 'e.fee_amount = 0', paid: 'e.fee_amount > 0', unknown: 'e.fee_amount IS NULL' } as Record<string, string>;
+    const fee = { free: 'fee_amount = 0', paid: 'fee_amount > 0', unknown: 'fee_amount IS NULL' } as Record<string, string>;
     parts.push(`(${q.fees.map((f) => fee[f]).join(' OR ')})`);
   }
   return { sql: parts.join('\n  AND '), binds };
@@ -185,8 +205,12 @@ function whereClause(q: Filters): { sql: string; binds: unknown[] } {
 
 type Row = Record<string, unknown>;
 
-export function rowToEvent(r: Row) {
-  const gameCodes = String(r.game_codes).split(',').sort();
+export const gamesOf = (mask: number): string[] => GAMES.filter((g) => mask & g.bit).map((g) => g.code).sort();
+
+/** last_seen_at is the fetched_at of the newest import among the event's games (collectors set it to the run time). */
+export function rowToEvent(r: Row, fetchedAt: Record<string, string>) {
+  const gameCodes = gamesOf(Number(r.game_mask));
+  const seen = gameCodes.map((g) => fetchedAt[g]).filter(Boolean).sort();
   return {
     id: r.id,
     game_code: gameCodes[0],
@@ -194,19 +218,10 @@ export function rowToEvent(r: Row) {
     source_code: r.source_code,
     external_id: r.external_id,
     source_url: r.source_url,
-    group: { source_id: r.g_source_id, name: r.g_name, category: r.g_category, event_type_code: r.g_event_type_code },
+    group: { source_id: r.group_source_id, name: r.group_name, category: r.category, event_type_code: r.event_type_code },
     name: r.name,
     attendance_mode: r.attendance_mode,
-    venue: r.venue_id === null ? null : {
-      name: r.v_name,
-      source_id: r.v_source_id,
-      country_code: r.v_country_code,
-      region_code: r.v_region_code,
-      region_name: r.v_region_name,
-      city: r.v_city,
-      address: r.v_address,
-      postal_code: r.v_postal_code,
-    },
+    venue: r.venue_json === null ? null : JSON.parse(String(r.venue_json)),
     starts_on: r.starts_on,
     ends_on: r.ends_on,
     starts_at: r.starts_at,
@@ -227,47 +242,51 @@ export function rowToEvent(r: Row) {
     registration_status: r.registration_status,
     event_status: r.event_status,
     source_status_text: r.source_status_text,
-    last_seen_at: r.last_seen_at,
+    last_seen_at: seen[seen.length - 1] ?? null,
   };
 }
 
-export async function listEvents(db: D1Database, params: URLSearchParams) {
-  const q = parseEventQuery(params);
+export function eventsSql(q: EventQuery): { sql: string; binds: unknown[] } {
   const where = whereClause(q);
-  const pageBinds = [...where.binds];
-  let pageWhere = where.sql;
+  let sql = where.sql;
+  const binds = [...where.binds];
   if (q.after) {
-    pageWhere += '\n  AND (e.starts_on, e.starts_sort, e.id) > (?, ?, ?)';
-    pageBinds.push(...q.after);
+    sql += '\n  AND (starts_on, starts_sort, id) > (?, ?, ?)';
+    binds.push(...q.after);
   }
-  const [page, count] = await db.batch<Row>([
-    db.prepare(`${SELECT}\n${FROM}\nLEFT JOIN venues v ON v.id = e.venue_id\nWHERE ${pageWhere}\nORDER BY e.starts_on, e.starts_sort, e.id\nLIMIT ?`)
-      .bind(...pageBinds, q.limit + 1),
-    db.prepare(`SELECT COUNT(*) AS n ${FROM}\nWHERE ${where.sql}`).bind(...where.binds),
-  ]);
-  const rows = page.results;
+  return { sql: `${SELECT}\nFROM events\nWHERE ${sql}\nORDER BY starts_on, starts_sort, id\nLIMIT ?`, binds: [...binds, q.limit + 1] };
+}
+
+export async function listEvents(db: D1Database, q: EventQuery & { fp: string }, fetchedAt: Record<string, string>) {
+  const { sql, binds } = eventsSql(q);
+  const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
   const more = rows.length > q.limit;
   const shown = more ? rows.slice(0, q.limit) : rows;
   const last = shown[shown.length - 1];
   return {
-    events: shown.map(rowToEvent),
+    events: shown.map((r) => rowToEvent(r, fetchedAt)),
     next_cursor: more ? encodeCursor(q.fp, [last.starts_on as string, Number(last.starts_sort), last.id as string]) : null,
-    count: Number(count.results[0]?.n ?? 0),
   };
 }
 
-export async function listDays(db: D1Database, params: URLSearchParams) {
-  const where = whereClause(parseFilters(params));
+export function daysSql(q: Filters): { sql: string; binds: unknown[] } {
+  const where = whereClause(q);
+  return { sql: `SELECT starts_on AS date, game_mask AS m, COUNT(*) AS n FROM events\nWHERE ${where.sql}\nGROUP BY starts_on, game_mask`, binds: where.binds };
+}
+
+export async function listDays(db: D1Database, q: Filters) {
+  const { sql, binds } = daysSql(q);
+  const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
   // A shared event counts once in count and once per member game in by_game.
-  const [totals, perGame] = await db.batch<Row>([
-    db.prepare(`SELECT e.starts_on AS date, COUNT(*) AS n ${FROM}\nWHERE ${where.sql}\nGROUP BY e.starts_on ORDER BY e.starts_on`)
-      .bind(...where.binds),
-    db.prepare(`SELECT e.starts_on AS date, m.game_code, COUNT(*) AS n ${FROM}
-JOIN event_games m ON m.event_id = e.id AND m.missing_since IS NULL
-WHERE ${where.sql}\nGROUP BY e.starts_on, m.game_code ORDER BY e.starts_on, m.game_code`).bind(...where.binds),
-  ]);
-  const days = totals.results.map((r) => ({ date: r.date as string, count: Number(r.n), by_game: {} as Record<string, number> }));
-  const byDate = new Map(days.map((d) => [d.date, d]));
-  for (const r of perGame.results) byDate.get(r.date as string)!.by_game[r.game_code as string] = Number(r.n);
+  const byDate = new Map<string, { date: string; count: number; by_game: Record<string, number> }>();
+  for (const r of rows) {
+    const date = r.date as string;
+    const d = byDate.get(date) ?? { date, count: 0, by_game: {} };
+    d.count += Number(r.n);
+    for (const g of gamesOf(Number(r.m))) d.by_game[g] = (d.by_game[g] ?? 0) + Number(r.n);
+    byDate.set(date, d);
+  }
+  const days = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+  for (const d of days) d.by_game = Object.fromEntries(Object.entries(d.by_game).sort());
   return { days };
 }

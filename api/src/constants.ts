@@ -1,4 +1,13 @@
-export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG'] as const;
+export const GAMES = [
+  { code: 'OPCG', name: 'ONE PIECEカードゲーム', slug: 'onepiece', bit: 1 },
+  { code: 'UATCG', name: 'UNION ARENA', slug: 'unionarena', bit: 2 },
+  { code: 'CONAN', name: '名探偵コナン カードゲーム', slug: 'conan', bit: 4 },
+  { code: 'PTCG', name: 'ポケモンカードゲーム', slug: 'pokemon', bit: 8 },
+] as const;
+export const GAME_CODES = GAMES.map((g) => g.code);
+// pref value for events without a physical venue.
+export const ONLINE = 'online';
+export const MAX_PREFS = 5;
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'] as const;
 export const REGISTRATION_STATUSES = ['not_open', 'open', 'waitlist', 'closed', 'unknown'] as const;
 export const ATTENDANCE_MODES = ['in_person', 'online', 'hybrid', 'unknown'] as const;

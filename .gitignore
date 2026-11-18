@@ -7,3 +7,4 @@ scripts/.pages.json
 scripts/official/cache/
 scripts/official/out/
 out/
+wrangler.remote.json

@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import worker from '../src/index';
-import { buildStatements, loadAll, REPO_DIR } from '../scripts/lib/importer.mjs';
+import { loadAll, planImport, REPO_DIR } from '../scripts/lib/importer.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 export type Ev = Record<string, any>;
@@ -109,13 +109,17 @@ export function writeDataDir(events: Ev[], runs: Record<string, Ev> = {}, dir = 
 export function importDir(db: SqliteD1, dataDir: string, now?: number) {
   const results = loadAll(dataDir);
   const accepted = results.filter((r) => r.errors.length === 0);
-  db.execAll(buildStatements(accepted, now === undefined ? {} : { now }));
-  return results;
+  const plan = planImport(accepted, db.readState(), now === undefined ? {} : { now });
+  db.execAll(plan.statements);
+  return Object.assign(results, { plan });
 }
 
 export function newDb(): SqliteD1 {
   return new SqliteD1().migrate();
 }
+
+/** Every prefecture the synthetic data uses plus online: the API requires 1-5 pref values. */
+export const ALL_PREFS = 'pref=JP-13,JP-14,JP-27,JP-40,online';
 
 export async function api(db: SqliteD1, path: string): Promise<{ status: number; body: any; headers: Headers }> {
   const res = await worker.fetch(new Request(`http://localhost${path}`), { DB: db as unknown as D1Database });
