@@ -6,7 +6,8 @@ export const PAGE_LIMIT = 50;
 // Worker; a page that hits the cap returns what matched plus a cursor to continue. Above the busiest
 // location-day so far (178 events), so a page normally covers its first matching day.
 export const SCAN_LIMIT = 200;
-const ID_RE = /^(tcgp|ptcg|conan):.{1,200}$/;
+// Printable ASCII only: ids are tcgp:/ptcg:/conan: + digits or hex; anything else (NUL, quotes…) is a forgery.
+const ID_RE = /^(tcgp|ptcg|conan):[\x21-\x7e]{1,200}$/;
 // 9999-12-31T23:59:59Z, the starts_sort of date-only events.
 const MAX_SORT = 253402300799;
 // Keeps the bound-parameter total under D1's 100 per query.
@@ -197,37 +198,57 @@ function matches(q: Filters): (r: Row) => boolean {
     && (!dows || dows.includes(new Date(`${r.starts_on}T00:00:00Z`).getUTCDay()));
 }
 
-// Unfiltered pages: "these locations, this range" on idx_events_loc, limit+1 rows. The cursor's day is the lower
-// bound and the row-value test skips that day's earlier rows (with several locations SQLite stops each one after
-// LIMIT rows).
+const ORDER = 'ORDER BY starts_on, starts_sort, id';
+
+// Unfiltered pages: per location, this range in index order on idx_events_loc, limit+1 rows each, merged. With a
+// cursor each location reads the cursor's day after the cursor and the later days as two index seeks on
+// (loc, starts_on, starts_sort[, id]), so no earlier row is read again and no part needs a sort.
 export function eventsSql(q: EventQuery): { sql: string; binds: unknown[] } {
-  const binds: unknown[] = [...q.prefs, lowerBound(q), q.until];
-  let where = `${locSql(q.prefs)} AND starts_on >= ? AND starts_on < ? AND game_mask <> 0`;
-  if (q.after) {
-    where += ' AND (starts_on, starts_sort, id) > (?, ?, ?)';
-    binds.push(...q.after);
+  const take = q.limit + 1;
+  const part = (where: string) => `SELECT * FROM (${SELECT}\nFROM events\nWHERE loc = ? AND game_mask <> 0 AND ${where}\n${ORDER}\nLIMIT ${take})`;
+  const parts: string[] = [];
+  const binds: unknown[] = [];
+  for (const loc of q.prefs) {
+    if (q.after) {
+      const [day, sort, id] = q.after;
+      parts.push(part('starts_on = ? AND (starts_sort, id) > (?, ?)'), part('starts_on > ? AND starts_on < ?'));
+      binds.push(loc, day, sort, id, loc, day < q.from ? q.from : day, q.until);
+    } else {
+      parts.push(part('starts_on >= ? AND starts_on < ?'));
+      binds.push(loc, q.from, q.until);
+    }
   }
-  return { sql: `${SELECT}\nFROM events\nWHERE ${where}\nORDER BY starts_on, starts_sort, id\nLIMIT ?`, binds: [...binds, q.limit + 1] };
+  return { sql: `${parts.join('\nUNION ALL\n')}\n${ORDER}\nLIMIT ${take}`, binds };
 }
 
 const lit = (v: string) => `'${v.replaceAll("'", "''")}'`;
 
 /**
- * Filtered pages: one branch per location over the matching days only, each capped at SCAN_LIMIT rows, reading just
- * the columns the Worker filters on. Days come from day_counts and the cursor is validated, so they are inlined
- * (binding them per branch would pass D1's 100-parameter limit).
+ * Filtered pages: per location, the cursor's day after the cursor and the later matching days, each part capped at
+ * SCAN_LIMIT / 2 rows (so at most SCAN_LIMIT rows per location), reading just the columns the Worker filters on.
+ * Both parts are index seeks on (loc, starts_on, starts_sort, id). Days come from day_counts and the cursor is
+ * validated, so they are inlined (binding them per part would pass D1's 100-parameter limit).
  */
+export const PART_LIMIT = SCAN_LIMIT / 2;
 export function scanSql(q: EventQuery, days: string[]): { sql: string; binds: unknown[] } {
-  const dayList = days.map(lit).join(', ');
-  const after = q.after ? ` AND (starts_on, starts_sort, id) > (${lit(q.after[0])}, ${q.after[1]}, ${lit(q.after[2])})` : '';
-  const branch = `SELECT * FROM (SELECT id, loc, starts_on, starts_sort, game_mask, event_type_code FROM events
-  WHERE loc = ? AND starts_on IN (${dayList}) AND game_mask <> 0${after}
-  ORDER BY starts_on, starts_sort, id LIMIT ${SCAN_LIMIT})`;
-  return { sql: `${q.prefs.map(() => branch).join('\nUNION ALL\n')}\nORDER BY starts_on, starts_sort, id`, binds: [...q.prefs] };
+  const part = (n: number, where: string) => `SELECT * FROM (SELECT id, loc, ${n} AS part, starts_on, starts_sort, game_mask, event_type_code
+  FROM events WHERE loc = ? AND game_mask <> 0 AND ${where}\n  ${ORDER} LIMIT ${PART_LIMIT})`;
+  const parts: string[] = [];
+  let laterDays = days;
+  if (q.after) {
+    const [day, sort, id] = q.after;
+    laterDays = days.filter((d) => d > day);
+    if (days.includes(day)) parts.push(part(0, `starts_on = ${lit(day)} AND (starts_sort, id) > (${sort}, ${lit(id)})`));
+  }
+  if (laterDays.length) parts.push(part(1, `starts_on IN (${laterDays.map(lit).join(', ')})`));
+  return {
+    sql: `${q.prefs.flatMap(() => parts).join('\nUNION ALL\n')}\n${ORDER}`,
+    binds: q.prefs.flatMap((p) => parts.map(() => p)),
+  };
 }
 
 const lowerBound = (q: EventQuery) => (q.after && q.after[0] > q.from ? q.after[0] : q.from);
-// day_counts rows read to find the next matching days (per location, like the scan).
+// day_counts rows read to find the next matching days: a total across the locations, in day order.
 export const DAY_ROWS = 62;
 
 /** The next days (from the cursor on) with at least one event matching the filters, from day_counts. */
@@ -258,11 +279,13 @@ export async function listEvents(db: D1Database, q: EventQuery, fetchedAt: Recor
   if (!days.length) return { events: [], next_cursor: null };
   const s = scanSql(q, days);
   let rows = (await db.prepare(s.sql).bind(...s.binds).all<Row>()).results;
-  // A location that hit the cap was read only up to its last row; nothing after the earliest such row is complete.
+  // A part (location × cursor day / later days) that hit its cap was read only up to its last row; nothing after
+  // the earliest such row is complete.
   let cut: [string, number, string] | null = null;
-  for (const loc of q.prefs) {
-    const mine = rows.filter((r) => r.loc === loc);
-    if (mine.length === SCAN_LIMIT) {
+  const parts = new Map<string, Row[]>();
+  for (const r of rows) parts.set(`${r.loc}\t${r.part}`, [...(parts.get(`${r.loc}\t${r.part}`) ?? []), r]);
+  for (const mine of parts.values()) {
+    if (mine.length === PART_LIMIT) {
       const k = keyOf(mine[mine.length - 1]);
       if (!cut || cmpKey(k, cut) < 0) cut = k;
     }

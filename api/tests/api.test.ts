@@ -101,6 +101,8 @@ describe('GET /api/v1/events', () => {
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-12-05', 0, 'tcgp:x'])}`)).body.error).toMatch(/outside the date range/);
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', -1, 'tcgp:x'])}`)).body.error).toMatch(/invalid cursor/);
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, 'nope'])}`)).body.error).toMatch(/invalid cursor/);
+    // The key is checked before anything reaches SQL: a NUL, a space or an empty id is a 400, not a 500.
+    for (const id of ['tcgp:\u0000x', 'tcgp:a b', 'tcgp:']) expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, id])}`)).body.error).toMatch(/invalid cursor/);
   });
 
   it('clamps ranges to the data window and answers ranges outside it without data', async () => {
