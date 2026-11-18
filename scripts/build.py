@@ -161,10 +161,41 @@ def page_def():
             ld_items=its))
     return pages
 
+# Tool navigation prototypes: NAV_VARIANT=a (toolbar menu), b (header tabs), c (toolbar tabs / phone bottom bar).
+# Unset = no tool navigation, output identical to before.
+NAV_VARIANT=os.environ.get('NAV_VARIANT','').lower()
+assert NAV_VARIANT in ('','a','b','c'),NAV_VARIANT
+ICO=lambda d:f'<svg class="navico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg>'
+# key, path, name, short description, icon
+TOOLS=[('release','/','新弾カレンダー','TCG新弾の発売日',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
+       ('events','/events/','イベントカレンダー','店舗大会・体験会を探す',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>'))]
+NAV_CSS=open(os.path.join(ROOT,'src/nav.css')).read() if NAV_VARIANT else ''
+NAV_JS=open(os.path.join(ROOT,'src/nav.js')).read() if NAV_VARIANT=='a' else ''
+def toolnav(tool):
+    cur=lambda k:' aria-current="page"' if k==tool else ''
+    if NAV_VARIANT=='a':
+        links=''.join(f'<a href="{p}"{cur(k)}><span class="ti">{ic}</span><span><strong>{n}</strong><small>{d}</small></span></a>' for k,p,n,d,ic in TOOLS)
+        return {'toolbar':'<div class="toolmenu"><button class="toolbtn" id="toolBtn" aria-expanded="false" aria-controls="toolPop" aria-label="ツールを切り替え" title="ツールを切り替え">'
+                +ICO('<rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/>')
+                +f'<span>ツール</span></button><div class="toolpop" id="toolPop" hidden><b>新弾ナビのツール</b>{links}</div></div>'}
+    if NAV_VARIANT in ('b','c'):
+        tabs='<nav class="tooltabs" aria-label="ツール">'+''.join(f'<a href="{p}"{cur(k)}>{ic}<span>{n}</span></a>' for k,p,n,d,ic in TOOLS)+'</nav>'
+        return {'header' if NAV_VARIANT=='b' else 'toolbar':tabs}
+    return {}
+def fill_nav(page,tool):
+    nav=toolnav(tool)
+    page=page.replace('<!--NAV_HEADER-->',nav.get('header','')).replace('<!--NAV_TOOLBAR-->',nav.get('toolbar',''))
+    if NAV_CSS: page=page.replace('</style>\n',f'</style>\n<style>\n{NAV_CSS}</style>\n',1)
+    if NAV_JS: page=page.rstrip()+f'\n<script>\n{NAV_JS}</script>'
+    return page
+def toolrow(cur):
+    if not NAV_VARIANT: return ''
+    return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{n}</a>' for k,p,n,d,ic in TOOLS)+'</div>'
+
 def sitenav(cur):
     g=''.join(f'<a href="/{s}/"{" aria-current=\"page\"" if cur==f"/{s}/" else ""}>{esc(short)}</a>' for s,k,n,short in GAMES if k in used)
     m=''.join(f'<a href="/{ym}/"{" aria-current=\"page\"" if cur==f"/{ym}/" else ""}>{mlabel(ym)}</a>' for ym in months)
-    return f'<nav class="sitenav" aria-label="サイト内リンク"><div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div><div><b>新弾ナビ</b><a href="/"{" aria-current=\"page\"" if cur=="/" else ""}>トップ（全タイトル）</a></div></nav>'
+    return f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(cur)}<div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div><div><b>新弾ナビ</b><a href="/"{" aria-current=\"page\"" if cur=="/" else ""}>トップ（全タイトル）</a></div></nav>'
 
 GA=''
 if GA_ID:
@@ -231,6 +262,7 @@ def render(pg):
         crumbs='<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in pg['crumbs'])+'</nav>'
     page=page.replace('<!--PAGEHEAD-->',f'{crumbs}<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p>{esc(pg["lead"])}</p></div>')
     page=page.replace('<!--SEOLIST-->',pg['list']).replace('<!--SITENAV-->',sitenav(pg['path']))
+    page=fill_nav(page,'release')
     page=re.sub(r'<title>.*?</title>\n?','',page,count=1)
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
@@ -244,6 +276,7 @@ def render_events():
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE))):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
+    src=fill_nav(src,'events').replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}</nav>' if NAV_VARIANT else '')
     title=re.search(r'<title>(.*?)</title>',src).group(1)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
     head=f"""<!doctype html>
