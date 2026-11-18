@@ -518,7 +518,9 @@ function card(e){
 }
 
 // ---- list view
-let events=[], nextCursor=null, total=null, dayCounts=null, loading=false, failed=false, ctrl=null, gen=0;
+// The API takes at most 31 days per request, so the list walks the range month by month (segs).
+let events=[], segs=[], seg=0, nextCursor=null, done=false, total=null, dayCounts=null, loading=false, failed=false, ctrl=null, gen=0;
+function segments([f,u]){ const out=[]; for(let a=f;a<u;){ let b=addM(monthOf(a),1)+'-01'; if(b>u) b=u; out.push([a,b]); a=b; } return out; }
 const listEl=document.getElementById('list');
 async function api(path, q, signal){
   const r=await fetch(`${API_BASE}${path}${q?'?'+q:''}`,{signal, headers:{accept:'application/json'}});
@@ -529,7 +531,7 @@ async function api(path, q, signal){
 function reload(){
   if(ctrl) ctrl.abort();
   ctrl=new AbortController(); gen++;
-  events=[]; nextCursor=null; total=null; dayCounts=null; failed=false;
+  events=[]; segs=segments(rangeOf(state)); seg=0; nextCursor=null; done=false; total=null; dayCounts=null; failed=false;
   renderNotice();
   if(!state.pref.length){ renderPrompt(); return; }
   if(state.view==='cal') loadCal(); else { loadPage(); loadDayCounts(); }
@@ -546,10 +548,11 @@ function renderPrompt(){
 async function loadDayCounts(){
   const my=gen, signal=ctrl.signal;
   try{
-    const r=await api('/events/days',apiQuery(state,rangeOf(state)),signal);
+    const rs=await Promise.all(segs.map(sg=>api('/events/days',apiQuery(state,sg),signal)));
     if(my!==gen) return;
-    dayCounts=Object.fromEntries((r.days||[]).map(d=>[d.date,d.count]));
-    total=(r.days||[]).reduce((t,d)=>t+d.count,0);
+    const days=rs.flatMap(r=>r.days||[]);
+    dayCounts=Object.fromEntries(days.map(d=>[d.date,d.count]));
+    total=days.reduce((t,d)=>t+d.count,0);
   }catch(err){
     if(err.name==='AbortError'||my!==gen) return;
     dayCounts=false;
@@ -558,13 +561,19 @@ async function loadDayCounts(){
 }
 async function loadPage(){
   const my=gen, signal=ctrl.signal;
+  if(done) return;
   loading=true; renderList();
-  const q=apiQuery(state,rangeOf(state)); q.set('limit',PAGE_SIZE); if(nextCursor) q.set('cursor',nextCursor);
   try{
-    const r=await api('/events',q,signal);
-    if(my!==gen) return;
-    events=events.concat(r.events||[]); nextCursor=r.next_cursor||null;
-    if(!nextCursor && dayCounts===false) total=events.length;
+    // one page = up to PAGE_SIZE events; a month that ends early continues into the next one
+    for(let got=0; !done && got<PAGE_SIZE; ){
+      const q=apiQuery(state,segs[seg]); q.set('limit',PAGE_SIZE); if(nextCursor) q.set('cursor',nextCursor);
+      const r=await api('/events',q,signal);
+      if(my!==gen) return;
+      const evs=r.events||[]; events=events.concat(evs); got+=evs.length;
+      if(r.next_cursor){ nextCursor=r.next_cursor; break; }
+      nextCursor=null; seg++; done=seg>=segs.length;
+    }
+    if(done && dayCounts===false) total=events.length;
   }catch(err){
     if(err.name==='AbortError'||my!==gen) return;
     failed=err;
@@ -608,12 +617,12 @@ function renderList(){
     h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}</h3><div class="list">${its.map(card).join('')}</div></section>`;
   });
   const rest = total!=null ? total-events.length : null;
-  if(nextCursor) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?'読み込めませんでした。もう一度試す':rest!=null&&rest>0?`もっと見る（残り ${rest.toLocaleString('ja-JP')}件）`:'もっと見る'}</button>`;
+  if(!done) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?'読み込めませんでした。もう一度試す':rest!=null&&rest>0?`もっと見る（残り ${rest.toLocaleString('ja-JP')}件）`:'もっと見る'}</button>`;
   listEl.innerHTML=h;
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
 }
 const io = 'IntersectionObserver' in window ? new IntersectionObserver(es=>{
-  if(es.some(x=>x.isIntersecting) && nextCursor && !loading && !failed && state.view==='list') loadPage();
+  if(es.some(x=>x.isIntersecting) && !done && !loading && !failed && state.view==='list') loadPage();
 },{rootMargin:'400px 0px'}) : null;
 document.getElementById('results').addEventListener('click',e=>{
   if(e.target.closest('#loadMore')){ failed=false; loadPage(); return; }
