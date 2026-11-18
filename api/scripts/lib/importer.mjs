@@ -1,5 +1,5 @@
-// Reads data/events/<GAME>/ (month files + _run.json), validates them against contracts/,
-// and turns accepted runs into idempotent SQL for D1 / SQLite.
+// Reads data/events/<GAME>/ (month files + _run.json), validates them against contracts/, diffs the
+// accepted runs against the database's current rows and turns the difference into SQL for D1 / SQLite.
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
@@ -154,33 +154,10 @@ export function sqlLiteral(v) {
   return `'${String(v).replaceAll("'", "''")}'`;
 }
 
-// Groups and venues are keyed by their full content, not by source_id: one source group can carry
-// different categories/types per event (PTCG), and a TCG+ venue source_id is an organizer id that
-// spans several addresses. Every event therefore gets back exactly the group and venue it was imported with.
-export function groupId(ev) {
-  const g = ev.group;
-  return `${ev.source_code}:${sha1(JSON.stringify([g.source_id, g.name, g.category, g.event_type_code])).slice(0, 20)}`;
-}
-
-export function venueId(ev) {
-  const v = ev.venue;
-  return `${ev.source_code}:${sha1(JSON.stringify([v.name, v.source_id, v.country_code, v.region_code, v.region_name, v.city, v.address, v.postal_code])).slice(0, 20)}`;
-}
-
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;
-
-const EVENT_COLS = [
-  'id', 'event_group_id', 'venue_id', 'region_code', 'source_code', 'external_id', 'source_url',
-  'name', 'attendance_mode', 'starts_on', 'ends_on', 'starts_at', 'ends_at', 'starts_sort', 'timezone',
-  'time_precision', 'format_text', 'eligibility_text', 'capacity', 'fee_amount', 'fee_currency', 'fee_text',
-  'registration_method', 'registration_platform', 'registration_url', 'registration_opens_at',
-  'registration_closes_at', 'registration_status', 'event_status', 'source_status_text', 'last_seen_at',
-  'content_hash', 'created_at', 'updated_at',
-];
-const MEMBER_COLS = ['event_id', 'game_code', 'last_import_id', 'missing_since', 'created_at'];
-const GROUP_COLS = ['id', 'source_code', 'source_id', 'name', 'category', 'event_type_code', 'content_hash', 'created_at', 'updated_at'];
-const VENUE_COLS = ['id', 'source_code', 'source_id', 'name', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code', 'content_hash', 'created_at', 'updated_at'];
-const IMPORT_COLS = ['id', 'game_code', 'source_code', 'fetched_at', 'window_from', 'window_until', 'source_total', 'record_count', 'complete', 'collector_version', 'query_json', 'notes_json', 'run_hash', 'imported_at'];
+export const GAME_BITS = { OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8 };
+export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'];
+const VENUE_KEYS = ['name', 'source_id', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code'];
 
 /** Event content minus the fields that legitimately differ between copies (game file, run time). */
 export function eventContent(ev) {
@@ -188,17 +165,40 @@ export function eventContent(ev) {
   return content;
 }
 
+/** Location key used by the API's pref filter: the venue's prefecture, or 'online' without one. */
+export function locOf(ev) {
+  if (ev.venue?.region_code) return ev.venue.region_code;
+  return ev.attendance_mode === 'online' || ev.attendance_mode === 'hybrid' || !ev.venue ? 'online' : null;
+}
+
+const EVENT_COLS = [
+  'id', 'game_mask', 'loc', 'source_code', 'external_id', 'source_url', 'group_source_id', 'group_name', 'category',
+  'event_type_code', 'name', 'attendance_mode', 'venue_json', 'region_code', 'starts_on', 'ends_on', 'starts_at', 'ends_at',
+  'starts_sort', 'timezone', 'time_precision', 'format_text', 'eligibility_text', 'capacity', 'fee_amount', 'fee_currency',
+  'fee_text', 'registration_method', 'registration_platform', 'registration_url', 'registration_opens_at',
+  'registration_closes_at', 'registration_status', 'event_status', 'source_status_text', 'content_hash', 'created_at', 'updated_at',
+];
+const IMPORT_COLS = ['id', 'game_code', 'source_code', 'fetched_at', 'window_from', 'window_until', 'source_total', 'record_count', 'complete', 'collector_version', 'query_json', 'notes_json', 'run_hash', 'imported_at'];
+/** Columns the importer needs from every existing event to diff and to recompute meta. */
+export const STATE_EVENT_COLS = ['id', 'content_hash', 'game_mask', 'starts_on', 'loc', 'region_code', 'attendance_mode', 'category', 'event_type_code'];
+export const STATE_IMPORT_COLS = ['id', 'game_code', 'fetched_at', 'window_from', 'window_until', 'record_count', 'complete'];
+
 function eventRow(ev, now) {
   return {
     id: ev.id,
-    event_group_id: groupId(ev),
-    venue_id: ev.venue ? venueId(ev) : null,
-    region_code: ev.venue?.region_code ?? null,
+    game_mask: 0,
+    loc: locOf(ev),
     source_code: ev.source_code,
     external_id: ev.external_id,
     source_url: ev.source_url,
+    group_source_id: ev.group.source_id,
+    group_name: ev.group.name,
+    category: ev.group.category,
+    event_type_code: ev.group.event_type_code,
     name: ev.name,
     attendance_mode: ev.attendance_mode,
+    venue_json: ev.venue ? JSON.stringify(Object.fromEntries(VENUE_KEYS.map((k) => [k, ev.venue[k] ?? null]))) : null,
+    region_code: ev.venue?.region_code ?? null,
     starts_on: ev.starts_on,
     ends_on: ev.ends_on,
     starts_at: ev.starts_at,
@@ -220,20 +220,30 @@ function eventRow(ev, now) {
     registration_status: ev.registration_status,
     event_status: ev.event_status,
     source_status_text: ev.source_status_text,
-    last_seen_at: ev.last_seen_at,
-    // last_seen_at changes every run, so it is left out: updated_at only moves on real changes.
+    // last_seen_at changes every run and is served from the import instead, so it is left out.
     content_hash: sha1(JSON.stringify(eventContent(ev))),
     created_at: now,
     updated_at: now,
   };
 }
 
-function upsertStatements(table, cols, rows, updateCols, conflict = 'id', tracksContent = true) {
-  const head = `INSERT INTO ${table} (${cols.join(', ')}) VALUES\n`;
-  const tail = `\nON CONFLICT(${conflict}) DO UPDATE SET\n  ${[
-    ...updateCols.map((c) => `${c} = excluded.${c}`),
-    ...(tracksContent ? [`updated_at = CASE WHEN ${table}.content_hash = excluded.content_hash THEN ${table}.updated_at ELSE excluded.updated_at END`] : []),
-  ].join(',\n  ')}`;
+/** State of an empty (freshly migrated) database. */
+export const emptyState = () => ({ events: new Map(), imports: [] });
+
+/** Builds the importer's view of a database from rows of STATE_EVENT_COLS / STATE_IMPORT_COLS. */
+export function stateFromRows(eventRows, importRows) {
+  return {
+    events: new Map(eventRows.map((r) => [r.id, { ...r, game_mask: Number(r.game_mask) }])),
+    imports: importRows.map((r) => ({ ...r, record_count: Number(r.record_count), complete: Number(r.complete) })),
+  };
+}
+
+/** SQL that pages through the state (keyset by id, `pageSize` rows per call). */
+export const stateEventsSql = (afterId, pageSize) =>
+  `SELECT ${STATE_EVENT_COLS.join(', ')} FROM events${afterId === null ? '' : ` WHERE id > ${sqlLiteral(afterId)}`} ORDER BY id LIMIT ${pageSize}`;
+export const stateImportsSql = () => `SELECT ${STATE_IMPORT_COLS.join(', ')} FROM imports`;
+
+function chunked(head, items, tail = '') {
   const out = [];
   let batch = [];
   let bytes = 0;
@@ -242,30 +252,111 @@ function upsertStatements(table, cols, rows, updateCols, conflict = 'id', tracks
     batch = [];
     bytes = 0;
   };
-  for (const row of rows) {
-    const values = `(${cols.map((c) => sqlLiteral(row[c])).join(', ')})`;
-    if (batch.length && (bytes + values.length > MAX_STATEMENT_BYTES || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
-    batch.push(values);
-    bytes += values.length;
+  for (const item of items) {
+    if (batch.length && (bytes + item.length > MAX_STATEMENT_BYTES || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
+    batch.push(item);
+    bytes += item.length + 2;
   }
   flush();
   return out;
 }
 
+/** The /events/meta body without labels, over each game's latest import window. */
+export function computeMeta(events, imports) {
+  const latest = {};
+  for (const imp of imports) {
+    const cur = latest[imp.game_code];
+    if (!cur || imp.fetched_at > cur.fetched_at) latest[imp.game_code] = imp;
+  }
+  const games = {};
+  for (const [g, imp] of Object.entries(latest)) {
+    games[g] = { record_count: imp.record_count, fetched_at: imp.fetched_at, complete: imp.complete === 1, window: { from: imp.window_from, until: imp.window_until } };
+  }
+  const prefectures = {};
+  const categories = {};
+  const types = new Map();
+  let online = 0;
+  for (const e of events.values()) {
+    let inWindow = 0;
+    for (const [g, bit] of Object.entries(GAME_BITS)) {
+      const imp = latest[g];
+      if (imp && e.game_mask & bit && e.starts_on >= imp.window_from && e.starts_on < imp.window_until) inWindow |= bit;
+    }
+    if (!inWindow) continue;
+    if (e.loc === 'online') online++;
+    else if (e.region_code && e.attendance_mode !== 'online') prefectures[e.region_code] = (prefectures[e.region_code] ?? 0) + 1;
+    categories[e.category] = (categories[e.category] ?? 0) + 1;
+    if (e.event_type_code === null) continue;
+    for (const [g, bit] of Object.entries(GAME_BITS)) {
+      if (!(inWindow & bit)) continue;
+      const key = `${g}\t${e.event_type_code}`;
+      types.set(key, (types.get(key) ?? 0) + 1);
+    }
+  }
+  const typeList = [...types].map(([k, n]) => [...k.split('\t'), n]).sort((a, b) => (a[0] + '\t' + a[1] < b[0] + '\t' + b[1] ? -1 : 1));
+  return {
+    games,
+    prefectures: Object.fromEntries(Object.entries(prefectures).sort()),
+    online,
+    categories: Object.fromEntries(CATEGORIES.filter((c) => categories[c]).map((c) => [c, categories[c]])),
+    types: typeList,
+    fetched_at: Object.fromEntries(Object.entries(latest).map(([g, imp]) => [g, imp.fetched_at])),
+  };
+}
+
 /**
- * SQL statements (without trailing semicolons) that load the accepted games.
- * Upserts by id. An event listed under several games is stored once with one event_games row per
- * game. A complete run marks only its own game's memberships inside its window as missing when the
- * run no longer lists them; events with no remaining membership drop out of the API. Nothing is deleted.
+ * Diffs the accepted runs against `state` (the database's current rows) and returns the SQL that brings
+ * the database up to date, writing only what changed:
+ * - new events are inserted; events whose content hash changed are rewritten;
+ * - game_mask gains the bits of the games listing an event and, for complete runs, loses the run's
+ *   bit on events inside its window that it no longer lists (rows are kept, mask 0 hides them);
+ * - new runs get an imports row; site_meta ('meta', 'state') is rewritten when anything changed.
+ * Nothing is deleted. Statements stay under D1's 100 KB limit.
  */
-export function buildStatements(accepted, { now = Math.floor(Date.now() / 1000) } = {}) {
-  const imports = [];
-  const groups = new Map();
-  const venues = new Map();
-  const events = new Map();
-  const members = [];
+export function planImport(accepted, state = emptyState(), { now = Math.floor(Date.now() / 1000) } = {}) {
+  const rows = new Map();
+  const listed = new Map();
   for (const { run, events: evs } of accepted) {
-    imports.push({
+    const bit = GAME_BITS[run.game_code];
+    for (const ev of evs) {
+      rows.set(ev.id, eventRow(ev, now));
+      listed.set(ev.id, (listed.get(ev.id) ?? 0) | bit);
+    }
+  }
+  const complete = accepted.map((r) => r.run).filter((r) => r.complete);
+  const upserts = [];
+  const masks = new Map();
+  const next = new Map(state.events);
+  let inserted = 0;
+  for (const id of new Set([...state.events.keys(), ...rows.keys()])) {
+    const old = state.events.get(id);
+    const row = rows.get(id);
+    const startsOn = row ? row.starts_on : old.starts_on;
+    const seen = listed.get(id) ?? 0;
+    let mask = (old?.game_mask ?? 0) | seen;
+    for (const r of complete) {
+      const bit = GAME_BITS[r.game_code];
+      if (!(seen & bit) && startsOn >= r.window.from && startsOn < r.window.until) mask &= ~bit;
+    }
+    if (row) {
+      row.game_mask = mask;
+      if (!old || old.content_hash !== row.content_hash) {
+        upserts.push(row);
+        if (!old) inserted++;
+      } else if (old.game_mask !== mask) masks.set(mask, [...(masks.get(mask) ?? []), id]);
+      next.set(id, Object.fromEntries(STATE_EVENT_COLS.map((c) => [c, row[c]])));
+    } else if (old.game_mask !== mask) {
+      masks.set(mask, [...(masks.get(mask) ?? []), id]);
+      next.set(id, { ...old, game_mask: mask });
+    }
+  }
+
+  const known = new Set(state.imports.map((i) => i.id));
+  const newImports = [];
+  for (const { run, events: evs } of accepted) {
+    if (known.has(importId(run))) continue;
+    known.add(importId(run));
+    newImports.push({
       id: importId(run),
       game_code: run.game_code,
       source_code: run.source_code,
@@ -281,82 +372,71 @@ export function buildStatements(accepted, { now = Math.floor(Date.now() / 1000) 
       run_hash: sha1(JSON.stringify([run, evs.map((e) => e.id)])),
       imported_at: now,
     });
-    for (const ev of evs) {
-      const g = ev.group;
-      groups.set(groupId(ev), {
-        id: groupId(ev),
-        source_code: ev.source_code,
-        source_id: g.source_id,
-        name: g.name,
-        category: g.category,
-        event_type_code: g.event_type_code,
-        content_hash: sha1(JSON.stringify(g)),
-        created_at: now,
-        updated_at: now,
-      });
-      if (ev.venue) {
-        const v = ev.venue;
-        venues.set(venueId(ev), { id: venueId(ev), source_code: ev.source_code, ...v, content_hash: sha1(JSON.stringify(v)), created_at: now, updated_at: now });
-      }
-      events.set(ev.id, eventRow(ev, now));
-      members.push({ event_id: ev.id, game_code: ev.game_code, last_import_id: importId(run), missing_since: null, created_at: now });
-    }
   }
-  const nonKey = (cols) => cols.filter((c) => !['id', 'created_at', 'updated_at'].includes(c));
-  const statements = [];
-  for (const imp of imports) {
+
+  const statements = newImports.map((imp) =>
+    `INSERT INTO imports (${IMPORT_COLS.join(', ')}) VALUES (${IMPORT_COLS.map((c) => sqlLiteral(imp[c])).join(', ')})\nON CONFLICT(id) DO NOTHING`);
+  const setCols = EVENT_COLS.filter((c) => !['id', 'created_at', 'updated_at'].includes(c));
+  // The WHERE keeps a stale diff from rewriting rows that already match.
+  statements.push(...chunked(
+    `INSERT INTO events (${EVENT_COLS.join(', ')}) VALUES\n`,
+    upserts.map((row) => `(${EVENT_COLS.map((c) => sqlLiteral(row[c])).join(', ')})`),
+    `\nON CONFLICT(id) DO UPDATE SET\n  ${[...setCols.map((c) => `${c} = excluded.${c}`),
+      'updated_at = CASE WHEN events.content_hash = excluded.content_hash THEN events.updated_at ELSE excluded.updated_at END'].join(',\n  ')}\n` +
+      'WHERE events.content_hash <> excluded.content_hash OR events.game_mask <> excluded.game_mask',
+  ));
+  let maskUpdates = 0;
+  for (const [mask, ids] of masks) {
+    maskUpdates += ids.length;
+    statements.push(...chunked(`UPDATE events SET game_mask = ${mask} WHERE id IN (`, ids.map(sqlLiteral), ')'));
+  }
+
+  const meta = computeMeta(next, [...state.imports, ...newImports]);
+  const changed = statements.length > 0;
+  const version = String(now);
+  if (changed) {
+    const { fetched_at, ...body } = meta;
     statements.push(
-      `INSERT INTO imports (${IMPORT_COLS.join(', ')}) VALUES (${IMPORT_COLS.map((c) => sqlLiteral(imp[c])).join(', ')})\n` +
-        `ON CONFLICT(id) DO UPDATE SET ${nonKey(IMPORT_COLS).map((c) => `${c} = excluded.${c}`).join(', ')}`,
+      `INSERT INTO site_meta (key, value) VALUES ('meta', ${sqlLiteral(JSON.stringify(body))}), ('state', ${sqlLiteral(JSON.stringify({ version, fetched_at }))})\n` +
+        'ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     );
   }
-  statements.push(...upsertStatements('venues', VENUE_COLS, [...venues.values()], nonKey(VENUE_COLS)));
-  statements.push(...upsertStatements('event_groups', GROUP_COLS, [...groups.values()], nonKey(GROUP_COLS)));
-  statements.push(...upsertStatements('events', EVENT_COLS, [...events.values()], nonKey(EVENT_COLS)));
-  statements.push(...upsertStatements('event_games', MEMBER_COLS, members, ['last_import_id', 'missing_since'], 'event_id, game_code', false));
-  for (const { run } of accepted) {
-    if (!run.complete) continue;
-    statements.push(
-      `UPDATE event_games SET missing_since = ${sqlLiteral(run.fetched_at)}\n` +
-        `WHERE game_code = ${sqlLiteral(run.game_code)} AND last_import_id <> ${sqlLiteral(importId(run))} AND missing_since IS NULL\n` +
-        `  AND event_id IN (SELECT id FROM events WHERE starts_on >= ${sqlLiteral(run.window.from)} AND starts_on < ${sqlLiteral(run.window.until)})`,
-    );
-  }
-  // Only rows whose value changes are written: D1 bills rows written, and most events keep their games.
-  const visibleGames = `(SELECT group_concat(game_code, ',') FROM\n` +
-    `  (SELECT game_code FROM event_games WHERE event_id = events.id AND missing_since IS NULL ORDER BY game_code))`;
-  statements.push(`UPDATE events SET game_codes = ${visibleGames}\nWHERE game_codes IS NOT ${visibleGames}`);
-  return statements;
+  const stats = {
+    inserted,
+    rewritten: upserts.length - inserted,
+    mask_updates: maskUpdates,
+    imports: newImports.length,
+    site_meta: changed ? 2 : 0,
+    unchanged: rows.size - upserts.length - [...masks.values()].flat().filter((id) => rows.has(id)).length,
+  };
+  return { statements, stats, meta, version: changed ? version : null, state: { events: next, imports: [...state.imports, ...newImports] } };
 }
 
-/** Distinct rows the import upserts per table (shared events count once in events). */
-export function importCounts(accepted) {
-  const ids = { events: new Set(), venues: new Set(), event_groups: new Set() };
-  let members = 0;
-  for (const { events: evs } of accepted) {
-    for (const ev of evs) {
-      ids.events.add(ev.id);
-      ids.event_groups.add(groupId(ev));
-      if (ev.venue) ids.venues.add(venueId(ev));
-      members++;
-    }
-  }
-  return { imports: accepted.length, venues: ids.venues.size, event_groups: ids.event_groups.size, events: ids.events.size, event_games: members };
-}
+// D1 counts a written row per table row and per index entry; events has one secondary index.
+const EVENT_INDEXES = 1;
 
 /**
- * Upper bound of D1 "rows written" for one import: every upserted row counts once plus once per index on
- * its table (the upserts SET every indexed column), plus one per event for game_codes (true on an empty
- * database; a re-import only writes events whose games changed). Missing-marks are not counted.
- * indexCounts: { table: number of indexes incl. PRIMARY KEY / UNIQUE autoindexes }.
+ * D1 rows written / read by applying a plan. Writes: an inserted or rewritten event costs the row plus
+ * its index entry (upper bound: a rewrite that keeps loc/starts_on may not touch the index), a mask-only
+ * update costs the row, imports and site_meta one each. Reads: the state read (one row per existing event
+ * and import) plus one primary-key lookup per written row.
  */
-export function estimateRowsWritten(counts, indexCounts) {
-  const tables = {};
-  for (const t of ['imports', 'venues', 'event_groups', 'events', 'event_games']) {
-    tables[t] = counts[t] * (1 + (indexCounts[t] ?? 0));
-  }
-  tables['events.game_codes'] = counts.events;
-  return { tables, total: Object.values(tables).reduce((a, b) => a + b, 0) };
+export function estimateCost(stats, state) {
+  const writes = {
+    'events (insert)': stats.inserted * (1 + EVENT_INDEXES),
+    'events (rewrite)': stats.rewritten * (1 + EVENT_INDEXES),
+    'events (game_mask)': stats.mask_updates,
+    imports: stats.imports,
+    site_meta: stats.site_meta,
+  };
+  const stateRead = state.events.size + state.imports.length;
+  const lookups = stats.inserted + stats.rewritten + stats.mask_updates + stats.imports + stats.site_meta;
+  return {
+    writes,
+    rowsWritten: Object.values(writes).reduce((a, b) => a + b, 0),
+    reads: { 'state read': stateRead, 'primary-key lookups': lookups },
+    rowsRead: stateRead + lookups,
+  };
 }
 
 export const toSqlFile = (statements) => statements.map((s) => `${s};\n`).join('\n');

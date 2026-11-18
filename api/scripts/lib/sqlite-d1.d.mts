@@ -8,6 +8,6 @@ export class SqliteD1 {
   exec(sql: string): Promise<{ count: number; duration: number }>;
   execAll(statements: string[]): void;
   migrate(): this;
-  indexCounts(): Record<string, number>;
+  readState(): import('./importer.mjs').ImportState;
   close(): void;
 }

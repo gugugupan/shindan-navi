@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { API_DIR } from './importer.mjs';
+import { API_DIR, stateEventsSql, stateFromRows, stateImportsSql } from './importer.mjs';
 
 const MIGRATIONS_DIR = join(API_DIR, 'migrations');
 
@@ -82,10 +82,16 @@ export class SqliteD1 {
     }
     return this;
   }
-  /** { table: number of indexes, including PRIMARY KEY / UNIQUE autoindexes } */
-  indexCounts() {
-    const rows = this.db.prepare("SELECT tbl_name AS t, COUNT(*) AS n FROM sqlite_master WHERE type = 'index' GROUP BY tbl_name").all();
-    return Object.fromEntries(rows.map((r) => [r.t, Number(r.n)]));
+  /** The importer's view of this database (see importer.mjs stateFromRows). */
+  readState() {
+    const events = [];
+    for (let after = null; ; ) {
+      const page = this.db.prepare(stateEventsSql(after, 5000)).all();
+      events.push(...page);
+      if (page.length < 5000) break;
+      after = page[page.length - 1].id;
+    }
+    return stateFromRows(events, this.db.prepare(stateImportsSql()).all());
   }
   close() {
     this.db.close();
