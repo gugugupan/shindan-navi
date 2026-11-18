@@ -46,6 +46,7 @@ Local preview: serve `dist/` (launch config `tcg-calendar`, port 5260). GA only 
 - Desktop calendar shows at most 3 items per day; quiet weekdays become slim columns; today is gold. Mobile: day list collapses to starred items + the first item, with 閉じる under the date as well as at the bottom.
 - Star button is the full-height right strip of each card (34px desktop, 46px mobile).
 - Theme button is icon-only at the right end of the toolbar (自動 → ライト → ダーク, default follows the system).
+- Tool switching (新弾カレンダー ⇄ イベントカレンダー): tabs in the toolbar just left of the theme button on desktop, a bottom tab bar on phones (≤760px); plus a ツール row in the footer nav. New tools are added to `TOOLS` in build.py.
 - Starring an upcoming item asks to add it to Google Calendar / .ics (前日20時 alarm) unless 今後は確認しない was ticked.
 - Thumbnails and data sources stay as they are and are **not credited** on the page (owner's choice, risk acknowledged).
 - Keep this site standalone: don't cross-link it from or to other sites without asking the owner.
