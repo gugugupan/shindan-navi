@@ -46,8 +46,9 @@ GET /api/v1/events
   cursor=<opaque>           (from next_cursor; must belong to these filters and lie inside from..until)
 → { "events": [Event], "next_cursor": string|null }
    Event = event.schema.json item; order starts_on, starts_at (nulls last), id.
-   With game/type/days, one request reads at most 300 rows per location: it may return fewer than 50 events (even
-   none) with a next_cursor; keep following the cursor. No count: totals come from /events/days.
+   With game/type/days, the Worker first looks up the next matching days in day_counts and reads only those days, at
+   most 200 rows per location; a page may hold fewer than 50 events (rarely none) with a next_cursor; keep following
+   it. No count: totals come from /events/days (the page stops a month once that many events arrived).
 
 GET /api/v1/events/days         from must be the 1st of a month and until the 1st of the next (a whole month);
                                 pref, game, type, days as for /events

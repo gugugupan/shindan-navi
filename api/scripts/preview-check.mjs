@@ -5,8 +5,8 @@
 //   node api/scripts/preview-check.mjs [--strict]            (repo root; needs wrangler.remote.json + Cloudflare auth)
 //   node api/scripts/preview-check.mjs [--strict] --url URL  (only the checks)
 //
-// Always fails on a broken build (/, /events/). Data checks (meta lists games with events, Tokyo has events from
-// today on) fail only with --strict, used for the first domain attach; CI warns instead, so a D1 hiccup or stale
+// Always fails on a broken build (/, /events/). Data checks (meta lists games with events, Tokyo has events in
+// the next 31 days) fail only with --strict, used for the first domain attach; CI warns instead, so a D1 hiccup or stale
 // data never blocks publishing the release calendar. The preview URL is masked in GitHub Actions logs.
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -63,20 +63,26 @@ if (page.error) fail(page.error);
 if (!(await page.text()).includes('/api/v1')) fail('/events/ does not look like the events page');
 
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
-const monthStart = `${today.slice(0, 7)}-01`;
-const nextMonth = new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7), 1)).toISOString().slice(0, 10);
+const addMonth = (d) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 1)).toISOString().slice(0, 10);
+const horizon = new Date(Date.parse(`${today}T00:00:00Z`) + 31 * 86_400_000).toISOString().slice(0, 10);
 const metaRes = await get('/api/v1/events/meta', { retries: 3 });
 if (metaRes.error) {
   dataProblem(`API: ${metaRes.error}`);
 } else {
   const meta = await metaRes.json();
   const games = (meta.games ?? []).filter((g) => g.record_count > 0);
-  const daysRes = await get(`/api/v1/events/days?from=${monthStart}&until=${nextMonth}&pref=JP-13`, { retries: 3 });
   if (!games.length) dataProblem('meta lists no game with events: import into D1 first');
-  else if (daysRes.error) dataProblem(`API: ${daysRes.error}`);
   else {
-    const ahead = ((await daysRes.json()).days ?? []).filter((d) => d.date >= today).reduce((n, d) => n + d.count, 0);
-    if (!ahead) dataProblem(`no Tokyo events from ${today} on: the data looks stale`);
-    else console.log(`preview-check: ok (${games.map((g) => `${g.code} ${g.record_count}`).join(', ')}; Tokyo ${ahead} events from ${today} this month)`);
+    // /days takes whole months: this month and the next cover today .. today+31 even at a month's end.
+    let ahead = 0;
+    let error = null;
+    for (let m = `${today.slice(0, 7)}-01`; m < horizon && !error; m = addMonth(m)) {
+      const res = await get(`/api/v1/events/days?from=${m}&until=${addMonth(m)}&pref=JP-13`, { retries: 3 });
+      if (res.error) error = res.error;
+      else ahead += ((await res.json()).days ?? []).filter((d) => d.date >= today && d.date < horizon).reduce((n, d) => n + d.count, 0);
+    }
+    if (error) dataProblem(`API: ${error}`);
+    else if (!ahead) dataProblem(`no Tokyo events between ${today} and ${horizon}: the data looks stale`);
+    else console.log(`preview-check: ok (${games.map((g) => `${g.code} ${g.record_count}`).join(', ')}; Tokyo ${ahead} events in the next 31 days)`);
   }
 }

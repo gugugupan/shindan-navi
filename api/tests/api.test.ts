@@ -101,6 +101,8 @@ describe('GET /api/v1/events', () => {
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-12-05', 0, 'tcgp:x'])}`)).body.error).toMatch(/outside the date range/);
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', -1, 'tcgp:x'])}`)).body.error).toMatch(/invalid cursor/);
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, 'nope'])}`)).body.error).toMatch(/invalid cursor/);
+    // The key is checked before anything reaches SQL: a NUL, a space or an empty id is a 400, not a 500.
+    for (const id of ['tcgp:\u0000x', 'tcgp:a b', 'tcgp:']) expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, id])}`)).body.error).toMatch(/invalid cursor/);
   });
 
   it('clamps ranges to the data window and answers ranges outside it without data', async () => {
@@ -112,19 +114,40 @@ describe('GET /api/v1/events', () => {
     expect((await api(db, `/api/v1/events?from=2026-10-05&until=2026-11-01&${ALL_PREFS}`)).body).toEqual({ events: [], next_cursor: null });
   });
 
-  it('caps the rows one filtered page reads and continues with a cursor', async () => {
+  it('jumps to the days that match a sparse filter', async () => {
     const local = newDb();
-    const tokyo = synthetic(8000).filter((e) => e.venue?.region_code === 'JP-13' && e.starts_on < '2026-12-01').sort(cmp);
-    // Only the last event in list order has the type, so the first page reads SCAN_LIMIT rows and finds nothing.
+    const tokyo = synthetic(4000).filter((e) => e.venue?.region_code === 'JP-13' && e.starts_on < '2026-12-01').sort(cmp);
     const rare = tokyo.map((e, i) => (i === tokyo.length - 1 ? { ...e, group: { ...e.group, event_type_code: 'rare_kind' } } : e));
     importDir(local, writeDataDir(rare));
-    expect(tokyo.length).toBeGreaterThan(SCAN_LIMIT);
+    // day_counts points straight at the one matching day: one request, no empty pages.
+    const p1 = await api(local, '/api/v1/events?from=2026-11-18&until=2026-12-01&pref=JP-13&type=rare_kind');
+    expect(p1.body).toMatchObject({ events: [{ id: rare[rare.length - 1].id }], next_cursor: null });
+    expect((await api(local, '/api/v1/events?from=2026-11-18&until=2026-12-01&pref=JP-13&type=no_such_kind')).body).toEqual({ events: [], next_cursor: null });
+  });
+
+  it('caps the rows one filtered page reads and continues with a cursor', async () => {
+    const local = newDb();
+    // 400 events on one Tokyo day; only the last of them has the type.
+    const crowd = synthetic(4000).filter((e) => e.venue?.region_code === 'JP-13').slice(0, 400)
+      .map((e, i) => ({ ...e, starts_on: '2026-11-25', starts_at: `2026-11-25T${String(10 + Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00+09:00`, time_precision: 'datetime', ends_on: null, ends_at: null } as Ev))
+      .sort(cmp);
+    const rare = crowd.map((e, i) => (i === crowd.length - 1 ? { ...e, group: { ...e.group, event_type_code: 'rare_kind' } } : e));
+    importDir(local, writeDataDir(rare));
     const q = '/api/v1/events?from=2026-11-18&until=2026-12-01&pref=JP-13&type=rare_kind';
     const p1 = await api(local, q);
     expect(p1.body.events).toEqual([]);
     expect(p1.body.next_cursor).not.toBeNull();
-    const all2 = await apiAll(local, q);
-    expect(all2.body.events.map((e: Ev) => e.id)).toEqual([rare[rare.length - 1].id]);
+    expect(crowd.length).toBeGreaterThan(SCAN_LIMIT);
+    expect((await apiAll(local, q)).body.events.map((e: Ev) => e.id)).toEqual([rare[rare.length - 1].id]);
+  });
+
+  it('shares cursors between requests that clamp to the same cache entry', async () => {
+    // The data window starts 2026-11-18: both ranges clamp to it and share one cached page.
+    const a = await api(db, `/api/v1/events?from=2026-11-05&until=2026-12-01&${ALL_PREFS}`);
+    expect(a.body.next_cursor).not.toBeNull();
+    const b = await api(db, `/api/v1/events?from=2026-11-10&until=2026-12-01&${ALL_PREFS}&cursor=${a.body.next_cursor}`);
+    expect(b.status).toBe(200);
+    expect(b.body.events.length).toBeGreaterThan(0);
   });
 
   it('keeps later pages stable when rows are added before the cursor', async () => {
