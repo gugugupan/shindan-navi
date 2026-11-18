@@ -1,1 +1,5 @@
 # Keep caching at Cloudflare defaults: long-lived immutable rules on unhashed paths can pin stale or fallback responses at the edge.
+
+# Version preview URLs (and workers.dev, if ever enabled) must not be indexed next to shindan-navi.app.
+https://:version.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex

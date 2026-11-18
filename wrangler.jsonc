@@ -1,0 +1,32 @@
+// One Worker serves the static site (dist/) and the events API (/api/*, D1).
+// database_id is a placeholder and must stay one: the real id comes from the D1_DATABASE_ID secret / env
+// var via `node api/scripts/remote-config.mjs`, which writes the git-ignored wrangler.remote.json used
+// for deploys and remote D1 commands. Local commands (`wrangler dev`, `d1 ... --local`) never read the id.
+// Full-line // comments only: remote-config.mjs strips them to parse this file without dependencies.
+{
+  "$schema": "api/node_modules/wrangler/config-schema.json",
+  "name": "shindan-navi",
+  "main": "api/src/index.ts",
+  "compatibility_date": "2026-07-01",
+  // No public workers.dev site; version preview URLs (workers.dev) stay on for checking uploads before
+  // they go live. Static responses on *.workers.dev carry X-Robots-Tag: noindex (public/_headers).
+  "workers_dev": false,
+  "preview_urls": true,
+  "routes": [{ "pattern": "shindan-navi.app", "custom_domain": true }],
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shindan-navi-events",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "api/migrations"
+    }
+  ],
+  "dev": { "port": 8787 }
+}

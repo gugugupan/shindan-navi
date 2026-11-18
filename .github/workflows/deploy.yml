@@ -34,10 +34,21 @@ jobs:
       - name: Build
         run: python -I scripts/build.py
 
-      - name: Deploy to Cloudflare Pages
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Fills the real D1 id into the git-ignored wrangler.remote.json; fails when the secret is empty.
+      - name: Worker config
+        env:
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+        run: node api/scripts/remote-config.mjs
+
+      # Deploys code + dist/ only. D1 migrations and data imports stay manual (api/README.md).
+      - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.86.0"
-          command: pages deploy dist --project-name shindan-navi --branch main --commit-dirty=true
+          wranglerVersion: "4.164.0"
+          command: deploy --config wrangler.remote.json
