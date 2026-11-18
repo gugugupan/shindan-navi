@@ -618,7 +618,7 @@ function renderList(){
   if(loading && !events.length){ listEl.innerHTML=Array.from({length:4},()=>'<div class="sk" aria-hidden="true"></div>').join('')+'<span class="sr">読み込み中…</span>'; return; }
   // Not done yet but nothing found so far: offer to keep looking rather than claiming there is nothing.
   if(!events.length && !done){
-    listEl.innerHTML=`<div class="state"><b>${failed?'読み込めませんでした':'まだ見つかっていません'}</b><span>${failed&&(failed.status===429||failed.status===503)?busyText(failed):'この先の期間も探せます。'}</span><button class="sbtn ghost" id="loadMore">続きを探す</button></div>`;
+    listEl.innerHTML=`<div class="state"><b>まだ見つかっていません</b><span>この先の期間も探せます。</span><button class="sbtn ghost" id="loadMore">続きを探す</button></div>`;
     return;
   }
   if(!events.length){
