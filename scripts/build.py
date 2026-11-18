@@ -60,8 +60,6 @@ def jd(s):
 def fmt(s,year=False):
     x=jd(s); return (f'{x.year}/' if year else '')+f'{x.month}/{x.day}({DOW[x.weekday()]})'
 def mlabel(ym): y,m=ym.split('-'); return f'{int(y)}年{int(m)}月'
-def yen(s):
-    m=re.search(r'\d[\d,]*',s or ''); return int(m.group().replace(',','')) if m else None
 upd=jd(UPDATED); upd_label=f'{upd.year}年{upd.month}月{upd.day}日'
 
 def static_list(items,heading,note,show_game=True):
@@ -80,15 +78,6 @@ def static_list(items,heading,note,show_game=True):
         out.append('</ul></div>')
     out.append('</div></section>')
     return ''.join(out)
-
-def product_ld(d,page_url):
-    price=yen(d['pack'])
-    desc=f"{d['game']}の新商品。{fmt(d['date'],True)}発売、{d['pack']}（税込）"+(f"、1BOX {d['box']}" if d['box'] else '')+'。'
-    p={'@type':'Product','name':d['name'],'description':desc,'image':SITE+d['thumb'],'brand':{'@type':'Brand','name':d['game']},'releaseDate':d['date']}
-    if price:
-        p['offers']={'@type':'Offer','price':price,'priceCurrency':'JPY','url':d['url'] or page_url,
-                     'availability':'https://schema.org/PreOrder' if d['date']>TODAY else 'https://schema.org/InStock'}
-    return p
 
 # extra names people search with, per main title
 ALIAS={'pokemon':['ポケモンカード','ポケカ','PTCG'],'onepiece':['ワンピースカード','ワンピカード','ワンピ'],
@@ -125,22 +114,35 @@ def page_def():
     for slug,key,name,short in GAMES:
         its=[d for d in data if d['game']==key]
         if not its: continue
-        u=[d for d in its if d['date']>=TODAY] or its
-        nxt=u[0]; al=ALIAS[slug]
+        u=[d for d in its if d['date']>=TODAY]
+        al=ALIAS[slug]
         names=list(dict.fromkeys([name,short]+al))
-        upcoming='、'.join(f'{fmt(d["date"])}「{esc(d["name"])}」' for d in u[:3])
+        if u:
+            nxt=u[0]; lst=u
+            upcoming='、'.join(f'{fmt(d["date"])}「{esc(d["name"])}」' for d in u[:3])
+            desc_next=f'次の発売は{fmt(nxt["date"])}「{nxt["name"][:36]}」。'
+            lead=f'発売予定 {len(u)}件・次の発売は{fmt(nxt["date"])}（{upd_label}更新）'
+            list_head,list_note=f'{short} 新弾の発売予定',f'{name}の今後の発売予定 {len(u)}件。価格は税込。'
+            about_next=f'次に発売されるのは{upcoming}です。'
+        else:
+            # only past releases are left in the data (it keeps ~30 days back); never present them as upcoming
+            lst=its[::-1]; last=lst[0]
+            desc_next=f'現在、発売予定の新弾は掲載していません（最近の発売は{fmt(last["date"])}「{last["name"][:36]}」）。'
+            lead=f'現在、発売予定の新弾はありません・最近の発売は{fmt(last["date"])}（{upd_label}更新）'
+            list_head,list_note=f'{short} 最近の発売',f'{name}の最近発売された商品 {len(lst)}件。新しい発売予定が発表され次第掲載します。価格は税込。'
+            about_next=f'現在、発売予定の新弾は掲載していません。最近の発売は{fmt(last["date"])}「{esc(last["name"])}」です。'
         pages.append(dict(path=f'/{slug}/',slug=slug,og=slug,
             title=f'{short}（{al[0] if al[0]!=short else name}）新弾 発売日一覧【{year}年最新】｜新弾ナビ',
-            desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。次の発売は{fmt(nxt["date"])}「{nxt["name"][:36]}」。{year}年の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
+            desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}{year}年の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
             keywords=names+[f'{short} 新弾',f'{short} 発売日']+COMMON_KW,
             h1=f'{name} 新弾 発売日カレンダー' if short in name else f'{name}（{short}）新弾 発売日カレンダー',
-            lead=f'発売予定 {len(u)}件・次の発売は{fmt(nxt["date"])}（{upd_label}更新）',
+            lead=lead,
             crumbs=[('トップ','/'),(f'{short} 新弾',None)], js={'game':key},
-            list=static_list(u,f'{short} 新弾の発売予定',f'{name}の今後の発売予定 {len(u)}件。価格は税込。',show_game=False)
+            list=static_list(lst,list_head,list_note,show_game=False)
                 +about_block(f'{short}の新弾情報について',[
-                  f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。次に発売されるのは{upcoming}です。',
+                  f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
                   f'カレンダーでは{esc(short)}の発売予定だけを表示しています。上の「すべて」を押すと、ほかのTCGの新弾もまとめて確認できます。気になる商品は☆でお気に入りに追加すると、Google カレンダーやスマホのカレンダーにも登録できます。']),
-            ld_items=u))
+            ld_items=lst))
     for ym in months:
         its=[d for d in data if d['date'].startswith(ym)]
         cnt=__import__('collections').Counter(d['game'] for d in its)
@@ -201,10 +203,10 @@ def render(pg):
     if pg['crumbs']:
         ld.append({'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
             {'@type':'ListItem','position':i+1,'name':n,**({'item':SITE+h} if h else {'item':url})} for i,(n,h) in enumerate(pg['crumbs'])]})
-    items=[d for d in pg['ld_items'] if d['thumb'] and yen(d['pack'])][:60]
+    items=pg['ld_items']
     if items:
         ld.append({'@context':'https://schema.org','@type':'ItemList','name':pg['h1'],'numberOfItems':len(items),
-            'itemListElement':[{'@type':'ListItem','position':i+1,'item':product_ld(d,url)} for i,d in enumerate(items)]})
+            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],**({'url':d['url']} if d['url'] else {})} for i,d in enumerate(items)]})
     ldjs=''.join(f'<script type="application/ld+json">{json.dumps(x,ensure_ascii=False).replace("</","<\\/")}</script>' for x in ld)
     head=f"""<!doctype html>
 <html lang="ja">

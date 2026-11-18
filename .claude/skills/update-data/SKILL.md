@@ -37,7 +37,7 @@ Serve `dist/` and spot-check the current month on desktop and mobile widths (new
 
 ## 4. Show the owner, then publish
 
-Summarise the report for the owner in Chinese (counts per section, notable new releases, anything you hid or overrode) and wait for an OK. Then:
+Run `.claude/skills/verify-release/` on the branch first. Summarise the report for the owner in Chinese (counts per section, notable new releases, anything you hid or overrode, the verify results) and wait for an OK. Then:
 
 ```bash
 git add data public/thumbs public/og scripts
