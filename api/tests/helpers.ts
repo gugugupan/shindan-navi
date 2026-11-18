@@ -127,6 +127,35 @@ export async function api(db: SqliteD1, path: string): Promise<{ status: number;
 }
 
 /**
+ * Like the page: splits from..until into API-sized (31-day) ranges and, for /events, follows every cursor.
+ * Returns the merged body: { events, next_cursor: null } or { days }.
+ */
+export async function apiAll(db: SqliteD1, path: string): Promise<{ status: number; body: any }> {
+  const url = new URL(`http://localhost${path}`);
+  const params = url.searchParams;
+  const from = params.get('from')!;
+  const until = params.get('until')!;
+  const isDays = url.pathname.endsWith('/days');
+  const events: Ev[] = [];
+  const days: Ev[] = [];
+  for (let f = from; f < until; f = addDays(f, 31)) {
+    const q = new URLSearchParams(params);
+    q.set('from', f);
+    q.set('until', addDays(f, 31) < until ? addDays(f, 31) : until);
+    let cursor: string | null = null;
+    do {
+      if (cursor) q.set('cursor', cursor);
+      const r = await api(db, `${url.pathname}?${q}`);
+      if (r.status !== 200) return r;
+      if (isDays) days.push(...r.body.days);
+      else events.push(...r.body.events);
+      cursor = isDays ? null : r.body.next_cursor;
+    } while (cursor);
+  }
+  return { status: 200, body: isDays ? { days } : { events, next_cursor: null } };
+}
+
+/**
  * SYNTHETIC events that reuse one group source_id with different categories/types and one venue source_id
  * with different addresses and regions, as the real sources do.
  */

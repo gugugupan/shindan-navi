@@ -1,8 +1,12 @@
 import { ATTENDANCE_MODES, CATEGORIES, FEES, GAMES, GAME_CODES, MAX_PREFS, ONLINE, REGISTRATION_STATUSES } from './constants';
 
-export const DEFAULT_LIMIT = 100;
-export const MAX_LIMIT = 200;
-export const MAX_RANGE_DAYS = 92;
+// The page's page size is the only one accepted: every other value would be a new cache key.
+export const PAGE_LIMIT = 50;
+// Bounds one query's scan to a month of the selected locations (the page splits longer ranges by month).
+export const MAX_RANGE_DAYS = 31;
+const ID_RE = /^(tcgp|ptcg|conan):.{1,200}$/;
+// 9999-12-31T23:59:59Z, the starts_sort of date-only events.
+const MAX_SORT = 253402300799;
 // Keeps the bound-parameter total under D1's 100 per query.
 export const MAX_TYPES = 20;
 
@@ -21,6 +25,13 @@ export interface EventQuery {
   modes: string[];
   limit: number;
   after: [string, number, string] | null;
+  /** The range lies outside the loaded data window: answer empty without querying. */
+  outside?: boolean;
+}
+
+export interface DataWindow {
+  from: string;
+  until: string;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -82,7 +93,7 @@ export function encodeCursor(fp: string, key: [string, number, string]): string 
   return b64urlEncode(JSON.stringify([1, fp, ...key]));
 }
 
-function decodeCursor(cursor: string, fp: string): [string, number, string] {
+function decodeCursor(cursor: string, fp: string, from: string, until: string): [string, number, string] {
   let v: unknown;
   try {
     v = JSON.parse(b64urlDecode(cursor));
@@ -90,10 +101,11 @@ function decodeCursor(cursor: string, fp: string): [string, number, string] {
     throw new BadRequest('invalid cursor');
   }
   if (!Array.isArray(v) || v.length !== 5 || v[0] !== 1 || typeof v[2] !== 'string' || !DATE_RE.test(v[2])
-    || !Number.isSafeInteger(v[3]) || typeof v[4] !== 'string') {
+    || !Number.isSafeInteger(v[3]) || v[3] < 0 || v[3] > MAX_SORT || typeof v[4] !== 'string' || !ID_RE.test(v[4])) {
     throw new BadRequest('invalid cursor');
   }
   if (v[1] !== fp) throw new BadRequest('cursor does not match these filters');
+  if (v[2] < from || v[2] >= until) throw new BadRequest('cursor outside the date range');
   return [v[2], v[3], v[4]];
 }
 
@@ -107,7 +119,11 @@ function rejectUnknown(params: URLSearchParams, allowed: readonly string[]) {
   for (const k of params.keys()) if (!allowed.includes(k)) throw new BadRequest(`unknown parameter: ${k}`);
 }
 
-export function parseFilters(params: URLSearchParams, allowed: readonly string[] = DAYS_PARAMS): Filters {
+/**
+ * Validates the query. With a data window (union of the latest import windows) the range is clamped to it,
+ * so dates beyond the data neither reach D1 nor make new cache keys.
+ */
+export function parseFilters(params: URLSearchParams, allowed: readonly string[] = DAYS_PARAMS, window: DataWindow | null = null): Filters {
   rejectUnknown(params, allowed);
   const from = single(params, 'from');
   const until = single(params, 'until');
@@ -116,6 +132,11 @@ export function parseFilters(params: URLSearchParams, allowed: readonly string[]
   const span = dayNumber('until', until) - dayNumber('from', from);
   if (span <= 0) throw new BadRequest('until must be after from');
   if (span > MAX_RANGE_DAYS) throw new BadRequest(`until must be at most ${MAX_RANGE_DAYS} days after from`);
+  let range = { from, until, outside: false };
+  if (window) {
+    if (until <= window.from || from >= window.until) range = { from, until, outside: true };
+    else range = { from: from < window.from ? window.from : from, until: until > window.until ? window.until : until, outside: false };
+  }
 
   const prefs = list(params, 'pref', undefined, PREF_RE);
   if (!prefs.length) throw new BadRequest('pref is required (JP-01..JP-47 or online)');
@@ -123,8 +144,7 @@ export function parseFilters(params: URLSearchParams, allowed: readonly string[]
   const types = list(params, 'type', undefined, TYPE_RE);
   if (types.length > MAX_TYPES) throw new BadRequest(`at most ${MAX_TYPES} type values`);
   return {
-    from,
-    until,
+    ...range,
     games: list(params, 'game', GAME_CODES),
     prefs,
     categories: list(params, 'category', CATEGORIES),
@@ -136,17 +156,13 @@ export function parseFilters(params: URLSearchParams, allowed: readonly string[]
   };
 }
 
-export function parseEventQuery(params: URLSearchParams): EventQuery & { fp: string } {
-  const base = parseFilters(params, EVENTS_PARAMS);
-  let limit = DEFAULT_LIMIT;
+export function parseEventQuery(params: URLSearchParams, window: DataWindow | null = null): EventQuery & { fp: string } {
+  const base = parseFilters(params, EVENTS_PARAMS, window);
   const rawLimit = single(params, 'limit');
-  if (rawLimit !== null) {
-    if (!/^\d+$/.test(rawLimit) || +rawLimit < 1) throw new BadRequest(`limit must be an integer from 1 to ${MAX_LIMIT}`);
-    limit = Math.min(+rawLimit, MAX_LIMIT);
-  }
+  if (rawLimit !== null && rawLimit !== String(PAGE_LIMIT)) throw new BadRequest(`limit must be ${PAGE_LIMIT}`);
   const fp = fingerprint(base);
   const cursor = single(params, 'cursor');
-  return { ...base, limit, after: cursor ? decodeCursor(cursor, fp) : null, fp };
+  return { ...base, limit: PAGE_LIMIT, after: cursor ? decodeCursor(cursor, fp, base.from, base.until) : null, fp };
 }
 
 /** One spelling per filter set, so equivalent URLs share a cache entry. */
@@ -162,7 +178,6 @@ export function canonicalFilters(q: Filters): URLSearchParams {
 
 export function canonicalEventQuery(q: EventQuery & { fp: string }): URLSearchParams {
   const out = canonicalFilters(q);
-  out.set('limit', String(q.limit));
   if (q.after) out.set('cursor', encodeCursor(q.fp, q.after));
   return out;
 }
@@ -247,7 +262,8 @@ export function rowToEvent(r: Row, fetchedAt: Record<string, string>) {
 }
 
 export function eventsSql(q: EventQuery): { sql: string; binds: unknown[] } {
-  const where = whereClause(q);
+  // The cursor's day becomes the index lower bound; the row-value test then skips that day's earlier rows.
+  const where = whereClause(q.after ? { ...q, from: q.after[0] } : q);
   let sql = where.sql;
   const binds = [...where.binds];
   if (q.after) {
@@ -258,6 +274,7 @@ export function eventsSql(q: EventQuery): { sql: string; binds: unknown[] } {
 }
 
 export async function listEvents(db: D1Database, q: EventQuery & { fp: string }, fetchedAt: Record<string, string>) {
+  if (q.outside) return { events: [], next_cursor: null };
   const { sql, binds } = eventsSql(q);
   const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
   const more = rows.length > q.limit;
@@ -275,7 +292,10 @@ export function daysSql(q: Filters): { sql: string; binds: unknown[] } {
 }
 
 export async function listDays(db: D1Database, q: Filters) {
+  if (q.outside) return { days: [] };
   const { sql, binds } = daysSql(q);
+  // With a game filter, by_game reports only the selected games (a shared event also carries others).
+  const shown = q.games.length ? GAMES.filter((g) => q.games.includes(g.code)).reduce((m, g) => m | g.bit, 0) : 0xff;
   const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
   // A shared event counts once in count and once per member game in by_game.
   const byDate = new Map<string, { date: string; count: number; by_game: Record<string, number> }>();
@@ -283,7 +303,7 @@ export async function listDays(db: D1Database, q: Filters) {
     const date = r.date as string;
     const d = byDate.get(date) ?? { date, count: 0, by_game: {} };
     d.count += Number(r.n);
-    for (const g of gamesOf(Number(r.m))) d.by_game[g] = (d.by_game[g] ?? 0) + Number(r.n);
+    for (const g of gamesOf(Number(r.m) & shown)) d.by_game[g] = (d.by_game[g] ?? 0) + Number(r.n);
     byDate.set(date, d);
   }
   const days = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));

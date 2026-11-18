@@ -36,13 +36,13 @@ describe('round trip', () => {
     let total = 0;
     for (let i = 0; i < locs.length; i += 5) {
       const pref = locs.slice(i, i + 5).join(',');
-      for (let from = dates[0]; from <= dates[dates.length - 1]; from = addDays(from, 92)) {
-        const range = `from=${from}&until=${addDays(from, 92)}&pref=${pref}`;
+      for (let from = dates[0]; from <= dates[dates.length - 1]; from = addDays(from, 31)) {
+        const range = `from=${from}&until=${addDays(from, 31)}&pref=${pref}`;
         const days = await api(db, `/api/v1/events/days?${range}`);
         total += days.body.days.reduce((n: number, d: Ev) => n + d.count, 0);
         let cursor: string | null = null;
         do {
-          const r = await api(db, `/api/v1/events?${range}&limit=200${cursor ? `&cursor=${cursor}` : ''}`);
+          const r = await api(db, `/api/v1/events?${range}${cursor ? `&cursor=${cursor}` : ''}`);
           expect(r.status).toBe(200);
           for (const e of r.body.events) seen.set(e.id, e);
           cursor = r.body.next_cursor;

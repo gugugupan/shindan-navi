@@ -11,13 +11,15 @@ interface StoredMeta {
 export interface DataState {
   version: string;
   fetched_at: Record<string, string>;
+  /** Union of the latest import windows; absent before the importer wrote it. */
+  window?: { from: string; until: string } | null;
 }
 
 async function siteMeta(db: D1Database, key: string): Promise<string | null> {
   return db.prepare('SELECT value FROM site_meta WHERE key = ?').bind(key).first<string>('value');
 }
 
-/** Version and per-game fetched_at written by the last import; null before the first import. */
+/** Version, per-game fetched_at and data window written by the last import; null before the first import. */
 export async function readState(db: D1Database): Promise<DataState | null> {
   const v = await siteMeta(db, 'state');
   return v === null ? null : (JSON.parse(v) as DataState);

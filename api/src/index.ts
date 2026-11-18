@@ -1,10 +1,14 @@
-import { BadRequest, canonicalEventQuery, canonicalFilters, DAYS_PARAMS, listDays, listEvents, parseEventQuery, parseFilters } from './events';
+import {
+  BadRequest, canonicalEventQuery, canonicalFilters, DAYS_PARAMS, listDays, listEvents, parseEventQuery, parseFilters, type DataWindow,
+} from './events';
 import { guessRegion } from './geo';
 import { getMeta, readState, type DataState } from './meta';
 
 export interface Env {
   DB: D1Database;
   ASSETS?: Fetcher;
+  /** Workers Rate Limiting binding; absent locally, in which case nothing is limited. */
+  API_LIMIT?: RateLimit;
 }
 
 const HEADERS = {
@@ -21,31 +25,46 @@ export const BROWSER_TTL = 300;
 const BROWSER_CACHE = `public, max-age=${BROWSER_TTL}`;
 // How long an isolate trusts its last read of the data version (one D1 row).
 export const STATE_TTL_MS = 60_000;
+// Last good data state, kept in the colo cache so a cold isolate can still find cached answers while D1 fails.
+const STATE_PATH = '/api/__state';
+const STATE_EDGE_TTL = 7 * 86_400;
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
 }
 
-interface Route {
-  /** Validates the query (throws BadRequest) and returns the canonical query used in the cache key. */
-  key(params: URLSearchParams): string;
-  run(db: D1Database, params: URLSearchParams, state: DataState | null): Promise<unknown>;
+interface Parsed {
+  outside?: boolean;
 }
+
+interface Route {
+  /** Validates the query (throws BadRequest), clamped to the data window. */
+  parse(params: URLSearchParams, window: DataWindow | null): Parsed;
+  /** Canonical query used in the cache key. */
+  key(parsed: Parsed): string;
+  run(db: D1Database, parsed: Parsed, state: DataState | null): Promise<unknown>;
+}
+
+type EventQ = ReturnType<typeof parseEventQuery>;
+type DaysQ = ReturnType<typeof parseFilters>;
 
 const ROUTES: Record<string, Route> = {
   '/api/v1/events': {
-    key: (p) => canonicalEventQuery(parseEventQuery(p)).toString(),
-    run: (db, p, state) => listEvents(db, parseEventQuery(p), state?.fetched_at ?? {}),
+    parse: (p, w) => parseEventQuery(p, w),
+    key: (q) => canonicalEventQuery(q as EventQ).toString(),
+    run: (db, q, state) => listEvents(db, q as EventQ, state?.fetched_at ?? {}),
   },
   '/api/v1/events/days': {
-    key: (p) => canonicalFilters(parseFilters(p, DAYS_PARAMS)).toString(),
-    run: (db, p) => listDays(db, parseFilters(p, DAYS_PARAMS)),
+    parse: (p, w) => parseFilters(p, DAYS_PARAMS, w),
+    key: (q) => canonicalFilters(q as DaysQ).toString(),
+    run: (db, q) => listDays(db, q as DaysQ),
   },
   '/api/v1/events/meta': {
-    key: (p) => {
+    parse: (p) => {
       for (const k of p.keys()) throw new BadRequest(`unknown parameter: ${k}`);
-      return '';
+      return {};
     },
+    key: () => '',
     run: (db) => getMeta(db),
   },
 };
@@ -55,12 +74,34 @@ function edgeCache(): Cache | null {
 }
 
 const stateMemo = new WeakMap<D1Database, { at: number; state: DataState | null }>();
-async function dataState(db: D1Database, memo: boolean): Promise<DataState | null> {
-  const hit = memo ? stateMemo.get(db) : undefined;
-  if (hit && Date.now() - hit.at < STATE_TTL_MS) return hit.state;
-  const state = await readState(db);
-  if (memo) stateMemo.set(db, { at: Date.now(), state });
-  return state;
+
+/**
+ * The data version. With the Cache API it is memoized per isolate for STATE_TTL_MS and, when D1 fails,
+ * the last known state (memo, then the colo cache) is used so cached answers keep being served.
+ */
+async function dataState(db: D1Database, cache: Cache | null, origin: string, ctx?: ExecutionContext): Promise<DataState | null> {
+  if (!cache) return readState(db);
+  const memo = stateMemo.get(db);
+  if (memo && Date.now() - memo.at < STATE_TTL_MS) return memo.state;
+  const stateKey = new Request(`${origin}${STATE_PATH}`, { method: 'GET' });
+  try {
+    const state = await readState(db);
+    stateMemo.set(db, { at: Date.now(), state });
+    if (state) {
+      const put = cache.put(stateKey, json(state, 200, { 'cache-control': `public, max-age=${STATE_EDGE_TTL}` }));
+      if (ctx) ctx.waitUntil(put);
+      else await put;
+    }
+    return state;
+  } catch (e) {
+    console.error(e);
+    if (memo) return memo.state;
+    const hit = await cache.match(stateKey);
+    if (!hit) throw e;
+    const state = (await hit.json()) as DataState;
+    stateMemo.set(db, { at: Date.now(), state });
+    return state;
+  }
 }
 
 export function cacheKey(origin: string, path: string, version: string, canonical: string): Request {
@@ -89,13 +130,21 @@ async function handleApi(request: Request, env: Env, url: URL, ctx?: ExecutionCo
   const cache = edgeCache();
   let res: Response;
   try {
-    const canonical = route.key(url.searchParams);
-    const state = await dataState(env.DB, cache !== null);
-    // Before the first import there is no version to key on, so nothing is cached.
-    const key = cache && state ? cacheKey(url.origin, url.pathname, state.version, canonical) : null;
+    const state = await dataState(env.DB, cache, url.origin, ctx);
+    const parsed = route.parse(url.searchParams, state?.window ?? null);
+    // Nothing is cached before the first import (no version) or for ranges outside the data (no D1 read).
+    const key = cache && state && !parsed.outside ? cacheKey(url.origin, url.pathname, state.version, route.key(parsed)) : null;
     const hit = key ? await cache!.match(key) : undefined;
     if (hit) return withHeaders(hit, { 'cache-control': BROWSER_CACHE, 'x-edge-cache': 'hit' }, !head, ['age']);
-    res = json(await route.run(env.DB, url.searchParams, state));
+    // Only misses reach D1, so only misses count against the per-client limit.
+    if (env.API_LIMIT && !parsed.outside) {
+      const { success } = await env.API_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'unknown' });
+      if (!success) {
+        const limited = json({ error: 'too many requests' }, 429, { 'retry-after': '60' });
+        return head ? withHeaders(limited, {}, false) : limited;
+      }
+    }
+    res = json(await route.run(env.DB, parsed, state));
     if (key) {
       const stored = cache!.put(key, withHeaders(res.clone(), { 'cache-control': `public, max-age=${EDGE_TTL}` }));
       if (ctx) ctx.waitUntil(stored);
