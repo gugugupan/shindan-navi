@@ -519,21 +519,32 @@ function card(e){
 }
 
 // ---- list view
-let events=[], nextCursor=null, total=null, dayCounts=null, loading=false, failed=false, ctrl=null, gen=0;
+// The API answers per calendar month (/days: whole months, /events: a start day to the month's end), so the list
+// walks the range month by month. Each month's /days is loaded when the list reaches it, which also skips months
+// without matches; the header total is "at least" until every month is known.
+let events=[], segs=[], seg=0, nextCursor=null, done=false, total=null, dayCounts=null, loading=false, failed=false, ctrl=null, gen=0, reloadTimer=null;
+const MAX_REQ_PER_LOAD = 3;
+function segments([f,u]){ const out=[]; for(let a=f;a<u;){ const next=addM(monthOf(a),1)+'-01'; out.push({from:a, until:next, month:monthOf(a), count:null}); a=next; } return out; }
+const rangeEnd=()=>rangeOf(state)[1];
 const listEl=document.getElementById('list');
 async function api(path, q, signal){
   const r=await fetch(`${API_BASE}${path}${q?'?'+q:''}`,{signal, headers:{accept:'application/json'}});
   let body=null; try{ body=await r.json(); }catch(e){}
-  if(!r.ok) throw Object.assign(new Error(body&&body.error||('HTTP '+r.status)),{status:r.status});
+  if(!r.ok) throw Object.assign(new Error(body&&body.error||('HTTP '+r.status)),{status:r.status, retryAfter:+(r.headers.get('retry-after')||0)});
   return body;
 }
+// Filter changes often come in bursts (chips, dialogs): wait for a pause before asking the API.
 function reload(){
   if(ctrl) ctrl.abort();
   ctrl=new AbortController(); gen++;
-  events=[]; nextCursor=null; total=null; dayCounts=null; failed=false;
+  events=[]; segs=segments(rangeOf(state)); seg=0; nextCursor=null; done=false; total=null; dayCounts=null; failed=false;
   renderNotice();
+  clearTimeout(reloadTimer);
   if(!state.pref.length){ renderPrompt(); return; }
-  if(state.view==='cal') loadCal(); else { loadPage(); loadDayCounts(); }
+  loading=true;
+  if(state.view==='cal') renderCal(null); else renderList();
+  const my=gen;
+  reloadTimer=setTimeout(()=>{ if(my!==gen) return; loading=false; if(state.view==='cal') loadCal(); else loadPage(); },300);
 }
 // The API needs 1-5 locations: without one (no IP guess) the page asks instead of loading.
 function renderPrompt(){
@@ -543,29 +554,36 @@ function renderPrompt(){
     ? Array.from({length:2},()=>'<div class="sk" aria-hidden="true"></div>').join('')+'<span class="sr">地域を確認中…</span>'
     : `<div class="state" id="prefPrompt"><b>地域を選んでください</b><span>都道府県（またはオンライン）を${MAX_PREFS}つまで選ぶと、その地域のイベントを表示します。</span><button class="sbtn" id="pickPref">都道府県を選ぶ</button></div>`;
 }
-// headers show the full per-day totals; without them the number is left out rather than showing a partial count
-async function loadDayCounts(){
-  const my=gen, signal=ctrl.signal;
-  try{
-    const r=await api('/events/days',apiQuery(state,rangeOf(state)),signal);
-    if(my!==gen) return;
-    dayCounts=Object.fromEntries((r.days||[]).map(d=>[d.date,d.count]));
-    total=(r.days||[]).reduce((t,d)=>t+d.count,0);
-  }catch(err){
-    if(err.name==='AbortError'||my!==gen) return;
-    dayCounts=false;
-  }
-  if(!loading || events.length) renderList();
+// /days for one month of the list (whole month requested, cut to the range here)
+async function loadMonthDays(sg, signal){
+  const r=await api('/events/days',apiQuery(state,[sg.month+'-01',addM(sg.month,1)+'-01']),signal);
+  const end=rangeEnd(), days=(r.days||[]).filter(d=>d.date>=sg.from&&d.date<end);
+  dayCounts=Object.assign(dayCounts||{},Object.fromEntries(days.map(d=>[d.date,d.count])));
+  sg.count=days.reduce((t,d)=>t+d.count,0);
+  total=segs.reduce((t,x)=>t+(x.count||0),0);
 }
 async function loadPage(){
   const my=gen, signal=ctrl.signal;
-  loading=true; renderList();
-  const q=apiQuery(state,rangeOf(state)); q.set('limit',PAGE_SIZE); if(nextCursor) q.set('cursor',nextCursor);
+  if(done||loading) return;
+  loading=true; failed=false; renderList();
   try{
-    const r=await api('/events',q,signal);
-    if(my!==gen) return;
-    events=events.concat(r.events||[]); nextCursor=r.next_cursor||null;
-    if(!nextCursor && dayCounts===false) total=events.length;
+    // one page = up to PAGE_SIZE events, at most MAX_REQ_PER_LOAD requests per load (the API stops filtered
+    // scans early and hands back a cursor); a month that ends early continues into the next one
+    for(let got=0, req=0; !done && got<PAGE_SIZE && req<MAX_REQ_PER_LOAD; req++){
+      const sg=segs[seg];
+      if(sg.count==null){ await loadMonthDays(sg,signal); if(my!==gen) return; }
+      let evs=[];
+      if(sg.count>0){
+        const q=apiQuery(state,[sg.from,sg.until]); q.set('limit',PAGE_SIZE); if(nextCursor) q.set('cursor',nextCursor);
+        const r=await api('/events',q,signal);
+        if(my!==gen) return;
+        const end=rangeEnd();
+        evs=(r.events||[]).filter(e=>e.starts_on<end);
+        nextCursor=evs.length===(r.events||[]).length ? r.next_cursor||null : null;
+      } else nextCursor=null;
+      events=events.concat(evs); got+=evs.length;
+      if(!nextCursor){ seg++; done=seg>=segs.length||segs[seg].from>=rangeEnd(); }
+    }
   }catch(err){
     if(err.name==='AbortError'||my!==gen) return;
     failed=err;
@@ -577,7 +595,8 @@ function renderHead(){
   const [f,u]=rangeOf(state), last=addD(u,-1);
   const rng = state.view==='cal' ? '' : f===last ? md(f) : `${md(f)}〜${md(last)}`;
   const where = (state.pref.length ? state.pref.slice(0,3).map(locName).join('・')+(state.pref.length>3?` ほか${state.pref.length-3}`:'') : '地域を選んでください')+(state.autoPref?'（現在地から推定）':'');
-  const cnt = total==null ? '' : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件</span>`;
+  const exact = state.view==='cal' || segs.every(x=>x.count!=null);
+  const cnt = total==null ? '' : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件${exact?'':'以上'}</span>`;
   el.innerHTML = state.view==='cal' ? `<span class="sub">${esc(where)}</span>`
     : `${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}</span>`;
 }
@@ -587,15 +606,17 @@ function renderNotice(){
   document.getElementById('notice').innerHTML = none.length && (state.game.length || none.length<GAMES.length)
     ? `<p class="notice">${none.map(c=>esc(GAME[c].name)).join('・')} のイベント情報は現在ありません（準備中）。${state.game.length&&none.length===state.game.length?'':'ほかのタイトルの結果を表示しています。'}</p>` : '';
 }
+// 429 / 503: the API asks to wait (Retry-After); say so instead of a generic error.
+const busyText = err => `アクセスが集中しています。${err.retryAfter||60}秒ほど待ってからもう一度お試しください`;
+function errorState(err){
+  const bad=err.status===400, busy=err.status===429||err.status===503;
+  return `<div class="state err" role="alert"><b>${busy?'アクセスが集中しています':bad?'この条件では検索できませんでした':'イベント情報を読み込めませんでした'}</b><span>${busy?`${err.retryAfter||60}秒ほど待ってから再読み込みしてください。`:bad?'日付や条件を変えてもう一度お試しください。':'通信状況を確認して、しばらくしてからもう一度お試しください。'}</span><button class="sbtn ghost" id="retry">再読み込み</button></div>`;
+}
 function renderList(){
   renderHead();
   if(state.view!=='list') return;
   listEl.setAttribute('aria-busy',loading);
-  if(failed && !events.length){
-    const bad=failed.status===400;
-    listEl.innerHTML=`<div class="state err" role="alert"><b>${bad?'この条件では検索できませんでした':'イベント情報を読み込めませんでした'}</b><span>${bad?'日付や条件を変えてもう一度お試しください。':'通信状況を確認して、しばらくしてからもう一度お試しください。'}</span><button class="sbtn ghost" id="retry">再読み込み</button></div>`;
-    return;
-  }
+  if(failed && !events.length){ listEl.innerHTML=errorState(failed); return; }
   if(loading && !events.length){ listEl.innerHTML=Array.from({length:4},()=>'<div class="sk" aria-hidden="true"></div>').join('')+'<span class="sr">読み込み中…</span>'; return; }
   if(!events.length){
     listEl.innerHTML=`<div class="state"><b>条件に合うイベントはありません</b><span>日付を広げたり、都道府県や絞り込み条件を減らしてみてください。</span>${activeFilterCount()||state.game.length||state.range!=='upcoming'?'<button class="sbtn ghost" id="resetAll2">条件をリセット</button>':''}</div>`;
@@ -608,13 +629,13 @@ function renderList(){
     const [,,dd]=k.split('-').map(Number), w=dowOf(k);
     h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}</h3><div class="list">${its.map(card).join('')}</div></section>`;
   });
-  const rest = total!=null ? total-events.length : null;
-  if(nextCursor) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?'読み込めませんでした。もう一度試す':rest!=null&&rest>0?`もっと見る（残り ${rest.toLocaleString('ja-JP')}件）`:'もっと見る'}</button>`;
+  const rest = total!=null && segs.every(x=>x.count!=null) ? total-events.length : null;
+  if(!done) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`もっと見る（残り ${rest.toLocaleString('ja-JP')}件）`:'もっと見る'}</button>`;
   listEl.innerHTML=h;
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
 }
 const io = 'IntersectionObserver' in window ? new IntersectionObserver(es=>{
-  if(es.some(x=>x.isIntersecting) && nextCursor && !loading && !failed && state.view==='list') loadPage();
+  if(es.some(x=>x.isIntersecting) && !done && !loading && !failed && state.view==='list') loadPage();
 },{rootMargin:'400px 0px'}) : null;
 document.getElementById('results').addEventListener('click',e=>{
   if(e.target.closest('#loadMore')){ failed=false; loadPage(); return; }
@@ -655,7 +676,7 @@ function renderCal(data){
   const [lo,hi]=calBounds();
   const head=`<div class="ecal-head"><button class="ib" data-month="${addM(ym,-1)}" aria-label="前月"${ym<=lo?' disabled':''}>‹</button><b>${y}年${m}月</b><button class="ib" data-month="${addM(ym,1)}" aria-label="翌月"${ym>=hi?' disabled':''}>›</button>
     <span class="sub">${data&&data.counts?`この月 <b>${data.total.toLocaleString('ja-JP')}</b> 件`:''}</span></div>`;
-  if(data&&data.error){ el.innerHTML=`<div class="ecal">${head}<div class="state err" role="alert" style="border:0;border-radius:0"><b>イベント情報を読み込めませんでした</b><span>通信状況を確認して、しばらくしてからもう一度お試しください。</span><button class="sbtn ghost" id="retry">再読み込み</button></div></div>`; return; }
+  if(data&&data.error){ el.innerHTML=`<div class="ecal">${head}${errorState(data.error)}</div>`; return; }
   const first=ym+'-01', start=addD(first,-dowOf(first)), days=diffD(first,addM(ym,1)+'-01');
   const cells=Math.ceil((dowOf(first)+days)/7)*7;
   let g=DOW.map((w,i)=>`<div class="dow ${i==0?'sun':i==6?'sat':''}">${w}</div>`).join('');

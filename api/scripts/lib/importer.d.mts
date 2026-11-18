@@ -19,6 +19,20 @@ export interface GameLoad {
 export interface ImportState {
   events: Map<string, Record<string, any>>;
   imports: Record<string, any>[];
+  siteMeta: Record<string, string>;
+  dayCounts: Map<string, number>;
+}
+
+export interface GamePlan {
+  fetched_at: string;
+  source_total: number | null;
+  record_count: number;
+  complete: boolean;
+  inserted: number;
+  rewritten: number;
+  unchanged: number;
+  hidden: number;
+  in_db: number;
 }
 
 export interface PlanStats {
@@ -26,6 +40,7 @@ export interface PlanStats {
   rewritten: number;
   mask_updates: number;
   imports: number;
+  day_counts: number;
   site_meta: number;
   unchanged: number;
 }
@@ -37,13 +52,18 @@ export function locOf(ev: Record<string, any>): string | null;
 export function sqlLiteral(v: unknown): string;
 export function importId(run: Record<string, any>): string;
 export function emptyState(): ImportState;
-export function stateFromRows(eventRows: Record<string, any>[], importRows: Record<string, any>[]): ImportState;
+export function stateFromRows(eventRows: Record<string, any>[], importRows: Record<string, any>[], siteMetaRows?: Record<string, any>[], dayCountRows?: Record<string, any>[]): ImportState;
+export function stateSiteMetaSql(): string;
+export function stateDayCountsSql(): string;
+export function computeDayCounts(events: ImportState['events']): Map<string, number>;
+export const MAX_STATEMENT_BYTES: number;
 export function stateEventsSql(afterId: string | null, pageSize: number): string;
 export function stateImportsSql(): string;
 export function computeMeta(events: ImportState['events'], imports: Record<string, any>[]): Record<string, any>;
 export function planImport(accepted: GameLoad[], state?: ImportState, opts?: { now?: number }): {
   statements: string[];
   stats: PlanStats;
+  perGame: Record<string, GamePlan>;
   meta: Record<string, any>;
   version: string | null;
   state: ImportState;

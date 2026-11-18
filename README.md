@@ -51,8 +51,8 @@ Pushing to `main` runs `.github/workflows/deploy.yml`. It never changes data and
 
 | `LIVE_HOST` | Pages project `shindan-navi` | Worker `shindan-navi` |
 | --- | --- | --- |
-| unset / `pages` (until the cutover) | built with `BUILD_EVENTS=0` (no `/events/`, no `/api/` there) and deployed: the live site keeps updating | built with `/events/` and deployed to its version preview URL, only if the `D1_DATABASE_ID` secret is set |
-| `worker` (after the cutover) | skipped | deployed with the `shindan-navi.app` custom domain; fails if `D1_DATABASE_ID` is empty |
+| unset / `pages` (until the cutover) | built with `BUILD_EVENTS=0` (no `/events/`, no `/api/` there) and deployed: the live site keeps updating | built with `/events/` and deployed without a route, only if the `D1_DATABASE_ID` secret is set. A route-less `wrangler deploy` leaves an attached custom domain alone (wrangler 4.164 only publishes custom domains that are declared), so this is harmless after a manual cutover too |
+| `worker` (after the cutover) | skipped | preview check (`api/scripts/preview-check.mjs`): fails on a broken build (`/`, `/events/`), only warns on API errors or stale data so release-calendar publishes never block on D1; then deployed with the `shindan-navi.app` custom domain. Fails if `D1_DATABASE_ID` is empty |
 
 The committed `wrangler.jsonc` has no route: only `api/scripts/remote-config.mjs --domain` (used when `LIVE_HOST=worker`, or by hand during the cutover) adds the custom domain, so merging never moves the domain by itself. `workers_dev` is off; version preview URLs are on and answer with `X-Robots-Tag: noindex`.
 
@@ -71,7 +71,15 @@ D1_DATABASE_ID=... ./scripts/deploy.sh worker          # Worker, preview URL onl
 D1_DATABASE_ID=... ./scripts/deploy.sh worker --domain # Worker + shindan-navi.app (cutover)
 ```
 
-Cutover (once): remove `shindan-navi.app` from the Pages project's custom domains, run `./scripts/deploy.sh worker --domain`, then set `LIVE_HOST=worker`. Rollback: remove the domain from the Worker (Settings → Domains & Routes), add it back to the Pages project, set `LIVE_HOST=pages` (or delete it) and run `./scripts/deploy.sh pages`. `www` redirects to the apex with a zone Redirect Rule either way.
+Cutover (once, after the first D1 import):
+
+1. Remove `shindan-navi.app` from the Pages project's custom domains.
+2. `D1_DATABASE_ID=... ./scripts/deploy.sh worker --domain`: uploads a version, runs `preview-check.mjs --strict` (the hard gate: build OK, meta lists events, Tokyo has events from today on), then deploys with the domain. Run interactively: wrangler asks before taking over existing DNS records; in CI (non-TTY) wrangler 4.164 overrides conflicting records without asking, so never let CI do the first attach.
+3. Set the repository variable `LIVE_HOST=worker` in the same sitting. Until then pushes still deploy Pages (now unused) and the Worker route-less, which keeps the domain; nothing breaks, but set it so Pages stops receiving deploys and CI runs the preview check.
+
+Never set `LIVE_HOST=worker` before step 2. Rollback: remove the domain from the Worker (Settings → Domains & Routes), add it back to the Pages project, set `LIVE_HOST=pages` (or delete it) and run `./scripts/deploy.sh pages`. `www` redirects to the apex with a zone Redirect Rule either way.
+
+Limits: the Worker limits uncached API requests itself (`API_LIMIT` 20/min per client, `API_BREAKER` 300/min per location; see `api/README.md` › D1 budget). Optionally add the Free plan's one WAF rate-limiting rule (Security → WAF → Rate limiting rules): *URI Path starts with `/api/`*, counted per IP, 30 requests / 10 s, Block for 10 s. It does not protect D1 (misses are already limited) but keeps one client from spending the Workers Free plan's 100,000 requests/day on cached `/api/` answers. A normal visit makes 3-4 API requests on load and about one per 50 events while scrolling.
 
 ## GA events
 

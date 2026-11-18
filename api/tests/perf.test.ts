@@ -19,11 +19,11 @@ describe.runIf(process.env.PERF)('20k events', () => {
     const t4 = performance.now();
     const timings: Record<string, number> = {};
     for (const q of [
-      'from=2026-11-18&until=2027-02-18&pref=JP-13',
-      'from=2026-11-18&until=2027-02-18&game=OPCG&pref=JP-13',
-      'from=2026-12-01&until=2027-01-01&days=weekend&fee=free&category=tournament&pref=JP-13,JP-14',
-      'from=2026-11-18&until=2027-02-18&type=meetup&limit=200&pref=JP-27',
-      'from=2026-11-18&until=2027-02-18&game=PTCG&pref=JP-13,JP-14,JP-27,JP-40,online',
+      'from=2026-11-18&until=2026-12-01&pref=JP-13',
+      'from=2026-11-18&until=2026-12-01&game=OPCG&pref=JP-13',
+      'from=2026-12-01&until=2027-01-01&days=weekend&pref=JP-13,JP-14',
+      'from=2026-11-18&until=2026-12-01&type=meetup&pref=JP-27',
+      'from=2026-11-18&until=2026-12-01&game=PTCG&pref=JP-13,JP-14,JP-27,JP-40,online',
     ]) {
       const s = performance.now();
       const r = await api(db, `/api/v1/events?${q}`);
@@ -31,7 +31,7 @@ describe.runIf(process.env.PERF)('20k events', () => {
       timings[q] = Math.round(performance.now() - s);
     }
     let s = performance.now();
-    await api(db, '/api/v1/events/days?from=2026-11-18&until=2027-02-18&pref=JP-13');
+    await api(db, '/api/v1/events/days?from=2026-12-01&until=2027-01-01&pref=JP-13');
     timings.days = Math.round(performance.now() - s);
     s = performance.now();
     await api(db, '/api/v1/events/meta');

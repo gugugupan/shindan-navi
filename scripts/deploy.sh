@@ -2,7 +2,7 @@
 # Manual fallback for .github/workflows/deploy.yml.
 #   ./scripts/deploy.sh pages              Pages site (live until the cutover; built without /events/)
 #   ./scripts/deploy.sh worker             Worker, version preview URL only (needs D1_DATABASE_ID)
-#   ./scripts/deploy.sh worker --domain    Worker and attach shindan-navi.app (the cutover step)
+#   ./scripts/deploy.sh worker --domain    preview check, then Worker with shindan-navi.app (the cutover step)
 # Needs `npx wrangler login` (or CLOUDFLARE_API_TOKEN).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -16,6 +16,11 @@ case "$target" in
     $WRANGLER pages deploy dist --project-name shindan-navi --branch main --commit-dirty=true ;;
   worker)
     "$PY" -I scripts/build.py
+    if [ "${1:-}" = "--domain" ]; then
+      # hard gate for attaching the domain: the preview must serve current data (CI only warns on data)
+      node api/scripts/remote-config.mjs
+      node api/scripts/preview-check.mjs --strict
+    fi
     node api/scripts/remote-config.mjs "$@"
     $WRANGLER deploy --config wrangler.remote.json ;;
   *) echo "usage: $0 pages | worker [--domain]" >&2; exit 2 ;;

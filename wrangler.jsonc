@@ -28,5 +28,11 @@
       "migrations_dir": "api/migrations"
     }
   ],
+  // Counted only on cache misses (the requests that read D1), per Cloudflare location: API_LIMIT per client
+  // (IPv4 address / IPv6 /64), API_BREAKER for everyone together. namespace_id only has to be unique in the account.
+  "ratelimits": [
+    { "name": "API_LIMIT", "namespace_id": "71101", "simple": { "limit": 20, "period": 60 } },
+    { "name": "API_BREAKER", "namespace_id": "71102", "simple": { "limit": 300, "period": 60 } }
+  ],
   "dev": { "port": 8787 }
 }

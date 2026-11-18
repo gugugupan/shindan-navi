@@ -2,7 +2,10 @@
 
 Shared by the collectors (`tools/`), the importer and Worker (`api/`) and the `/events/` page. Change only through the lead; every consumer reads from here.
 
-## Data files (`data/events/`)
+## Data files (`data/events/`, local only)
+
+Event data is **never committed** (owner decision; `/data/events` is in `.gitignore`). Collectors write it on the
+operator's machine; `api/scripts/import-events.mjs --target remote` pushes it to D1. D1 is the only shared copy.
 
 ```
 data/events/<GAME>/<YYYY-MM>.json   array of events (event.schema.json), month = starts_on, sorted by starts_on, starts_at, id
@@ -12,7 +15,7 @@ data/events/<GAME>/_run.json        last accepted run (run.schema.json)
 - `<GAME>` is one of `OPCG`, `UATCG`, `CONAN`, `PTCG`.
 - Window for this round: `starts_on` in [2026-11-18, 2027-02-18). Collectors may fetch wider but only write this window.
 - A run that fails coverage checks writes nothing under `data/events/`; diagnostics stay in the tool's ignored `out/`.
-- Files are pretty-printed with 2-space indent and a trailing newline so git diffs are reviewable.
+- Files are pretty-printed with 2-space indent and a trailing newline so they stay easy to inspect and diff locally.
 - Never store personal data (players, accounts, organizer contact emails/phones), cookies or profile data.
 
 ## Normalization rules
@@ -28,28 +31,28 @@ data/events/<GAME>/_run.json        last accepted run (run.schema.json)
 ## API (Worker `shindan-navi`, same origin as the site)
 
 All responses JSON with `X-Robots-Tag: noindex` and `X-Content-Type-Options: nosniff`. Sized for the D1 Free plan:
-every events query is bounded by location + date range (`idx_events_loc`), and meta is precomputed at import.
+the API accepts exactly what the page sends, ranges are month-shaped, `/events/days` reads a precomputed per-day
+table and filtered `/events` scans are capped. Meta is precomputed at import.
 
 ```
 GET /api/v1/events
   pref=JP-13,JP-14,online   (REQUIRED, 1-5 values: JP-01..JP-47 or online)
-  from=YYYY-MM-DD           (required, inclusive; starts_on >= from)
-  until=YYYY-MM-DD          (required, exclusive; at most 92 days after from)
+  from=YYYY-MM-DD           (required, inclusive; any day)
+  until=YYYY-MM-DD          (required, exclusive; must be the 1st of the month after from's month)
   game=OPCG,PTCG            (optional, comma list)
-  category=tournament,...   (optional)
-  type=standard_battle,...  (optional, group.event_type_code)
-  days=weekend|weekday|0..6 (optional; 0 = Sunday, comma list; by starts_on in Asia/Tokyo)
-  fee=free|paid|unknown     (optional, comma list)
-  registration=open,...     (optional, registration_status)
-  mode=in_person,online     (optional)
-  limit=1..200 (default 100)
-  cursor=<opaque>
+  type=standard_battle,...  (optional, group.event_type_code, at most 20)
+  days=weekend|weekday      (optional; by starts_on in Asia/Tokyo)
+  limit=50                  (optional; 50 is the only page size)
+  cursor=<opaque>           (from next_cursor; must belong to these filters and lie inside from..until)
 → { "events": [Event], "next_cursor": string|null }
    Event = event.schema.json item; order starts_on, starts_at (nulls last), id.
-   No count: totals come from /events/days (sum of days[].count).
+   With game/type/days, one request reads at most 300 rows per location: it may return fewer than 50 events (even
+   none) with a next_cursor; keep following the cursor. No count: totals come from /events/days.
 
-GET /api/v1/events/days         same parameters as /events except limit/cursor
-→ { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... } }] }   only days with count > 0
+GET /api/v1/events/days         from must be the 1st of a month and until the 1st of the next (a whole month);
+                                pref, game, type, days as for /events
+→ { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... } }] }   only days with count > 0;
+   with game=…, by_game lists only the selected games
 
 GET /api/v1/events/meta         no parameters
 → { "games": [{ "code", "name", "slug", "record_count", "fetched_at", "complete", "window": {"from","until"} }],
@@ -61,8 +64,11 @@ GET /api/v1/events/meta         no parameters
 GET /api/v1/geo                 prefecture guessed from the visitor's IP (Cloudflare request.cf), not stored
 → { "region_code": "JP-13" | null }   null outside Japan or when unknown; Cache-Control: private, no-store
 
-Errors: 400 { "error": "<message>" } for bad or unknown parameters (missing pref, more than 5 pref values,
-any parameter not listed above, e.g. a cache-busting `?_=`).
+Errors: 400 { "error": "<message>" } for bad or unknown parameters (missing pref, more than 5 pref values, a range
+that is not month-shaped, limit other than 50, a forged cursor, any parameter not listed above such as `?_=`,
+`category`, `fee`, `registration`, `mode`). 429 { "error": "too many requests" } and 503 { "error": "busy" }
+(Retry-After: 60) when the uncached-request limits trip. Ranges are clamped to the data window (union of the
+latest import windows); ranges wholly outside it answer empty without touching D1.
 ```
 
 Locations:
@@ -70,18 +76,21 @@ Locations:
 - `pref` is a location: a prefecture (`JP-xx`) matches in-person and hybrid events whose venue is in it; `online`
   matches events without a venue (`attendance_mode` online). A hybrid event with a venue is found under its
   prefecture. There is no nationwide query; the page always sends 1-5 locations.
-- `mode=in_person` and `mode=online` both match `hybrid` (a filter on top of the locations).
 
-Caching:
+Caching and limits:
 
 - `/events`, `/events/days`, `/events/meta` (GET/HEAD, status 200): stored in the colo's Cache API for 24 hours under
-  `<path>?v=<data version>&<canonical query>` — lists sorted, `limit` explicit, meta keyed by path only. Every
-  import that changes data writes a new version, so new data is served as soon as an isolate re-reads the version
-  (at most 60 s). Browsers get `Cache-Control: public, max-age=300` (the edge's `Age` header is dropped) and
+  `<path>?v=<data version>&<canonical query>` (clamped range, lists sorted; meta keyed by path only). Every import
+  that changes data writes a new version, so new data is served as soon as an isolate re-reads the version (at most
+  60 s). Browsers get `Cache-Control: public, max-age=300` (the edge's `Age` header is dropped) and
   `X-Edge-Cache: hit|miss`.
+- When D1 fails, the Worker keeps the last known data version (isolate memo, else a copy in the colo cache under
+  `/api/__state`) and retries D1 for it after 5 s, so cached answers keep being served; only misses fail (500).
+- Uncached requests only, per Cloudflare location: 20 per minute per client (IPv4 address or IPv6 /64) → 429;
+  300 per minute for everyone together → 503 (Workers Rate Limiting bindings `API_LIMIT`, `API_BREAKER`).
 - Errors (4xx/5xx) are never cached: `Cache-Control: no-store`. `/api/v1/geo` is `private, no-store`.
-- Without the Cache API (Node dev server, tests) every response is `no-store`. On `*.workers.dev` (version preview
-  URLs) the Cache API stores nothing, so every request is a miss that reads D1.
+- Without the Cache API (Node dev server, tests) every response is `no-store`. Cloudflare documents working Cache API
+  operations only for custom domains: on `*.workers.dev` preview URLs assume every request is a miss that reads D1.
 
 Clarifications:
 
@@ -94,24 +103,30 @@ Clarifications:
 - Shared events: the same `id` may appear in several game files (e.g. BANDAI CARD GAMES shared series listed under OPCG and UATCG). The importer stores one event with multiple games; `game=` matches any of them. API events carry `game_codes` (all games, sorted) in addition to `game_code` (first of `game_codes`).
 - Team events: when the source capacity counts teams, not players, `capacity` is `null` and the source wording goes to `eligibility_text`.
 - Sources: OPCG and UATCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the Takara Tomy official event search (https://www.takaratomy.co.jp/products/conan-cardgame/eventsearch; `conan:`, `conan_official`) because the game is not a Bandai title and TCG+ does not list it.
-- The page only sends `days=weekend|weekday` and never `mode`.
+- The page asks `/events/days` per whole month (lazily, as the list reaches each month, and skips months without
+  matches), `/events` from the range start (or the 1st) to the end of each month, and cuts both to the selected range
+  itself. It waits 300 ms after filter changes before requesting, and loads at most 3 requests per scroll step.
 
 ## Getting data into the production D1
 
-Manual, from a laptop, after the `data/events/` change is reviewed and **committed** (the importer refuses an
-untracked, symlinked or dirty data directory for `--plan` / `--yes`); CI never imports.
+Manual, from the operator's machine with the collected files in `data/events/`; CI never imports. No git step:
+the guards are the importer's own checks.
 
 ```
-cd api && D1_DATABASE_ID=<id> npm run import:remote                 # validate + first-import estimate; no remote call
-cd api && D1_DATABASE_ID=<id> npm run import:remote -- --plan       # read the remote rows, print the exact plan
-cd api && D1_DATABASE_ID=<id> npm run import:remote -- --yes        # migrate, read, plan, apply if ≤ --max-writes (90,000)
+cd api && D1_DATABASE_ID=<id> npm run import:remote               # validate + first-import estimate; no remote call
+cd api && D1_DATABASE_ID=<id> npm run import:remote -- --plan     # read D1, print the per-game review summary and plan
+cd api && D1_DATABASE_ID=<id> npm run import:remote -- --yes      # migrate, read, plan, apply if ≤ --max-writes (90,000)
 ```
 
-- The importer diffs against the remote rows and writes only new/changed events, game-membership changes, new
-  import rows and two site_meta rows. Nothing is deleted; an unchanged re-import writes nothing.
-- A game with validation errors blocks the remote import (use `--games` to import the others deliberately; also
-  the way to split a large load across UTC days).
-- Budget figures are in `api/README.md`.
+Guards (remote target): every file and `_run.json` must pass the schema and consistency checks (a rejected game
+blocks the import; `--games` imports the others deliberately); every run must be `complete` unless allowed per game
+with `--allow-incomplete CONAN,...`; a game listing over 20% fewer events than D1 currently shows for the same
+window is refused unless `--allow-shrink`. The review summary prints per game: fetched_at, source_total, records,
+events in D1 now, inserted / updated / unchanged / hidden. The operator reads it in `--plan` and then runs `--yes`.
+
+- The importer diffs against D1 and writes only new/changed events, game-membership changes, new import rows and
+  site_meta (also repaired when missing or stale). Nothing is deleted; an unchanged re-import writes nothing.
+- `--games` also splits a large load across UTC days. Budget figures are in `api/README.md`.
 
 ## Ownership this round
 

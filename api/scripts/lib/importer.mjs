@@ -17,8 +17,8 @@ const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_offi
 // 9999-12-31T23:59:59Z: date-only events sort after timed ones on the same day.
 export const NULL_SORT = 253402300799;
 const MAX_ERRORS = 50;
-// D1 rejects statements over 100 KB; stay well below.
-const MAX_STATEMENT_BYTES = 80_000;
+// D1 rejects statements over 100 KB (UTF-8 bytes); stay well below.
+export const MAX_STATEMENT_BYTES = 60_000;
 const MAX_ROWS_PER_STATEMENT = 200;
 
 let validators;
@@ -75,6 +75,7 @@ export function loadGame(dataDir, game) {
   out.run = run;
 
   const seen = new Set();
+  const unreachable = [];
   const files = readdirSync(dir).filter((f) => f !== '_run.json').sort();
   for (const file of files) {
     if (!/^\d{4}-\d{2}\.json$/.test(file)) {
@@ -112,9 +113,12 @@ export function loadGame(dataDir, game) {
       if (ev.ends_on !== null && (!isRealDate(ev.ends_on) || ev.ends_on < ev.starts_on)) err(`${at}: ends_on before starts_on`);
       if (ev.time_precision === 'datetime' && ev.starts_at === null) err(`${at}: time_precision datetime needs starts_at`);
       if (ev.starts_at !== null && Number.isNaN(Date.parse(ev.starts_at))) err(`${at}: unparseable starts_at`);
+      if (locOf(ev) === null) unreachable.push(ev.id);
     });
     out.events.push(...events);
   }
+  // Every location filter needs a prefecture or "online"; these events would be stored but never shown.
+  if (unreachable.length) out.warnings.push(`${game}: ${unreachable.length} in-person event(s) with a venue but no region_code are unreachable by location (e.g. ${unreachable.slice(0, 3).join(', ')})`);
   if (run.record_count !== out.events.length) {
     err(`${game}: run.record_count ${run.record_count} != ${out.events.length} events in files`);
   }
@@ -228,22 +232,40 @@ function eventRow(ev, now) {
 }
 
 /** State of an empty (freshly migrated) database. */
-export const emptyState = () => ({ events: new Map(), imports: [] });
+export const emptyState = () => ({ events: new Map(), imports: [], siteMeta: {}, dayCounts: new Map() });
 
-/** Builds the importer's view of a database from rows of STATE_EVENT_COLS / STATE_IMPORT_COLS. */
-export function stateFromRows(eventRows, importRows) {
+/** Builds the importer's view of a database from rows of STATE_EVENT_COLS / STATE_IMPORT_COLS / site_meta. */
+export function stateFromRows(eventRows, importRows, siteMetaRows = [], dayCountRows = []) {
   return {
     events: new Map(eventRows.map((r) => [r.id, { ...r, game_mask: Number(r.game_mask) }])),
     imports: importRows.map((r) => ({ ...r, record_count: Number(r.record_count), complete: Number(r.complete) })),
+    siteMeta: Object.fromEntries(siteMetaRows.map((r) => [r.key, r.value])),
+    dayCounts: new Map(dayCountRows.map((r) => [dayKey(r.loc, r.starts_on, Number(r.game_mask), r.event_type_code), Number(r.n)])),
   };
+}
+
+const dayKey = (loc, startsOn, mask, type) => [loc, startsOn, mask, type ?? ''].join('\t');
+
+/** day_counts rows implied by the events: visible events with a location, per (loc, day, mask, type). */
+export function computeDayCounts(events) {
+  const out = new Map();
+  for (const e of events.values()) {
+    if (!e.game_mask || !e.loc) continue;
+    const k = dayKey(e.loc, e.starts_on, e.game_mask, e.event_type_code);
+    out.set(k, (out.get(k) ?? 0) + 1);
+  }
+  return out;
 }
 
 /** SQL that pages through the state (keyset by id, `pageSize` rows per call). */
 export const stateEventsSql = (afterId, pageSize) =>
   `SELECT ${STATE_EVENT_COLS.join(', ')} FROM events${afterId === null ? '' : ` WHERE id > ${sqlLiteral(afterId)}`} ORDER BY id LIMIT ${pageSize}`;
 export const stateImportsSql = () => `SELECT ${STATE_IMPORT_COLS.join(', ')} FROM imports`;
+export const stateSiteMetaSql = () => 'SELECT key, value FROM site_meta';
+export const stateDayCountsSql = () => 'SELECT loc, starts_on, game_mask, event_type_code, n FROM day_counts';
 
 function chunked(head, items, tail = '') {
+  const fixed = Buffer.byteLength(head) + Buffer.byteLength(tail);
   const out = [];
   let batch = [];
   let bytes = 0;
@@ -253,9 +275,11 @@ function chunked(head, items, tail = '') {
     bytes = 0;
   };
   for (const item of items) {
-    if (batch.length && (bytes + item.length > MAX_STATEMENT_BYTES || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
+    const size = Buffer.byteLength(item) + 2;
+    if (fixed + size > MAX_STATEMENT_BYTES) throw new Error(`a single row needs ${fixed + size} bytes, over the ${MAX_STATEMENT_BYTES}-byte statement budget`);
+    if (batch.length && (fixed + bytes + size > MAX_STATEMENT_BYTES || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
     batch.push(item);
-    bytes += item.length + 2;
+    bytes += size;
   }
   flush();
   return out;
@@ -283,8 +307,9 @@ export function computeMeta(events, imports) {
       if (imp && e.game_mask & bit && e.starts_on >= imp.window_from && e.starts_on < imp.window_until) inWindow |= bit;
     }
     if (!inWindow) continue;
+    // Same keys as the API's pref filter, so a location's count matches what selecting it shows.
     if (e.loc === 'online') online++;
-    else if (e.region_code && e.attendance_mode !== 'online') prefectures[e.region_code] = (prefectures[e.region_code] ?? 0) + 1;
+    else if (e.loc) prefectures[e.loc] = (prefectures[e.loc] ?? 0) + 1;
     categories[e.category] = (categories[e.category] ?? 0) + 1;
     if (e.event_type_code === null) continue;
     for (const [g, bit] of Object.entries(GAME_BITS)) {
@@ -294,8 +319,10 @@ export function computeMeta(events, imports) {
     }
   }
   const typeList = [...types].map(([k, n]) => [...k.split('\t'), n]).sort((a, b) => (a[0] + '\t' + a[1] < b[0] + '\t' + b[1] ? -1 : 1));
+  const windows = Object.values(latest);
   return {
     games,
+    window: windows.length ? { from: windows.map((w) => w.window_from).sort()[0], until: windows.map((w) => w.window_until).sort().pop() } : null,
     prefectures: Object.fromEntries(Object.entries(prefectures).sort()),
     online,
     categories: Object.fromEntries(CATEGORIES.filter((c) => categories[c]).map((c) => [c, categories[c]])),
@@ -324,6 +351,11 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     }
   }
   const complete = accepted.map((r) => r.run).filter((r) => r.complete);
+  // Per game in this import: what it lists (inserted / rewritten / unchanged), what it hides, and how many of
+  // its events the database currently shows inside the run's window (for the shrink check).
+  const perGame = Object.fromEntries(accepted.map(({ run }) => [run.game_code,
+    { fetched_at: run.fetched_at, source_total: run.source_total, record_count: run.record_count, complete: run.complete,
+      inserted: 0, rewritten: 0, unchanged: 0, hidden: 0, in_db: 0 }]));
   const upserts = [];
   const masks = new Map();
   const next = new Map(state.events);
@@ -337,6 +369,13 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     for (const r of complete) {
       const bit = GAME_BITS[r.game_code];
       if (!(seen & bit) && startsOn >= r.window.from && startsOn < r.window.until) mask &= ~bit;
+    }
+    for (const { run } of accepted) {
+      const g = perGame[run.game_code];
+      const bit = GAME_BITS[run.game_code];
+      if (old && old.game_mask & bit && old.starts_on >= run.window.from && old.starts_on < run.window.until) g.in_db++;
+      if (old && old.game_mask & bit && !(mask & bit)) g.hidden++;
+      if (seen & bit) g[!old ? 'inserted' : old.content_hash !== row.content_hash ? 'rewritten' : 'unchanged']++;
     }
     if (row) {
       row.game_mask = mask;
@@ -391,13 +430,36 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     statements.push(...chunked(`UPDATE events SET game_mask = ${mask} WHERE id IN (`, ids.map(sqlLiteral), ')'));
   }
 
+  // day_counts follows the events; diffed against the stored rows, so a stale table is repaired too.
+  const counts = computeDayCounts(next);
+  const oldCounts = state.dayCounts ?? new Map();
+  const countUpserts = [...counts].filter(([k, n]) => oldCounts.get(k) !== n);
+  const countDeletes = [...oldCounts.keys()].filter((k) => !counts.has(k));
+  const tuple = (k) => {
+    const [loc, day, mask, type] = k.split('\t');
+    return `(${sqlLiteral(loc)}, ${sqlLiteral(day)}, ${Number(mask)}, ${sqlLiteral(type)}`;
+  };
+  statements.push(...chunked('INSERT INTO day_counts (loc, starts_on, game_mask, event_type_code, n) VALUES\n',
+    countUpserts.map(([k, n]) => `${tuple(k)}, ${n})`), '\nON CONFLICT(loc, starts_on, game_mask, event_type_code) DO UPDATE SET n = excluded.n'));
+  statements.push(...chunked('DELETE FROM day_counts WHERE (loc, starts_on, game_mask, event_type_code) IN (VALUES ',
+    countDeletes.map((k) => `${tuple(k)})`), ')'));
+
   const meta = computeMeta(next, [...state.imports, ...newImports]);
-  const changed = statements.length > 0;
+  const { fetched_at, window, ...body } = meta;
+  const metaJson = JSON.stringify(body);
+  // site_meta is also rewritten when it is missing or stale (e.g. an earlier import failed before its last
+  // statement), not only when rows change.
+  let stored = null;
+  try {
+    stored = JSON.parse(state.siteMeta?.state ?? 'null');
+  } catch {}
+  const metaStale = state.siteMeta?.meta !== metaJson || !stored
+    || JSON.stringify([stored.fetched_at, stored.window]) !== JSON.stringify([fetched_at, window]);
+  const changed = statements.length > 0 || metaStale;
   const version = String(now);
   if (changed) {
-    const { fetched_at, ...body } = meta;
     statements.push(
-      `INSERT INTO site_meta (key, value) VALUES ('meta', ${sqlLiteral(JSON.stringify(body))}), ('state', ${sqlLiteral(JSON.stringify({ version, fetched_at }))})\n` +
+      `INSERT INTO site_meta (key, value) VALUES ('meta', ${sqlLiteral(metaJson)}), ('state', ${sqlLiteral(JSON.stringify({ version, fetched_at, window }))})\n` +
         'ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     );
   }
@@ -406,10 +468,19 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     rewritten: upserts.length - inserted,
     mask_updates: maskUpdates,
     imports: newImports.length,
+    day_counts: countUpserts.length + countDeletes.length,
     site_meta: changed ? 2 : 0,
     unchanged: rows.size - upserts.length - [...masks.values()].flat().filter((id) => rows.has(id)).length,
   };
-  return { statements, stats, meta, version: changed ? version : null, state: { events: next, imports: [...state.imports, ...newImports] } };
+  return {
+    statements, stats, perGame, meta, version: changed ? version : null,
+    state: {
+      events: next,
+      imports: [...state.imports, ...newImports],
+      siteMeta: changed ? { meta: metaJson, state: JSON.stringify({ version, fetched_at, window }) } : state.siteMeta,
+      dayCounts: counts,
+    },
+  };
 }
 
 // D1 counts a written row per table row and per index entry; events has one secondary index.
@@ -427,10 +498,11 @@ export function estimateCost(stats, state) {
     'events (rewrite)': stats.rewritten * (1 + EVENT_INDEXES),
     'events (game_mask)': stats.mask_updates,
     imports: stats.imports,
+    day_counts: stats.day_counts,
     site_meta: stats.site_meta,
   };
-  const stateRead = state.events.size + state.imports.length;
-  const lookups = stats.inserted + stats.rewritten + stats.mask_updates + stats.imports + stats.site_meta;
+  const stateRead = state.events.size + state.imports.length + Object.keys(state.siteMeta ?? {}).length + (state.dayCounts?.size ?? 0);
+  const lookups = stats.inserted + stats.rewritten + stats.mask_updates + stats.imports + stats.day_counts + stats.site_meta;
   return {
     writes,
     rowsWritten: Object.values(writes).reduce((a, b) => a + b, 0),
