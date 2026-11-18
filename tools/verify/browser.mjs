@@ -27,7 +27,8 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${server.address().port}`;
 
-const pages = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/.pages.json'), 'utf8')).map(p => p.path);
+const pages = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/.pages.json'), 'utf8')).map(p => p.path)
+  .filter(p => p !== '/events/'); // needs the Worker API; see api/scripts/preview-check.mjs
 const VIEWPORTS = { desktop: { width: 1280, height: 900 }, mobile: { width: 390, height: 844, isMobile: true, hasTouch: true } };
 fs.mkdirSync(OUT, { recursive: true });
 

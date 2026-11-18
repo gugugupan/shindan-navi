@@ -133,11 +133,16 @@ def walk(node, path, out):
         for i, v in enumerate(node): walk(v, f'{path}[{i}]', out)
 
 
+# Tool pages (not release calendars) have no release list or breadcrumbs; /events/ needs the Worker API and is
+# checked by api/scripts/preview-check.mjs.
+TOOL_PAGES = {'/events/'}
+
+
 def check_dist(today, head, ov):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
     paths = [p['path'] for p in pages]
-    titles = [p for p in paths if re.fullmatch(r'/[a-z]+/', p)]
+    titles = [p for p in paths if re.fullmatch(r'/[a-z]+/', p) and p not in TOOL_PAGES]
     months = [p for p in paths if re.fullmatch(r'/\d{4}-\d{2}/', p)]
     if '/' not in paths: fail('dist: home page missing')
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
@@ -168,7 +173,7 @@ def check_dist(today, head, ov):
         if bad: fail(f'{p}: forbidden structured data in {len(bad)} objects, e.g. {bad[0]}')
         types = [blk.get('@type') for blk in blocks]
         if p == '/' and 'WebSite' not in types: fail('/: WebSite missing')
-        if p != '/':
+        if p != '/' and p not in TOOL_PAGES:
             bc = [blk for blk in blocks if blk.get('@type') == 'BreadcrumbList']
             if not bc: fail(f'{p}: BreadcrumbList missing')
             elif bc[0]['itemListElement'][-1].get('item') != SITE + p: fail(f'{p}: last breadcrumb is not the page itself')
