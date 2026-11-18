@@ -11,10 +11,18 @@
 .chip.q[aria-pressed="true"],.chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .chip.k[aria-pressed="true"] em{color:inherit;opacity:.7}
 .chip.g em.none{font-family:var(--body);font-size:10.5px}
-.filterbtn{display:inline-flex}
 .trow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.evf{display:none;flex-direction:column;gap:10px;padding-top:10px;border-top:1px solid var(--line);max-height:60vh;overflow-y:auto}
-.bar.open .evf{display:flex}
+.frow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:8px;border-top:1px solid var(--line)}
+.fbtn{display:inline-flex;align-items:center;gap:4px;font-weight:700;max-width:16em}
+.fbtn small{font-size:10.5px;font-weight:700;color:var(--muted)}
+.fbtn b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fbtn::after{content:"";width:6px;height:6px;margin:0 1px 2px 3px;border:solid currentColor;border-width:0 1.6px 1.6px 0;transform:rotate(45deg);opacity:.6;flex:none}
+.fbtn.on{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.fbtn.on small{color:inherit;opacity:.7}
+.freset{border:0;background:none;color:var(--accent);font-size:12px;font-weight:700;padding:4px 6px}
+.fgrp{display:grid;gap:6px}
+.fgrp h3{margin:0;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
+.fgrp h3 i{width:8px;height:8px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
 .fg{display:grid;grid-template-columns:6em minmax(0,1fr);gap:6px 10px;align-items:start;margin:0;padding:0;border:0;min-width:0}
 .fl{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding-top:5px}
 .fc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
@@ -24,7 +32,6 @@
 .prefsel{border:1px dashed var(--accent);color:var(--accent);font-weight:700}
 .chip.x{padding-right:8px}
 .chip.x::after{content:"×";color:var(--muted);margin-left:2px}
-.evf-foot{display:flex;justify-content:flex-end;gap:8px}
 .fresh{margin:10px 2px 0;display:flex;flex-wrap:wrap;gap:2px 16px;font-size:11.5px;color:var(--muted)}
 .fresh span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .fresh i{width:7px;height:7px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
@@ -108,12 +115,13 @@ button.cd:hover{background:var(--surface-2)}
 @media (max-width:760px){
   .evlabel{font-size:13px;padding:5px 10px}
   .evlabel small{display:none}
-  .filterbtn span{display:none}
   .panel>.row{flex-wrap:nowrap}
   .quick{margin-inline:-2px}
   .fg{grid-template-columns:minmax(0,1fr);gap:4px}
   .fl{padding-top:0}
-  .evf{max-height:55vh}
+  .frow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-8px;padding-inline:8px}
+  .frow::-webkit-scrollbar{display:none}
+  .frow>*{flex:none}
   .trow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-8px;padding-inline:8px}
   .trow::-webkit-scrollbar{display:none}
   .trow .chip{flex:none}
@@ -152,11 +160,10 @@ button.cd:hover{background:var(--surface-2)}
         <button id="vList" aria-pressed="true" aria-label="リスト"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>リスト</span></button>
         <button id="vCal" aria-pressed="false" aria-label="カレンダー"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>カレンダー</span></button>
       </div>
-      <button class="filterbtn" id="filterBtn" aria-expanded="false" aria-controls="evf"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span>絞り込み</span><em id="filterBadge" hidden></em></button>
       <button class="themebtn" id="themeBtn" aria-label="テーマ切替"></button>
     </div>
     <div class="trow" id="games" role="group" aria-label="タイトルで絞り込み"></div>
-    <div class="evf" id="evf"></div>
+    <div class="frow" id="frow" role="group" aria-label="絞り込み"></div>
   </div></div>
 
   <div class="fresh" id="fresh" aria-label="データの更新状況"></div>
@@ -174,6 +181,8 @@ button.cd:hover{background:var(--surface-2)}
 </div>
 
 <dialog id="prefDlg" class="prefdlg" aria-labelledby="prefTitle"><div class="dlg"><button class="ib close" id="prefClose" aria-label="閉じる">×</button><h2 class="dl-day" id="prefTitle">都道府県を選ぶ</h2><div id="prefBody"></div></div></dialog>
+
+<dialog id="fDlg" class="prefdlg" aria-labelledby="fTitle"><div class="dlg"><button class="ib close" id="fClose" aria-label="閉じる">×</button><h2 class="dl-day" id="fTitle"></h2><div id="fBody" class="fc"></div></div></dialog>
 
 <script>
 const API_BASE = /*API_BASE*/'/api/v1';
@@ -319,26 +328,22 @@ function renderControls(){
       return `<button class="chip g" style="--h:${g.h}" data-k="game" data-v="${g.code}" aria-pressed="${state.game.includes(g.code)}"><i></i>${esc(g.name)}${em}</button>`;
     }).join('');
 
-  const types = (meta&&meta.types||[]).filter(t=>!state.game.length||state.game.includes(t.game_code));
-  const multiGame = new Set(types.map(t=>t.game_code)).size>1;
-  const prefChips = state.pref.map(p=>`<button class="chip x" data-k="prefdel" data-v="${p}" aria-label="${esc(PREF[p])}を外す">${esc(PREF[p])}</button>`).join('');
+  const sum=(arr,lab,max=1)=>arr.length?arr.slice(0,max).map(lab).join('・')+(arr.length>max?` ほか${arr.length-max}`:''):'';
+  const typeName=c=>{ const t=(meta&&meta.types||[]).find(x=>x.code===c); return t?t.name:c; };
   const [f,u]=rangeOf(state);
-  document.getElementById('evf').innerHTML = `
-    <div class="fg"><span class="fl" id="l-pref">都道府県</span><div class="fc" role="group" aria-labelledby="l-pref">${prefChips}<button class="chip prefsel" id="prefOpen" aria-haspopup="dialog">${state.pref.length?'変更':'都道府県を選ぶ'}</button>${state.pref.length?`<span class="hint">オンライン開催は表示されません</span>`:''}</div></div>
-    <div class="fg"><span class="fl" id="l-date">日付指定</span><div class="fc" role="group" aria-labelledby="l-date">
-      <label>開始 <input type="date" class="datein" id="dFrom" value="${f}" min="${TODAY}"></label>
-      <label>終了 <input type="date" class="datein" id="dTo" value="${addD(u,-1)}" min="${TODAY}"></label>
-      <span class="hint">${state.clamped?'期間は最大92日までです（終了日を調整しました）':'最大92日間'}</span></div></div>
-    <div class="fg"><span class="fl" id="l-dow">曜日</span><div class="fc" role="group" aria-labelledby="l-dow">${DAYS.map(([v,l])=>chip('days',v,l,state.days===v,' k')).join('')}</div></div>
-    <div class="fg"><span class="fl" id="l-cat">種類</span><div class="fc" role="group" aria-labelledby="l-cat">${CATS.map(([v,l])=>chip('cat',v,l+catCount(v),state.cat.includes(v),' k')).join('')}</div></div>
-    ${types.length?`<div class="fg"><span class="fl" id="l-type">イベント形式</span><div class="fc" role="group" aria-labelledby="l-type">${types.map(t=>`<button class="chip k" style="--h:${GAME[t.game_code]?.h??0}" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${multiGame?'<i></i>':''}${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`:''}
-    <div class="fg"><span class="fl" id="l-fee">参加費</span><div class="fc" role="group" aria-labelledby="l-fee">${FEES.map(([v,l])=>chip('fee',v,l,state.fee.includes(v),' k')).join('')}</div></div>
-    <div class="fg"><span class="fl" id="l-reg">受付状況</span><div class="fc" role="group" aria-labelledby="l-reg">${REGS.map(([v,l])=>chip('reg',v,l,state.reg.includes(v),' k')).join('')}</div></div>
-    <div class="fg"><span class="fl" id="l-mode">開催形式</span><div class="fc" role="group" aria-labelledby="l-mode">${MODES.map(([v,l])=>chip('mode',v,l,state.mode===v,' k')).join('')}</div></div>
-    <div class="evf-foot"><button class="sbtn ghost" id="resetAll">条件をクリア</button><button class="sbtn" id="closeFilters">閉じる</button></div>`;
+  const fb=(key,label,val)=>`<button class="chip fbtn${val?' on':''}" data-f="${key}" aria-haspopup="dialog"><small>${label}</small>${val?`<b>${esc(val)}</b>`:''}</button>`;
+  document.getElementById('frow').innerHTML =
+    fb('pref','都道府県',sum(state.pref,p=>PREF[p],2)) +
+    fb('type','イベント形式',sum(state.type,typeName)) +
+    fb('cat','種類',sum(state.cat,c=>CAT_LABEL[c],2)) +
+    fb('date','期間',state.range==='custom'?`${md(f)}〜${md(addD(u,-1))}`:'') +
+    fb('days','曜日',(DAYS.find(d=>d[0]===state.days&&d[0])||[])[1]||'') +
+    fb('fee','参加費',sum(state.fee,v=>FEES.find(x=>x[0]===v)[1],2)) +
+    fb('reg','受付',sum(state.reg,v=>REGS.find(x=>x[0]===v)[1],2)) +
+    fb('mode','開催形式',(MODES.find(d=>d[0]===state.mode&&d[0])||[])[1]||'') +
+    (activeFilterCount()||state.range==='custom'?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
+  if(fDlg.open) renderF();
 
-  const n = activeFilterCount();
-  const badge=document.getElementById('filterBadge'); badge.hidden=!n; badge.textContent=n;
   document.getElementById('vList').setAttribute('aria-pressed',state.view==='list');
   document.getElementById('vCal').setAttribute('aria-pressed',state.view==='cal');
   document.getElementById('list').hidden=state.view!=='list';
@@ -353,11 +358,11 @@ const catCount = c => { const x=meta&&meta.categories&&meta.categories.find(y=>y
 const activeFilterCount = () => state.pref.length+state.cat.length+state.type.length+state.fee.length+state.reg.length+(state.days?1:0)+(state.mode?1:0);
 
 function toggleIn(arr,v){ return arr.includes(v)?arr.filter(x=>x!==v):[...arr,v]; }
-document.querySelector('.panel').addEventListener('click',e=>{
+function onChip(e){
   const b=e.target.closest('[data-k]'); if(!b) return;
   const k=b.dataset.k, v=b.dataset.v;
   if(k==='range'){
-    if(v==='custom'){ const [f,u]=rangeOf(state); commit({range:'custom',from:f,to:addD(u,-1)}); openFilters(true); document.getElementById('dFrom').focus(); }
+    if(v==='custom'){ const [f,u]=rangeOf(state); commit({range:'custom',from:f,to:addD(u,-1)}); openF('date'); document.getElementById('dFrom').focus(); }
     else commit({range:v});
     track('events_filter',{key:'range',value:v}); return;
   }
@@ -365,24 +370,59 @@ document.querySelector('.panel').addEventListener('click',e=>{
   if(k==='prefdel'){ commit({pref:state.pref.filter(p=>p!==v)}); return; }
   if(k==='days'||k==='mode'){ commit({[k]:v}); track('events_filter',{key:k,value:v}); return; }
   if(LIST_KEYS[k]){ commit({[k]:toggleIn(state[k],v)}); track('events_filter',{key:k,value:v}); }
-});
-document.querySelector('.panel').addEventListener('change',e=>{
+}
+function onDate(e){
   if(e.target.id==='dFrom'||e.target.id==='dTo'){
     const f=document.getElementById('dFrom').value, t=document.getElementById('dTo').value;
     if(!isDate(f)||!isDate(t)) return;
     commit({range:'custom',from:f,to:t});
   }
-});
-document.getElementById('evf').addEventListener('click',e=>{
-  if(e.target.closest('#prefOpen')) openPref();
-  if(e.target.closest('#closeFilters')){ openFilters(false); document.getElementById('filterBtn').focus(); return; }
-  if(e.target.closest('#resetAll')) commit({pref:[],cat:[],type:[],fee:[],reg:[],days:'',mode:''});
-});
-function openFilters(open){
-  const bar=document.querySelector('.bar'); bar.classList.toggle('open',open);
-  document.getElementById('filterBtn').setAttribute('aria-expanded',open);
 }
-document.getElementById('filterBtn').onclick=()=>openFilters(!document.querySelector('.bar').classList.contains('open'));
+document.querySelector('.panel').addEventListener('click',e=>{
+  const fbtn=e.target.closest('[data-f]');
+  if(fbtn){ const k=fbtn.dataset.f; if(k==='pref') openPref(); else openF(k); return; }
+  if(e.target.closest('#resetAll')){ commit({pref:[],cat:[],type:[],fee:[],reg:[],days:'',mode:'',...(state.range==='custom'?{range:'upcoming'}:{})}); return; }
+  onChip(e);
+});
+
+// ---- one dialog per filter group; choices apply immediately
+const fDlg=document.getElementById('fDlg');
+const F_TITLE={type:'イベント形式',cat:'種類',date:'期間を指定',days:'曜日',fee:'参加費',reg:'受付状況',mode:'開催形式'};
+const F_CLEAR={type:{type:[]},cat:{cat:[]},date:{range:'upcoming'},days:{days:''},fee:{fee:[]},reg:{reg:[]},mode:{mode:''}};
+let fKey='';
+function renderF(){
+  const k=fKey, chips=(arr,multi)=>arr.map(([v,l])=>chip(k,v,l,multi?state[k].includes(v):state[k]===v,' k')).join('');
+  let body='';
+  if(k==='type'){
+    const games=GAMES.filter(g=>!state.game.length||state.game.includes(g.code));
+    body=games.map(g=>{
+      const ts=(meta&&meta.types||[]).filter(t=>t.game_code===g.code);
+      if(!ts.length) return '';
+      return `<div class="fgrp" style="--h:${g.h}"><h3><i></i>${esc(g.name)}</h3><div class="fc">${ts.map(t=>`<button class="chip k" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`;
+    }).join('') || `<p class="note">${meta?'選べる形式がありません':'読み込み中…'}</p>`;
+  } else if(k==='cat') body=`<div class="fc">${CATS.map(([v,l])=>chip('cat',v,l+catCount(v),state.cat.includes(v),' k')).join('')}</div>`;
+  else if(k==='fee') body=`<div class="fc">${chips(FEES,true)}</div>`;
+  else if(k==='reg') body=`<div class="fc">${chips(REGS,true)}</div>`;
+  else if(k==='days') body=`<div class="fc">${chips(DAYS,false)}</div>`;
+  else if(k==='mode') body=`<div class="fc">${chips(MODES,false)}</div>${state.pref.length?'<p class="note">都道府県を選んでいる間、オンライン開催は表示されません。</p>':''}`;
+  else if(k==='date'){ const [f,u]=rangeOf(state); body=`<div class="fc">
+      <label>開始 <input type="date" class="datein" id="dFrom" value="${f}" min="${TODAY}"></label>
+      <label>終了 <input type="date" class="datein" id="dTo" value="${addD(u,-1)}" min="${TODAY}"></label></div>
+      <p class="note">${state.clamped?'期間は最大92日までです（終了日を調整しました）':'最大92日間'}</p>`; }
+  const focusKey=document.activeElement&&fDlg.contains(document.activeElement)&&document.activeElement.dataset.k?[document.activeElement.dataset.k,document.activeElement.dataset.v]:null;
+  document.getElementById('fTitle').textContent=F_TITLE[k];
+  document.getElementById('fBody').innerHTML=`<div style="display:grid;gap:12px;width:100%">${body}</div><div class="foot" style="width:100%"><button type="button" class="sbtn ghost" id="fClear">この条件を解除</button><button type="button" class="sbtn" id="fDone">閉じる</button></div>`;
+  if(focusKey){ const el=fDlg.querySelector(`[data-k="${focusKey[0]}"][data-v="${CSS.escape(focusKey[1])}"]`); if(el) el.focus(); }
+}
+function openF(k){ fKey=k; renderF(); if(!fDlg.open){ if(fDlg.showModal) fDlg.showModal(); else fDlg.setAttribute('open',''); } }
+function closeF(){ fDlg.close(); document.querySelector(`[data-f="${fKey}"]`)?.focus(); }
+fDlg.addEventListener('click',e=>{
+  if(e.target===fDlg){ closeF(); return; }
+  if(e.target.closest('#fDone')||e.target.closest('#fClose')){ closeF(); return; }
+  if(e.target.closest('#fClear')){ commit(F_CLEAR[fKey]); return; }
+  onChip(e);
+});
+fDlg.addEventListener('change',onDate);
 document.getElementById('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'event_list'}); };
 document.getElementById('vCal').onclick=()=>{ commit({view:'cal',month:monthOf(rangeOf(state)[0])}); track('switch_view',{view:'event_calendar'}); };
 
@@ -419,7 +459,7 @@ prefDlg.addEventListener('click',e=>{
   if(e.target.closest('#prefApply')){
     const sorted=Object.keys(PREF).filter(c=>draft.includes(c));
     prefDlg.close(); commit({pref:sorted}); track('events_filter',{key:'pref',value:sorted.join(',')});
-    document.getElementById('prefOpen')?.focus();
+    document.querySelector('[data-f="pref"]')?.focus();
   }
 });
 document.getElementById('prefClose').onclick=()=>prefDlg.close();
