@@ -27,8 +27,6 @@
 .fl{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding-top:5px}
 .fc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
 .fc .hint{font-size:11.5px;color:var(--faint)}
-.datein{font:inherit;font-size:13px;color:inherit;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;height:30px;padding:0 6px}
-.fc label{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
 .prefsel{border:1px dashed var(--accent);color:var(--accent);font-weight:700}
 .chip.x{padding-right:8px}
 .chip.x::after{content:"×";color:var(--muted);margin-left:2px}
@@ -214,7 +212,7 @@ const CATS = [['tournament','大会'],['casual','交流会'],['teaching','体験
 const CAT_LABEL = Object.fromEntries([...CATS,['other','その他'],['unknown','種類未分類']]);
 const REG_METHOD = {first_come:'先着',lottery:'抽選',walk_in:'当日参加OK',invitation:'招待制'};
 const DAYS = [['','すべて'],['weekend','土日'],['weekday','平日']];
-const QUICK = [['upcoming','これから'],['today','今日'],['weekend','今週末'],['nextweek','来週'],['month','今月'],['custom','日付指定']];
+const QUICK = [['upcoming','これから'],['today','今日'],['weekend','今週末'],['nextweek','来週'],['month','今月']];
 const DOW = ['日','月','火','水','木','金','土'];
 const MAX_DAYS = 92, PAGE_SIZE = 50;
 
@@ -255,7 +253,7 @@ function readURL(){
     game:list('game').filter(g=>GAME[g]), pref:[...new Set(list('pref').filter(p=>PREF[p]||p===ONLINE))].slice(0,MAX_PREFS),
     type:list('type').filter(t=>/^[a-z0-9_]+$/.test(t)),
     days:DAYS.some(x=>x[0]===q.get('days'))?q.get('days'):'',
-    range:QUICK.some(x=>x[0]===q.get('range'))?q.get('range'):'upcoming',
+    range:(QUICK.some(x=>x[0]===q.get('range'))||q.get('range')==='custom')?q.get('range'):'upcoming',
     from:q.get('from'), to:q.get('to'),
     view:q.get('view')==='cal'?'cal':'list', month:/^\d{4}-\d{2}$/.test(q.get('month')||'')?q.get('month'):null
   };
@@ -269,8 +267,7 @@ function normCustom(s){
   if(!isDate(s.from)) s.from=TODAY;
   if(!isDate(s.to)) s.to=addD(s.from,6);
   if(s.to<s.from) [s.from,s.to]=[s.to,s.from];
-  s.clamped = diffD(s.from,s.to)+1>MAX_DAYS;
-  if(s.clamped) s.to=addD(s.from,MAX_DAYS-1);
+  if(diffD(s.from,s.to)+1>MAX_DAYS) s.to=addD(s.from,MAX_DAYS-1);
 }
 function toQuery(s){
   const q=new URLSearchParams();
@@ -333,12 +330,10 @@ function renderControls(){
 
   const sum=(arr,lab,max=1)=>arr.length?arr.slice(0,max).map(lab).join('・')+(arr.length>max?` ほか${arr.length-max}`:''):'';
   const typeName=c=>{ const t=(meta&&meta.types||[]).find(x=>x.code===c); return t?t.name:c; };
-  const [f,u]=rangeOf(state);
   const fb=(key,label,val)=>`<button class="chip fbtn${val?' on':''}" data-f="${key}" aria-haspopup="dialog"><small>${label}</small>${val?`<b>${esc(val)}</b>`:''}</button>`;
   document.getElementById('frow').innerHTML =
     fb('pref','都道府県',sum(state.pref,locName,2)) +
     fb('type','イベント形式',sum(state.type,typeName)) +
-    fb('date','期間',state.range==='custom'?`${md(f)}〜${md(addD(u,-1))}`:'') +
     fb('days','曜日',(DAYS.find(d=>d[0]===state.days&&d[0])||[])[1]||'') +
     (activeFilterCount()||state.range==='custom'?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
   if(fDlg.open) renderF();
@@ -360,21 +355,10 @@ function toggleIn(arr,v){ return arr.includes(v)?arr.filter(x=>x!==v):[...arr,v]
 function onChip(e){
   const b=e.target.closest('[data-k]'); if(!b) return;
   const k=b.dataset.k, v=b.dataset.v;
-  if(k==='range'){
-    if(v==='custom'){ const [f,u]=rangeOf(state); commit({range:'custom',from:f,to:addD(u,-1)}); openF('date'); document.getElementById('dFrom').focus(); }
-    else commit({range:v});
-    track('events_filter',{key:'range',value:v}); return;
-  }
+  if(k==='range'){ commit({range:v}); track('events_filter',{key:'range',value:v}); return; }
   if(k==='game'){ commit({game: v ? toggleIn(state.game,v) : [], type: v ? state.type : []}); track('events_filter',{key:'game',value:v||'all'}); return; }
   if(k==='days'){ commit({[k]:v}); track('events_filter',{key:k,value:v}); return; }
   if(LIST_KEYS[k]){ commit({[k]:toggleIn(state[k],v)}); track('events_filter',{key:k,value:v}); }
-}
-function onDate(e){
-  if(e.target.id==='dFrom'||e.target.id==='dTo'){
-    const f=document.getElementById('dFrom').value, t=document.getElementById('dTo').value;
-    if(!isDate(f)||!isDate(t)) return;
-    commit({range:'custom',from:f,to:t});
-  }
 }
 document.querySelector('.panel').addEventListener('click',e=>{
   const fbtn=e.target.closest('[data-f]');
@@ -385,8 +369,8 @@ document.querySelector('.panel').addEventListener('click',e=>{
 
 // ---- one dialog per filter group; choices apply immediately
 const fDlg=document.getElementById('fDlg');
-const F_TITLE={type:'イベント形式',date:'期間を指定',days:'曜日'};
-const F_CLEAR={type:{type:[]},date:{range:'upcoming'},days:{days:''}};
+const F_TITLE={type:'イベント形式',days:'曜日'};
+const F_CLEAR={type:{type:[]},days:{days:''}};
 let fKey='';
 function renderF(){
   const k=fKey, chips=(arr,multi)=>arr.map(([v,l])=>chip(k,v,l,multi?state[k].includes(v):state[k]===v,' k')).join('');
@@ -399,10 +383,6 @@ function renderF(){
       return `<div class="fgrp" style="--h:${g.h}"><h3><i></i>${esc(g.name)}</h3><div class="fc">${ts.map(t=>`<button class="chip k" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`;
     }).join('') || `<p class="note">${meta?'選べる形式がありません':'読み込み中…'}</p>`;
   } else if(k==='days') body=`<div class="fc">${chips(DAYS,false)}</div>`;
-  else if(k==='date'){ const [f,u]=rangeOf(state); body=`<div class="fc">
-      <label>開始 <input type="date" class="datein" id="dFrom" value="${f}" min="${TODAY}"></label>
-      <label>終了 <input type="date" class="datein" id="dTo" value="${addD(u,-1)}" min="${TODAY}"></label></div>
-      <p class="note">${state.clamped?'期間は最大92日までです（終了日を調整しました）':'最大92日間'}</p>`; }
   const focusKey=document.activeElement&&fDlg.contains(document.activeElement)&&document.activeElement.dataset.k?[document.activeElement.dataset.k,document.activeElement.dataset.v]:null;
   document.getElementById('fTitle').textContent=F_TITLE[k];
   document.getElementById('fBody').innerHTML=`<div style="display:grid;gap:12px;width:100%">${body}</div><div class="foot" style="width:100%"><button type="button" class="sbtn ghost" id="fClear">この条件を解除</button><button type="button" class="sbtn" id="fDone">閉じる</button></div>`;
@@ -416,7 +396,6 @@ fDlg.addEventListener('click',e=>{
   if(e.target.closest('#fClear')){ commit(F_CLEAR[fKey]); return; }
   onChip(e);
 });
-fDlg.addEventListener('change',onDate);
 document.getElementById('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'event_list'}); };
 document.getElementById('vCal').onclick=()=>{ commit({view:'cal',month:monthOf(rangeOf(state)[0])}); track('switch_view',{view:'event_calendar'}); };
 
