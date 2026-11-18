@@ -99,6 +99,10 @@ for p in pages:
     done.add(name)
     if name == 'home':
         big, sub, game = 'トレカ<em>新弾</em>\n発売日カレンダー', 'ポケカ・ワンピ・MTG・遊戯王・ヴァイスほか', None
+    elif name == 'events':
+        thumbs = [t[0] for t in (thumbs_for(g) for g in ('ONE PIECE', 'UNION ARENA', 'ポケモンカード')) if t]
+        render(name, card_html(name, 'TCG<em>イベント</em>\n大会カレンダー', 'ワンピ・ユニアリ・コナン・ポケカの店舗大会', thumbs))
+        continue
     else:
         game = p['js']['game']
         full = re.sub(r'(（[^）]*）)?\s*新弾 発売日カレンダー$', '', p['h1'])

@@ -235,8 +235,12 @@ def render(pg):
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
 
-# /events/ is a noindex preview: kept out of the sitemap, .pages.json (OG images) and the site nav
+# /events/ is a public page but stays out of the site nav (navigation is decided separately)
 EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
+EVENTS_PAGE=dict(path='/events/',og='events',
+    desc='ONE PIECEカードゲーム・UNION ARENA・名探偵コナン カードゲーム・ポケモンカードの店舗大会・ジムバトル・交流会・体験会を、開催日・都道府県・参加費で探せるTCGイベントカレンダー。公式イベント情報をまとめて一覧でチェックできます。',
+    keywords=['TCG イベント','トレカ 大会','店舗大会','ジムバトル','交流会','体験会','ワンピカード 大会','ユニアリ 大会','コナンカード 大会','ポケカ 大会','イベントカレンダー'],
+    h1='TCG イベントカレンダー',lead='店舗大会・交流会・体験会を開催日・都道府県・参加費で探せます。',js=None)
 def render_events():
     src=open(os.path.join(ROOT,'src/events.html')).read()
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
@@ -244,16 +248,18 @@ def render_events():
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE))):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
-    title=re.search(r'<title>(.*?)</title>',src).group(1)
+    title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    pg=EVENTS_PAGE
+    url=SITE+pg['path']
+    og=f'{SITE}/og/{pg["og"]}.png'
     head=f"""<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>{title}</title>
-<meta name="description" content="ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカードの店舗大会・交流会・体験会を開催日・都道府県・参加費で探せるイベントカレンダー。">
-<meta name="robots" content="noindex">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(pg['desc'])}">
 <meta name="theme-color" content="#3a43d0">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -261,6 +267,22 @@ def render_events():
 <link rel="manifest" href="/site.webmanifest">
 <link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="新弾ナビ">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{esc(pg['h1'])}｜新弾ナビ">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(title)}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+<meta name="keywords" content="{esc(','.join(pg['keywords']))}">
 {GA}
 <style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
 """
@@ -279,10 +301,11 @@ os.makedirs(os.path.join(dist,'events'),exist_ok=True)
 open(os.path.join(dist,'events/index.html'),'w').write(render_events())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
+sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
 open(os.path.join(dist,'robots.txt'),'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n')
-json.dump([{'path':p['path'],'og':p['og'],'h1':p['h1'],'lead':p['lead'],'js':p['js']} for p in pages],open(os.path.join(ROOT,'scripts/.pages.json'),'w'),ensure_ascii=False)
+json.dump([{'path':p['path'],'og':p['og'],'h1':p['h1'],'lead':p['lead'],'js':p['js']} for p in pages+[EVENTS_PAGE]],open(os.path.join(ROOT,'scripts/.pages.json'),'w'),ensure_ascii=False)
 venv_py=os.path.join(ROOT,'.venv/bin/python')
 if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
