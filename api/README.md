@@ -90,48 +90,56 @@ stale). `/events/days` reads only this table.
 
 ## D1 budget (Free plan: 100,000 rows written, 5,000,000 rows read per UTC day)
 
-Numbers below are on the data of 2026-11-18 (28,662 events after the latest PTCG run; 9,422 day_counts rows).
+Numbers below are on the data of 2026-11-18 (32,980 events, 9,743 day_counts rows).
 
 Writes (D1 counts each table row and each index entry; `--plan` prints the exact numbers for a given state):
 
 | Import | Rows written |
 | --- | ---: |
-| First import | ~66,744 (events 2 × 28,658, day_counts 9,422, imports 4, site_meta 2) |
+| First import | ~75,709 (events 2 × 32,980, day_counts 9,743, imports 4, site_meta 2) |
 | Re-import with nothing changed | 0 |
 | Typical refresh | 2 × changed events + 1 × mask changes + changed day_counts rows + new runs + 2 |
 
 The importer refuses to apply a plan above `--max-writes` (default 90,000); split a bigger first import with
 `--games` across UTC days. Free-plan limits are per day across everything, so check the dashboard before a large
 import on a day that already had one. Reads per import: the state read (every event, import, site_meta and
-day_counts row, ~38k) plus one primary-key lookup per written row.
+day_counts row, ~43k) plus one primary-key lookup per written row.
 
 Reads per uncached request, measured with SQLite on the current data (rows stepped; D1 may count index entries too,
-so up to ~2× for `/events`; `day_counts` is read through its primary key only):
+so up to ~2× for the events scans). "5 largest" = JP-13/27/23/28/11. Limits that bound them: `SCAN_LIMIT` 200 rows
+per location, `DAY_ROWS` 62 matching day_counts rows per location, one month per request.
 
-| Request (5 largest = JP-13/27/23/28/11) | Rows |
+| Request | Rows |
 | --- | ---: |
-| `/events/days`, one month, 東京都 | ≤ 285 |
-| `/events/days`, one month, 5 largest (worst) | 1,202 (Dec) |
-| `/events` page without game/type/days filters, 1 location / 5 largest | 51 / ≤ 132 |
-| `/events` page with filters, 1 location / 5 largest (scan cap 300) | ≤ 300 / ≤ 744 |
+| `/events/days`, one month: 東京都 / 5 largest | ≤ 290 / ≤ 1,238 |
+| `/events` page, no game/type/days filter: 1 location / 5 largest | 51 / ≤ 135 |
+| `/events` page with filters: day lookup + scan + matches in full, 東京都 | ≤ 290 + 200 + 50 |
+| `/events` page with filters, 5 largest (measured worst: type+weekend, Dec) | 1,238 + 1,000 + 50 |
 | `/events/meta`, data version | 1, 1 |
 
-An uncached Tokyo list view costs ~340 rows (one month's `/days` + the first page); paging all of Tokyo's 3,266
-events took 66 `/events` + 4 `/days` requests in the browser test.
+An uncached Tokyo list view costs ~340 rows (one month's `/days` + the first page).
 
-**Worst case.** The most expensive miss is `/events/days` for a month of the 5 largest prefectures: 1,202 rows
-(~2.4k if every row counted twice). ~4,200 distinct uncached requests (~2,100) use up 5M/day. The key space is small
-but not tiny (≤4 months or ~92 start days × location sets × game/type/days), so the limits matter:
+**Worst case.** A miss costs at most ~2.3k rows (a filtered `/events` page on the 5 largest prefectures: the whole
+month's day_counts when matches are sparse, up to 200 rows per location, the ≤ 50 matches in full); 2,288 measured. ~2,200 distinct
+uncached requests use up 5M/day (~1,100 if D1 counts every scanned row twice). The key space is small but not tiny
+(≤4 months or ~92 start days × location sets × game/type/days), so the limits matter:
 
-- one client (IPv4 address or IPv6 /64) gets 20 misses per minute per location: ~24k rows/min, so a single client
-  that keeps hitting the limit exhausts the daily reads in about 3.5 hours;
-- all clients together get 300 misses per minute per location (breaker, 503), which bounds bursts to ~360k rows/min
-  but not the daily total.
+- one client (IPv4 address or IPv6 /64) gets 20 misses per minute per location: ≤ ~45k rows/min, so a single client
+  that keeps hitting the limit exhausts the daily reads in about 2 hours;
+- all clients together get 300 misses per minute per location (breaker, 503), which bounds bursts but not the daily
+  total.
 
 So the free quota is protected against accidents and casual abuse, not against a client that sustains the limit
 for hours. When the quota runs out, D1 fails until 00:00 UTC: cached answers keep serving, misses return 500, the
 static pages are unaffected. If that happens, the options are Workers Paid (25B reads/month) or a WAF rule that
 blocks the offender.
+
+## Migrations
+
+CI deploys code only and never migrates D1. Apply a new `migrations/*.sql` to the remote database **before** pushing
+code that needs it: `npm run import:remote -- --yes` runs `wrangler d1 migrations apply --remote` first, or run that
+command alone (`npx wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json`
+after `node scripts/remote-config.mjs`). Keep migrations additive so the code before and after the push both work.
 
 ## Remote import
 
@@ -175,8 +183,10 @@ the first import.
   range wholly outside answers empty without a D1 read.
 - `cursor` is bound to the filters and the requested range; reusing it with other filters, a date outside the range
   or a malformed key is 400. A window change while someone scrolls does not void it.
-- Filtered `/events` pages (game/type/days) read at most 300 rows (`SCAN_LIMIT`) through the index, filter them in
-  the Worker and return a cursor after the last row read when the cap was hit, possibly with fewer than 50 events.
+- Filtered `/events` pages (game/type/days) first read the next matching days from `day_counts` (`DAY_ROWS` = 62
+  rows), then scan only those days with one branch per location capped at 200 rows (`SCAN_LIMIT`, above the busiest
+  location-day), filter in the Worker and read the ≤ 50 matches in full. When a branch hits its cap, the page ends at
+  that branch's last row and the cursor continues there; a page can then hold fewer than 50 events.
 - `/events` has no `count`; `/events/days` gives per-day totals for the same filters.
 - `game` matches any member game; events carry `game_codes` (sorted alphabetically) and `game_code` = `game_codes[0]`.
   `/events/days` counts a shared event once in `count` and under each member game in `by_game` (only the selected
