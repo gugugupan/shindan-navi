@@ -522,8 +522,8 @@ function card(e){
 // walks the range month by month. Each month's /days is loaded when the list reaches it, which also skips months
 // without matches; the header total is "at least" until every month is known.
 let events=[], segs=[], seg=0, nextCursor=null, done=false, total=null, dayCounts=null, loading=false, failed=false, ctrl=null, gen=0, reloadTimer=null;
-const MAX_REQ_PER_LOAD = 3;
-function segments([f,u]){ const out=[]; for(let a=f;a<u;){ const next=addM(monthOf(a),1)+'-01'; out.push({from:a, until:next, month:monthOf(a), count:null}); a=next; } return out; }
+const MAX_FETCH_PER_LOAD = 3;
+function segments([f,u]){ const out=[]; for(let a=f;a<u;){ const next=addM(monthOf(a),1)+'-01'; out.push({from:a, until:next, month:monthOf(a), count:null, got:0}); a=next; } return out; }
 const rangeEnd=()=>rangeOf(state)[1];
 const listEl=document.getElementById('list');
 async function api(path, q, signal){
@@ -566,21 +566,20 @@ async function loadPage(){
   if(done||loading) return;
   loading=true; failed=false; renderList();
   try{
-    // one page = up to PAGE_SIZE events, at most MAX_REQ_PER_LOAD requests per load (the API stops filtered
-    // scans early and hands back a cursor); a month that ends early continues into the next one
-    for(let got=0, req=0; !done && got<PAGE_SIZE && req<MAX_REQ_PER_LOAD; req++){
+    // One load = up to PAGE_SIZE events in at most MAX_FETCH_PER_LOAD requests. /days gives each month's
+    // count for the filters, so a month ends as soon as all its events arrived and empty months cost no /events.
+    for(let got=0, fetches=0; !done && got<PAGE_SIZE && fetches<MAX_FETCH_PER_LOAD; ){
       const sg=segs[seg];
-      if(sg.count==null){ await loadMonthDays(sg,signal); if(my!==gen) return; }
-      let evs=[];
-      if(sg.count>0){
+      if(sg.count==null){ fetches++; await loadMonthDays(sg,signal); if(my!==gen) return; continue; }
+      if(sg.got<sg.count){
+        fetches++;
         const q=apiQuery(state,[sg.from,sg.until]); q.set('limit',PAGE_SIZE); if(nextCursor) q.set('cursor',nextCursor);
         const r=await api('/events',q,signal);
         if(my!==gen) return;
-        const end=rangeEnd();
-        evs=(r.events||[]).filter(e=>e.starts_on<end);
-        nextCursor=evs.length===(r.events||[]).length ? r.next_cursor||null : null;
+        const end=rangeEnd(), evs=(r.events||[]).filter(e=>e.starts_on<end);
+        events=events.concat(evs); got+=evs.length; sg.got+=evs.length;
+        nextCursor=evs.length===(r.events||[]).length && sg.got<sg.count ? r.next_cursor||null : null;
       } else nextCursor=null;
-      events=events.concat(evs); got+=evs.length;
       if(!nextCursor){ seg++; done=seg>=segs.length||segs[seg].from>=rangeEnd(); }
     }
   }catch(err){
@@ -617,6 +616,11 @@ function renderList(){
   listEl.setAttribute('aria-busy',loading);
   if(failed && !events.length){ listEl.innerHTML=errorState(failed); return; }
   if(loading && !events.length){ listEl.innerHTML=Array.from({length:4},()=>'<div class="sk" aria-hidden="true"></div>').join('')+'<span class="sr">読み込み中…</span>'; return; }
+  // Not done yet but nothing found so far: offer to keep looking rather than claiming there is nothing.
+  if(!events.length && !done){
+    listEl.innerHTML=`<div class="state"><b>${failed?'読み込めませんでした':'まだ見つかっていません'}</b><span>${failed&&(failed.status===429||failed.status===503)?busyText(failed):'この先の期間も探せます。'}</span><button class="sbtn ghost" id="loadMore">続きを探す</button></div>`;
+    return;
+  }
   if(!events.length){
     listEl.innerHTML=`<div class="state"><b>条件に合うイベントはありません</b><span>日付を広げたり、都道府県や絞り込み条件を減らしてみてください。</span>${activeFilterCount()||state.game.length||state.range!=='upcoming'?'<button class="sbtn ghost" id="resetAll2">条件をリセット</button>':''}</div>`;
     return;
