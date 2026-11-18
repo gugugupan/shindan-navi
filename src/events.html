@@ -536,7 +536,6 @@ function reload(){
   if(state.view==='cal') loadCal(); else { loadPage(); loadDayCounts(); }
 }
 // headers show the full per-day totals; without them the number is left out rather than showing a partial count
-const COUNT_CAP = 10000;
 async function loadDayCounts(){
   const my=gen, signal=ctrl.signal;
   try{
@@ -568,7 +567,7 @@ function renderHead(){
   const [f,u]=rangeOf(state), last=addD(u,-1);
   const rng = state.view==='cal' ? '' : f===last ? md(f) : `${md(f)}〜${md(last)}`;
   const where = state.pref.length ? state.pref.slice(0,3).map(p=>PREF[p]).join('・')+(state.pref.length>3?` ほか${state.pref.length-3}`:'') : '全国';
-  const cnt = total==null ? '' : total>=COUNT_CAP ? `<span class="count"><b>${COUNT_CAP.toLocaleString('ja-JP')}</b> 件以上</span>` : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件</span>`;
+  const cnt = total==null ? '' : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件</span>`;
   el.innerHTML = state.view==='cal' ? `<span class="sub">${esc(where)}${state.mode==='online'?' · オンライン':''}</span>`
     : `${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}${state.mode==='online'?' · オンライン':''}</span>`;
 }
@@ -599,7 +598,7 @@ function renderList(){
     const [,,dd]=k.split('-').map(Number), w=dowOf(k);
     h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}</h3><div class="list">${its.map(card).join('')}</div></section>`;
   });
-  const rest = total!=null && total<COUNT_CAP ? total-events.length : null;
+  const rest = total!=null ? total-events.length : null;
   if(nextCursor) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?'読み込めませんでした。もう一度試す':rest!=null&&rest>0?`もっと見る（残り ${rest.toLocaleString('ja-JP')}件）`:'もっと見る'}</button>`;
   listEl.innerHTML=h;
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
