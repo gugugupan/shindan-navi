@@ -255,9 +255,9 @@ def render(pg):
 
 EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
 EVENTS_PAGE=dict(path='/events/',og='events',
-    desc='ONE PIECEカードゲーム・UNION ARENA・名探偵コナン カードゲーム・ポケモンカードの店舗大会・ジムバトル・交流会・体験会を、開催日・都道府県・参加費で探せるTCGイベントカレンダー。公式イベント情報をまとめて一覧でチェックできます。',
+    desc='ONE PIECEカードゲーム・UNION ARENA・名探偵コナン カードゲーム・ポケモンカードの店舗大会・ジムバトル・交流会・体験会を、開催日・都道府県・イベント形式で探せるTCGイベントカレンダー。公式イベント情報をまとめて一覧でチェックできます。',
     keywords=['TCG イベント','トレカ 大会','店舗大会','ジムバトル','交流会','体験会','ワンピカード 大会','ユニアリ 大会','コナンカード 大会','ポケカ 大会','イベントカレンダー'],
-    h1='TCG イベントカレンダー',lead='店舗大会・交流会・体験会を開催日・都道府県・参加費で探せます。',js=None)
+    h1='TCG イベントカレンダー',lead='店舗大会・交流会・体験会を開催日・都道府県・イベント形式で探せます。',js=None)
 def render_events():
     src=open(os.path.join(ROOT,'src/events.html')).read()
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
