@@ -10,7 +10,7 @@
 | --- | --- |
 | 商品数据的事实源 | 继续是 git 中的 `data/items.json` 与 `data/overrides.json`，由 `scripts/build.py` 静态构建。不迁入数据库，不双写。 |
 | 商品 ID | 已有 ID 视为不透明主键，永不重算；新增游戏代码通过映射表关联，不参与 ID 计算。 |
-| 赛事数据的提供方式 | Cloudflare Worker 查询 API + D1。当前只在本地（`wrangler dev --local`）运行，不创建远端资源。 |
+| 赛事数据的提供方式 | Cloudflare Worker 查询 API + D1。站点与 API 由同一个 Worker `shindan-navi` 提供（方案 B：一个仓库对应一个 Worker，配置为仓库根 `wrangler.jsonc`），Pages 项目在域名迁移后下线。 |
 | 赛事数据的事实源 | 采集结果经标准化后以 JSON 提交到 git（`data/events/`）审阅，再导入 D1；D1 是查询层，可随时从 git 重建。 |
 | 首批赛事游戏 | ONE PIECE（OPCG）、UNION ARENA（UATCG）、名探偵コナン TCG（CONAN）、ポケモンカード（PTCG），日本市场。 |
 | 数据刷新 | 本地手动运行采集，人工审阅后提交。是否推翻“不自动刷新”的既有决定见 §14 第 0 项。 |
@@ -31,7 +31,7 @@ TCG Navi 面向玩家聚合不同卡牌游戏的新品、赛事和资讯。用�
 | 名探偵コナン 赛事 | 本地采集（タカラトミー官方「公認店イベント 開催日程検索」）；TCG+ 不收录 | 独立适配器；来源无活动 ID |
 | Pokémon 赛事 | 未实现；官方 players 站有赛事搜索 | 独立适配器，验证跨平台复用 |
 | 新闻资讯 | 尚未建设 | 标题、简短摘要、原文链接、关联游戏 |
-| 后端与数据库 | 生产站仍为纯静态网站 | 赛事查询引入 Worker + D1；商品不迁入 |
+| 后端与数据库 | 静态页面 + `/api/*` 由同一 Worker 提供（M1 部署配置已就绪，域名迁移见 M2） | 赛事查询用 Worker + D1；商品不迁入 |
 
 本地赛事数据不是线上功能。计数属于试验记录，不作为持续覆盖承诺。
 
@@ -158,13 +158,15 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 
 | 组件 | 候选 | 状态 |
 | --- | --- | --- |
-| 前端 | 现有 Cloudflare Pages | 生产中 |
-| 赛事查询 API | Cloudflare Worker | 已决定；本轮仅本地 |
-| 赛事数据 | Cloudflare D1 | 已决定；本轮仅本地 |
+| 前端 | Worker 静态资源（`dist/`，`auto-trailing-slash`、`404-page`） | 已决定；替代 Cloudflare Pages |
+| 赛事查询 API | 同一 Worker，`run_worker_first: ["/api/*"]`，Cache API 边缘缓存 10 分钟 | 已决定 |
+| 赛事数据 | Cloudflare D1 `shindan-navi-events`（远端已创建，空库） | 已决定；本地手动导入 |
 | 浏览器采集 | 本机 Chrome | 现行方案；云端浏览器暂不考虑 |
 | 来源快照存储（R2）、任务队列 | — | 暂不引入，出现具体需求再评估 |
 
-上线前需单独确认：远端 D1/Worker 创建、预算、路由（建议挂在现有域名子路径 `/api/`）、凭据隔离。当前 main push 会触发生产部署；赛事功能的发布需单独批准。自动数据刷新不能混入现有构建 workflow。
+部署：main push 运行 `.github/workflows/deploy.yml`，构建后 `wrangler deploy`；D1 的 `database_id` 不入库，部署时由 secret `D1_DATABASE_ID` 写入被忽略的 `wrangler.remote.json`。workflow 只部署代码与 `dist/`，不采集、不导入。自定义域名 `shindan-navi.app` 在 `routes`（`custom_domain`）中声明；`workers_dev` 关闭，版本预览 URL 开启并带 `X-Robots-Tag: noindex`，用于域名迁移前验证。
+
+数据进入 D1：本地 `api/` 下 `npm run import:remote -- --yes`（需 `D1_DATABASE_ID`），先审阅提交 `data/events/`。导入只做 upsert，不删除，读者不会看到空表。预算：D1 Free 每日 100,000 行写入、5M 行读取。当前全量导入写入上限估算约 37 万行（含索引），重复导入约 34 万行，超出 Free；需要 Workers Paid 或调整索引/改为只写变化行（待决，见 §14）。
 
 ## 11. 渐进迁移与品牌
 
@@ -172,7 +174,7 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 - 收藏保存在浏览器 localStorage，按 origin 隔离：更换域名会让所有用户的收藏消失。默认保留 `shindan-navi.app`，新功能挂在子路径（如 `/events/`）。若将来更换域名，需先设计收藏迁移。
 - 域名在 `scripts/build.py`（`SITE_HOST`、GA 判断）与 `.ics` UID 中硬编码，迁移时一并处理。
 - TCG Navi 作为平台品牌、新弾ナビ作为新品功能延续，品牌、导航、视觉和域名变更单独审阅。
-- 现有 URL、canonical 与 sitemap 不在本轮变化；`/events/` 预览阶段带 noindex，不进 sitemap。
+- 现有 URL 与 canonical 不变；`/events/` 公开（可索引、进 sitemap、有 canonical 与 OG 图），暂不加入站内导航（导航单独设计）。
 - 本设计不引入游戏门户互链。
 
 ## 12. 实施里程碑
@@ -202,9 +204,9 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 0. 是否推翻“数据不自动刷新”的既有决定（`CLAUDE.md`）。若推翻，哪些步骤仍需人工审阅。
 1. TCG+ 与 Pokémon 官方站的条款是否允许采集，是否需要登录。
 2. 赛事数据的新鲜度目标、刷新频率、保留时间（商品目前删除 30 天前的数据，赛事是否保留历史）与月度预算上限。
-3. 远端 Worker + D1 的上线时间与路由。
+3. 远端 Worker + D1 的上线时间（路由已定：同域，`/api/*`）。D1 写入预算：Workers Paid，或改 schema/导入器把每次导入控制在 10 万行写入以内。
 4. 新采集器与 `scripts/official/` 是否需要共享代码。
-5. 赛事页是否进 sitemap、是否为各游戏建赛事落地页（沿用“仅 10 个主要游戏有落地页”的决定）。
+5. 是否为各游戏建赛事落地页（沿用“仅 10 个主要游戏有落地页”的决定）。`/events/` 已决定进 sitemap。
 6. TCG Navi 的最终日语名称、视觉与域名策略。
 
 ## 15. 参考

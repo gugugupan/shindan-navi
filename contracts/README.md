@@ -25,9 +25,17 @@ data/events/<GAME>/_run.json        last accepted run (run.schema.json)
 - `venue.region_code` is ISO 3166-2:JP (`JP-13` = 東京都); online events have `venue: null`, `attendance_mode: "online"`.
 - `group.category`: `tournament` (大会・バトル・CS・ジムバトル), `casual` (交流会・フリー対戦), `teaching` (体験会・ティーチング), `festival` (フェス・大型イベント), else `other` / `unknown`. Keep the source's own series name in `group.name`.
 
-## Local API (Worker, `wrangler dev --local`)
+## API (Worker `shindan-navi`, same origin as the site)
 
-All responses JSON, `Cache-Control: no-store` locally.
+All responses JSON with `X-Robots-Tag: noindex`. Caching:
+
+- `/api/v1/events`, `/events/days`, `/events/meta` (GET/HEAD, status 200 only): stored in the colo's Cache API
+  (`caches.default`) for 10 minutes, keyed by the full URL with query parameters sorted; sent to browsers as
+  `Cache-Control: public, max-age=60` with `X-Edge-Cache: hit|miss`. A new import is visible within ~11 minutes;
+  there is no purge.
+- Errors (4xx/5xx) are never cached: `Cache-Control: no-store`.
+- `/api/v1/geo`: `private, no-store`, never cached.
+- Where the Cache API does not exist (Node dev server, tests) every response is `no-store`.
 
 ```
 GET /api/v1/events
@@ -73,6 +81,21 @@ Clarifications:
 - Team events: when the source capacity counts teams, not players, `capacity` is `null` and the source wording goes to `eligibility_text`.
 - Sources: OPCG and UATCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the Takara Tomy official event search (https://www.takaratomy.co.jp/products/conan-cardgame/eventsearch; `conan:`, `conan_official`) because the game is not a Bandai title and TCG+ does not list it.
 - The page only sends `days=weekend|weekday`.
+
+## Getting data into the production D1
+
+Manual, from a laptop, after the `data/events/` change is reviewed and committed; CI never imports.
+
+```
+cd api && D1_DATABASE_ID=<id> npm run import:remote            # validate, write .local/import.sql, print estimate; no remote call
+cd api && D1_DATABASE_ID=<id> npm run import:remote -- --yes    # wrangler d1 migrations apply --remote, then execute --remote --file
+```
+
+- The SQL only upserts and marks memberships missing; it never deletes or empties a table, so readers see either
+  the old or the new row for each event. Re-running the same import is safe.
+- A game with validation errors blocks the remote import (use `--games` to import the others deliberately).
+- The estimate is an upper bound of D1 rows written (each row plus each index entry). Above the Free plan's
+  100,000 rows written/day the importer also requires `--allow-over-free-limit`; see `api/README.md`.
 
 ## Ownership this round
 

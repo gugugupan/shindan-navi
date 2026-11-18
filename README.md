@@ -1,6 +1,6 @@
 # 新弾ナビ
 
-TCG new-release calendar (static single page) for https://shindan-navi.app, hosted on Cloudflare Pages (project `shindan-navi`).
+TCG new-release calendar (static pages) and TCG event calendar (`/events/`, API + D1) for https://shindan-navi.app, served by one Cloudflare Worker (`shindan-navi`, config `wrangler.jsonc`).
 
 Working notes for people and coding agents: `CLAUDE.md` (architecture, owner decisions, gotchas) and the skills in `.claude/skills/` — `update-data` (refresh and publish the release data) and `find-product-image` (replace placeholders with real package images, helper `scripts/add_thumb.py`).
 
@@ -29,7 +29,7 @@ It scrapes カードラボ (daily tables) and トレカの地図 (this month + 5
 
 ## Pages
 
-Built by `scripts/build.py`: `/` (all titles), one page per main title (`/pokemon/`, `/onepiece/`, `/mtg/`, `/yugioh/`, `/duelmasters/`, `/weiss/`, `/unionarena/`, `/gundam/`, `/dragonball/`, `/digimon/`) and one per month (`/2026-10/` …). Each page has its own title/description/canonical, a static release list in the HTML, JSON-LD (BreadcrumbList / ItemList of Product), and the calendar app pre-filtered via `PAGE`. Also writes `sitemap.xml` and `robots.txt`; `public/404.html` stops Pages from serving the home page for unknown paths. `data/meta.json` holds the data snapshot date shown as 更新日 and used as sitemap lastmod.
+Built by `scripts/build.py`: `/` (all titles), one page per main title (`/pokemon/`, `/onepiece/`, `/mtg/`, `/yugioh/`, `/duelmasters/`, `/weiss/`, `/unionarena/`, `/gundam/`, `/dragonball/`, `/digimon/`) and one per month (`/2026-10/` …). Each page has its own title/description/canonical, a static release list in the HTML, JSON-LD (BreadcrumbList / ItemList of Product), and the calendar app pre-filtered via `PAGE`. Also builds `/events/` (from `src/events.html`; data from `/api/v1/`) and writes `sitemap.xml` (incl. `/events/`) and `robots.txt`; `public/404.html` is served with status 404 for unknown paths (`not_found_handling: 404-page`). `data/meta.json` holds the data snapshot date shown as 更新日 and used as sitemap lastmod.
 
 OGP images: `python3 -I scripts/og.py` (after a build) renders `public/og/*.png` with headless Chrome. Re-run it when the game list or thumbnails change.
 
@@ -47,16 +47,23 @@ Serves from `dist/`. GA only loads on `shindan-navi.app`, so local previews are 
 
 ## Deploy
 
-Pushing to `main` runs `.github/workflows/deploy.yml`: build (with GA) and `wrangler pages deploy` to the `shindan-navi` Pages project. Repo secrets `CLOUDFLARE_API_TOKEN` (Account → Cloudflare Pages → Edit) and `CLOUDFLARE_ACCOUNT_ID` are required. The workflow only publishes; it never changes data — data updates are a separate local step that ends in a reviewed commit.
+Pushing to `main` runs `.github/workflows/deploy.yml`: build (with GA), write `wrangler.remote.json` with the real D1 id, and `wrangler deploy` the `shindan-navi` Worker (static assets from `dist/` + `/api/*`). It never changes data and never touches D1 — data updates and event imports are separate local steps (see `api/README.md`).
 
-Manual deploy from a laptop still works:
+Repo secrets:
+
+- `CLOUDFLARE_API_TOKEN` — Account: Workers Scripts Edit, Account Settings Read; Zone `shindan-navi.app`: Workers Routes Edit, DNS Edit, Zone Read (custom domain). D1 permissions are not needed for deploys (remote imports run locally with your own login). Cloudflare Pages Edit can be dropped once the Pages project is retired.
+- `CLOUDFLARE_ACCOUNT_ID`.
+- `D1_DATABASE_ID` — id of the `shindan-navi-events` D1 database; the workflow fails if it is empty. Never commit it.
+
+Manual deploy from a laptop:
 
 ```bash
-npx wrangler@4 login
-./scripts/deploy.sh   # GA4 measurement ID defaults to G-Q4NENX804G; override with GA_ID=...
+npx wrangler login
+D1_DATABASE_ID=... ./scripts/deploy.sh               # GA_ID defaults to G-Q4NENX804G
+D1_DATABASE_ID=... ./scripts/deploy.sh --no-routes   # deploy without attaching shindan-navi.app
 ```
 
-Custom domain (one-time, already done): Workers & Pages → shindan-navi → Custom domains → `shindan-navi.app`; `www` redirects to the apex with a Redirect Rule.
+Custom domain: declared in `wrangler.jsonc` (`routes: [{ pattern: "shindan-navi.app", custom_domain: true }]`) and attached on deploy. `www` redirects to the apex with a zone Redirect Rule. `workers_dev` is off; version preview URLs (`wrangler versions upload`) are on and send `X-Robots-Tag: noindex`.
 
 ## GA events
 
