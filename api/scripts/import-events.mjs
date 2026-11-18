@@ -4,19 +4,22 @@
 //
 //   node scripts/import-events.mjs [--data DIR] [--games OPCG,PTCG] [--target sqlite|wrangler|remote]
 //                                  [--sqlite FILE] [--out FILE] [--dry-run] [--plan] [--yes] [--max-writes N]
+//                                  [--allow-incomplete OPCG,CONAN] [--allow-shrink]
 //
 // sqlite:   node:sqlite file for dev-node / tests (always applied unless --dry-run).
 // wrangler: local D1 (.wrangler/state) through wrangler --local.
 // remote:   the production D1. Needs env D1_DATABASE_ID. Without flags: validate and estimate against an
 //           empty database (first-import cost), no remote call. --plan: also read the remote rows and print
 //           the exact plan. --yes: migrate, read, plan and apply when the plan writes at most --max-writes rows.
-//           --plan / --yes require the data directory to be committed in git.
+//           Event data is local only (never in git), so the guards are: every file valid, every run complete
+//           unless --allow-incomplete GAME,..., and no game shrinking >20% against D1 unless --allow-shrink.
 import { mkdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
-import { join, resolve, dirname, basename } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
   API_DIR, DEFAULT_DATA_DIR, loadAll, planImport, toSqlFile, estimateCost, emptyState, stateFromRows, stateEventsSql, stateImportsSql,
+  stateSiteMetaSql,
 } from './lib/importer.mjs';
 import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mjs';
 
@@ -24,6 +27,8 @@ const DB_NAME = 'shindan-navi-events';
 // D1 Free: 100,000 rows written and 5,000,000 rows read per day (UTC); past either, every query fails until 00:00 UTC.
 const FREE_WRITES_PER_DAY = 100_000;
 const STATE_PAGE = 5000;
+// A run listing this much less than D1 currently shows for the same window is more likely a broken scrape.
+const MAX_SHRINK = 0.2;
 const { values: opts } = parseArgs({
   options: {
     data: { type: 'string', default: DEFAULT_DATA_DIR },
@@ -35,6 +40,8 @@ const { values: opts } = parseArgs({
     plan: { type: 'boolean', default: false },
     yes: { type: 'boolean', default: false },
     'max-writes': { type: 'string', default: '90000' },
+    'allow-incomplete': { type: 'string', default: '' },
+    'allow-shrink': { type: 'boolean', default: false },
   },
 });
 const fail = (msg, code = 1) => {
@@ -61,20 +68,6 @@ if (!existsSync(dataDir)) {
   process.exit(0);
 }
 
-/** The production database only takes data that is reviewed and committed: tracked and clean in git. */
-function requireCommitted(dir) {
-  const git = (...args) => spawnSync('git', ['-C', dirname(dir), ...args], { encoding: 'utf8' });
-  const name = basename(dir);
-  const tracked = git('ls-files', '--', name);
-  if (tracked.status !== 0) fail(`${dir} is not inside a git checkout`);
-  if (!tracked.stdout.trim()) fail(`${dir} has no committed files (an untracked directory or symlink?); commit the reviewed data first`);
-  const dirty = git('status', '--porcelain', '--untracked-files=all', '--', name);
-  if (dirty.stdout.trim()) fail(`${dir} has uncommitted changes; commit the reviewed data first:\n${dirty.stdout}`);
-  const head = git('log', '-1', '--format=%h %s', '--', name).stdout.trim();
-  console.log(`data: committed (${head})`);
-}
-if (readRemote) requireCommitted(dataDir);
-
 const t0 = Date.now();
 const results = loadAll(dataDir, opts.games?.split(',').map((s) => s.trim()).filter(Boolean));
 const accepted = [];
@@ -93,6 +86,11 @@ if (!accepted.length) {
   process.exit(results.length ? 1 : 0);
 }
 if (remote && accepted.length !== results.length) fail('refusing a remote import while a game is rejected; fix the data or pass --games');
+const allowIncomplete = new Set(opts['allow-incomplete'].split(',').map((s) => s.trim()).filter(Boolean));
+const incomplete = accepted.filter((r) => !r.run.complete && !allowIncomplete.has(r.game)).map((r) => r.game);
+if (remote && incomplete.length) {
+  fail(`incomplete run(s) for ${incomplete.join(', ')}: the collector did not get the whole source. Re-collect, or pass --allow-incomplete ${incomplete.join(',')} knowingly (an incomplete run adds and updates events but hides none)`);
+}
 
 function wrangler(args, capture = false) {
   // CI=1 makes wrangler skip its interactive confirmations.
@@ -121,7 +119,7 @@ function readWranglerState(where, config) {
       if (page.length < STATE_PAGE) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()));
+    return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()), wranglerQuery(where, config, stateSiteMetaSql()));
   } catch (e) {
     if (/no such table/.test(e.message)) return emptyState();
     throw e;
@@ -155,6 +153,17 @@ if (opts.target === 'sqlite') {
 const plan = planImport(accepted, state);
 const cost = estimateCost(plan.stats, state);
 console.log(`plan against ${stateLabel}: ${state.events.size} existing events`);
+console.log('  game   fetched_at            source_total  records  in D1 now  inserted  updated  unchanged  hidden');
+const shrunk = [];
+for (const [g, p] of Object.entries(plan.perGame)) {
+  const cells = [g.padEnd(6), p.fetched_at.padEnd(21), String(p.source_total ?? '-').padStart(12), String(p.record_count).padStart(8),
+    String(p.in_db).padStart(10), String(p.inserted).padStart(9), String(p.rewritten).padStart(8), String(p.unchanged).padStart(10), String(p.hidden).padStart(7)];
+  console.log(`  ${cells.join(' ')}${p.complete ? '' : '  (incomplete)'}`);
+  if (p.in_db > 0 && p.record_count < p.in_db * (1 - MAX_SHRINK)) shrunk.push(`${g} ${p.in_db} -> ${p.record_count}`);
+}
+if (remote && shrunk.length && !opts['allow-shrink']) {
+  fail(`run(s) list over ${MAX_SHRINK * 100}% fewer events than D1 shows for the same window (${shrunk.join('; ')}). Check the collector output; pass --allow-shrink if the drop is real`);
+}
 console.log(`  ${Object.entries(plan.stats).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 console.log(`  D1 rows written ~${cost.rowsWritten.toLocaleString('en-US')} (${Object.entries(cost.writes).filter(([, n]) => n).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ') || 'nothing'})`);
 console.log(`  D1 rows read    ~${cost.rowsRead.toLocaleString('en-US')} (${Object.entries(cost.reads).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ')})`);

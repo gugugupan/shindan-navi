@@ -8,3 +8,5 @@ scripts/official/cache/
 scripts/official/out/
 out/
 wrangler.remote.json
+# Collected event data is local only and reaches D1 through api/scripts/import-events.mjs; never commit it.
+/data/events

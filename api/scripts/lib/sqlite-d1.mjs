@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { API_DIR, stateEventsSql, stateFromRows, stateImportsSql } from './importer.mjs';
+import { API_DIR, stateEventsSql, stateFromRows, stateImportsSql, stateSiteMetaSql } from './importer.mjs';
 
 const MIGRATIONS_DIR = join(API_DIR, 'migrations');
 
@@ -91,7 +91,7 @@ export class SqliteD1 {
       if (page.length < 5000) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, this.db.prepare(stateImportsSql()).all());
+    return stateFromRows(events, this.db.prepare(stateImportsSql()).all(), this.db.prepare(stateSiteMetaSql()).all());
   }
   close() {
     this.db.close();

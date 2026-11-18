@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALL_PREFS, api, importDir, newDb, run, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
-import { emptyState, estimateCost, loadAll, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
+import { ALL_PREFS, api, apiAll, importDir, newDb, run, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
+import { emptyState, estimateCost, loadAll, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
 import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 const snapshot = (db: SqliteD1) => ({
@@ -12,7 +12,7 @@ const snapshot = (db: SqliteD1) => ({
 });
 const mask = (db: SqliteD1, id: string) => db.db.prepare('SELECT game_mask m FROM events WHERE id = ?').get(id)!.m;
 const visible = (db: SqliteD1) => db.db.prepare('SELECT COUNT(*) n FROM events WHERE game_mask <> 0').get()!.n;
-const Q = `/api/v1/events?from=2026-11-18&until=2027-02-18&limit=200&${ALL_PREFS}`;
+const Q = `/api/v1/events?from=2026-11-18&until=2027-02-18&${ALL_PREFS}`;
 
 describe('importer', () => {
   it('writes nothing when the same files are imported again', () => {
@@ -27,6 +27,25 @@ describe('importer', () => {
     expect(snapshot(db)).toEqual(before);
   });
 
+  it('repairs missing or stale site_meta even when no event changed', () => {
+    const db = newDb();
+    const dir = writeDataDir(synthetic(20));
+    importDir(db, dir, 1_000);
+    db.db.exec("DELETE FROM site_meta WHERE key = 'state'");
+    const repair = importDir(db, dir, 2_000).plan;
+    expect(repair.stats).toMatchObject({ inserted: 0, rewritten: 0, mask_updates: 0, imports: 0, site_meta: 2 });
+    expect(JSON.parse(String(db.db.prepare("SELECT value FROM site_meta WHERE key = 'state'").get()!.value))).toMatchObject({ version: '2000', window: { from: '2026-11-18', until: '2027-02-18' } });
+    db.db.exec("UPDATE site_meta SET value = '{}' WHERE key = 'meta'");
+    expect(importDir(db, dir, 3_000).plan.stats.site_meta).toBe(2);
+    expect(importDir(db, dir, 4_000).plan.statements).toEqual([]);
+  });
+
+  it('warns about in-person events that no location can reach', () => {
+    const ev = synthetic(2)[1];
+    const dir = writeDataDir([{ ...ev, attendance_mode: 'in_person', venue: { ...ev.venue, region_code: null, region_name: null } }]);
+    expect(loadAll(dir).flatMap((r) => r.warnings).join('\n')).toMatch(/1 in-person event\(s\) with a venue but no region_code are unreachable/);
+  });
+
   it('rewrites only changed events, serves last_seen_at from the import and bumps the data version', async () => {
     const db = newDb();
     const evs = synthetic(20);
@@ -39,7 +58,7 @@ describe('importer', () => {
     const rows = db.db.prepare('SELECT id, updated_at, created_at FROM events ORDER BY id').all();
     expect(rows.filter((r: Ev) => r.updated_at === 2_000).map((r: Ev) => r.id)).toEqual([evs[0].id]);
     expect(rows.every((r: Ev) => r.created_at === 1_000)).toBe(true);
-    const got = (await api(db, Q)).body.events;
+    const got = (await apiAll(db, Q)).body.events;
     expect(got.every((e: Ev) => e.last_seen_at === '2026-11-19T00:00:00Z')).toBe(true);
     expect(JSON.parse(String(db.db.prepare("SELECT value FROM site_meta WHERE key = 'state'").get()!.value)).version).toBe('2000');
   });
@@ -51,13 +70,13 @@ describe('importer', () => {
     const gone = evs[3];
     const rest = evs.filter((e) => e !== gone);
     importDir(db, writeDataDir(rest, { OPCG: run('OPCG', rest.length, { fetched_at: '2026-11-20T00:00:00Z' }) }), 2_000);
-    expect((await api(db, Q)).body.events.map((e: Ev) => e.id)).not.toContain(gone.id);
+    expect((await apiAll(db, Q)).body.events.map((e: Ev) => e.id)).not.toContain(gone.id);
     expect(mask(db, gone.id)).toBe(0);
     expect((await api(db, '/api/v1/events/meta')).body.games[0].record_count).toBe(rest.length);
 
     const back = importDir(db, writeDataDir(evs, { OPCG: run('OPCG', evs.length, { fetched_at: '2026-11-21T00:00:00Z' }) }), 3_000).plan;
     expect(back.stats).toMatchObject({ inserted: 0, rewritten: 0, mask_updates: 1 });
-    expect((await api(db, Q)).body.events.map((e: Ev) => e.id)).toContain(gone.id);
+    expect((await apiAll(db, Q)).body.events.map((e: Ev) => e.id)).toContain(gone.id);
   });
 
   it('does not hide anything for incomplete runs or outside the run window', async () => {
@@ -113,15 +132,18 @@ describe('importer', () => {
     const evs = synthetic(8).filter((e) => e.game_code === 'CONAN');
     expect(evs[0].id).toMatch(/^conan:/);
     expect(importDir(db, writeDataDir(evs)).flatMap((r) => r.errors)).toEqual([]);
-    const r = await api(db, `/api/v1/events?from=2026-11-18&until=2027-02-18&game=CONAN&${ALL_PREFS}`);
+    const r = await apiAll(db, `/api/v1/events?from=2026-11-18&until=2027-02-18&game=CONAN&${ALL_PREFS}`);
     expect(r.body.events.map((e: Ev) => e.source_code)).toEqual(evs.map(() => 'conan_official'));
   });
 
-  it('escapes quotes and keeps statements under the D1 size limit', () => {
-    const evs = synthetic(2000).map((e, i) => (i === 0 ? { ...e, name: "O'Brien's 'quoted' ; DROP TABLE events; --" } : e));
+  it('escapes quotes and keeps statements under the byte budget with multibyte text', () => {
+    // Japanese text is 3 bytes per character in UTF-8 but 1 UTF-16 unit: the budget must count bytes.
+    const long = '【SYNTHETIC】東京都千代田区丸の内一丁目のカードショップで開催されるスタンダードバトル'.repeat(8);
+    const evs = synthetic(2000).map((e, i) => ({ ...e, name: i === 0 ? "O'Brien's 'quoted' ; DROP TABLE events; --" : e.name, eligibility_text: long, format_text: long }) as Ev);
     const dir = writeDataDir(evs);
     const stmts = planImport(loadAll(dir).filter((r) => !r.errors.length)).statements;
-    expect(Math.max(...stmts.map((s: string) => Buffer.byteLength(s)))).toBeLessThan(100_000);
+    expect(stmts.length).toBeGreaterThan(20);
+    expect(Math.max(...stmts.map((s: string) => Buffer.byteLength(s)))).toBeLessThanOrEqual(MAX_STATEMENT_BYTES);
     const db = newDb();
     db.execAll(stmts);
     expect(db.db.prepare('SELECT name FROM events WHERE id = ?').get(evs[0].id)!.name).toBe(evs[0].name);
@@ -137,7 +159,7 @@ describe('shared events', () => {
   const uatcg = [...base.filter((e) => e.game_code === 'UATCG'), { ...shared, game_code: 'UATCG', last_seen_at: '2026-11-18T01:00:00Z' }];
   const q = Q;
   const total = async (db: SqliteD1, extra = '') =>
-    (await api(db, `/api/v1/events/days?from=2026-11-18&until=2027-02-18&${ALL_PREFS}${extra}`)).body.days.reduce((n: number, d: Ev) => n + d.count, 0);
+    (await apiAll(db, `/api/v1/events/days?from=2026-11-18&until=2027-02-18&${ALL_PREFS}${extra}`)).body.days.reduce((n: number, d: Ev) => n + d.count, 0);
 
   function load() {
     const db = newDb();
@@ -149,13 +171,13 @@ describe('shared events', () => {
   it('stores one event with both games and returns game_codes', async () => {
     const db = load();
     expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE id = ?').get(shared.id)!.n).toBe(1);
-    const all = (await api(db, q)).body;
+    const all = (await apiAll(db, q)).body;
     expect(await total(db)).toBe(opcg.length + uatcg.length - 1);
     const ev = all.events.find((e: Ev) => e.id === shared.id);
     expect(ev.game_code).toBe('OPCG');
     expect(ev.game_codes).toEqual(['OPCG', 'UATCG']);
     for (const g of ['OPCG', 'UATCG']) {
-      const r = (await api(db, `${q}&game=${g}`)).body;
+      const r = (await apiAll(db, `${q}&game=${g}`)).body;
       expect(r.events.map((e: Ev) => e.id)).toContain(shared.id);
       expect(await total(db, `&game=${g}`)).toBe((g === 'OPCG' ? opcg : uatcg).length);
     }
@@ -169,6 +191,8 @@ describe('shared events', () => {
     expect(day.count).toBe(others.length + 1);
     expect(day.by_game.OPCG).toBe(others.filter((e) => e.game_code === 'OPCG').length + 1);
     expect(day.by_game.UATCG).toBe(others.filter((e) => e.game_code === 'UATCG').length + 1);
+    const opcgOnly = (await api(db, `/api/v1/events/days?${ALL_PREFS}&game=OPCG&from=${shared.starts_on}&until=${new Date(Date.parse(`${shared.starts_on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`)).body.days[0];
+    expect(Object.keys(opcgOnly.by_game)).toEqual(['OPCG']);
   });
 
   it('keeps per-game meta and missing handling separate', async () => {
@@ -181,21 +205,21 @@ describe('shared events', () => {
     // UATCG's complete run drops the shared event: it stays visible through OPCG only.
     const uatcg2 = uatcg.filter((e) => e.id !== shared.id);
     importDir(db, writeDataDir(uatcg2, { UATCG: run('UATCG', uatcg2.length, { fetched_at: '2026-11-19T00:00:00Z' }) }), 2_000);
-    let ev = (await api(db, q)).body.events.find((e: Ev) => e.id === shared.id);
+    let ev = (await apiAll(db, q)).body.events.find((e: Ev) => e.id === shared.id);
     expect(ev.game_codes).toEqual(['OPCG']);
-    expect((await api(db, `${q}&game=UATCG`)).body.events.map((e: Ev) => e.id)).not.toContain(shared.id);
+    expect((await apiAll(db, `${q}&game=UATCG`)).body.events.map((e: Ev) => e.id)).not.toContain(shared.id);
     meta = (await api(db, '/api/v1/events/meta')).body;
     expect(meta.categories.reduce((n: number, c: Ev) => n + c.count, 0)).toBe(total);
 
     // OPCG drops it too: hidden everywhere, row kept.
     const opcg2 = opcg.filter((e) => e.id !== shared.id);
     importDir(db, writeDataDir(opcg2, { OPCG: run('OPCG', opcg2.length, { fetched_at: '2026-11-19T00:00:00Z' }) }), 3_000);
-    expect((await api(db, q)).body.events.map((e: Ev) => e.id)).not.toContain(shared.id);
+    expect((await apiAll(db, q)).body.events.map((e: Ev) => e.id)).not.toContain(shared.id);
     expect(db.db.prepare('SELECT COUNT(*) n FROM events WHERE id = ?').get(shared.id)!.n).toBe(1);
 
     // Back in UATCG only.
     importDir(db, writeDataDir(uatcg, { UATCG: run('UATCG', uatcg.length, { fetched_at: '2026-11-20T00:00:00Z' }) }), 4_000);
-    ev = (await api(db, q)).body.events.find((e: Ev) => e.id === shared.id);
+    ev = (await apiAll(db, q)).body.events.find((e: Ev) => e.id === shared.id);
     expect(ev).toMatchObject({ game_code: 'UATCG', game_codes: ['UATCG'] });
   });
 
