@@ -8,11 +8,11 @@
   "name": "shindan-navi",
   "main": "api/src/index.ts",
   "compatibility_date": "2026-07-01",
-  // No public workers.dev site; version preview URLs (workers.dev) stay on for checking uploads before
+  // No public workers.dev site; version preview URLs (workers.dev) stay on for checking deploys before
   // they go live. Static responses on *.workers.dev carry X-Robots-Tag: noindex (public/_headers).
+  // No routes here: the shindan-navi.app custom domain is added only by `remote-config.mjs --domain`.
   "workers_dev": false,
   "preview_urls": true,
-  "routes": [{ "pattern": "shindan-navi.app", "custom_domain": true }],
   "assets": {
     "directory": "dist",
     "binding": "ASSETS",

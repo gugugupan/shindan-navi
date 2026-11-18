@@ -19,6 +19,10 @@ jobs:
     env:
       GA_ID: G-Q4NENX804G
       TZ: Asia/Tokyo
+      # Repository variable LIVE_HOST says who serves shindan-navi.app: "pages" (default, until the
+      # cutover in README.md › Deploy) or "worker". Pages keeps receiving every push until then.
+      LIVE_HOST: ${{ vars.LIVE_HOST || 'pages' }}
+      HAS_D1_ID: ${{ secrets.D1_DATABASE_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,21 +35,41 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install --quiet fonttools==4.66.1 brotli==1.2.0
 
-      - name: Build
+      # The Pages site has no /api/, so its build leaves /events/ out.
+      - name: Build for Pages
+        if: env.LIVE_HOST != 'worker'
+        run: BUILD_EVENTS=0 python -I scripts/build.py
+
+      - name: Deploy to Cloudflare Pages
+        if: env.LIVE_HOST != 'worker'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.164.0"
+          command: pages deploy dist --project-name shindan-navi --branch main --commit-dirty=true
+
+      - name: Build for the Worker
+        if: env.LIVE_HOST == 'worker' || env.HAS_D1_ID == 'true'
         run: python -I scripts/build.py
 
       - uses: actions/setup-node@v4
+        if: env.LIVE_HOST == 'worker' || env.HAS_D1_ID == 'true'
         with:
           node-version: "22"
 
-      # Fills the real D1 id into the git-ignored wrangler.remote.json; fails when the secret is empty.
+      # Writes the git-ignored wrangler.remote.json with the real D1 id (fails when the secret is empty).
+      # Only LIVE_HOST=worker adds the shindan-navi.app custom domain; before that a deploy reaches the
+      # version preview URL only.
       - name: Worker config
+        if: env.LIVE_HOST == 'worker' || env.HAS_D1_ID == 'true'
         env:
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
-        run: node api/scripts/remote-config.mjs
+        run: node api/scripts/remote-config.mjs ${{ env.LIVE_HOST == 'worker' && '--domain' || '' }}
 
-      # Deploys code + dist/ only. D1 migrations and data imports stay manual (api/README.md).
+      # Code + dist/ only. D1 migrations and data imports stay manual (api/README.md).
       - name: Deploy Worker
+        if: env.LIVE_HOST == 'worker' || env.HAS_D1_ID == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

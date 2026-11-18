@@ -235,7 +235,9 @@ def render(pg):
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
 
-# /events/ is a public page but stays out of the site nav (navigation is decided separately)
+# /events/ is a public page but stays out of the site nav (navigation is decided separately).
+# BUILD_EVENTS=0 leaves it out entirely: hosts without the /api/ Worker (the Pages site before cutover).
+BUILD_EVENTS=os.environ.get('BUILD_EVENTS','1')!='0'
 EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
 EVENTS_PAGE=dict(path='/events/',og='events',
     desc='ONE PIECEカードゲーム・UNION ARENA・名探偵コナン カードゲーム・ポケモンカードの店舗大会・ジムバトル・交流会・体験会を、開催日・都道府県・参加費で探せるTCGイベントカレンダー。公式イベント情報をまとめて一覧でチェックできます。',
@@ -297,11 +299,12 @@ for pg in pages:
     d=os.path.join(dist,pg['path'].strip('/'))
     os.makedirs(d,exist_ok=True)
     open(os.path.join(d,'index.html'),'w').write(render(pg))
-os.makedirs(os.path.join(dist,'events'),exist_ok=True)
-open(os.path.join(dist,'events/index.html'),'w').write(render_events())
+if BUILD_EVENTS:
+    os.makedirs(os.path.join(dist,'events'),exist_ok=True)
+    open(os.path.join(dist,'events/index.html'),'w').write(render_events())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
-sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
+if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
 open(os.path.join(dist,'robots.txt'),'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n')
@@ -311,4 +314,4 @@ if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
-print('pages',len(pages),'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+print('pages',len(pages),'| events page',BUILD_EVENTS,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
