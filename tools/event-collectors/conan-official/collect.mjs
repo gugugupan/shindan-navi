@@ -11,7 +11,7 @@ export const COLLECTOR_VERSION = 'conan-official/0.1.0';
 const USER_AGENT = 'Mozilla/5.0 (compatible; shindan-navi-event-collector/0.1)';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repo = resolve(here, '..', '..');
+const repo = resolve(here, '..', '..', '..');
 
 const { values: opt } = parseArgs({
   options: {

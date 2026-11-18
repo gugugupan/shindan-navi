@@ -7,7 +7,7 @@ import { startControl } from './control.mjs';
 import { classifyPage, isTcgUrl, jsonShape, parseEnv, parseOptions, redact, redactText, safeUrl } from './core.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, '../..');
+const ROOT = path.resolve(HERE, '../../..');
 const PROFILE = path.join(HERE, '.session/chrome');
 const HELP = `TCG+ persistent browser probe
   npm start                       Visible Chrome with a dedicated saved profile
@@ -40,7 +40,7 @@ async function settings() {
 async function doctor(env) {
   const checks = { node: process.version, nodeSupported: Number(process.versions.node.split('.')[0]) >= 20 };
   try { await import('playwright-core'); checks.playwright = 'installed'; }
-  catch { checks.playwright = 'missing: run npm install in tools/tcg-plus'; }
+  catch { checks.playwright = 'missing: run npm install in tools/event-collectors/tcg-plus'; }
   const chrome = env.CHROME_EXECUTABLE || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
   checks.chrome = await fs.access(chrome).then(() => chrome, () => 'not found; set CHROME_EXECUTABLE or install Google Chrome');
   checks.jevKeyConfigured = Boolean(env.TYPESAFE_API_KEY);
@@ -78,7 +78,7 @@ async function run(options, env) {
   if (Number(process.versions.node.split('.')[0]) < 20) throw new Error('Use Node.js 20 or newer (current: ' + process.version + '). Run npm run doctor for environment checks.');
   let chromium;
   try { ({ chromium } = await import('playwright-core')); }
-  catch { throw new Error('Playwright is not installed. Run npm install in tools/tcg-plus.'); }
+  catch { throw new Error('Playwright is not installed. Run npm install in tools/event-collectors/tcg-plus.'); }
 
   const out = path.join(HERE, 'out', new Date().toISOString().replace(/[:.]/g, '-'));
   await fs.mkdir(out, { recursive: true, mode: 0o700 });
@@ -195,7 +195,7 @@ async function run(options, env) {
         }
         throw new Error('Allowed control commands: status, snapshot, network, goto, reload, select.');
       });
-      console.log('Local control ready: node tools/tcg-plus/control.mjs status (from repository root).');
+      console.log('Local control ready: node tools/event-collectors/tcg-plus/control.mjs status (from repository root).');
     }
     console.log(HELP);
     rl = createInterface({ input: process.stdin, output: process.stdout });

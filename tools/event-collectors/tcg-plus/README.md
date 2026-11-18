@@ -7,7 +7,7 @@ Local investigation tool for the event data model. Opens visible Chrome, keeps a
 Build a self-contained HTML viewer from the saved partial competition results, without scraping or running the production build:
 
 ```bash
-tools/tcg-plus/.cache/node22/bin/node tools/tcg-plus/build-viewer.mjs
+tools/event-collectors/tcg-plus/.cache/node22/bin/node tools/event-collectors/tcg-plus/build-viewer.mjs
 ```
 
 Run from the repository root. The default input is the recovered 9,800-event snapshot under `out/stopped-partial-2026-11-17T17-09-27.967Z/`. Pass another collection directory as the first argument to inspect a different saved result. Output is `out/competition-viewer/index.html`; open that file directly in a browser. All data and assets are embedded, so no local server or internet connection is required.
@@ -19,7 +19,7 @@ The viewer is an isolated data-review tool. It does not change the production te
 ## Event calendar data (`data/events/`)
 
 ```bash
-cd tools/tcg-plus
+cd tools/event-collectors/tcg-plus
 node scrape-browser.mjs --game UATCG --profile <chrome-profile-dir> --page-size 100 --from 2026-11-18
 node export-events.mjs out/events-<run>/ --from 2026-11-18 --until 2027-02-18 [--note "spot-check …"] [--dry-run]
 ```
@@ -34,7 +34,7 @@ node export-events.mjs out/events-<run>/ --from 2026-11-18 --until 2027-02-18 [-
 The separate collector targets Japanese ONE PIECE events across Japan:
 
 ```bash
-bash tools/tcg-plus/scrape.sh
+bash tools/event-collectors/tcg-plus/scrape.sh
 ```
 
 Run from the repository root. It reuses the local Node 22 runtime (or an existing Node 20+) and installed Chrome, opens the existing dedicated profile, then automatically exhausts the website's public event-list `limit/offset` pages. No manual clicks or page-by-page commands are needed. Close the interactive probe before running this collector because the profile can only be opened once. The collector closes Chrome when finished. There is no prefecture, weekday or open-applications filter. The default start date is today in Asia/Tokyo, matching the normal event search. This cannot recover unpublished or source-hidden historical records.
@@ -42,7 +42,7 @@ Run from the repository root. It reuses the local Node 22 runtime (or an existin
 For a specific month:
 
 ```bash
-bash tools/tcg-plus/scrape.sh --from 2026-11-01 --until 2026-11-30
+bash tools/event-collectors/tcg-plus/scrape.sh --from 2026-11-01 --until 2026-11-30
 ```
 
 Date-boundary semantics still need live comparison. `--page-size` accepts the website's 20/40/60/80/100 options; `--max-pages` is a safety budget (default 10000), never an instruction to publish a truncated list. Game ID 8 must match a Japanese ONE PIECE entry in current masterdata; `--game-title-id` permits correcting it without changing internal `OPCG`.
@@ -51,7 +51,7 @@ A successful run produces `out/events-*/competitions.json` (the actual array of 
 
 The source route and field names were recovered from cached public TCG+ JavaScript and subsequently checked against actual browser responses. Live list fields include `event_series_title`, `entryFee` and `applicationOpen`. The normal browser search also returns shared BANDAI CARD GAMES events: these are included only when the public series directory explicitly lists ONE PIECE's ID among `event_series_game_title_ids`. Their source game ID and scope match are retained in the export.
 
-Direct Node requests to the list returned HTTP 403 in this environment, while normal Chrome requests returned HTTP 200. The default transport therefore uses public GET requests in a normal TCG+ page, without cookies or authentication headers in the collector's requests. It only permits the game-directory, event-list and public series-membership endpoints; there is no arbitrary browser command interface. Masterdata is fetched directly to avoid a separate browser-transfer failure. `--headless` is optional and has not been live-validated. For diagnostics, `bash tools/tcg-plus/scrape.sh --direct` retains the Node-only transport; its date range defaults to the source behavior unless explicitly supplied. See [collector status and source evidence](../../docs/TCG_PLUS_COLLECTOR.md). Neither collector imports release data, applies for events or deploys changes.
+Direct Node requests to the list returned HTTP 403 in this environment, while normal Chrome requests returned HTTP 200. The default transport therefore uses public GET requests in a normal TCG+ page, without cookies or authentication headers in the collector's requests. It only permits the game-directory, event-list and public series-membership endpoints; there is no arbitrary browser command interface. Masterdata is fetched directly to avoid a separate browser-transfer failure. `--headless` is optional and has not been live-validated. For diagnostics, `bash tools/event-collectors/tcg-plus/scrape.sh --direct` retains the Node-only transport; its date range defaults to the source behavior unless explicitly supplied. See [collector status and source evidence](../../../docs/TCG_PLUS_COLLECTOR.md). Neither collector imports release data, applies for events or deploys changes.
 
 ## Run
 
@@ -60,17 +60,17 @@ Requires Node.js 20+ and installed Google Chrome. The existing website does not 
 To download a project-local Node.js 22 runtime, verify its SHA-256, install dependencies, run tests and open the browser in one command:
 
 ```bash
-bash tools/tcg-plus/run.sh
+bash tools/event-collectors/tcg-plus/run.sh
 ```
 
 Run this from the repository root. It keeps Node and npm cache under the ignored `.cache/` directory, does not change system Node or shell configuration, and reuses the existing browser profile. Node 22 is selected because Node 20 is end-of-life; the Node 22 macOS binary has a macOS 11 minimum deployment target. This does not imply that Apple or Playwright currently supports macOS 12. Chrome launch compatibility still needs a real check on this machine.
 
-The same bootstrap accepts probe arguments, for example `bash tools/tcg-plus/run.sh --headless --once`. It requires network access to nodejs.org and the npm registry. If an existing Node.js 20+ is already available, use the direct commands below instead.
+The same bootstrap accepts probe arguments, for example `bash tools/event-collectors/tcg-plus/run.sh --headless --once`. It requires network access to nodejs.org and the npm registry. If an existing Node.js 20+ is already available, use the direct commands below instead.
 
 The bootstrap reuses an installed Playwright package when its exact version matches the manifest and lockfile. If a previous run used sudo, the profile or dependencies may be owned by root. The bootstrap reports the affected browser directory and a narrowly scoped ownership repair command; execute that once from your normal terminal, then run the bootstrap without sudo. It preserves the saved browser session. Do not run npm or Chrome as root to work around a permissions error.
 
 ```bash
-cd tools/tcg-plus
+cd tools/event-collectors/tcg-plus
 npm install
 npm run doctor
 npm start
@@ -87,15 +87,15 @@ The `.session/chrome/` profile preserves cookies and localStorage. Restarting `n
 Another terminal or Codex can then run these commands from the repository root:
 
 ```bash
-node tools/tcg-plus/control.mjs status
-node tools/tcg-plus/control.mjs snapshot
-node tools/tcg-plus/control.mjs network
-node tools/tcg-plus/control.mjs goto https://www.bandai-tcg-plus.com/series/8608
+node tools/event-collectors/tcg-plus/control.mjs status
+node tools/event-collectors/tcg-plus/control.mjs snapshot
+node tools/event-collectors/tcg-plus/control.mjs network
+node tools/event-collectors/tcg-plus/control.mjs goto https://www.bandai-tcg-plus.com/series/8608
 ```
 
 The channel uses ignored `.control/` files inside the workspace, does not open a network port, and only exposes status, page snapshots, network metadata, TCG+ navigation, reload and native select changes. It cannot evaluate arbitrary code, read profile cookies or submit applications. Commands are serialized, tied to a specific server instance and never automatically retried after a timeout. Close the browser or use `quit` to disable it.
 
-Run as your normal user. If the browser process was started under another user, Codex should first run `node tools/tcg-plus/control.mjs --init` under your normal user before restarting the browser. This pre-creates the control files without changing profile ownership or permissions. Screenshots and profile data retain their existing protection.
+Run as your normal user. If the browser process was started under another user, Codex should first run `node tools/event-collectors/tcg-plus/control.mjs --init` under your normal user before restarting the browser. This pre-creates the control files without changing profile ownership or permissions. Screenshots and profile data retain their existing protection.
 
 If Chrome is elsewhere:
 
@@ -125,7 +125,7 @@ Each run creates `out/<timestamp>/`. At `tcg+>`:
 From the repository root, run:
 
 ```bash
-bash tools/tcg-plus/trial.sh
+bash tools/event-collectors/tcg-plus/trial.sh
 ```
 
 This standalone trial does not launch Chrome, require an interactive prompt, read the saved browser profile, or load credentials. It uses the prepared local Node 22 runtime, or an existing Node 20+. It requests the observed `/api/masterdata` endpoint, checks that game ID 8 has a ONE PIECE title, then fetches up to three pages of `/api/user/eventseries` with the observed `country_code=JP&limit=11&offset=0` parameters and increasing offsets. Set `--max-pages 1` for one page or up to `--max-pages 20` for a larger trial. Each request has a 15-second timeout; series pages are spaced 750 ms apart, with no automatic retries.
@@ -136,7 +136,7 @@ Each output folder also contains `report.schema.json`, copied from [`trial-repor
 
 The numeric `success.code` is recorded without assuming its meaning; its success/error semantics remain unverified. Application-period strings are preserved as source values, never converted into event dates. This is a series sampling experiment, not a production importer. Individual events, venues, time filters, source game edition and anonymous access still require real-source verification. Existing release data and deployment are untouched.
 
-Current trial evidence and limitations: [TCG+ scraper trial](../../docs/TCG_PLUS_TRIAL.md).
+Current trial evidence and limitations: [TCG+ scraper trial](../../../docs/TCG_PLUS_TRIAL.md).
 
 `network.ndjson` records fetch/XHR method, sanitized URL, status and (for TCG+ JSON responses) field shapes. Response headers, cookies and request payloads are never logged. `errors.ndjson` records page exceptions and failed requests.
 

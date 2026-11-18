@@ -79,8 +79,8 @@ Clarifications:
 | Path | Owner |
 | --- | --- |
 | `contracts/` | lead |
-| `tools/tcg-plus/`, `data/events/{OPCG,UATCG,CONAN}/` | TCG+ collector |
-| `tools/pokemon-players/`, `data/events/PTCG/` | Pokémon collector |
+| `tools/event-collectors/tcg-plus/`, `data/events/{OPCG,UATCG,CONAN}/` | TCG+ collector |
+| `tools/event-collectors/pokemon-players/`, `data/events/PTCG/` | Pokémon collector |
 | `api/` (Worker, migrations, importer, tests) | backend |
 | `src/events.html`, `scripts/build.py`, `public/events/` | web |
 | `docs/` | lead |

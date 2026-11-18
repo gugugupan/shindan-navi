@@ -5,7 +5,7 @@ import { buildOutputs, loadValidators, writeOutputs } from './normalize.mjs';
 import { redactText } from './core.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const DATA = path.resolve(HERE, '../../data/events');
+const DATA = path.resolve(HERE, '../../../data/events');
 
 export function parseExportOptions(args) {
   const options = { dir: null, from: '2026-11-18', until: '2027-02-18', notes: [], dryRun: false, dataDir: DATA };

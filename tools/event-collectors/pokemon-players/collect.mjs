@@ -11,7 +11,7 @@ import { openBrowserTransport } from './lib/transport.mjs';
 export const COLLECTOR_VERSION = 'pokemon-players/0.1.0';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repo = resolve(here, '..', '..');
+const repo = resolve(here, '..', '..', '..');
 
 const { values: opt } = parseArgs({
   options: {

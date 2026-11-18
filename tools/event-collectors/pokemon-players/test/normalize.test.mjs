@@ -10,7 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const rows = JSON.parse(readFileSync(join(here, 'fixtures', 'event-search-rows.json'), 'utf8'));
 const byId = (id) => rows.find((r) => r.event_holding_id === id);
 const SEEN = '2026-11-18T00:00:00Z';
-const validators = makeValidators(resolve(here, '..', '..', '..'));
+const validators = makeValidators(resolve(here, '..', '..', '..', '..'));
 
 test('fee: free and plain yen amounts only', () => {
   assert.deepEqual(parseFee('無料'), { fee_amount: 0, fee_currency: 'JPY', fee_text: '無料' });

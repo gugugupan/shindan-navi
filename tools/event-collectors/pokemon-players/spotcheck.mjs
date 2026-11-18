@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const dataDir = resolve(here, '..', '..', 'data', 'events', 'PTCG');
+const dataDir = resolve(here, '..', '..', '..', 'data', 'events', 'PTCG');
 const all = readdirSync(dataDir).filter((f) => /^\d{4}-\d{2}\.json$/.test(f))
   .flatMap((f) => JSON.parse(readFileSync(join(dataDir, f), 'utf8')));
 const wanted = process.argv.slice(2).map((id) => all.find((e) => e.id === id) ?? { id, missing: true });

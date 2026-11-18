@@ -15,12 +15,12 @@
 
 实际响应的名称字段为 `event_series_title`，费用为 `entryFee`，公开报名标记为 `applicationOpen`。列表可包含 BANDAI CARD GAMES 共通活动，原始 `game_title_id` 不同于 8；只有 `/api/user/event/list/params` 的 `event_series_game_title_ids` 明确包含 8，且系列的来源游戏 ID 与记录一致，才纳入 ONE PIECE 清单。例如系列 9093 的关联为 `6,7,8,9,14,15`。导出保留 `source_game_title_id` 与 `game_scope_match`，不把所有其他游戏记录放行。
 
-同一浏览器缓存恢复真实系列第一页：11 条，来源声明 total 为 27，API code 为 200。只投影公开系列字段并保存在忽略目录 `tools/tcg-plus/out/source-evidence-2026-11-18/series-first-page.json`。`source-contract.json` 保存公共缓存哈希与契约摘要，没有保存 cookie、身份信息或原始响应头。该文件是历史缓存证据，不是新的完整采集结果，也不是单场数据。
+同一浏览器缓存恢复真实系列第一页：11 条，来源声明 total 为 27，API code 为 200。只投影公开系列字段并保存在忽略目录 `tools/event-collectors/tcg-plus/out/source-evidence-2026-11-18/series-first-page.json`。`source-contract.json` 保存公共缓存哈希与契约摘要，没有保存 cookie、身份信息或原始响应头。该文件是历史缓存证据，不是新的完整采集结果，也不是单场数据。
 
 ## 执行与产物
 
 ```bash
-bash tools/tcg-plus/scrape.sh
+bash tools/event-collectors/tcg-plus/scrape.sh
 ```
 
 默认校验 masterdata 中 ID 8 的名称为 ONE PIECE、语言为 JA，然后查询日本、全部都道府县，不过滤工作日和报名状态。已实测目录值为 `ONE PIECE CARD GAME / JA / one_piece_card_game.ja`。Chrome 入口默认开始日期为 Asia/Tokyo 今天，匹配正常页面；可选 `--from` / `--until`，但结束日期包含端点的规则仍需实测。
@@ -47,6 +47,6 @@ bash tools/tcg-plus/scrape.sh
 - PASS：实际执行前后 183 个商品数据及缩略图文件哈希未变。
 - 仍待验证：完整清单数量、最终 Schema 校验、报名状态与隐藏字段语义。当前原始报名标记不等于保证可参加。
 
-失败报告：`tools/tcg-plus/out/events-2026-11-17T15-09-15.169Z-748f89b6/report.json`。时间戳为 UTC，东京已是 11 月 18 日。
+失败报告：`tools/event-collectors/tcg-plus/out/events-2026-11-17T15-09-15.169Z-748f89b6/report.json`。时间戳为 UTC，东京已是 11 月 18 日。
 
 本轮完整采集完成后在此追加最终数量和产物路径。没有启动定时任务、创建云资源、提交或发布。

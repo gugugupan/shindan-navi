@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const CONTRACTS = path.resolve(HERE, '../../contracts');
+export const CONTRACTS = path.resolve(HERE, '../../../contracts');
 export const COLLECTOR_VERSION = 'tcg-plus-collector/1';
 const fail = message => { throw new Error(message); };
 

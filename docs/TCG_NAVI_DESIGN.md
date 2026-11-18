@@ -26,7 +26,7 @@ TCG Navi 面向玩家聚合不同卡牌游戏的新品、赛事和资讯。用�
 | --- | --- | --- |
 | 多游戏新品日历 | Python 静态构建；商品来自 git JSON；10 个主要游戏有落地页 | 保持静态构建与既有数据身份 |
 | 商品数据更新 | `scripts/update_data.py` 本地运行：抓取カードラボ、トレカの地図，默认还处理官方站点来源，并调用 LLM（OpenRouter）与 Jev 提取，需要 `.env` 凭据并产生费用 | 作为已有的商品来源适配器保留；不另建第二套商品采集 |
-| ONE PIECE 日本赛事 | 本地采集原型 `tools/tcg-plus/`（见 [TCG_PLUS_COLLECTOR.md](TCG_PLUS_COLLECTOR.md)）；正常浏览器中来源声明 2026-11-18 起的总数为 13,587，完整分页尚未验收 | 可恢复、可核对覆盖范围的采集与导入 |
+| ONE PIECE 日本赛事 | 本地采集原型 `tools/event-collectors/tcg-plus/`（见 [TCG_PLUS_COLLECTOR.md](TCG_PLUS_COLLECTOR.md)）；正常浏览器中来源声明 2026-11-18 起的总数为 13,587，完整分页尚未验收 | 可恢复、可核对覆盖范围的采集与导入 |
 | UNION ARENA 赛事 | 本地采集（TCG+，game_title_id 9） | 复用 TCG+ 适配器 |
 | 名探偵コナン 赛事 | 本地采集（タカラトミー官方「公認店イベント 開催日程検索」）；TCG+ 不收录 | 独立适配器；来源无活动 ID |
 | Pokémon 赛事 | 未实现；官方 players 站有赛事搜索 | 独立适配器，验证跨平台复用 |

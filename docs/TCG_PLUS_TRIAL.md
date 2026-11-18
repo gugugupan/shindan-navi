@@ -20,14 +20,14 @@
 在仓库根目录执行：
 
 ```bash
-bash tools/tcg-plus/trial.sh
+bash tools/event-collectors/tcg-plus/trial.sh
 ```
 
 程序只向已观察的两个接口发送 GET。先读取游戏目录并校验 ONE PIECE 名称，再请求系列页面，默认最多三页，每页 11 条；每个请求超时 15 秒，系列页间隔 750 毫秒。支持 `--game-title-id` 和 `--max-pages`；前者必须通过实时目录名称检查，不能据此自动认定游戏语言版本。
 
-输出为忽略提交的 `tools/tcg-plus/out/trial-*/report.json`，不修改数据库、`data/`、缩略图或部署配置。游戏与系列只输出允许的公开字段，失败不输出半批系列。报告记录 HTTP 状态和来源数值 code；code 语义尚未确认，因此样本采集成功不代表生产接口契约验证成功。
+输出为忽略提交的 `tools/event-collectors/tcg-plus/out/trial-*/report.json`，不修改数据库、`data/`、缩略图或部署配置。游戏与系列只输出允许的公开字段，失败不输出半批系列。报告记录 HTTP 状态和来源数值 code；code 语义尚未确认，因此样本采集成功不代表生产接口契约验证成功。
 
-每次运行还会复制 `tools/tcg-plus/trial-report.schema.json` 为同目录的 `report.schema.json`。报告通过 `$schema` 引用该文件，使用 JSON Schema Draft 4，分别定义非空样本、空列表和失败三种结果；失败分支禁止包含 `series`。2026-11-17 14:58 UTC 再次实测仍以 `ENOTFOUND` 失败，但实际失败报告已通过本机 jsonschema 2.6.0 的 Draft4Validator 结构校验；错误报告含半批 series、或缺少必需字段却标记采集成功，均被拒绝。该结果证明输出格式与错误处理，不证明赛事采集成功。
+每次运行还会复制 `tools/event-collectors/tcg-plus/trial-report.schema.json` 为同目录的 `report.schema.json`。报告通过 `$schema` 引用该文件，使用 JSON Schema Draft 4，分别定义非空样本、空列表和失败三种结果；失败分支禁止包含 `series`。2026-11-17 14:58 UTC 再次实测仍以 `ENOTFOUND` 失败，但实际失败报告已通过本机 jsonschema 2.6.0 的 Draft4Validator 结构校验；错误报告含半批 series、或缺少必需字段却标记采集成功，均被拒绝。该结果证明输出格式与错误处理，不证明赛事采集成功。
 
 `complete_series_listing` 表示本次取得数量是否等于来源 total；`multiple_pages_fetched` 只表示确实取得多页。重复 ID、total 改变、提前空页/短页会失败，不能静默宣称完整。到达页数上限时允许返回部分样本，覆盖状态明确为不完整。
 

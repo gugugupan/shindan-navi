@@ -110,7 +110,7 @@ test('fingerprint is stable across spacing/width changes and differs per start',
 });
 
 test('outputs validate against contracts and reject contact leaks', () => {
-  const v = makeValidators(resolve(here, '..', '..', '..'));
+  const v = makeValidators(resolve(here, '..', '..', '..', '..'));
   const run = {
     game_code: 'CONAN', source_code: 'conan_official', fetched_at: AT, window: { from: '2026-11-18', until: '2027-02-18' },
     query: {}, source_total: null, record_count: events.length, complete: false, collector_version: 't', notes: [],
