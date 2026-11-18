@@ -81,13 +81,14 @@ describe('edge cache', () => {
       url: 'https://shindan-navi.app/api/v1/events?v=1000&from=2026-11-18&until=2026-12-01&game=OPCG&pref=JP-13%2CJP-14',
       cacheControl: `public, max-age=${EDGE_TTL}`,
     }]);
-    expect(queries).toBe(2);
+    // data version + matching days (game filter) + scan + matches in full
+    expect(queries).toBe(4);
     const b = await call(EVENTS);
     expect(b.res.headers.get('x-edge-cache')).toBe('hit');
     expect(b.res.headers.get('cache-control')).toBe(`public, max-age=${BROWSER_TTL}`);
     expect(b.res.headers.get('age')).toBeNull();
     expect(b.text).toBe(a.text);
-    expect(queries).toBe(2);
+    expect(queries).toBe(4);
   });
 
   it('shares one entry across spellings of the same filters', async () => {

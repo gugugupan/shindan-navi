@@ -3,8 +3,9 @@ import { GAMES, GAME_CODES, MAX_PREFS } from './constants';
 // The page's page size is the only one accepted: every other value would be a new cache key.
 export const PAGE_LIMIT = 50;
 // With game/type/days filters, /events reads at most this many rows per location and filters them in the
-// Worker; a page that hits the cap returns what matched plus a cursor to continue.
-export const SCAN_LIMIT = 300;
+// Worker; a page that hits the cap returns what matched plus a cursor to continue. Above the busiest
+// location-day so far (178 events), so a page normally covers its first matching day.
+export const SCAN_LIMIT = 200;
 const ID_RE = /^(tcgp|ptcg|conan):.{1,200}$/;
 // 9999-12-31T23:59:59Z, the starts_sort of date-only events.
 const MAX_SORT = 253402300799;
@@ -68,7 +69,9 @@ function list(params: URLSearchParams, name: string, allowed?: readonly string[]
 }
 
 function fingerprint(q: Filters): string {
-  const s = JSON.stringify([q.reqFrom, q.reqUntil, q.games, q.prefs, q.types, q.days]);
+  // Filters only: several requested ranges can clamp to one cache entry, whose cursor must then work for all of
+  // them. The cursor's own day is checked against each request's range instead.
+  const s = JSON.stringify([q.games, q.prefs, q.types, q.days]);
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
   return (h >>> 0).toString(36);
@@ -194,46 +197,103 @@ function matches(q: Filters): (r: Row) => boolean {
     && (!dows || dows.includes(new Date(`${r.starts_on}T00:00:00Z`).getUTCDay()));
 }
 
-// The scan is "these locations, this range" on idx_events_loc. The cursor's day is the lower bound and the
-// row-value test skips that day's earlier rows. Unfiltered pages read limit+1 rows; filtered ones up to
-// SCAN_LIMIT per location (SQLite stops each location's index range after LIMIT rows).
-export function eventsSql(q: EventQuery): { sql: string; binds: unknown[]; take: number } {
-  const binds: unknown[] = [...q.prefs, q.after && q.after[0] > q.from ? q.after[0] : q.from, q.until];
+// Unfiltered pages: "these locations, this range" on idx_events_loc, limit+1 rows. The cursor's day is the lower
+// bound and the row-value test skips that day's earlier rows (with several locations SQLite stops each one after
+// LIMIT rows).
+export function eventsSql(q: EventQuery): { sql: string; binds: unknown[] } {
+  const binds: unknown[] = [...q.prefs, lowerBound(q), q.until];
   let where = `${locSql(q.prefs)} AND starts_on >= ? AND starts_on < ? AND game_mask <> 0`;
   if (q.after) {
     where += ' AND (starts_on, starts_sort, id) > (?, ?, ?)';
     binds.push(...q.after);
   }
-  const take = isFiltered(q) ? SCAN_LIMIT : q.limit + 1;
-  return { sql: `${SELECT}\nFROM events\nWHERE ${where}\nORDER BY starts_on, starts_sort, id\nLIMIT ?`, binds: [...binds, take], take };
+  return { sql: `${SELECT}\nFROM events\nWHERE ${where}\nORDER BY starts_on, starts_sort, id\nLIMIT ?`, binds: [...binds, q.limit + 1] };
+}
+
+const lit = (v: string) => `'${v.replaceAll("'", "''")}'`;
+
+/**
+ * Filtered pages: one branch per location over the matching days only, each capped at SCAN_LIMIT rows, reading just
+ * the columns the Worker filters on. Days come from day_counts and the cursor is validated, so they are inlined
+ * (binding them per branch would pass D1's 100-parameter limit).
+ */
+export function scanSql(q: EventQuery, days: string[]): { sql: string; binds: unknown[] } {
+  const dayList = days.map(lit).join(', ');
+  const after = q.after ? ` AND (starts_on, starts_sort, id) > (${lit(q.after[0])}, ${q.after[1]}, ${lit(q.after[2])})` : '';
+  const branch = `SELECT * FROM (SELECT id, loc, starts_on, starts_sort, game_mask, event_type_code FROM events
+  WHERE loc = ? AND starts_on IN (${dayList}) AND game_mask <> 0${after}
+  ORDER BY starts_on, starts_sort, id LIMIT ${SCAN_LIMIT})`;
+  return { sql: `${q.prefs.map(() => branch).join('\nUNION ALL\n')}\nORDER BY starts_on, starts_sort, id`, binds: [...q.prefs] };
+}
+
+const lowerBound = (q: EventQuery) => (q.after && q.after[0] > q.from ? q.after[0] : q.from);
+// day_counts rows read to find the next matching days (per location, like the scan).
+export const DAY_ROWS = 62;
+
+/** The next days (from the cursor on) with at least one event matching the filters, from day_counts. */
+export function matchingDaysSql(q: EventQuery): { sql: string; binds: unknown[] } {
+  const { parts, binds } = dayCountsWhere(q, lowerBound(q));
+  return { sql: `SELECT starts_on FROM day_counts\nWHERE ${parts.join(' AND ')}\nORDER BY starts_on\nLIMIT ${DAY_ROWS}`, binds };
 }
 
 const keyOf = (r: Row): [string, number, string] => [r.starts_on as string, Number(r.starts_sort), r.id as string];
+const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+const cmpKey = (a: [string, number, string], b: [string, number, string]) =>
+  (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0));
 
 export async function listEvents(db: D1Database, q: EventQuery, fetchedAt: Record<string, string>) {
   if (q.outside) return { events: [], next_cursor: null };
-  const { sql, binds, take } = eventsSql(q);
-  const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
-  const found = isFiltered(q) ? rows.filter(matches(q)) : rows;
+  if (!isFiltered(q)) {
+    const { sql, binds } = eventsSql(q);
+    const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
+    const shown = rows.slice(0, q.limit);
+    const next = rows.length > q.limit ? keyOf(shown[shown.length - 1]) : null;
+    return { events: shown.map((r) => rowToEvent(r, fetchedAt)), next_cursor: next ? encodeCursor(q.fp, next) : null };
+  }
+
+  const m = matchingDaysSql(q);
+  const dayRows = (await db.prepare(m.sql).bind(...m.binds).all<Row>()).results;
+  const days = [...new Set(dayRows.map((r) => r.starts_on as string))];
+  if (!days.length) return { events: [], next_cursor: null };
+  const s = scanSql(q, days);
+  let rows = (await db.prepare(s.sql).bind(...s.binds).all<Row>()).results;
+  // A location that hit the cap was read only up to its last row; nothing after the earliest such row is complete.
+  let cut: [string, number, string] | null = null;
+  for (const loc of q.prefs) {
+    const mine = rows.filter((r) => r.loc === loc);
+    if (mine.length === SCAN_LIMIT) {
+      const k = keyOf(mine[mine.length - 1]);
+      if (!cut || cmpKey(k, cut) < 0) cut = k;
+    }
+  }
+  if (cut) rows = rows.filter((r) => cmpKey(keyOf(r), cut!) <= 0);
+  const found = rows.filter(matches(q));
   let shown = found;
   let next: [string, number, string] | null = null;
   if (found.length > q.limit) {
     shown = found.slice(0, q.limit);
     next = keyOf(shown[shown.length - 1]);
-  } else if (isFiltered(q) && rows.length === take) {
-    // Scan cap reached: return what matched so far and continue after the last row read.
-    next = keyOf(rows[rows.length - 1]);
+  } else if (cut) {
+    next = cut;
+  } else if (dayRows.length === DAY_ROWS) {
+    // More matching days may follow the ones looked up: continue at the start of the next day
+    // (starts_sort 0 = 1970, before every real event).
+    const d = nextDay(days[days.length - 1]);
+    if (d < q.until) next = [d, 0, 'tcgp:0'];
   }
-  return {
-    events: shown.map((r) => rowToEvent(r, fetchedAt)),
-    next_cursor: next ? encodeCursor(q.fp, next) : null,
-  };
+  let events: Row[] = [];
+  if (shown.length) {
+    const full = (await db.prepare(`${SELECT}\nFROM events WHERE id IN (${marks(shown)})`).bind(...shown.map((r) => r.id)).all<Row>()).results;
+    const byId = new Map(full.map((r) => [r.id, r]));
+    events = shown.map((r) => byId.get(r.id)!);
+  }
+  return { events: events.map((r) => rowToEvent(r, fetchedAt)), next_cursor: next ? encodeCursor(q.fp, next) : null };
 }
 
-/** /days reads day_counts (one row per location, day, game mask and type), not the events. */
-export function daysSql(q: Filters): { sql: string; binds: unknown[] } {
+function dayCountsWhere(q: Filters, from: string): { parts: string[]; binds: unknown[] } {
   const parts = [locSql(q.prefs), 'starts_on >= ?', 'starts_on < ?'];
-  const binds: unknown[] = [...q.prefs, q.from, q.until];
+  const binds: unknown[] = [...q.prefs, from, q.until];
   if (q.games.length) {
     parts.push('(game_mask & ?) <> 0');
     binds.push(gameBits(q.games));
@@ -243,6 +303,12 @@ export function daysSql(q: Filters): { sql: string; binds: unknown[] } {
     binds.push(...q.types);
   }
   if (q.days) parts.push(dowSql(q.days));
+  return { parts, binds };
+}
+
+/** /days reads day_counts (one row per location, day, game mask and type), not the events. */
+export function daysSql(q: Filters): { sql: string; binds: unknown[] } {
+  const { parts, binds } = dayCountsWhere(q, q.from);
   return { sql: `SELECT starts_on AS date, game_mask AS m, SUM(n) AS n FROM day_counts\nWHERE ${parts.join(' AND ')}\nGROUP BY starts_on, game_mask`, binds };
 }
 
