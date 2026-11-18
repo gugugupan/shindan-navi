@@ -52,7 +52,7 @@ Pushing to `main` runs `.github/workflows/deploy.yml`. It never changes data and
 | `LIVE_HOST` | Pages project `shindan-navi` | Worker `shindan-navi` |
 | --- | --- | --- |
 | unset / `pages` (until the cutover) | built with `BUILD_EVENTS=0` (no `/events/`, no `/api/` there) and deployed: the live site keeps updating | built with `/events/` and deployed to its version preview URL, only if the `D1_DATABASE_ID` secret is set |
-| `worker` (after the cutover) | skipped | deployed with the `shindan-navi.app` custom domain; fails if `D1_DATABASE_ID` is empty |
+| `worker` (after the cutover) | skipped | preflight on a version preview URL (`api/scripts/preview-check.mjs`: meta must list imported events, `/events/` and `/days` must answer), then deployed with the `shindan-navi.app` custom domain; fails if `D1_DATABASE_ID` is empty or the preflight fails |
 
 The committed `wrangler.jsonc` has no route: only `api/scripts/remote-config.mjs --domain` (used when `LIVE_HOST=worker`, or by hand during the cutover) adds the custom domain, so merging never moves the domain by itself. `workers_dev` is off; version preview URLs are on and answer with `X-Robots-Tag: noindex`.
 
@@ -71,7 +71,9 @@ D1_DATABASE_ID=... ./scripts/deploy.sh worker          # Worker, preview URL onl
 D1_DATABASE_ID=... ./scripts/deploy.sh worker --domain # Worker + shindan-navi.app (cutover)
 ```
 
-Cutover (once): remove `shindan-navi.app` from the Pages project's custom domains, run `./scripts/deploy.sh worker --domain`, then set `LIVE_HOST=worker`. Rollback: remove the domain from the Worker (Settings → Domains & Routes), add it back to the Pages project, set `LIVE_HOST=pages` (or delete it) and run `./scripts/deploy.sh pages`. `www` redirects to the apex with a zone Redirect Rule either way.
+Cutover (once, after the first D1 import): remove `shindan-navi.app` from the Pages project's custom domains, run `./scripts/deploy.sh worker --domain` (same preflight as CI, then attach), and set `LIVE_HOST=worker` **in the same sitting**: between the cutover and the variable, pushes still deploy the now-unused Pages project and the live Worker misses that update. Do not set `LIVE_HOST=worker` before the import: the preflight would fail (by design) and pushes would stop updating Pages. Rollback: remove the domain from the Worker (Settings → Domains & Routes), add it back to the Pages project, set `LIVE_HOST=pages` (or delete it) and run `./scripts/deploy.sh pages`. `www` redirects to the apex with a zone Redirect Rule either way.
+
+Rate limiting: besides the Worker's per-IP limit on uncached API requests, add the Free plan's one WAF rate-limiting rule (Security → WAF → Rate limiting rules): *URI Path starts with `/api/`*, counted per IP, **40 requests / 10 s**, action Block for 10 s. A normal visit makes ~7 API requests on load and one per 50 events while scrolling.
 
 ## GA events
 

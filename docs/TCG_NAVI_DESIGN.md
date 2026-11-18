@@ -11,9 +11,9 @@
 | 商品数据的事实源 | 继续是 git 中的 `data/items.json` 与 `data/overrides.json`，由 `scripts/build.py` 静态构建。不迁入数据库，不双写。 |
 | 商品 ID | 已有 ID 视为不透明主键，永不重算；新增游戏代码通过映射表关联，不参与 ID 计算。 |
 | 赛事数据的提供方式 | Cloudflare Worker 查询 API + D1。站点与 API 由同一个 Worker `shindan-navi` 提供（方案 B：一个仓库对应一个 Worker，配置为仓库根 `wrangler.jsonc`），切换前 Pages 继续承载线上站点（workflow 按仓库变量 `LIVE_HOST` 部署），切换后下线。D1 保持 Free 方案。 |
-| 赛事数据的事实源 | 采集结果经标准化后以 JSON 提交到 git（`data/events/`）审阅，再导入 D1；D1 是查询层，可随时从 git 重建。 |
+| 赛事数据的事实源 | 采集结果经标准化后以 JSON 保存在操作者本机（`data/events/`，git 忽略，**不提交**），由导入器推送到 D1；D1 是唯一的共享副本。审阅改为导入器的检查与汇总（见 §10）。 |
 | 首批赛事游戏 | ONE PIECE（OPCG）、UNION ARENA（UATCG）、名探偵コナン TCG（CONAN）、ポケモンカード（PTCG），日本市场。 |
-| 数据刷新 | 本地手动运行采集，人工审阅后提交。是否推翻“不自动刷新”的既有决定见 §14 第 0 项。 |
+| 数据刷新 | 本地手动运行采集，看导入汇总后推送到 D1（不提交 git）。是否推翻“不自动刷新”的既有决定见 §14 第 0 项。 |
 | 本轮交付 | `/events/` 赛事日历页的本地预览，带筛选。不 push、不部署。 |
 
 ## 1. 产品目标与首版范围
@@ -54,7 +54,7 @@ TCG Navi 面向玩家聚合不同卡牌游戏的新品、赛事和资讯。用�
 | 领域 | 存储 | 可支持的展示 |
 | --- | --- | --- |
 | 商品与发售信息 | git JSON → 静态构建 | 新品日历、商品列表、游戏新品页 |
-| 活动系列、场次与场地 | git JSON → D1 → Worker API | 赛事日历、赛事列表、未来的地图 |
+| 活动系列、场次与场地 | 本机 JSON → D1 → Worker API | 赛事日历、赛事列表、未来的地图 |
 | 资讯文章 | 待定 | 游戏资讯流、主题聚合页 |
 
 一个新页面不自动需要一个新数据库。
@@ -76,8 +76,8 @@ TCG Navi 面向玩家聚合不同卡牌游戏的新品、赛事和资讯。用�
 flowchart LR
     M[本地手动运行] --> A[来源适配器]
     A --> C[标准化赛事 JSON]
-    C --> V[校验与 git diff 审阅]
-    V --> G[data/events/ 提交]
+    C --> V[校验与导入汇总审阅]
+    V --> G[data/events/ 本机保存]
     G --> D[(D1 导入)]
     D --> Q[Worker 查询 API]
     Q --> W[/events/ 页面]
@@ -140,7 +140,7 @@ GET /api/v1/events/meta        # 各游戏覆盖范围、最后更新时间、�
 
 1. **运行。** 固定游戏、地区、日期范围，本地手动执行。
 2. **校验。** Schema、身份唯一性、游戏与地区归属、时间精度，以及取得数量与来源 total 的一致性。数量不足时失败，不输出部分清单。
-3. **审阅。** 以 git diff 审阅新增、改期、取消和异常减少。抓取缺失不能直接触发删除或取消。
+3. **审阅。** 赛事数据不进 git：导入器 `--plan` 按游戏打印 fetched_at、来源总数、件数、D1 现有件数与新增/更新/未变/隐藏，操作者确认后 `--yes`。不完整的运行默认拒绝（`--allow-incomplete`），比 D1 同窗口少 20% 以上默认拒绝（`--allow-shrink`）。抓取缺失不能直接触发删除或取消。
 4. **导入。** 与 D1 现有数据比对，只写入变化的行，记录 `imports`；未变化的重复导入不写入。
 5. **展示。** 页面显示每个游戏的最后更新时间与覆盖范围。
 
@@ -166,7 +166,7 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 
 部署：main push 运行 `.github/workflows/deploy.yml`，只部署代码与 `dist/`，不采集、不导入。仓库变量 `LIVE_HOST` 决定由谁承载 `shindan-navi.app`：未设置或 `pages` 时，Pages 继续接收不含 `/events/` 的构建（线上站点与 update-data 发布不中断），Worker 只部署到版本预览 URL；`worker` 时只部署 Worker 并挂自定义域名。提交的 `wrangler.jsonc` 不含路由，合并不会切换域名；域名由 `remote-config.mjs --domain` 显式添加。D1 的 `database_id` 不入库，部署时由 secret `D1_DATABASE_ID` 写入被忽略的 `wrangler.remote.json`。`workers_dev` 关闭，版本预览 URL 开启并带 `X-Robots-Tag: noindex`。
 
-数据进入 D1：本地 `api/` 下先 `npm run import:remote -- --plan` 再 `-- --yes`（需 `D1_DATABASE_ID`；数据必须已提交）。导入与现有数据比对，只写变化，不删除，读者不会看到空表。预算（D1 Free：每日 100,000 行写入、5M 行读取）：events 为单表、唯一二级索引 `(loc, starts_on, starts_sort)`，meta 在导入时预计算。当前数据首次导入约 6.6 万行写入，无变化的重复导入为 0；东京一次未命中缓存的列表页约读 3,900 行，中位县约 480 行。明细见 `api/README.md`。D1 表结构因此是反规范化的单表（系列、场地内联），与 [EVENT_DATA_MODEL.md](EVENT_DATA_MODEL.md) 的规范化逻辑模型不同；后者仍描述字段含义。
+数据进入 D1：本地 `api/` 下先 `npm run import:remote -- --plan` 再 `-- --yes`（需 `D1_DATABASE_ID`；数据只在本机）。导入与现有数据比对，只写变化，不删除，读者不会看到空表。预算（D1 Free：每日 100,000 行写入、5M 行读取）：events 为单表、唯一二级索引 `(loc, starts_on, starts_sort)`，meta 在导入时预计算。当前数据首次导入约 6.6 万行写入，无变化的重复导入为 0；东京一次未命中缓存的列表页约读 3,900 行，中位县约 480 行；单个请求最坏约 1 万行（5 个大县 × 31 天），由边缘缓存、按 IP 的 Worker 限流和一条 WAF 限流规则兜底。明细见 `api/README.md`。D1 表结构因此是反规范化的单表（系列、场地内联），与 [EVENT_DATA_MODEL.md](EVENT_DATA_MODEL.md) 的规范化逻辑模型不同；后者仍描述字段含义。
 
 ## 11. 渐进迁移与品牌
 
