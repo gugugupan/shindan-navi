@@ -58,6 +58,18 @@ jobs:
         with:
           node-version: "22"
 
+      # Before the domain points at the Worker, the build must work on a version preview URL with D1 data
+      # (meta lists events). Fails the job, so the domain step below never runs on an empty or broken Worker.
+      - name: Preflight on a version preview URL
+        if: env.LIVE_HOST == 'worker'
+        env:
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node api/scripts/remote-config.mjs
+          node api/scripts/preview-check.mjs
+
       # Writes the git-ignored wrangler.remote.json with the real D1 id (fails when the secret is empty).
       # Only LIVE_HOST=worker adds the shindan-navi.app custom domain; before that a deploy reaches the
       # version preview URL only.
