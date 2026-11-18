@@ -56,6 +56,9 @@ GET /api/v1/events/meta
 GET /api/v1/events/days         same filters as /events (no limit/cursor)
 → { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... } }] }   only days with count > 0
 
+GET /api/v1/geo                 prefecture guessed from the visitor's IP (Cloudflare request.cf), not stored
+→ { "region_code": "JP-13" | null }   null outside Japan or when unknown; Cache-Control: private, no-store
+
 Errors: 400 { "error": "<message>" } for bad params.
 ```
 

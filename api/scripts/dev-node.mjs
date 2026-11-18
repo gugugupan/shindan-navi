@@ -53,6 +53,8 @@ const ASSETS = {
 createServer(async (req, res) => {
   try {
     const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url}`, { method: req.method });
+    // DEV_GEO_REGION=13 emulates Cloudflare's IP geolocation for /api/v1/geo
+    if (process.env.DEV_GEO_REGION) Object.defineProperty(request, 'cf', { value: { country: 'JP', regionCode: process.env.DEV_GEO_REGION } });
     const response = await worker.fetch(request, { DB: db, ASSETS });
     res.writeHead(response.status, Object.fromEntries(response.headers));
     res.end(Buffer.from(await response.arrayBuffer()));

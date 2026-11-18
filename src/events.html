@@ -177,7 +177,7 @@ button.cd:hover{background:var(--surface-2)}
 
   <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・参加費で探せます。</p></div></div>
   <p class="legend">イベント情報は各タイトルの公式イベントページで公開されている内容をもとに掲載しています。開催可否・参加費・定員・申込方法は変わることがあるため、参加前に必ず「公式で詳細・申込」から最新情報をご確認ください。定員は募集人数で、残り枠ではありません。</p>
-  <p class="legend">都道府県・表示設定はお使いのブラウザ（localStorage）にのみ保存され、外部には送信されません。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener">Google のポリシー</a> をご覧ください。</p>
+  <p class="legend">絞り込み条件・表示設定はお使いのブラウザ（localStorage）にのみ保存され、外部には送信されません。初めて開いたときの都道府県は、接続元 IP アドレスから推定したものです（位置情報の許可は求めず、推定結果も保存しません）。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener">Google のポリシー</a> をご覧ください。</p>
 </div>
 
 <dialog id="prefDlg" class="prefdlg" aria-labelledby="prefTitle"><div class="dlg"><button class="ib close" id="prefClose" aria-label="閉じる">×</button><h2 class="dl-day" id="prefTitle">都道府県を選ぶ</h2><div id="prefBody"></div></div></dialog>
@@ -208,8 +208,6 @@ const PREF_REGION = {}; pi=0;
 REGIONS.forEach(([r,ps],ri)=>ps.forEach(()=>{ pi++; PREF_REGION['JP-'+String(pi).padStart(2,'0')]=ri; }));
 const CATS = [['tournament','大会'],['casual','交流会'],['teaching','体験会'],['festival','フェス']];
 const CAT_LABEL = Object.fromEntries([...CATS,['other','その他'],['unknown','種類未分類']]);
-const FEES = [['free','無料'],['paid','有料'],['unknown','参加費未確認']];
-const REGS = [['open','受付中'],['not_open','受付前'],['waitlist','キャンセル待ち'],['closed','受付終了'],['unknown','受付状況不明']];
 const REG_METHOD = {first_come:'先着',lottery:'抽選',walk_in:'当日参加OK',invitation:'招待制'};
 const MODES = [['','すべて'],['in_person','会場'],['online','オンライン']];
 const DAYS = [['','すべて'],['weekend','土日'],['weekday','平日']];
@@ -244,20 +242,21 @@ function rangeOf(s){
 }
 
 // ---- state <-> URL
-const LIST_KEYS = {game:'game', pref:'pref', cat:'cat', type:'type', fee:'fee', reg:'reg'};
+const LIST_KEYS = {game:'game', pref:'pref', type:'type'};
+const SAVED_KEY = 'tcg.ev.filters';
 function readURL(){
-  const q=new URLSearchParams(location.search);
+  const q0=new URLSearchParams(location.search), saved=store.get(SAVED_KEY,null);
+  const q=q0.toString()||!saved||typeof saved!=='object' ? q0 : new URLSearchParams(Object.entries(saved).filter(([,v])=>typeof v==='string'&&v));
   const list=k=>(q.get(k)||'').split(',').filter(Boolean);
   const s={
     game:list('game').filter(g=>GAME[g]), pref:list('pref').filter(p=>PREF[p]),
-    cat:list('cat').filter(c=>CAT_LABEL[c]), type:list('type').filter(t=>/^[a-z0-9_]+$/.test(t)),
-    fee:list('fee').filter(f=>FEES.some(x=>x[0]===f)), reg:list('reg').filter(r=>REGS.some(x=>x[0]===r)),
+    type:list('type').filter(t=>/^[a-z0-9_]+$/.test(t)),
     days:DAYS.some(x=>x[0]===q.get('days'))?q.get('days'):'', mode:MODES.some(x=>x[0]===q.get('mode'))?q.get('mode'):'',
     range:QUICK.some(x=>x[0]===q.get('range'))?q.get('range'):'upcoming',
     from:q.get('from'), to:q.get('to'),
     view:q.get('view')==='cal'?'cal':'list', month:/^\d{4}-\d{2}$/.test(q.get('month')||'')?q.get('month'):null
   };
-  if(!q.has('pref')) s.pref=(store.get('tcg.ev.pref',[])||[]).filter(p=>PREF[p]);
+  s.restored = !q0.toString() && !!saved; s.hadQuery = !!q0.toString();
   normCustom(s);
   if(!s.month) s.month=monthOf(rangeOf(s)[0]);
   return s;
@@ -284,11 +283,8 @@ function apiQuery(s,[from,until]){
   const q=new URLSearchParams({from,until});
   if(s.game.length) q.set('game',s.game.join(','));
   if(s.pref.length) q.set('pref',s.pref.join(','));
-  if(s.cat.length) q.set('category',s.cat.join(','));
   if(s.type.length) q.set('type',s.type.join(','));
   if(s.days) q.set('days',s.days);
-  if(s.fee.length) q.set('fee',s.fee.join(','));
-  if(s.reg.length) q.set('registration',s.reg.join(','));
   if(s.mode) q.set('mode',s.mode);
   return q;
 }
@@ -297,10 +293,16 @@ let state = readURL();
 history.replaceState(null,'',location.pathname+(toQuery(state)?'?'+toQuery(state):''));
 let meta = null, metaErr = false;
 
+// filters (not the date range) survive visits; an empty object records an explicit 全国 choice
+function saveFilters(){
+  const o={}; ['game','pref','type'].forEach(k=>{ if(state[k].length) o[k]=state[k].join(','); });
+  if(state.days) o.days=state.days; if(state.mode) o.mode=state.mode; if(state.view==='cal') o.view='cal';
+  store.set(SAVED_KEY,o);
+}
 function commit(changes, opts={}){
   Object.assign(state, changes);
   normCustom(state);
-  if(changes.pref) store.set('tcg.ev.pref', state.pref);
+  if(!opts.auto){ state.autoPref=false; saveFilters(); }
   if(!('month' in changes) && ('range' in changes || 'from' in changes || 'to' in changes)) state.month=monthOf(rangeOf(state)[0]);
   const qs=toQuery(state), url=location.pathname+(qs?'?'+qs:'');
   if(url!==location.pathname+location.search) history[opts.replace?'replaceState':'pushState'](null,'',url);
@@ -335,11 +337,8 @@ function renderControls(){
   document.getElementById('frow').innerHTML =
     fb('pref','都道府県',sum(state.pref,p=>PREF[p],2)) +
     fb('type','イベント形式',sum(state.type,typeName)) +
-    fb('cat','種類',sum(state.cat,c=>CAT_LABEL[c],2)) +
     fb('date','期間',state.range==='custom'?`${md(f)}〜${md(addD(u,-1))}`:'') +
     fb('days','曜日',(DAYS.find(d=>d[0]===state.days&&d[0])||[])[1]||'') +
-    fb('fee','参加費',sum(state.fee,v=>FEES.find(x=>x[0]===v)[1],2)) +
-    fb('reg','受付',sum(state.reg,v=>REGS.find(x=>x[0]===v)[1],2)) +
     fb('mode','開催形式',(MODES.find(d=>d[0]===state.mode&&d[0])||[])[1]||'') +
     (activeFilterCount()||state.range==='custom'?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
   if(fDlg.open) renderF();
@@ -354,8 +353,7 @@ function renderControls(){
     if(el) el.focus();
   }
 }
-const catCount = c => { const x=meta&&meta.categories&&meta.categories.find(y=>y.code===c); return x?` <em>${x.count.toLocaleString('ja-JP')}</em>`:''; };
-const activeFilterCount = () => state.pref.length+state.cat.length+state.type.length+state.fee.length+state.reg.length+(state.days?1:0)+(state.mode?1:0);
+const activeFilterCount = () => state.pref.length+state.type.length+(state.days?1:0)+(state.mode?1:0);
 
 function toggleIn(arr,v){ return arr.includes(v)?arr.filter(x=>x!==v):[...arr,v]; }
 function onChip(e){
@@ -381,14 +379,14 @@ function onDate(e){
 document.querySelector('.panel').addEventListener('click',e=>{
   const fbtn=e.target.closest('[data-f]');
   if(fbtn){ const k=fbtn.dataset.f; if(k==='pref') openPref(); else openF(k); return; }
-  if(e.target.closest('#resetAll')){ commit({pref:[],cat:[],type:[],fee:[],reg:[],days:'',mode:'',...(state.range==='custom'?{range:'upcoming'}:{})}); return; }
+  if(e.target.closest('#resetAll')){ commit({pref:[],type:[],days:'',mode:'',...(state.range==='custom'?{range:'upcoming'}:{})}); return; }
   onChip(e);
 });
 
 // ---- one dialog per filter group; choices apply immediately
 const fDlg=document.getElementById('fDlg');
-const F_TITLE={type:'イベント形式',cat:'種類',date:'期間を指定',days:'曜日',fee:'参加費',reg:'受付状況',mode:'開催形式'};
-const F_CLEAR={type:{type:[]},cat:{cat:[]},date:{range:'upcoming'},days:{days:''},fee:{fee:[]},reg:{reg:[]},mode:{mode:''}};
+const F_TITLE={type:'イベント形式',date:'期間を指定',days:'曜日',mode:'開催形式'};
+const F_CLEAR={type:{type:[]},date:{range:'upcoming'},days:{days:''},mode:{mode:''}};
 let fKey='';
 function renderF(){
   const k=fKey, chips=(arr,multi)=>arr.map(([v,l])=>chip(k,v,l,multi?state[k].includes(v):state[k]===v,' k')).join('');
@@ -400,10 +398,7 @@ function renderF(){
       if(!ts.length) return '';
       return `<div class="fgrp" style="--h:${g.h}"><h3><i></i>${esc(g.name)}</h3><div class="fc">${ts.map(t=>`<button class="chip k" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`;
     }).join('') || `<p class="note">${meta?'選べる形式がありません':'読み込み中…'}</p>`;
-  } else if(k==='cat') body=`<div class="fc">${CATS.map(([v,l])=>chip('cat',v,l+catCount(v),state.cat.includes(v),' k')).join('')}</div>`;
-  else if(k==='fee') body=`<div class="fc">${chips(FEES,true)}</div>`;
-  else if(k==='reg') body=`<div class="fc">${chips(REGS,true)}</div>`;
-  else if(k==='days') body=`<div class="fc">${chips(DAYS,false)}</div>`;
+  } else if(k==='days') body=`<div class="fc">${chips(DAYS,false)}</div>`;
   else if(k==='mode') body=`<div class="fc">${chips(MODES,false)}</div>${state.pref.length?'<p class="note">都道府県を選んでいる間、オンライン開催は表示されません。</p>':''}`;
   else if(k==='date'){ const [f,u]=rangeOf(state); body=`<div class="fc">
       <label>開始 <input type="date" class="datein" id="dFrom" value="${f}" min="${TODAY}"></label>
@@ -566,7 +561,7 @@ function renderHead(){
   const el=document.getElementById('rhead');
   const [f,u]=rangeOf(state), last=addD(u,-1);
   const rng = state.view==='cal' ? '' : f===last ? md(f) : `${md(f)}〜${md(last)}`;
-  const where = state.pref.length ? state.pref.slice(0,3).map(p=>PREF[p]).join('・')+(state.pref.length>3?` ほか${state.pref.length-3}`:'') : '全国';
+  const where = (state.pref.length ? state.pref.slice(0,3).map(p=>PREF[p]).join('・')+(state.pref.length>3?` ほか${state.pref.length-3}`:'') : '全国')+(state.autoPref?'（現在地から推定）':'');
   const cnt = total==null ? '' : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件</span>`;
   el.innerHTML = state.view==='cal' ? `<span class="sub">${esc(where)}${state.mode==='online'?' · オンライン':''}</span>`
     : `${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}${state.mode==='online'?' · オンライン':''}</span>`;
@@ -609,7 +604,7 @@ const io = 'IntersectionObserver' in window ? new IntersectionObserver(es=>{
 document.getElementById('results').addEventListener('click',e=>{
   if(e.target.closest('#loadMore')){ failed=false; loadPage(); return; }
   if(e.target.closest('#retry')){ if(!meta) loadMeta(); reload(); return; }
-  if(e.target.closest('#resetAll2')){ commit({game:[],pref:[],cat:[],type:[],fee:[],reg:[],days:'',mode:'',range:'upcoming'}); return; }
+  if(e.target.closest('#resetAll2')){ commit({game:[],pref:[],type:[],days:'',mode:'',range:'upcoming'}); return; }
   const a=e.target.closest('a.ev-link'); if(a) track('click_event_source',{game:a.dataset.game});
   const d=e.target.closest('button.cd[data-day]');
   if(d){ commit({view:'list',range:'custom',from:d.dataset.day,to:d.dataset.day}); window.scrollTo({top:0}); return; }
@@ -701,8 +696,17 @@ document.getElementById('themeBtn').onclick=()=>{
 };
 applyTheme();
 
+// first visit without a link or saved filters: preselect the prefecture the server guesses from the IP
+async function guessPref(){
+  try{
+    const r=await api('/geo'), code=r&&r.region_code;
+    if(PREF[code] && !state.pref.length && !location.search){ state.autoPref=true; commit({pref:[code]},{replace:true,auto:true}); }
+  }catch(e){}
+}
+
 renderControls();
 renderFresh();
 loadMeta();
 reload();
+if(!state.hadQuery && !state.restored) guessPref();
 </script>

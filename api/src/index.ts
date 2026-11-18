@@ -1,4 +1,5 @@
 import { BadRequest, listDays, listEvents } from './events';
+import { guessRegion } from './geo';
 import { getMeta } from './meta';
 
 export interface Env {
@@ -22,6 +23,7 @@ const ROUTES: Record<string, (db: D1Database, params: URLSearchParams) => Promis
 };
 
 async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
+  if (url.pathname === '/api/v1/geo' && request.method === 'GET') return json(guessRegion(request), 200, { 'cache-control': 'private, no-store' });
   const handler = ROUTES[url.pathname];
   if (!handler) return json({ error: 'not found' }, 404);
   if (request.method !== 'GET' && request.method !== 'HEAD') return json({ error: 'method not allowed' }, 405, { allow: 'GET, HEAD' });
