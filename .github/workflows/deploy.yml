@@ -58,8 +58,9 @@ jobs:
         with:
           node-version: "22"
 
-      # Before the domain points at the Worker, the build must work on a version preview URL with D1 data
-      # (meta lists events). Fails the job, so the domain step below never runs on an empty or broken Worker.
+      # Checks the build on a version preview URL before the deploy below: fails on a broken build (/, /events/),
+      # only warns on API or data problems so a D1 hiccup never blocks publishing. The first domain attach is
+      # gated strictly by `scripts/deploy.sh worker --domain`.
       - name: Preflight on a version preview URL
         if: env.LIVE_HOST == 'worker'
         env:

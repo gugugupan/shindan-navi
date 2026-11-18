@@ -17,9 +17,9 @@ case "$target" in
   worker)
     "$PY" -I scripts/build.py
     if [ "${1:-}" = "--domain" ]; then
-      # same gate as CI: a version preview with imported data must work before the domain moves
+      # hard gate for attaching the domain: the preview must serve current data (CI only warns on data)
       node api/scripts/remote-config.mjs
-      node api/scripts/preview-check.mjs
+      node api/scripts/preview-check.mjs --strict
     fi
     node api/scripts/remote-config.mjs "$@"
     $WRANGLER deploy --config wrangler.remote.json ;;
