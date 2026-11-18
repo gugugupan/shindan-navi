@@ -40,6 +40,22 @@ describe('importer', () => {
     expect(importDir(db, dir, 4_000).plan.statements).toEqual([]);
   });
 
+  it('keeps day_counts equal to the visible events and repairs it', () => {
+    const db = newDb();
+    const evs = synthetic(60).filter((e) => e.game_code === 'OPCG');
+    const dir = writeDataDir(evs);
+    importDir(db, dir, 1_000);
+    const sum = () => Number(db.db.prepare('SELECT COALESCE(SUM(n), 0) s FROM day_counts').get()!.s);
+    expect(sum()).toBe(evs.length);
+    const rest = evs.slice(1);
+    importDir(db, writeDataDir(rest, { OPCG: run('OPCG', rest.length, { fetched_at: '2026-11-19T00:00:00Z' }) }), 2_000);
+    expect(sum()).toBe(rest.length);
+    db.db.exec('DELETE FROM day_counts');
+    const repair = importDir(db, writeDataDir(rest, { OPCG: run('OPCG', rest.length, { fetched_at: '2026-11-19T00:00:00Z' }) }), 3_000).plan;
+    expect(repair.stats.day_counts).toBeGreaterThan(0);
+    expect(sum()).toBe(rest.length);
+  });
+
   it('warns about in-person events that no location can reach', () => {
     const ev = synthetic(2)[1];
     const dir = writeDataDir([{ ...ev, attendance_mode: 'in_person', venue: { ...ev.venue, region_code: null, region_name: null } }]);
@@ -186,12 +202,13 @@ describe('shared events', () => {
 
   it('counts the event once per day and once per member game in by_game', async () => {
     const db = load();
-    const day = (await api(db, `/api/v1/events/days?${ALL_PREFS}&from=${shared.starts_on}&until=${new Date(Date.parse(`${shared.starts_on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`)).body.days[0];
+    const oneDay = `from=${shared.starts_on}&until=${new Date(Date.parse(`${shared.starts_on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`;
+    const day = (await apiAll(db, `/api/v1/events/days?${ALL_PREFS}&${oneDay}`)).body.days[0];
     const others = base.filter((e) => e.starts_on === shared.starts_on);
     expect(day.count).toBe(others.length + 1);
     expect(day.by_game.OPCG).toBe(others.filter((e) => e.game_code === 'OPCG').length + 1);
     expect(day.by_game.UATCG).toBe(others.filter((e) => e.game_code === 'UATCG').length + 1);
-    const opcgOnly = (await api(db, `/api/v1/events/days?${ALL_PREFS}&game=OPCG&from=${shared.starts_on}&until=${new Date(Date.parse(`${shared.starts_on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}`)).body.days[0];
+    const opcgOnly = (await apiAll(db, `/api/v1/events/days?${ALL_PREFS}&game=OPCG&${oneDay}`)).body.days[0];
     expect(Object.keys(opcgOnly.by_game)).toEqual(['OPCG']);
   });
 

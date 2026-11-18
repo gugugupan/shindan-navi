@@ -232,15 +232,29 @@ function eventRow(ev, now) {
 }
 
 /** State of an empty (freshly migrated) database. */
-export const emptyState = () => ({ events: new Map(), imports: [], siteMeta: {} });
+export const emptyState = () => ({ events: new Map(), imports: [], siteMeta: {}, dayCounts: new Map() });
 
 /** Builds the importer's view of a database from rows of STATE_EVENT_COLS / STATE_IMPORT_COLS / site_meta. */
-export function stateFromRows(eventRows, importRows, siteMetaRows = []) {
+export function stateFromRows(eventRows, importRows, siteMetaRows = [], dayCountRows = []) {
   return {
     events: new Map(eventRows.map((r) => [r.id, { ...r, game_mask: Number(r.game_mask) }])),
     imports: importRows.map((r) => ({ ...r, record_count: Number(r.record_count), complete: Number(r.complete) })),
     siteMeta: Object.fromEntries(siteMetaRows.map((r) => [r.key, r.value])),
+    dayCounts: new Map(dayCountRows.map((r) => [dayKey(r.loc, r.starts_on, Number(r.game_mask), r.event_type_code), Number(r.n)])),
   };
+}
+
+const dayKey = (loc, startsOn, mask, type) => [loc, startsOn, mask, type ?? ''].join('\t');
+
+/** day_counts rows implied by the events: visible events with a location, per (loc, day, mask, type). */
+export function computeDayCounts(events) {
+  const out = new Map();
+  for (const e of events.values()) {
+    if (!e.game_mask || !e.loc) continue;
+    const k = dayKey(e.loc, e.starts_on, e.game_mask, e.event_type_code);
+    out.set(k, (out.get(k) ?? 0) + 1);
+  }
+  return out;
 }
 
 /** SQL that pages through the state (keyset by id, `pageSize` rows per call). */
@@ -248,6 +262,7 @@ export const stateEventsSql = (afterId, pageSize) =>
   `SELECT ${STATE_EVENT_COLS.join(', ')} FROM events${afterId === null ? '' : ` WHERE id > ${sqlLiteral(afterId)}`} ORDER BY id LIMIT ${pageSize}`;
 export const stateImportsSql = () => `SELECT ${STATE_IMPORT_COLS.join(', ')} FROM imports`;
 export const stateSiteMetaSql = () => 'SELECT key, value FROM site_meta';
+export const stateDayCountsSql = () => 'SELECT loc, starts_on, game_mask, event_type_code, n FROM day_counts';
 
 function chunked(head, items, tail = '') {
   const fixed = Buffer.byteLength(head) + Buffer.byteLength(tail);
@@ -415,6 +430,20 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     statements.push(...chunked(`UPDATE events SET game_mask = ${mask} WHERE id IN (`, ids.map(sqlLiteral), ')'));
   }
 
+  // day_counts follows the events; diffed against the stored rows, so a stale table is repaired too.
+  const counts = computeDayCounts(next);
+  const oldCounts = state.dayCounts ?? new Map();
+  const countUpserts = [...counts].filter(([k, n]) => oldCounts.get(k) !== n);
+  const countDeletes = [...oldCounts.keys()].filter((k) => !counts.has(k));
+  const tuple = (k) => {
+    const [loc, day, mask, type] = k.split('\t');
+    return `(${sqlLiteral(loc)}, ${sqlLiteral(day)}, ${Number(mask)}, ${sqlLiteral(type)}`;
+  };
+  statements.push(...chunked('INSERT INTO day_counts (loc, starts_on, game_mask, event_type_code, n) VALUES\n',
+    countUpserts.map(([k, n]) => `${tuple(k)}, ${n})`), '\nON CONFLICT(loc, starts_on, game_mask, event_type_code) DO UPDATE SET n = excluded.n'));
+  statements.push(...chunked('DELETE FROM day_counts WHERE (loc, starts_on, game_mask, event_type_code) IN (VALUES ',
+    countDeletes.map((k) => `${tuple(k)})`), ')'));
+
   const meta = computeMeta(next, [...state.imports, ...newImports]);
   const { fetched_at, window, ...body } = meta;
   const metaJson = JSON.stringify(body);
@@ -439,12 +468,18 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     rewritten: upserts.length - inserted,
     mask_updates: maskUpdates,
     imports: newImports.length,
+    day_counts: countUpserts.length + countDeletes.length,
     site_meta: changed ? 2 : 0,
     unchanged: rows.size - upserts.length - [...masks.values()].flat().filter((id) => rows.has(id)).length,
   };
   return {
     statements, stats, perGame, meta, version: changed ? version : null,
-    state: { events: next, imports: [...state.imports, ...newImports], siteMeta: changed ? { meta: metaJson, state: JSON.stringify({ version, fetched_at, window }) } : state.siteMeta },
+    state: {
+      events: next,
+      imports: [...state.imports, ...newImports],
+      siteMeta: changed ? { meta: metaJson, state: JSON.stringify({ version, fetched_at, window }) } : state.siteMeta,
+      dayCounts: counts,
+    },
   };
 }
 
@@ -463,10 +498,11 @@ export function estimateCost(stats, state) {
     'events (rewrite)': stats.rewritten * (1 + EVENT_INDEXES),
     'events (game_mask)': stats.mask_updates,
     imports: stats.imports,
+    day_counts: stats.day_counts,
     site_meta: stats.site_meta,
   };
-  const stateRead = state.events.size + state.imports.length + Object.keys(state.siteMeta ?? {}).length;
-  const lookups = stats.inserted + stats.rewritten + stats.mask_updates + stats.imports + stats.site_meta;
+  const stateRead = state.events.size + state.imports.length + Object.keys(state.siteMeta ?? {}).length + (state.dayCounts?.size ?? 0);
+  const lookups = stats.inserted + stats.rewritten + stats.mask_updates + stats.imports + stats.day_counts + stats.site_meta;
   return {
     writes,
     rowsWritten: Object.values(writes).reduce((a, b) => a + b, 0),

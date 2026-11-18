@@ -3,7 +3,7 @@
 //   ROUNDTRIP_DATA=<data/events dir> [ROUNDTRIP_DB=<sqlite file>] npx vitest run tests/roundtrip.test.ts
 // Without ROUNDTRIP_DATA it runs on the sample fixture plus SYNTHETIC conflicting groups/venues and a shared event.
 import { describe, expect, it } from 'vitest';
-import { api, conflicting, importDir, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
+import { apiAll, conflicting, importDir, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
 import { locOf } from '../scripts/lib/importer.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
@@ -36,18 +36,12 @@ describe('round trip', () => {
     let total = 0;
     for (let i = 0; i < locs.length; i += 5) {
       const pref = locs.slice(i, i + 5).join(',');
-      for (let from = dates[0]; from <= dates[dates.length - 1]; from = addDays(from, 31)) {
-        const range = `from=${from}&until=${addDays(from, 31)}&pref=${pref}`;
-        const days = await api(db, `/api/v1/events/days?${range}`);
-        total += days.body.days.reduce((n: number, d: Ev) => n + d.count, 0);
-        let cursor: string | null = null;
-        do {
-          const r = await api(db, `/api/v1/events?${range}${cursor ? `&cursor=${cursor}` : ''}`);
-          expect(r.status).toBe(200);
-          for (const e of r.body.events) seen.set(e.id, e);
-          cursor = r.body.next_cursor;
-        } while (cursor);
-      }
+      const range = `from=${dates[0]}&until=${addDays(dates[dates.length - 1], 1)}&pref=${pref}`;
+      const days = await apiAll(db, `/api/v1/events/days?${range}`);
+      total += days.body.days.reduce((n: number, d: Ev) => n + d.count, 0);
+      const r = await apiAll(db, `/api/v1/events?${range}`);
+      expect(r.status).toBe(200);
+      for (const e of r.body.events) seen.set(e.id, e);
     }
     expect(seen.size).toBe(files.size);
     expect(total).toBe(files.size);

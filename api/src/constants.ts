@@ -5,13 +5,8 @@ export const GAMES = [
   { code: 'PTCG', name: 'ポケモンカードゲーム', slug: 'pokemon', bit: 8 },
 ] as const;
 export const GAME_CODES = GAMES.map((g) => g.code);
-// pref value for events without a physical venue.
-export const ONLINE = 'online';
 export const MAX_PREFS = 5;
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'] as const;
-export const REGISTRATION_STATUSES = ['not_open', 'open', 'waitlist', 'closed', 'unknown'] as const;
-export const ATTENDANCE_MODES = ['in_person', 'online', 'hybrid', 'unknown'] as const;
-export const FEES = ['free', 'paid', 'unknown'] as const;
 
 export const PREFECTURES: ReadonlyArray<readonly [string, string]> = [
   ['JP-01', '北海道'], ['JP-02', '青森県'], ['JP-03', '岩手県'], ['JP-04', '宮城県'], ['JP-05', '秋田県'],

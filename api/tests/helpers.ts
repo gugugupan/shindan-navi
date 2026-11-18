@@ -126,8 +126,11 @@ export async function api(db: SqliteD1, path: string): Promise<{ status: number;
   return { status: res.status, body: await res.json(), headers: res.headers };
 }
 
+const nextMonth = (d: string) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 1)).toISOString().slice(0, 10);
+
 /**
- * Like the page: splits from..until into API-sized (31-day) ranges and, for /events, follows every cursor.
+ * Like the page: covers from..until with month-shaped requests (/days whole months, /events from a start day to
+ * the end of its month), follows every cursor and drops what lies outside the range.
  * Returns the merged body: { events, next_cursor: null } or { days }.
  */
 export async function apiAll(db: SqliteD1, path: string): Promise<{ status: number; body: any }> {
@@ -138,19 +141,20 @@ export async function apiAll(db: SqliteD1, path: string): Promise<{ status: numb
   const isDays = url.pathname.endsWith('/days');
   const events: Ev[] = [];
   const days: Ev[] = [];
-  for (let f = from; f < until; f = addDays(f, 31)) {
+  for (let f = from; f < until; f = nextMonth(f)) {
     const q = new URLSearchParams(params);
-    q.set('from', f);
-    q.set('until', addDays(f, 31) < until ? addDays(f, 31) : until);
+    q.set('from', isDays ? `${f.slice(0, 7)}-01` : f);
+    q.set('until', nextMonth(f));
     let cursor: string | null = null;
     do {
       if (cursor) q.set('cursor', cursor);
       const r = await api(db, `${url.pathname}?${q}`);
       if (r.status !== 200) return r;
-      if (isDays) days.push(...r.body.days);
-      else events.push(...r.body.events);
+      if (isDays) days.push(...r.body.days.filter((d: Ev) => d.date >= from && d.date < until));
+      else events.push(...r.body.events.filter((e: Ev) => e.starts_on < until));
       cursor = isDays ? null : r.body.next_cursor;
     } while (cursor);
+    if (!isDays) f = `${f.slice(0, 7)}-01`;
   }
   return { status: 200, body: isDays ? { days } : { events, next_cursor: null } };
 }

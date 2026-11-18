@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
   API_DIR, DEFAULT_DATA_DIR, loadAll, planImport, toSqlFile, estimateCost, emptyState, stateFromRows, stateEventsSql, stateImportsSql,
-  stateSiteMetaSql,
+  stateSiteMetaSql, stateDayCountsSql,
 } from './lib/importer.mjs';
 import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mjs';
 
@@ -119,7 +119,8 @@ function readWranglerState(where, config) {
       if (page.length < STATE_PAGE) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()), wranglerQuery(where, config, stateSiteMetaSql()));
+    return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()), wranglerQuery(where, config, stateSiteMetaSql()),
+      wranglerQuery(where, config, stateDayCountsSql()));
   } catch (e) {
     if (/no such table/.test(e.message)) return emptyState();
     throw e;
@@ -159,10 +160,14 @@ for (const [g, p] of Object.entries(plan.perGame)) {
   const cells = [g.padEnd(6), p.fetched_at.padEnd(21), String(p.source_total ?? '-').padStart(12), String(p.record_count).padStart(8),
     String(p.in_db).padStart(10), String(p.inserted).padStart(9), String(p.rewritten).padStart(8), String(p.unchanged).padStart(10), String(p.hidden).padStart(7)];
   console.log(`  ${cells.join(' ')}${p.complete ? '' : '  (incomplete)'}`);
-  if (p.in_db > 0 && p.record_count < p.in_db * (1 - MAX_SHRINK)) shrunk.push(`${g} ${p.in_db} -> ${p.record_count}`);
+  // An incomplete run hides nothing, so a short one cannot shrink what the site shows.
+  if (p.complete && p.in_db > 0 && p.record_count < p.in_db * (1 - MAX_SHRINK)) shrunk.push(`${g} ${p.in_db} -> ${p.record_count} events`);
+  const prev = state.imports.filter((i) => i.game_code === g).sort((a, b) => (a.fetched_at < b.fetched_at ? -1 : 1)).pop();
+  const run = accepted.find((r) => r.game === g).run;
+  if (p.complete && prev && run.window.until < prev.window_until) shrunk.push(`${g} window ends ${run.window.until}, before the previous ${prev.window_until}`);
 }
 if (remote && shrunk.length && !opts['allow-shrink']) {
-  fail(`run(s) list over ${MAX_SHRINK * 100}% fewer events than D1 shows for the same window (${shrunk.join('; ')}). Check the collector output; pass --allow-shrink if the drop is real`);
+  fail(`complete run(s) shrink what D1 shows (${shrunk.join('; ')}): more than ${MAX_SHRINK * 100}% fewer events for the same window, or a window ending earlier than the previous import. Check the collector output; pass --allow-shrink if the drop is real`);
 }
 console.log(`  ${Object.entries(plan.stats).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 console.log(`  D1 rows written ~${cost.rowsWritten.toLocaleString('en-US')} (${Object.entries(cost.writes).filter(([, n]) => n).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ') || 'nothing'})`);

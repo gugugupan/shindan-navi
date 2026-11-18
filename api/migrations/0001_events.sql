@@ -1,4 +1,4 @@
--- Event query layer. Source of truth is data/events/ in git; this database can be rebuilt from it.
+-- Event query layer, filled by api/scripts/import-events.mjs from the operator's local data/events/ (never in git).
 -- Sized for the D1 Free plan: one wide events table (no joins at query time), one secondary index and
 -- precomputed meta. The importer diffs against the current rows and writes only what changed.
 

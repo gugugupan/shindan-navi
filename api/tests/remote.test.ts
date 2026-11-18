@@ -33,9 +33,10 @@ describe('cost estimate', () => {
     const first = planImport(results, emptyState(), { now: 1 });
     const c = estimateCost(first.stats, emptyState());
     expect(c.writes['events (insert)']).toBe(80);
-    expect(c.rowsWritten).toBe(80 + 4 + 2);
+    expect(first.stats.day_counts).toBeGreaterThan(0);
+    expect(c.rowsWritten).toBe(80 + 4 + first.stats.day_counts + 2);
     const again = planImport(results, first.state, { now: 2 });
-    expect(estimateCost(again.stats, first.state)).toMatchObject({ rowsWritten: 0, reads: { 'state read': 46 } });
+    expect(estimateCost(again.stats, first.state)).toMatchObject({ rowsWritten: 0, reads: { 'state read': 40 + 4 + 2 + first.stats.day_counts } });
   });
 });
 
@@ -50,7 +51,7 @@ describe('import --target remote', () => {
     bin = mkdtempSync(join(tmpdir(), 'fake-npx-'));
     log = join(bin, 'calls.log');
     // FAKE_STATE (a JSON file) answers the events state read; every other query gets an empty result.
-    writeFileSync(join(bin, 'npx'), `#!/bin/sh\necho "$@" >> "${log}"\ncase "$*" in *"FROM events"*) if [ -n "$FAKE_STATE" ]; then cat "$FAKE_STATE"; else echo '[{"results":[],"success":true}]'; fi;; *--command*) echo '[{"results":[],"success":true}]';; esac\n`);
+    writeFileSync(join(bin, 'npx'), `#!/bin/sh\necho "$@" >> "${log}"\ncase "$*" in *"FROM events"*) if [ -n "$FAKE_STATE" ]; then cat "$FAKE_STATE"; else echo '[{"results":[],"success":true}]'; fi;; *"FROM imports"*) if [ -n "$FAKE_IMPORTS" ]; then cat "$FAKE_IMPORTS"; else echo '[{"results":[],"success":true}]'; fi;; *--command*) echo '[{"results":[],"success":true}]';; esac\n`);
     chmodSync(join(bin, 'npx'), 0o755);
     data = writeDataDir(synthetic(30));
     if (existsSync(REMOTE_CONFIG)) {
@@ -85,7 +86,7 @@ describe('import --target remote', () => {
     const r = run([], { D1_DATABASE_ID: FAKE_ID });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/plan against empty database/);
-    expect(r.stdout).toMatch(/D1 rows written ~66 /);
+    expect(r.stdout).toMatch(/D1 rows written ~\d+ \(events \(insert\) 60, imports 4, day_counts \d+, site_meta 2\)/);
     expect(r.stdout).toMatch(/remote import NOT applied/);
     expect(r.stdout + r.stderr).not.toContain(FAKE_ID);
     expect(r.calls).toEqual([]);
@@ -116,6 +117,17 @@ describe('import --target remote', () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/OPCG 10 -> 1/);
     expect(run(['--plan', '--allow-shrink'], { D1_DATABASE_ID: FAKE_ID, FAKE_STATE: join(bin, 'state.json') }, small).status).toBe(0);
+    // Incomplete runs hide nothing, so they are exempt.
+    const partialSmall = writeDataDir(synthetic(4).filter((e) => e.game_code === 'OPCG'), { OPCG: runOf('OPCG', 1, { complete: false }) });
+    expect(run(['--plan', '--allow-incomplete', 'OPCG'], { D1_DATABASE_ID: FAKE_ID, FAKE_STATE: join(bin, 'state.json') }, partialSmall).status).toBe(0);
+  });
+
+  it('refuses a complete run whose window ends before the previous import', () => {
+    const prev = { id: 'OPCG:2026-11-17T00:00:00Z', game_code: 'OPCG', fetched_at: '2026-11-17T00:00:00Z', window_from: '2026-11-17', window_until: '2027-03-01', record_count: 8, complete: 1 };
+    writeFileSync(join(bin, 'imports.json'), JSON.stringify([{ results: [prev], success: true }]));
+    const r = run(['--plan'], { D1_DATABASE_ID: FAKE_ID, FAKE_IMPORTS: join(bin, 'imports.json') });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/OPCG window ends 2027-02-18, before the previous 2027-03-01/);
   });
 
   it('reads the remote rows with --plan and writes nothing', () => {

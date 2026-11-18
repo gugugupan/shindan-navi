@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { SCAN_LIMIT } from '../src/events';
 import { ALL_PREFS, api, apiAll, asApi, newDb, sampleEvents, synthetic, writeDataDir, importDir, type Ev } from './helpers';
 import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
@@ -30,7 +31,7 @@ async function fetchAll(query: string, on = db): Promise<Ev[]> {
 
 describe('GET /api/v1/events', () => {
   it('returns fixture events in exactly the contract shape', async () => {
-    const r = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-19&game=OPCG,PTCG,UATCG&${ALL_PREFS}`);
+    const r = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-01&game=OPCG,PTCG,UATCG&${ALL_PREFS}`);
     const byId = new Map(r.body.events.map((e: Ev) => [e.id, e]));
     for (const ev of sampleEvents()) {
       // Key order matters too: compare serialized JSON.
@@ -45,21 +46,11 @@ describe('GET /api/v1/events', () => {
     ['pref=JP-13,JP-40', (e) => ['JP-13', 'JP-40'].includes(e.venue?.region_code)],
     ['pref=online', (e) => !e.venue],
     ['pref=JP-27,online', (e) => !e.venue || e.venue.region_code === 'JP-27'],
-    ['category=tournament,casual', (e) => ['tournament', 'casual'].includes(e.group.category)],
     ['type=standard_battle', (e) => e.group.event_type_code === 'standard_battle'],
+    ['type=meetup,standard_battle', (e) => ['meetup', 'standard_battle'].includes(e.group.event_type_code)],
     ['days=weekend', (e) => [0, 6].includes(dow(e.starts_on))],
     ['days=weekday', (e) => ![0, 6].includes(dow(e.starts_on))],
-    ['days=1,3', (e) => [1, 3].includes(dow(e.starts_on))],
-    ['fee=free', (e) => e.fee_amount === 0],
-    ['fee=paid', (e) => e.fee_amount > 0],
-    ['fee=unknown', (e) => e.fee_amount === null],
-    ['fee=free,unknown', (e) => e.fee_amount === 0 || e.fee_amount === null],
-    ['registration=open', (e) => e.registration_status === 'open'],
-    ['mode=online', (e) => ['online', 'hybrid'].includes(e.attendance_mode)],
-    ['mode=in_person', (e) => ['in_person', 'hybrid'].includes(e.attendance_mode)],
-    ['mode=hybrid', (e) => e.attendance_mode === 'hybrid'],
-    ['pref=JP-13&mode=online', (e) => e.attendance_mode === 'hybrid' && e.venue?.region_code === 'JP-13'],
-    ['game=UATCG&pref=JP-14&fee=paid&days=weekend', (e) => e.game_code === 'UATCG' && e.venue?.region_code === 'JP-14' && e.fee_amount > 0 && [0, 6].includes(dow(e.starts_on))],
+    ['game=UATCG&pref=JP-14&type=meetup&days=weekend', (e) => e.game_code === 'UATCG' && e.venue?.region_code === 'JP-14' && e.group.event_type_code === 'meetup' && [0, 6].includes(dow(e.starts_on))],
   ];
   for (const [q, pred] of cases) {
     it(`filters ${q}`, async () => {
@@ -91,7 +82,7 @@ describe('GET /api/v1/events', () => {
   it('paginates in pages of 50 without gaps or duplicates', async () => {
     const got = (await fetchAll('from=2026-11-18&until=2027-02-18')).map((e) => e.id);
     expect(got).toEqual([...all].sort(cmp).map((e) => e.id));
-    const first = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-19&${ALL_PREFS}`);
+    const first = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-01&${ALL_PREFS}`);
     expect(first.body.events).toHaveLength(50);
     expect(first.body.next_cursor).not.toBeNull();
   });
@@ -103,29 +94,45 @@ describe('GET /api/v1/events', () => {
   });
 
   it('rejects forged cursors', async () => {
-    const q = `/api/v1/events?from=2026-11-18&until=2026-12-19&${ALL_PREFS}`;
+    const q = `/api/v1/events?from=2026-11-18&until=2026-12-01&${ALL_PREFS}`;
     const p1 = await api(db, q);
     const [v, fp] = JSON.parse(Buffer.from(p1.body.next_cursor, 'base64url').toString());
     const forge = (x: unknown[]) => Buffer.from(JSON.stringify(x)).toString('base64url');
-    expect((await api(db, `${q}&cursor=${forge([v, fp, '2027-01-05', 0, 'tcgp:x'])}`)).body.error).toMatch(/outside the date range/);
+    expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-12-05', 0, 'tcgp:x'])}`)).body.error).toMatch(/outside the date range/);
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', -1, 'tcgp:x'])}`)).body.error).toMatch(/invalid cursor/);
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, 'nope'])}`)).body.error).toMatch(/invalid cursor/);
   });
 
   it('clamps ranges to the data window and answers ranges outside it without data', async () => {
-    const inside = await api(db, `/api/v1/events/days?from=2026-11-01&until=2026-12-01&${ALL_PREFS}`);
-    const clamped = await api(db, `/api/v1/events/days?from=2026-11-18&until=2026-12-01&${ALL_PREFS}`);
-    expect(inside.body).toEqual(clamped.body);
-    expect((await api(db, `/api/v1/events/days?from=2027-03-01&until=2027-03-31&${ALL_PREFS}`)).body).toEqual({ days: [] });
-    expect((await api(db, `/api/v1/events?from=2026-10-01&until=2026-10-31&${ALL_PREFS}`)).body).toEqual({ events: [], next_cursor: null });
+    const clamped = await api(db, `/api/v1/events/days?from=2026-11-01&until=2026-12-01&${ALL_PREFS}`);
+    expect(clamped.body.days[0].date >= '2026-11-18').toBe(true);
+    const ids = async (q: string) => (await api(db, `/api/v1/events?${q}&${ALL_PREFS}`)).body.events.map((e: Ev) => e.id);
+    expect(await ids('from=2026-11-05&until=2026-12-01')).toEqual(await ids('from=2026-11-18&until=2026-12-01'));
+    expect((await api(db, `/api/v1/events/days?from=2027-03-01&until=2027-04-01&${ALL_PREFS}`)).body).toEqual({ days: [] });
+    expect((await api(db, `/api/v1/events?from=2026-10-05&until=2026-11-01&${ALL_PREFS}`)).body).toEqual({ events: [], next_cursor: null });
+  });
+
+  it('caps the rows one filtered page reads and continues with a cursor', async () => {
+    const local = newDb();
+    const tokyo = synthetic(8000).filter((e) => e.venue?.region_code === 'JP-13' && e.starts_on < '2026-12-01').sort(cmp);
+    // Only the last event in list order has the type, so the first page reads SCAN_LIMIT rows and finds nothing.
+    const rare = tokyo.map((e, i) => (i === tokyo.length - 1 ? { ...e, group: { ...e.group, event_type_code: 'rare_kind' } } : e));
+    importDir(local, writeDataDir(rare));
+    expect(tokyo.length).toBeGreaterThan(SCAN_LIMIT);
+    const q = '/api/v1/events?from=2026-11-18&until=2026-12-01&pref=JP-13&type=rare_kind';
+    const p1 = await api(local, q);
+    expect(p1.body.events).toEqual([]);
+    expect(p1.body.next_cursor).not.toBeNull();
+    const all2 = await apiAll(local, q);
+    expect(all2.body.events.map((e: Ev) => e.id)).toEqual([rare[rare.length - 1].id]);
   });
 
   it('keeps later pages stable when rows are added before the cursor', async () => {
     const local = newDb();
-    const evs = synthetic(400).filter((e) => e.starts_on < '2026-12-19');
+    const evs = synthetic(1200).filter((e) => e.starts_on < '2026-12-01');
     const dir = writeDataDir(evs);
     importDir(local, dir);
-    const q = `/api/v1/events?from=2026-11-18&until=2026-12-19&${ALL_PREFS}`;
+    const q = `/api/v1/events?from=2026-11-18&until=2026-12-01&${ALL_PREFS}`;
     const p1 = await api(local, q);
     // A new run adds an event that sorts first; the second page must continue after the cursor.
     const early = { ...synthetic(1, 999)[0], starts_on: '2026-11-18', starts_at: null, time_precision: 'date' };
@@ -143,31 +150,32 @@ describe('GET /api/v1/events', () => {
   });
 
   const P = 'pref=JP-13';
+  const M = 'from=2026-12-01&until=2027-01-01';
   const bad: Array<[string, RegExp]> = [
     ['', /from is required/],
     [`from=2026-11-18&${P}`, /until is required/],
-    ['from=2026-11-18&until=2026-12-01', /pref is required/],
-    ['from=2026-11-18&until=2026-12-01&pref=', /pref is required/],
-    ['from=2026-11-18&until=2026-12-01&pref=JP-01,JP-02,JP-03,JP-04,JP-05,online', /at most 5 pref/],
-    ['from=2026-11-18&until=2026-12-01&pref=Online', /invalid pref/],
-    ['from=2026-11-18&until=2026-12-01&pref=JP-48', /invalid pref/],
-    [`from=2026-11-18&until=2026-12-01&${P}&x=1`, /unknown parameter: x/],
-    [`from=2026-11-18&until=2026-12-01&${P}&_=123`, /unknown parameter: _/],
+    [M, /pref is required/],
+    [`${M}&pref=`, /pref is required/],
+    [`${M}&pref=JP-01,JP-02,JP-03,JP-04,JP-05,online`, /at most 5 pref/],
+    [`${M}&pref=Online`, /invalid pref/],
+    [`${M}&pref=JP-48`, /invalid pref/],
+    [`${M}&${P}&x=1`, /unknown parameter: x/],
+    [`${M}&${P}&_=123`, /unknown parameter: _/],
+    [`${M}&${P}&category=tournament`, /unknown parameter: category/],
+    [`${M}&${P}&fee=free`, /unknown parameter: fee/],
+    [`${M}&${P}&mode=online`, /unknown parameter: mode/],
     [`from=2026-13-01&until=2027-01-01&${P}`, /from is not a valid date/],
     [`from=2026/11/18&until=2027-01-01&${P}`, /from must be YYYY-MM-DD/],
-    [`from=2026-11-18&until=2026-11-18&${P}`, /until must be after from/],
-    [`from=2026-11-18&until=2026-12-20&${P}`, /at most 31 days/],
-    [`from=2026-11-18&until=2026-11-20&from=2026-11-19&${P}`, /more than once/],
-    [`from=2026-11-18&until=2026-12-01&${P}&game=MTG`, /invalid game/],
-    [`from=2026-11-18&until=2026-12-01&${P}&category=party`, /invalid category/],
-    [`from=2026-11-18&until=2026-12-01&${P}&type=Bad-Type`, /invalid type/],
-    [`from=2026-11-18&until=2026-12-01&${P}&days=7`, /invalid days/],
-    [`from=2026-11-18&until=2026-12-01&${P}&fee=cheap`, /invalid fee/],
-    [`from=2026-11-18&until=2026-12-01&${P}&registration=yes`, /invalid registration/],
-    [`from=2026-11-18&until=2026-12-01&${P}&mode=vr`, /invalid mode/],
-    [`from=2026-11-18&until=2026-12-01&${P}&limit=0`, /limit must be 50/],
-    [`from=2026-11-18&until=2026-12-01&${P}&limit=ten`, /limit must be 50/],
-    [`from=2026-11-18&until=2026-12-01&${P}&cursor=garbage`, /invalid cursor/],
+    [`from=2026-12-05&until=2026-12-20&${P}`, /until must be the first day of the month after from/],
+    [`from=2026-12-05&until=2027-02-01&${P}`, /until must be the first day of the month after from/],
+    [`${M}&from=2026-12-02&${P}`, /more than once/],
+    [`${M}&${P}&game=MTG`, /invalid game/],
+    [`${M}&${P}&type=Bad-Type`, /invalid type/],
+    [`${M}&${P}&days=1`, /invalid days/],
+    [`${M}&${P}&days=weekend&days=weekday`, /more than once/],
+    [`${M}&${P}&limit=0`, /limit must be 50/],
+    [`${M}&${P}&limit=ten`, /limit must be 50/],
+    [`${M}&${P}&cursor=garbage`, /invalid cursor/],
   ];
   for (const [q, msg] of bad) {
     it(`400 for "${q}"`, async () => {
@@ -177,13 +185,14 @@ describe('GET /api/v1/events', () => {
     });
   }
 
-  it('accepts exactly 31 days', async () => {
+  it('accepts a whole month and a month tail', async () => {
     expect((await api(db, '/api/v1/events?from=2026-12-01&until=2027-01-01&pref=JP-13')).status).toBe(200);
+    expect((await api(db, '/api/v1/events?from=2026-12-24&until=2027-01-01&pref=JP-13')).status).toBe(200);
   });
 
   it('rejects a cursor reused with different filters', async () => {
-    const p1 = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-19&${ALL_PREFS}`);
-    const r = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-19&${ALL_PREFS}&game=OPCG&cursor=${p1.body.next_cursor}`);
+    const p1 = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-01&${ALL_PREFS}`);
+    const r = await api(db, `/api/v1/events?from=2026-11-18&until=2026-12-01&${ALL_PREFS}&game=OPCG&cursor=${p1.body.next_cursor}`);
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/cursor does not match/);
   });
@@ -208,7 +217,7 @@ describe('GET /api/v1/events/days', () => {
     return [...m.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
   };
 
-  for (const q of ['', '&game=OPCG,PTCG', '&pref=JP-13&days=weekend', '&mode=online&fee=free']) {
+  for (const q of ['', '&game=OPCG,PTCG', '&pref=JP-13&days=weekend', '&type=standard_battle&days=weekday']) {
     it(`matches /events for "${q}"`, async () => {
       const r = await apiAll(db, `/api/v1/events/days?${withPref(`from=2026-11-18&until=2027-02-18${q}`)}`);
       expect(r.status).toBe(200);
@@ -227,9 +236,10 @@ describe('GET /api/v1/events/days', () => {
 
   it('validates filters like /events and rejects limit/cursor', async () => {
     expect((await api(db, '/api/v1/events/days?from=2026-11-18&pref=JP-13')).status).toBe(400);
-    expect((await api(db, '/api/v1/events/days?from=2026-11-18&until=2026-12-01')).body.error).toMatch(/pref is required/);
-    expect((await api(db, '/api/v1/events/days?from=2026-11-18&until=2026-12-01&pref=JP-13&game=MTG')).status).toBe(400);
-    expect((await api(db, '/api/v1/events/days?from=2026-11-18&until=2026-12-01&pref=JP-13&limit=10')).body.error).toMatch(/unknown parameter: limit/);
+    expect((await api(db, '/api/v1/events/days?from=2026-12-01&until=2027-01-01')).body.error).toMatch(/pref is required/);
+    expect((await api(db, '/api/v1/events/days?from=2026-12-01&until=2027-01-01&pref=JP-13&game=MTG')).status).toBe(400);
+    expect((await api(db, '/api/v1/events/days?from=2026-12-01&until=2027-01-01&pref=JP-13&limit=50')).body.error).toMatch(/unknown parameter: limit/);
+    expect((await api(db, '/api/v1/events/days?from=2026-11-18&until=2026-12-01&pref=JP-13')).body.error).toMatch(/whole months/);
   });
 });
 

@@ -1,5 +1,5 @@
 import {
-  BadRequest, canonicalEventQuery, canonicalFilters, DAYS_PARAMS, listDays, listEvents, parseEventQuery, parseFilters, type DataWindow,
+  BadRequest, canonicalEventQuery, canonicalFilters, listDays, listEvents, parseEventQuery, parseFilters, type DataWindow,
 } from './events';
 import { guessRegion } from './geo';
 import { getMeta, readState, type DataState } from './meta';
@@ -7,8 +7,9 @@ import { getMeta, readState, type DataState } from './meta';
 export interface Env {
   DB: D1Database;
   ASSETS?: Fetcher;
-  /** Workers Rate Limiting binding; absent locally, in which case nothing is limited. */
+  /** Workers Rate Limiting bindings (uncached requests only); absent locally, where nothing is limited. */
   API_LIMIT?: RateLimit;
+  API_BREAKER?: RateLimit;
 }
 
 const HEADERS = {
@@ -28,6 +29,8 @@ export const STATE_TTL_MS = 60_000;
 // Last good data state, kept in the colo cache so a cold isolate can still find cached answers while D1 fails.
 const STATE_PATH = '/api/__state';
 const STATE_EDGE_TTL = 7 * 86_400;
+// After a failed D1 read, wait this long before trying D1 again for the data version.
+export const STATE_RETRY_MS = 5_000;
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
@@ -55,7 +58,7 @@ const ROUTES: Record<string, Route> = {
     run: (db, q, state) => listEvents(db, q as EventQ, state?.fetched_at ?? {}),
   },
   '/api/v1/events/days': {
-    parse: (p, w) => parseFilters(p, DAYS_PARAMS, w),
+    parse: (p, w) => parseFilters(p, 'days', w),
     key: (q) => canonicalFilters(q as DaysQ).toString(),
     run: (db, q) => listDays(db, q as DaysQ),
   },
@@ -74,6 +77,7 @@ function edgeCache(): Cache | null {
 }
 
 const stateMemo = new WeakMap<D1Database, { at: number; state: DataState | null }>();
+const stateFailedAt = new WeakMap<D1Database, number>();
 
 /**
  * The data version. With the Cache API it is memoized per isolate for STATE_TTL_MS and, when D1 fails,
@@ -84,6 +88,11 @@ async function dataState(db: D1Database, cache: Cache | null, origin: string, ct
   const memo = stateMemo.get(db);
   if (memo && Date.now() - memo.at < STATE_TTL_MS) return memo.state;
   const stateKey = new Request(`${origin}${STATE_PATH}`, { method: 'GET' });
+  if (!memo && Date.now() - (stateFailedAt.get(db) ?? 0) < STATE_RETRY_MS) {
+    const hit = await cache.match(stateKey);
+    if (hit) return (await hit.json()) as DataState;
+    throw new Error('D1 unavailable (retrying shortly)');
+  }
   try {
     const state = await readState(db);
     stateMemo.set(db, { at: Date.now(), state });
@@ -95,13 +104,40 @@ async function dataState(db: D1Database, cache: Cache | null, origin: string, ct
     return state;
   } catch (e) {
     console.error(e);
-    if (memo) return memo.state;
+    stateFailedAt.set(db, Date.now());
+    // Keep using the last known version; try D1 again after STATE_RETRY_MS rather than on every request.
+    const retryAt = Date.now() - STATE_TTL_MS + STATE_RETRY_MS;
+    if (memo) {
+      stateMemo.set(db, { at: retryAt, state: memo.state });
+      return memo.state;
+    }
     const hit = await cache.match(stateKey);
     if (!hit) throw e;
     const state = (await hit.json()) as DataState;
-    stateMemo.set(db, { at: Date.now(), state });
+    stateMemo.set(db, { at: retryAt, state });
     return state;
   }
+}
+
+/** IPv4 as is; IPv6 by its /64, the block one subscriber usually holds. */
+export function clientKey(ip: string | null): string {
+  if (!ip) return 'unknown';
+  if (!ip.includes(':')) return ip;
+  const [head, tail = ''] = ip.toLowerCase().split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups = [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
+
+async function rateLimited(request: Request, env: Env): Promise<Response | null> {
+  if (env.API_LIMIT && !(await env.API_LIMIT.limit({ key: clientKey(request.headers.get('cf-connecting-ip')) })).success) {
+    return json({ error: 'too many requests' }, 429, { 'retry-after': '60' });
+  }
+  if (env.API_BREAKER && !(await env.API_BREAKER.limit({ key: 'all' })).success) {
+    return json({ error: 'busy' }, 503, { 'retry-after': '60' });
+  }
+  return null;
 }
 
 export function cacheKey(origin: string, path: string, version: string, canonical: string): Request {
@@ -136,13 +172,10 @@ async function handleApi(request: Request, env: Env, url: URL, ctx?: ExecutionCo
     const key = cache && state && !parsed.outside ? cacheKey(url.origin, url.pathname, state.version, route.key(parsed)) : null;
     const hit = key ? await cache!.match(key) : undefined;
     if (hit) return withHeaders(hit, { 'cache-control': BROWSER_CACHE, 'x-edge-cache': 'hit' }, !head, ['age']);
-    // Only misses reach D1, so only misses count against the per-client limit.
-    if (env.API_LIMIT && !parsed.outside) {
-      const { success } = await env.API_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'unknown' });
-      if (!success) {
-        const limited = json({ error: 'too many requests' }, 429, { 'retry-after': '60' });
-        return head ? withHeaders(limited, {}, false) : limited;
-      }
+    // Only misses reach D1, so only misses count: per client, then for the whole location (a breaker).
+    if (!parsed.outside) {
+      const limited = await rateLimited(request, env);
+      if (limited) return head ? withHeaders(limited, {}, false) : limited;
     }
     res = json(await route.run(env.DB, parsed, state));
     if (key) {
