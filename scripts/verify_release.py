@@ -187,13 +187,18 @@ def check_dist(today, head, ov):
                     fail(f'{p}: ItemList ({len(names)}) != visible list ({len(pp.list_names)}); missing {miss} extra {extra}')
         elif lists: fail(f'{p}: ItemList present but no visible list')
 
-        if p == '/' or p in titles:
+        lead = re.search(r'<div class="ptitle"><h1>.*?</h1><p>(.*?)</p>', src)
+        lead = lead[1] if lead else ''
+        none_upcoming = p in titles and '発売予定の新弾はありません' in lead
+        if none_upcoming:
+            if any(d >= today for d in pp.list_dates): fail(f'{p}: says nothing is upcoming but lists {max(pp.list_dates)}')
+            if '次の発売は' in src: fail(f'{p}: says nothing is upcoming but still has 次の発売 text')
+        elif p == '/' or p in titles:
             past = [d for d in pp.list_dates if d < today]
             if past: fail(f'{p}: upcoming list shows past dates {sorted(set(past))[:3]}')
-        if p in titles:
-            lead = re.search(r'<div class="ptitle"><h1>.*?</h1><p>(.*?)</p>', src)
-            m = lead and re.search(r'次の発売は(\d+)/(\d+)', lead[1])
-            if not m: fail(f'{p}: lead has no 次の発売: {lead and lead[1]!r}')
+        if p in titles and not none_upcoming:
+            m = re.search(r'次の発売は(\d+)/(\d+)', lead)
+            if not m: fail(f'{p}: lead has neither 次の発売 nor 発売予定なし: {lead!r}')
             else:
                 nxt = min(pp.list_dates) if pp.list_dates else None
                 if not nxt or nxt < today or (int(nxt[5:7]), int(nxt[8:10])) != (int(m[1]), int(m[2])):

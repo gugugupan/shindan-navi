@@ -58,9 +58,11 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       const visibleCards = [...document.querySelectorAll('.pk')].filter(e => e.offsetParent).length;
       const brokenImgs = [...document.images].filter(i => i.complete && i.naturalWidth === 0).map(i => i.getAttribute('src'));
       return { nextHidden: next.hidden, nextDay: next.dataset.day, nextText: next.innerText.replace(/\s+/g, ' '),
+        noneUpcoming: (document.querySelector('.ptitle p')?.textContent || '').includes('発売予定の新弾はありません'),
         visibleCards, brokenImgs, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
     });
-    if (st.nextHidden) fail(where, '次の発売日 card is hidden');
+    if (st.noneUpcoming) { if (!st.nextHidden) fail(where, 'page says nothing is upcoming but 次の発売日 card is shown'); }
+    else if (st.nextHidden) fail(where, '次の発売日 card is hidden');
     else if (st.nextDay < TODAY) fail(where, `次の発売日 points to past date ${st.nextDay}`);
     if (!st.visibleCards && !st.nextHidden) {
       // the current month can be empty for a title; the next-release button opens that day's items instead
@@ -69,7 +71,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       const n = await page.evaluate(() => document.getElementById('dlg').open ? document.querySelectorAll('#dlgBody [data-star-id]').length : 0);
       if (!n) fail(where, 'month is empty and 次の発売日 opens no items');
       else await page.locator('#dlgClose').click();
-    } else if (!st.visibleCards) fail(where, 'no visible release cards');
+    } else if (!st.visibleCards && !st.noneUpcoming) fail(where, 'no visible release cards');
     if (st.brokenImgs.length) fail(where, `broken images ${st.brokenImgs.slice(0, 3).join(', ')}`);
     if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
     for (const b of [...new Set(bad)]) fail(where, b);
