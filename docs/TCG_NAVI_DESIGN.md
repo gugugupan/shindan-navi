@@ -166,7 +166,7 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 
 部署：main push 运行 `.github/workflows/deploy.yml`，只部署代码与 `dist/`，不采集、不导入。仓库变量 `LIVE_HOST` 决定由谁承载 `shindan-navi.app`：未设置或 `pages` 时，Pages 继续接收不含 `/events/` 的构建（线上站点与 update-data 发布不中断），Worker 只部署到版本预览 URL；`worker` 时只部署 Worker 并挂自定义域名。提交的 `wrangler.jsonc` 不含路由，合并不会切换域名；域名由 `remote-config.mjs --domain` 显式添加。D1 的 `database_id` 不入库，部署时由 secret `D1_DATABASE_ID` 写入被忽略的 `wrangler.remote.json`。`workers_dev` 关闭，版本预览 URL 开启并带 `X-Robots-Tag: noindex`。
 
-数据进入 D1：本地 `api/` 下先 `npm run import:remote -- --plan` 再 `-- --yes`（需 `D1_DATABASE_ID`；数据只在本机）。导入与现有数据比对，只写变化，不删除，读者不会看到空表。预算（D1 Free：每日 100,000 行写入、5M 行读取）：events 为单表、唯一二级索引 `(loc, starts_on, starts_sort)`，meta 在导入时预计算。当前数据首次导入约 6.6 万行写入，无变化的重复导入为 0；东京一次未命中缓存的列表页约读 3,900 行，中位县约 480 行；单个请求最坏约 1 万行（5 个大县 × 31 天），由边缘缓存、按 IP 的 Worker 限流和一条 WAF 限流规则兜底。明细见 `api/README.md`。D1 表结构因此是反规范化的单表（系列、场地内联），与 [EVENT_DATA_MODEL.md](EVENT_DATA_MODEL.md) 的规范化逻辑模型不同；后者仍描述字段含义。
+数据进入 D1：本地 `api/` 下先 `npm run import:remote -- --plan` 再 `-- --yes`（需 `D1_DATABASE_ID`；数据只在本机）。导入与现有数据比对，只写变化，不删除，读者不会看到空表。预算（D1 Free：每日 100,000 行写入、5M 行读取）：events 为单表、唯一二级索引 `(loc, starts_on, starts_sort)`，meta 在导入时预计算。API 只接受页面实际发出的参数，范围按自然月；`/events/days` 读导入时预计算的 `day_counts`，带筛选的 `/events` 每次最多扫 300 行。当前数据首次导入约 6.7 万行写入，无变化的重复导入为 0；东京一次未命中缓存的列表页约读 340 行；单个未命中请求最坏约 1,200 行（5 个大县的一个月），约 4,200 个不同的未命中请求才会用完每日 5M。按客户端（IPv6 按 /64）每分钟 20 次、按机房每分钟 300 次的限流只防意外与一般滥用，持续数小时压满限流的单一客户端仍可耗尽当日额度（届时缓存照常、未命中返回 500）。明细见 `api/README.md`。D1 表结构因此是反规范化的单表（系列、场地内联），与 [EVENT_DATA_MODEL.md](EVENT_DATA_MODEL.md) 的规范化逻辑模型不同；后者仍描述字段含义。
 
 ## 11. 渐进迁移与品牌
 

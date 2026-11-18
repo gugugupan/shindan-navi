@@ -81,50 +81,57 @@ databases): `games` (seeded, with the `game_mask` bit), `imports`, `events`, `si
 `events` is one wide row per event: group (`group_*`, `category`, `event_type_code`) and venue (`venue_json`,
 `region_code`) are stored inline, because joins cost a row read per event on D1. `loc` is the location filter key
 (venue prefecture, or `online` without a venue). The only secondary index is `idx_events_loc(loc, starts_on,
-starts_sort)`; the API never looks events up by group or venue, so the old group/venue/membership tables and
-their indexes are gone. `starts_sort` = Unix seconds of `starts_at`, or 253402300799 for date-only events, which
-gives the "starts_at nulls last" order and the keyset `(starts_on, starts_sort, id)`.
+starts_sort)`. `starts_sort` = Unix seconds of `starts_at`, or 253402300799 for date-only events, which gives the
+"starts_at nulls last" order and the keyset `(starts_on, starts_sort, id)`.
+
+`migrations/0002_day_counts.sql`: `day_counts(loc, starts_on, game_mask, event_type_code, n)` — visible events per
+location, day, game mask and type (`''` for none), maintained by the importer (diffed like the events, repaired when
+stale). `/events/days` reads only this table.
 
 ## D1 budget (Free plan: 100,000 rows written, 5,000,000 rows read per UTC day)
+
+Numbers below are on the data of 2026-11-18 (28,662 events after the latest PTCG run; 9,422 day_counts rows).
 
 Writes (D1 counts each table row and each index entry; `--plan` prints the exact numbers for a given state):
 
 | Import | Rows written |
 | --- | ---: |
-| First import of the current data (32,980 events, 4 runs) | ~65,966 (events 2 × 32,980, imports 4, site_meta 2) |
+| First import | ~66,744 (events 2 × 28,658, day_counts 9,422, imports 4, site_meta 2) |
 | Re-import with nothing changed | 0 |
-| Typical refresh | 2 × changed events + 1 × membership changes + new runs + 2 |
+| Typical refresh | 2 × changed events + 1 × mask changes + changed day_counts rows + new runs + 2 |
 
-The importer refuses to apply a plan above `--max-writes` (default 90,000). If a future first import is bigger,
-split it with `--games` across UTC days. Free-plan limits are per day across everything, so check the dashboard
-before a large import on a day that already had one.
+The importer refuses to apply a plan above `--max-writes` (default 90,000); split a bigger first import with
+`--games` across UTC days. Free-plan limits are per day across everything, so check the dashboard before a large
+import on a day that already had one. Reads per import: the state read (every event, import, site_meta and
+day_counts row, ~38k) plus one primary-key lookup per written row.
 
-Reads per import: the state read (one row per existing event and import plus 2 site_meta rows, ~33k) plus one
-primary-key lookup per written row.
+Reads per uncached request, measured with SQLite on the current data (rows stepped; D1 may count index entries too,
+so up to ~2× for `/events`; `day_counts` is read through its primary key only):
 
-Reads per request, measured on the current data with SQLite (rows the query steps through; D1 may also count the
-index entry, so up to ~2×). Every query is a `SEARCH events USING INDEX idx_events_loc (loc=? AND starts_on>? AND
-starts_on<?)`; with several locations SQLite stops each one after the page size. With a cursor, the cursor's day is
-the index lower bound, so a page re-reads at most that day's earlier rows.
+| Request (5 largest = JP-13/27/23/28/11) | Rows |
+| --- | ---: |
+| `/events/days`, one month, 東京都 | ≤ 285 |
+| `/events/days`, one month, 5 largest (worst) | 1,202 (Dec) |
+| `/events` page without game/type/days filters, 1 location / 5 largest | 51 / ≤ 132 |
+| `/events` page with filters, 1 location / 5 largest (scan cap 300) | ≤ 300 / ≤ 744 |
+| `/events/meta`, data version | 1, 1 |
 
-| Location | `/events` page | `/events/days` one month | all `/events` pages, 92 days | meta / version |
-| --- | ---: | ---: | ---: | ---: |
-| 東京都 (largest, 3,797 events / 92 days) | 51–229 | 1,693 (Dec) | 8,415 in 78 requests (was 72,971 without the cursor bound) | 1 + 1 |
-| median prefecture (JP-47, 429 / 92 days) | ≤ 51 | ≤ 363 | — | 1 + 1 |
-| 5 largest (JP-13/27/23/28/11) | ≤ 803 | 5,629 (Dec) | 79,704 in 255 requests (was 807,959) | 1 + 1 |
+An uncached Tokyo list view costs ~340 rows (one month's `/days` + the first page); paging all of Tokyo's 3,266
+events took 66 `/events` + 4 `/days` requests in the browser test.
 
-The page asks `/events/days` per calendar month of the range (4 requests for これから) and the first `/events` page, so
-an uncached Tokyo list view costs ~3,900 rows (median ~480). Cached responses cost nothing; each isolate re-reads the
-1-row data version at most once a minute.
+**Worst case.** The most expensive miss is `/events/days` for a month of the 5 largest prefectures: 1,202 rows
+(~2.4k if every row counted twice). ~4,200 distinct uncached requests (~2,100) use up 5M/day. The key space is small
+but not tiny (≤4 months or ~92 start days × location sets × game/type/days), so the limits matter:
 
-**Worst case per request.** Ranges are at most 31 days and clamped to the data window; the limit is fixed at 50;
-cursors must lie inside the range. The most expensive request is `/events/days` (or an `/events` filter matching
-nothing) over 5 large prefectures for 31 days: 10,360 rows on the current data (11-18..12-18; ~20.7k if index
-entries count). So ~480 distinct uncached requests (~240 at 2×) would use the whole 5M/day. Defences, in order:
-the edge cache (24 h per version, per colo), the Workers Rate Limiting binding `API_LIMIT` (60 uncached requests per
-minute per IP and location, fail-open when absent) and the WAF rule from the README runbook (all `/api/` requests).
-A determined client with many IPs can still exhaust the free quota for the rest of the UTC day; the static pages
-are unaffected, `/events/` then shows its error state.
+- one client (IPv4 address or IPv6 /64) gets 20 misses per minute per location: ~24k rows/min, so a single client
+  that keeps hitting the limit exhausts the daily reads in about 3.5 hours;
+- all clients together get 300 misses per minute per location (breaker, 503), which bounds bursts to ~360k rows/min
+  but not the daily total.
+
+So the free quota is protected against accidents and casual abuse, not against a client that sustains the limit
+for hours. When the quota runs out, D1 fails until 00:00 UTC: cached answers keep serving, misses return 500, the
+static pages are unaffected. If that happens, the options are Workers Paid (25B reads/month) or a WAF rule that
+blocks the offender.
 
 ## Remote import
 
@@ -140,13 +147,16 @@ Event data is local only (never in git), so the importer guards it itself:
   import (`--games` imports the others deliberately);
 - every run is `complete`, unless allowed per game: `--allow-incomplete CONAN` (an incomplete run adds and updates
   events but hides none);
-- no game lists over 20% fewer events than D1 shows for it in the same window, unless `--allow-shrink`;
+- a complete run must not list over 20% fewer events than D1 shows for its game in the same window, nor end its
+  window earlier than the game's previous import, unless `--allow-shrink` (incomplete runs hide nothing and are
+  exempt);
 - at most `--max-writes` rows written (default 90,000).
 
 The review summary (printed by every mode) has one line per game: fetched_at, source_total, records in the files,
 events in D1 now for that window, inserted, updated, unchanged, hidden. Read it in `--plan`, then run `--yes`.
 
-Consistency: the SQL never deletes or empties a table, so readers see each event in its old or new state. Whether D1
+Consistency: the SQL never deletes events or empties a table (only `day_counts` rows that no longer apply are
+deleted), so readers see each event in its old or new state. Whether D1
 runs an uploaded file as one transaction is not documented (its import guide only says to remove `BEGIN
 TRANSACTION`/`COMMIT`); a partial import is safe to re-run, and the next import rewrites site_meta if it was left
 stale. D1 is single-threaded per database: while a large import runs, API misses queue and may fail with an
@@ -156,18 +166,21 @@ the first import.
 
 ## API notes
 
-- Unknown query parameters are 400 (they would otherwise bypass the cache); empty list values (`game=`) mean "no
-  filter"; `from`, `until`, `limit`, `cursor` may appear once.
+- The API accepts exactly what the page sends: `pref`, `from`, `until`, `game`, `type`, `days` (`weekend`/`weekday`),
+  plus `limit` (only 50) and `cursor` for `/events`. Anything else is 400, so it can neither bypass the cache nor add
+  work. Empty list values (`game=`) mean "no filter"; `from`, `until`, `days`, `limit`, `cursor` may appear once.
 - `pref` is required: 1-5 of `JP-01`..`JP-47` / `online`.
-- Ranges: at most 31 days, clamped to the data window (union of the latest import windows, kept in site_meta
-  `state`); a range wholly outside answers empty without a D1 read.
-- `limit` may only be 50 (the page size); anything else is 400.
-- `cursor` is bound to the filters; reusing it with other filters, a date outside the range or a malformed key is 400.
+- Ranges are month-shaped: `/events/days` takes a whole month, `/events` any start day up to the 1st of the next
+  month. Both are clamped to the data window (union of the latest import windows, kept in site_meta `state`); a
+  range wholly outside answers empty without a D1 read.
+- `cursor` is bound to the filters and the requested range; reusing it with other filters, a date outside the range
+  or a malformed key is 400. A window change while someone scrolls does not void it.
+- Filtered `/events` pages (game/type/days) read at most 300 rows (`SCAN_LIMIT`) through the index, filter them in
+  the Worker and return a cursor after the last row read when the cap was hit, possibly with fewer than 50 events.
 - `/events` has no `count`; `/events/days` gives per-day totals for the same filters.
 - `game` matches any member game; events carry `game_codes` (sorted alphabetically) and `game_code` = `game_codes[0]`.
   `/events/days` counts a shared event once in `count` and under each member game in `by_game` (only the selected
   games when `game=` is set).
-- `mode=in_person` and `mode=online` both also match `hybrid`.
 - `/events/days` lists only days with matches; `by_game` has only games with matches that day.
 - `days` uses the weekday of `starts_on` (already a Tokyo date).
 - All `event_status` values are returned and counted; the page marks cancelled/postponed events.
