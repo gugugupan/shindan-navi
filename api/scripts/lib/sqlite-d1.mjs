@@ -82,6 +82,11 @@ export class SqliteD1 {
     }
     return this;
   }
+  /** { table: number of indexes, including PRIMARY KEY / UNIQUE autoindexes } */
+  indexCounts() {
+    const rows = this.db.prepare("SELECT tbl_name AS t, COUNT(*) AS n FROM sqlite_master WHERE type = 'index' GROUP BY tbl_name").all();
+    return Object.fromEntries(rows.map((r) => [r.t, Number(r.n)]));
+  }
   close() {
     this.db.close();
   }

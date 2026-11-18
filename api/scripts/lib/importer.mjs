@@ -322,11 +322,41 @@ export function buildStatements(accepted, { now = Math.floor(Date.now() / 1000) 
         `  AND event_id IN (SELECT id FROM events WHERE starts_on >= ${sqlLiteral(run.window.from)} AND starts_on < ${sqlLiteral(run.window.until)})`,
     );
   }
-  statements.push(
-    `UPDATE events SET game_codes = (SELECT group_concat(game_code, ',') FROM\n` +
-      `  (SELECT game_code FROM event_games WHERE event_id = events.id AND missing_since IS NULL ORDER BY game_code))`,
-  );
+  // Only rows whose value changes are written: D1 bills rows written, and most events keep their games.
+  const visibleGames = `(SELECT group_concat(game_code, ',') FROM\n` +
+    `  (SELECT game_code FROM event_games WHERE event_id = events.id AND missing_since IS NULL ORDER BY game_code))`;
+  statements.push(`UPDATE events SET game_codes = ${visibleGames}\nWHERE game_codes IS NOT ${visibleGames}`);
   return statements;
+}
+
+/** Distinct rows the import upserts per table (shared events count once in events). */
+export function importCounts(accepted) {
+  const ids = { events: new Set(), venues: new Set(), event_groups: new Set() };
+  let members = 0;
+  for (const { events: evs } of accepted) {
+    for (const ev of evs) {
+      ids.events.add(ev.id);
+      ids.event_groups.add(groupId(ev));
+      if (ev.venue) ids.venues.add(venueId(ev));
+      members++;
+    }
+  }
+  return { imports: accepted.length, venues: ids.venues.size, event_groups: ids.event_groups.size, events: ids.events.size, event_games: members };
+}
+
+/**
+ * Upper bound of D1 "rows written" for one import: every upserted row counts once plus once per index on
+ * its table (the upserts SET every indexed column), plus one per event for game_codes (true on an empty
+ * database; a re-import only writes events whose games changed). Missing-marks are not counted.
+ * indexCounts: { table: number of indexes incl. PRIMARY KEY / UNIQUE autoindexes }.
+ */
+export function estimateRowsWritten(counts, indexCounts) {
+  const tables = {};
+  for (const t of ['imports', 'venues', 'event_groups', 'events', 'event_games']) {
+    tables[t] = counts[t] * (1 + (indexCounts[t] ?? 0));
+  }
+  tables['events.game_codes'] = counts.events;
+  return { tables, total: Object.values(tables).reduce((a, b) => a + b, 0) };
 }
 
 export const toSqlFile = (statements) => statements.map((s) => `${s};\n`).join('\n');

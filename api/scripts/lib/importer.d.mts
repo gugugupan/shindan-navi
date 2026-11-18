@@ -22,3 +22,5 @@ export function venueId(ev: Record<string, any>): string;
 export function importId(run: Record<string, any>): string;
 export function buildStatements(accepted: GameLoad[], opts?: { now?: number }): string[];
 export function toSqlFile(statements: string[]): string;
+export function importCounts(accepted: GameLoad[]): Record<'imports' | 'venues' | 'event_groups' | 'events' | 'event_games', number>;
+export function estimateRowsWritten(counts: Record<string, number>, indexCounts: Record<string, number>): { tables: Record<string, number>; total: number };
