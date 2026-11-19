@@ -338,7 +338,7 @@ def render_events():
 # is enabled. 最終改定日 and the sitemap lastmod are the latest date among the enabled revisions.
 PRIVACY_EFFECTIVE_BASE='2026-11-19'
 PRIVACY_EFFECTIVE_LOGIN='2026-11-19'
-PRIVACY_EFFECTIVE_FEEDBACK=None
+PRIVACY_EFFECTIVE_FEEDBACK='2026-11-19'
 if LOGIN_ENABLED and not PRIVACY_EFFECTIVE_LOGIN:
     sys.exit('LOGIN_ENABLED=1 needs PRIVACY_EFFECTIVE_LOGIN in scripts/build.py: set it to the date login goes live (YYYY-MM-DD)')
 if FEEDBACK_ENABLED and not PRIVACY_EFFECTIVE_FEEDBACK:
