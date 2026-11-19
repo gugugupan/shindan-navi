@@ -16,7 +16,8 @@ data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptc
 ```
 
 - `<GAME>` is one of `OPCG`, `UATCG`, `CONAN`, `PTCG`, `GCG` (ガンダムカードゲーム), `DBFW` (ドラゴンボールスーパーカードゲーム
-  フュージョンワールド), `BS` (バトルスピリッツ), `DCG` (デジモンカードゲーム).
+  フュージョンワールド), `BS` (バトルスピリッツ), `DCG` (デジモンカードゲーム), `WS` (ヴァイスシュヴァルツ), `VG` (ヴァンガード),
+  `SVE` (Shadowverse EVOLVE), `HOCG` (hololive OFFICIAL CARD GAME), `LLOCG` (ラブライブ！OCG).
 - Window for this round: `starts_on` in [2026-11-18, 2027-02-18). Collectors may fetch wider but only write this window.
 - A run that fails coverage checks writes nothing under `data/events/`; diagnostics stay in the tool's ignored `out/`.
 - Files are pretty-printed with 2-space indent and a trailing newline so they stay easy to inspect and diff locally.
@@ -24,7 +25,7 @@ data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptc
 
 ## Normalization rules
 
-- `id` = `tcgp:<event id>`, `ptcg:<event_holding_id>` or `conan:<fingerprint>`. Same source record → same id across runs.
+- `id` = `tcgp:<event id>`, `ptcg:<event_holding_id>`, `bnavi:<Bushi Navi event id>` or `conan:<fingerprint>`. Same source record → same id across runs.
 - `conan:` is provisional: the Takara Tomy event search exposes no event or store id, so the id is a hash of series option, store name, store address and start-time text. A change to any of these yields a new id. Replace it when the source offers a stable key.
 - Times: `starts_at` etc. are ISO 8601 with offset (`2026-12-05T13:00:00+09:00`); `timezone` is `Asia/Tokyo` for Japanese venues. Date-only events: `time_precision: "date"`, `starts_at: null`.
 - Unknown is `null` / `"unknown"`, never guessed. Hidden fee → `fee_amount: null`. Fee 0 only when the source states free / 0円. Capacity is 定員, not remaining seats.
@@ -40,7 +41,7 @@ data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptc
 | Field | Value |
 | --- | --- |
 | `lat`, `lng` | Numbers rounded to 6 decimals. Outside Japan bounds (lat 20–46, lng 122–154) → the whole geo is `null`. |
-| `source` | `tcgplus` (TCG+ list/detail), `ptcg` (players-site event detail), `google` (Geocoding API, CONAN only). |
+| `source` | `tcgplus` (TCG+ list/detail), `ptcg` (players-site event detail), `google` (Geocoding API, CONAN only), `bushinavi` (Bushi Navi list `place_geo`, x = latitude, y = longitude). |
 | `precision` | The source's own accuracy label as text (e.g. Google `location_type`), else `null`. |
 | `place_id` | Google place id, else `null`. |
 | `geocoded_at` | `YYYY-MM-DD` (Asia/Tokyo) of the lookup; required for `google`, else may be `null`. |
@@ -159,12 +160,13 @@ Clarifications:
   month without a request: the visible events with a location inside the data window, one row per (location,
   exact game_mask, event_type_code, month) with weekend (Sat/Sun) and weekday counts, as a flat list of 5-tuples.
   `type_index` points into `loc_counts.types` (-1 = no type), `month_index` into `loc_counts.months`. A game filter
-  matches rows with `game_mask & selected bits` (OPCG 1, UATCG 2, CONAN 4, PTCG 8, GCG 16, DBFW 32, BS 64, DCG 128), so a multi-game event counts once.
+  matches rows with `game_mask & selected bits` (OPCG 1, UATCG 2, CONAN 4, PTCG 8, GCG 16, DBFW 32, BS 64, DCG 128,
+  WS 256, VG 512, SVE 1024, HOCG 2048, LLOCG 4096), so a multi-game event counts once.
 - `last_seen_at` in API events is the `fetched_at` of the newest import among the event's games (the collectors
   write the run time there, and storing it per event would rewrite every row on every import).
 - Shared events: the same `id` may appear in several game files (e.g. BANDAI CARD GAMES shared series listed under several TCG+ games). The importer stores one event with multiple games; `game=` matches any of them. API events carry `game_codes` (all games, sorted) in addition to `game_code` (first of `game_codes`).
 - Team events: when the source capacity counts teams, not players, `capacity` is `null` and the source wording goes to `eligibility_text`.
-- Sources: OPCG, UATCG, GCG, DBFW, BS and DCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the Takara Tomy official event search (https://www.takaratomy.co.jp/products/conan-cardgame/eventsearch; `conan:`, `conan_official`) because the game is not a Bandai title and TCG+ does not list it.
+- Sources: OPCG, UATCG, GCG, DBFW, BS and DCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the Takara Tomy official event search (https://www.takaratomy.co.jp/products/conan-cardgame/eventsearch; `conan:`, `conan_official`) because the game is not a Bandai title and TCG+ does not list it. WS, VG, SVE, HOCG and LLOCG come from the Bushiroad event search Bushi Navi (`bnavi:`, `bushinavi`; `tools/event-collectors/bushi-navi/`).
 - The page asks `/events/days` per whole month (lazily, as the list reaches each month, and skips months without
   matches), `/events` from the range start (or the 1st) to the end of each month, and cuts both to the selected range
   itself. It waits 300 ms after filter changes before requesting, and loads at most 3 requests per scroll step.
