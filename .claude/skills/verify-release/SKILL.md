@@ -36,7 +36,7 @@ uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0
 node tools/verify/browser.mjs --today YYYY-MM-DD    # same date as step 1
 ```
 
-Serves `dist/` locally with the browser clock pinned to that date, opens every page at 1280px and 390px, and fails on console errors, failed or 4xx/5xx local requests, broken images, horizontal scroll, a calendar that does not open on the current month (month pages: their month), or no visible release cards while the page has upcoming items (a title with nothing this month passes if 次月 reaches its items within 3 months). On `/releases/` it also toggles a title chip and stars a card; it also checks that `/` forwards to `/releases/` with query and hash kept. Screenshots go to `.verify/` (git-ignored) — look at a few, at least `releases` and one title page per width.
+Serves `dist/` locally with the browser clock pinned to that date, opens every page at 1280px and 390px, and fails on console errors, failed or 4xx/5xx local requests, broken images, horizontal scroll, a calendar that does not open on the current month (month pages: their month), or no visible release cards while the page has upcoming items (a title with nothing this month passes if 次月 reaches its items within 3 months). On `/releases/` it also toggles a title chip and stars a card; on `/` (the today page) it checks the date, today's releases from the embedded window, the 6-day week, favourites first, the location prompt without API calls, the 2 stubbed event requests for a saved location, and that `/releases/#d=` opens that day. Screenshots go to `.verify/` (git-ignored) — look at a few, at least `releases` and one title page per width.
 
 ## 3. Report to the owner
 

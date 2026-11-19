@@ -380,27 +380,90 @@ def render_privacy():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
-# / until the today page exists: a stand-in that forwards to the release calendar, keeping ?query and #hash
-# (UTM tags, old shares). Not 301: / stays a page of its own. Not in the sitemap, noindex.
+# / is the today page (src/home.html). "Today" is computed in the browser (Asia/Tokyo); the page carries the releases
+# from HOME_BEFORE days before to HOME_AFTER days after the build day and says so when a visit falls outside them.
+HOME_BEFORE,HOME_AFTER=1,14
+def home_page():
+    t=jd(TODAY)
+    lo,hi=(t-datetime.timedelta(days=HOME_BEFORE)).isoformat(),(t+datetime.timedelta(days=HOME_AFTER)).isoformat()
+    soon=[d for d in data if TODAY<=d['date']<=hi]
+    ev='・TCGイベント' if BUILD_EVENTS else ''
+    return dict(path='/',og='home',lo=lo,hi=hi,
+        title=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}｜新弾ナビ',
+        desc=(f'今日発売のTCG・トレカ新弾（ポケカ・ワンピカード・MTG・遊戯王・デュエマ・ヴァイスほか{len(used)}タイトル）'
+              +('と、選んだ都道府県で今日開催されるTCGイベント（店舗大会・交流会・体験会）' if BUILD_EVENTS else '')
+              +'をひと目でチェック。明日・今週の発売予定もまとめて確認できます。'),
+        keywords=['今日発売','今日 発売 トレカ','TCG 今日','トレカ 新弾 今日','今週 発売 トレカ']+(['TCG イベント 今日','店舗大会'] if BUILD_EVENTS else [])+COMMON_KW,
+        h1=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}',
+        lead=f'{len(used)}タイトルの新弾{ev}を日本時間の今日で表示（{upd_label}更新）',
+        list=static_list(soon,'今後2週間の発売予定',f'{fmt(TODAY,True)}から{HOME_AFTER}日以内に発売されるTCG・トレカ新弾 {len(soon)}件。')
+            +about_block('新弾ナビについて',[
+              f'新弾ナビは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をまとめた<a href="/releases/">新弾カレンダー</a>'
+              +('と、店舗大会・交流会を都道府県で探せる<a href="/events/">イベントカレンダー</a>' if BUILD_EVENTS else '')
+              +'のサイトです。このページでは、今日発売の商品'+('と今日のイベント' if BUILD_EVENTS else '')+'、明日からの1週間の予定をまとめて表示します。',
+              '新弾カレンダーで ☆ を付けたお気に入りの商品は、このページでも先頭に表示されます。'
+              +('イベントは、イベントカレンダーで選んだ都道府県（またはオンライン）のものを表示します。' if BUILD_EVENTS else '')]),
+        ld_items=soon)
+HOME_PAGE=home_page()
 def render_home():
-    to='/releases/'
-    return f"""<!doctype html>
+    pg=HOME_PAGE
+    src=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/home.html')).read(),count=1,flags=re.S)
+    src=flags(src)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    keep=['id','date','game','name','pack','thumb']
+    home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
+          'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
+    pagehead=f'<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p>{esc(pg["lead"])}</p></div>'
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
+                     ('<!--PAGEHEAD-->',pagehead),('<!--SEOLIST-->',pg['list']),
+                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE))):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    url=SITE+'/'
+    og=f'{SITE}/og/{pg["og"]}.png'
+    ld=[{'@context':'https://schema.org','@type':'WebSite','name':'新弾ナビ','url':url,'inLanguage':'ja'}]
+    if pg['ld_items']:
+        ld.append({'@context':'https://schema.org','@type':'ItemList','name':'今後2週間の発売予定','numberOfItems':len(pg['ld_items']),
+            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],**({'url':d['url']} if d['url'] else {})} for i,d in enumerate(pg['ld_items'])]})
+    ldjs=''.join(f'<script type="application/ld+json">{json.dumps(x,ensure_ascii=False).replace("</","<\\/")}</script>' for x in ld)
+    head=f"""<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex">
-<title>新弾ナビ</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(pg['title'])}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+<meta name="theme-color" content="#3a43d0">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<script>location.replace('{to}'+location.search+location.hash)</script>
-<noscript><meta http-equiv="refresh" content="0; url={to}"></noscript>
-</head>
-<body>
-<p><a href="{to}">新弾カレンダーへ</a></p>
-</body>
-</html>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="新弾ナビ">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(pg['title'])}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{esc(pg['h1'])}｜新弾ナビ">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(pg['title'])}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+<meta name="keywords" content="{esc(','.join(dict.fromkeys(pg['keywords'])))}">
+{ldjs}
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
 """
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
@@ -417,6 +480,7 @@ open(os.path.join(dist,'index.html'),'w').write(render_home())
 os.makedirs(os.path.join(dist,'privacy'),exist_ok=True)
 open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')

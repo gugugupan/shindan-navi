@@ -138,6 +138,30 @@ def walk(node, path, out):
 TOOL_PAGES = {'/events/'}
 
 
+def check_home(today, head, ov):
+    """/ is the today page: indexable, and the releases it embeds cover build day -1 .. +14 exactly."""
+    f = os.path.join(DIST, 'index.html')
+    if not os.path.exists(f): fail('dist: /index.html missing'); return
+    src = open(f).read()
+    if re.search(r'<meta name="robots"[^>]*noindex', src): fail('/: noindex')
+    if 'location.replace(' in src or 'http-equiv="refresh"' in src: fail('/: still forwards')
+    m = re.search(r'const H = (\{.*?\});\n', src)
+    if not m: fail('/: embedded HOME data missing'); return
+    h = json.loads(m[1])
+    t = datetime.date.fromisoformat(today)
+    lo, hi = (t - datetime.timedelta(days=1)).isoformat(), (t + datetime.timedelta(days=14)).isoformat()
+    if (h.get('from'), h.get('until')) != (lo, hi): fail(f'/: HOME window {h.get("from")}..{h.get("until")}, expected {lo}..{hi}')
+    hidden = {k for k, v in ov.items() if v.get('hide')}
+    want = {i['id'] for i in head if lo <= ov.get(i['id'], {}).get('date', i['date']) <= hi and i['id'] not in hidden}
+    got = [i.get('id') for i in h.get('items', [])]
+    if set(got) != want or len(got) != len(want):
+        fail(f'/: HOME items ({len(got)}) != releases {lo}..{hi} ({len(want)}); missing {sorted(want - set(got))[:3]} extra {sorted(set(got) - want)[:3]}')
+    if any(k not in h.get('counts', {}) for k in {i.get('game') for i in h.get('items', [])}): fail('/: HOME counts lack a title')
+    events = os.path.exists(os.path.join(DIST, 'events/index.html'))
+    if events != ('id="evBody"' in src): fail(f'/: event block {"missing" if events else "present without /events/"}')
+    print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events}')
+
+
 def check_dist(today, head, ov):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
@@ -146,15 +170,13 @@ def check_dist(today, head, ov):
     months = [p for p in paths if re.fullmatch(r'/\d{4}-\d{2}/', p)]
     if '/releases/' not in paths: fail('dist: release calendar /releases/ missing')
     if '/' in paths: fail('dist: / is built as a release calendar page')
-    home = os.path.join(DIST, 'index.html')
-    if not os.path.exists(home): fail('dist: /index.html missing')
-    elif "location.replace('/releases/'+location.search+location.hash)" not in open(home).read():
-        fail('/: does not forward to /releases/ with query and hash')
+    check_home(today, head, ov)
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
     if not months: fail('dist: no month pages')
 
     hidden = [k for k, v in ov.items() if v.get('hide')]
     sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
+    paths = ['/'] + paths
     for p in paths:
         if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
     for loc, lm in re.findall(r'<loc>(.*?)</loc><lastmod>(.*?)</lastmod>', sitemap):
@@ -179,7 +201,9 @@ def check_dist(today, head, ov):
         for i, blk in enumerate(blocks): walk(blk, f'ld[{i}]', bad)
         if bad: fail(f'{p}: forbidden structured data in {len(bad)} objects, e.g. {bad[0]}')
         types = [blk.get('@type') for blk in blocks]
-        if p not in TOOL_PAGES:
+        if p == '/':
+            if 'WebSite' not in types: fail('/: WebSite JSON-LD missing')
+        elif p not in TOOL_PAGES:
             bc = [blk for blk in blocks if blk.get('@type') == 'BreadcrumbList']
             if not bc: fail(f'{p}: BreadcrumbList missing')
             elif bc[0]['itemListElement'][-1].get('item') != SITE + p: fail(f'{p}: last breadcrumb is not the page itself')
@@ -204,7 +228,7 @@ def check_dist(today, head, ov):
         if none_upcoming:
             if any(d >= today for d in pp.list_dates): fail(f'{p}: says nothing is upcoming but lists {max(pp.list_dates)}')
             if '次の発売は' in src: fail(f'{p}: says nothing is upcoming but still has 次の発売 text')
-        elif p == '/releases/' or p in titles:
+        elif p in ('/', '/releases/') or p in titles:
             past = [d for d in pp.list_dates if d < today]
             if past: fail(f'{p}: upcoming list shows past dates {sorted(set(past))[:3]}')
         if p in titles and not none_upcoming:

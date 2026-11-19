@@ -1,0 +1,297 @@
+<!--
+  The today page (/). "Today" is Asia/Tokyo, computed in the browser: the site is rebuilt only on deploys, so build.py
+  embeds the releases from build day -1 to +14 (HOME) and the page says so when it runs past that window.
+  Events (EVENTS parts, BUILD_EVENTS on): at most 2 API requests per visit, both the same cache keys /events/ uses
+  (/events/days for this month and the first /events page from today), and none without a saved location.
+-->
+<title>今日発売のTCG・トレカ新弾とイベント｜新弾ナビ</title>
+<style>/*SITE_CSS*/</style>
+<style>
+.hbar{margin:4px 0 12px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.hbar b{font-family:var(--display);font-weight:400;font-size:clamp(22px,3vw,28px);line-height:1.2}
+.hbar span{font-size:13px;font-weight:700;color:var(--muted)}
+.hgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
+.hgrid.ev2{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+.blk{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.blk.today{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil),var(--shadow)}
+.blk-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:0}
+.blk-h h2{margin:0;font-family:var(--display);font-weight:400;font-size:19px;line-height:1.3}
+.blk-h .tb{font-family:var(--body);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--foil-ink);background:var(--foil);border-radius:4px;padding:2px 6px;vertical-align:3px;margin-left:6px}
+.blk-h .sub{font-size:12.5px;font-weight:700;color:var(--muted)}
+.blk-h .sub a{color:var(--accent);font-weight:700}
+.blk-h .n{margin-left:auto;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.blk-h .n b{font-family:var(--mono);color:var(--ink)}
+.blk-f{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin-top:auto}
+.go{font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--surface);white-space:nowrap}
+.go:hover{border-color:var(--accent)}
+.hint{margin:0;font-size:12px;color:var(--muted)}
+.hint a{color:var(--accent)}
+.none{margin:0;padding:18px 12px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--muted);font-size:13px;display:grid;gap:8px;justify-items:center}
+.none b{color:var(--ink);font-size:14px}
+.none.err{border-color:var(--sun);border-style:solid}
+.rels{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+a.pk{color:inherit;text-decoration:none;grid-template-columns:48px minmax(0,1fr);padding:6px 8px 6px 6px}
+a.pk .th{width:48px}
+a.pk .n{font-size:13px}
+a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
+.pk .sm{color:var(--foil);margin-right:4px}
+.evs{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.ev{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;background:var(--surface-2);border-radius:10px;padding:8px 10px 8px 12px}
+.ev::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
+.ev .tm{grid-row:1/span 2;font-family:var(--mono);font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:3.2em}
+.ev .tm.tbd{font-family:var(--body);font-size:11px;color:var(--muted)}
+.ev a{font-size:13px;font-weight:700;line-height:1.4;color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
+.ev a:hover{color:var(--accent);text-decoration:underline}
+.ev p{margin:0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.ev .tag{font-size:11px;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%));margin-right:6px}
+.ev .st{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:6px;background:var(--sun);color:#fff}
+.ev.off a{text-decoration:line-through;color:var(--muted)}
+.sk{height:52px;border-radius:10px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%}
+@media (prefers-reduced-motion:no-preference){.sk{animation:sk 1.2s linear infinite}@keyframes sk{to{background-position:-200% 0}}}
+.wk{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.wd{border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0;background:var(--surface-2)}
+.wd h3{margin:0;display:flex;align-items:baseline;gap:6px;font-family:var(--mono);font-size:13px}
+.wd h3 .dw{font-family:var(--body);font-size:11px;font-weight:700;color:var(--muted)}
+.wd h3 .dw.sat{color:var(--sat)} .wd h3 .dw.sun{color:var(--sun)}
+.wd h3 .lb{font-family:var(--body);font-size:10px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px}
+.wd ul{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.wd li{font-size:12px;line-height:1.35;min-width:0}
+.wd li a{color:var(--ink);text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.wd li a:hover{color:var(--accent)}
+.wd li i{display:inline-block;width:7px;height:7px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l));margin-right:4px;vertical-align:1px}
+.wd li.st a{font-weight:700}
+.wd li.st a::before{content:"★ ";color:var(--foil)}
+.wd .q{font-size:11.5px;color:var(--faint)}
+.wd .wl{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
+.wd .wl a{font-size:11.5px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:1px 8px;background:var(--surface);white-space:nowrap}
+.wd .wl a:hover{border-color:var(--accent)}
+.wd .wl a b{font-family:var(--mono)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:1100px){.wk{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:900px){.hgrid.ev2{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+  .blk{padding:12px;border-radius:12px}
+  .rels{grid-template-columns:minmax(0,1fr)}
+  .wk{grid-template-columns:minmax(0,1fr)}
+  .wd{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 10px;align-items:start}
+  .wd h3{grid-row:1/span 3;flex-direction:column;align-items:center;gap:2px;font-size:16px}
+  .wd .wl{margin-top:2px}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <!--BRAND-->
+    <!--CORNER-->
+  </header>
+
+  <main class="home" id="home">
+    <p class="hbar"><b id="hDate"></b><span>今日のTCG</span></p>
+    <div class="hgrid<!--EVENTS--> ev2<!--/EVENTS-->">
+      <section class="blk today" aria-labelledby="relH">
+        <div class="blk-h"><h2 id="relH">今日発売<span class="tb">TODAY</span></h2><span class="n" id="relN"></span></div>
+        <div id="relBody"></div>
+        <div class="blk-f"><p class="hint" id="relHint"></p><a class="go" id="relGo" href="/releases/">新弾カレンダーで見る ›</a></div>
+      </section>
+<!--EVENTS-->
+      <section class="blk" aria-labelledby="evH">
+        <div class="blk-h"><h2 id="evH">今日のイベント</h2><span class="sub" id="evWhere"></span><span class="n" id="evN"></span></div>
+        <div id="evBody" aria-live="polite"></div>
+        <div class="blk-f"><p class="hint" id="evHint"></p><a class="go" id="evGo" href="/events/">イベントカレンダーで見る ›</a></div>
+      </section>
+<!--/EVENTS-->
+    </div>
+    <section class="blk" aria-labelledby="wkH" style="margin-top:12px">
+      <div class="blk-h"><h2 id="wkH">明日・今週の予定</h2><span class="sub" id="wkSub"></span></div>
+      <div class="wk" id="wkBody"></div>
+    </section>
+  </main>
+
+  <div class="pageinfo"><!--PAGEHEAD--></div>
+  <!--SEOLIST-->
+  <p class="legend">「今日」は日本時間で表示しています。発売日・価格<!--EVENTS-->・イベント情報<!--/EVENTS-->は変更されることがあるので、公式情報をご確認ください。<!--NOLOGIN-->お気に入り<!--EVENTS-->・イベントの地域<!--/EVENTS-->はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->お気に入り・イベントの地域はお使いのブラウザ（localStorage）に保存され、ログイン中はアカウントと同期します。<!--/LOGIN-->本サイトはアクセス解析のため Google アナリティクスを利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
+  <!--SITENAV-->
+</div>
+
+<script>
+(function(){
+const H = /*HOME*/null;
+const API_BASE = /*API_BASE*/'/api/v1';
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}} };
+const DOW = ['日','月','火','水','木','金','土'];
+const TODAY = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const addD = (s,n) => { const d=new Date(s+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+const dowOf = s => new Date(s+'T00:00:00Z').getUTCDay();
+const md = s => { const [,m,d]=s.split('-').map(Number); return `${m}/${d}(${DOW[dowOf(s)]})`; };
+const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m>12){m-=12;y++} while(m<1){m+=12;y--} return y+'-'+String(m).padStart(2,'0'); };
+const WEEK = Array.from({length:6},(_,i)=>addD(TODAY,i+1));
+// releases are known for H.from..H.until only (build day -1 .. +14)
+const covered = d => d>=H.from && d<=H.until;
+
+// same colours as the release calendar (src/template.html: titles by count, golden-angle hues)
+const games = Object.keys(H.counts).sort((a,b)=>H.counts[b]-H.counts[a]||a.localeCompare(b,'ja'));
+const HUE = {}; games.forEach((g,i)=>HUE[g]=Math.round((i*137.508+230)%360));
+const PLACEHOLDER = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M4 8L9.6 3 15.2 8 20.8 3 26.4 8 32 3 37.6 8 43.2 3 48.8 8 54.4 3 60 8V56L54.4 61 48.8 56 43.2 61 37.6 56 32 61 26.4 56 20.8 61 15.2 56 9.6 61 4 56Z" fill="currentColor" opacity=".22"/><path d="M32 11L38.4 25.6 53 32 38.4 38.4 32 53 25.6 38.4 11 32 25.6 25.6z" fill="currentColor"/></svg>';
+const thumb = d => d.thumb ? `<img class="th" src="${esc(d.thumb)}" alt="" loading="lazy">` : `<span class="th none" aria-hidden="true">${PLACEHOLDER}</span>`;
+
+let stars = new Set();
+function readStars(){
+  // legacy "date|name" keys are migrated by the release calendar; map them here too
+  stars = new Set(store.get('tcg.stars',[]).map(k=>{
+    k=String(k); if(!k.includes('|')) return k;
+    const d=H.items.find(x=>x.date+'|'+x.name===k); return d?d.id:k;
+  }));
+}
+const isStar = d => stars.has(d.id);
+const byStar = (a,b) => isStar(b)-isStar(a);
+const relsOn = d => H.items.filter(x=>x.date===d).sort(byStar);
+const user = () => window.snUser;
+
+function renderRel(){
+  const its = relsOn(TODAY);
+  $('hDate').textContent = (([y,m,d])=>`${+m}月${+d}日(${DOW[dowOf(TODAY)]})`)(TODAY.split('-'));
+  const body=$('relBody');
+  $('relN').innerHTML = covered(TODAY) && its.length ? `<b>${its.length}</b> 件` : '';
+  $('relGo').href = its.length ? `/releases/#d=${TODAY}` : '/releases/';
+  if(!covered(TODAY)){
+    body.innerHTML = `<p class="none"><b>このページの発売情報は ${md(H.until)} までです</b><span>最新の発売予定は新弾カレンダーでご確認ください。</span></p>`;
+  } else if(!its.length){
+    const next = H.items.find(x=>x.date>TODAY);
+    const n = next ? relsOn(next.date).length : 0;
+    body.innerHTML = `<p class="none"><b>今日発売の新弾はありません</b>${next?`<a class="go" href="/releases/#d=${next.date}">次の発売は ${md(next.date)}・${n}件 ›</a>`:''}</p>`;
+  } else {
+    body.innerHTML = `<div class="rels">${its.map(d=>{
+      const pr = d.pack ? `<span class="pr">${esc(d.pack)}</span>` : '';
+      return `<a class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}" href="/releases/#i=${d.id}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" aria-label="お気に入り">★</span>':''}${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></a>`;
+    }).join('')}</div>`;
+  }
+  const u=user(), nStar=its.filter(isStar).length;
+  $('relHint').innerHTML = u ? `${esc(u.display_name||'')} さんのお気に入り（★${stars.size}件）を先頭に表示しています。`
+    : nStar ? 'お気に入り（★）の商品を先頭に表示しています。'
+    : stars.size ? '' : '<a href="/releases/">新弾カレンダー</a>で ☆ を付けると、お気に入りが先頭に表示されます。';
+}
+
+// ---- events (BUILD_EVENTS)
+const EVENTS = !!$('evBody');
+const EV_GAMES = {OPCG:['ONE PIECE',4],UATCG:['UNION ARENA',272],CONAN:['名探偵コナン',205],PTCG:['ポケモンカード',44]};
+const PREFS = '北海道,青森県,岩手県,宮城県,秋田県,山形県,福島県,茨城県,栃木県,群馬県,埼玉県,千葉県,東京都,神奈川県,新潟県,富山県,石川県,福井県,山梨県,長野県,岐阜県,静岡県,愛知県,三重県,滋賀県,京都府,大阪府,兵庫県,奈良県,和歌山県,鳥取県,島根県,岡山県,広島県,山口県,徳島県,香川県,愛媛県,高知県,福岡県,佐賀県,長崎県,熊本県,大分県,宮崎県,鹿児島県,沖縄県'.split(',');
+const locName = c => c==='online' ? 'オンライン' : PREFS[+c.slice(3)-1];
+const isLoc = c => c==='online' || (/^JP-\d{2}$/.test(c) && +c.slice(3)>=1 && +c.slice(3)<=47);
+// the /events/ saved filters (one location; older saves with several keep the first). days is left out: today is today.
+function evFilters(){
+  const s=store.get('tcg.ev.filters',null)||{};
+  const list=k=>typeof s[k]==='string'?s[k].split(',').filter(Boolean):[];
+  return {pref:list('pref').filter(isLoc)[0]||'', game:list('game').filter(g=>EV_GAMES[g]).join(','), type:list('type').filter(t=>/^[a-z0-9_]+$/.test(t)).join(',')};
+}
+// query parameters in the order /events/ builds them, so both pages share the API cache entries
+function q(f,extra){
+  const p=new URLSearchParams(extra.api||{});
+  if(f.game) p.set('game',f.game);
+  p.set('pref',f.pref);
+  if(f.type) p.set('type',f.type);
+  Object.entries(extra.tail||{}).forEach(([k,v])=>p.set(k,v));
+  return p.toString().replace(/%2C/g,',');
+}
+const dayLink = (f,d) => '/events/?'+q(f,{tail:{range:'custom',from:d,to:d}});
+const monthLink = (f,ym) => '/events/?'+q(f,{tail:ym&&ym!==TODAY.slice(0,7)?{month:ym}:{}});
+let evF=null, evKey=null, ev=null; // ev: {loading} | {error} | {counts, list, more}
+async function api(path,query){
+  const r=await fetch(`${API_BASE}${path}?${query}`,{headers:{accept:'application/json'}});
+  let body=null; try{ body=await r.json(); }catch(e){}
+  if(!r.ok) throw Object.assign(new Error('HTTP '+r.status),{status:r.status});
+  return body;
+}
+async function loadEvents(force){
+  if(!EVENTS) return;
+  evF=evFilters();
+  const key=JSON.stringify(evF);
+  if(!evF.pref){ evKey=key; ev=null; renderEv(); renderWeek(); return; }
+  if(key===evKey && !force) return;
+  evKey=key; ev={loading:true}; renderEv(); renderWeek();
+  const ym=TODAY.slice(0,7), next=addM(ym,1)+'-01', f=evF;
+  try{
+    const [days,page]=await Promise.all([
+      api('/events/days',q(f,{api:{from:ym+'-01',until:next}})),
+      api('/events',q(f,{api:{from:TODAY,until:next},tail:{limit:50}}))]);
+    if(key!==evKey) return;
+    const counts=Object.fromEntries((days.days||[]).map(d=>[d.date,d.count]));
+    const list=(page.events||[]).filter(e=>e.starts_on===TODAY);
+    ev={counts,list};
+  }catch(e){
+    if(key!==evKey) return;
+    ev={error:e};
+  }
+  renderEv(); renderWeek();
+}
+const timeFmt = tz => new Intl.DateTimeFormat('ja-JP',{timeZone:tz||'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false});
+const isPostcode = s => /^〒?\s*\d{3}-?\d{4}$/.test(String(s||'').trim());
+const venueLabel = v => !v ? '' : isPostcode(v.name) && v.address ? v.address : v.name;
+function evRow(e){
+  const codes=Array.isArray(e.game_codes)&&e.game_codes.length?e.game_codes:[e.game_code];
+  const g=EV_GAMES[codes[0]]||[codes[0],0];
+  const tm = e.time_precision==='datetime'&&e.starts_at ? `<span class="tm">${timeFmt(e.timezone).format(new Date(e.starts_at))}</span>` : '<span class="tm tbd">時刻未定</span>';
+  const where = e.attendance_mode==='online' ? 'オンライン開催' : venueLabel(e.venue) || '会場は公式で確認';
+  const st = e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st">延期</span>' : '';
+  const tags = codes.map(c=>{ const x=EV_GAMES[c]||[c,0]; return `<span class="tag" style="--h:${x[1]}">${esc(x[0])}</span>`; }).join('');
+  return `<li class="ev${e.event_status==='cancelled'?' off':''}" style="--h:${g[1]}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
+}
+const EV_SHOW = 5;
+function renderEv(){
+  if(!EVENTS) return;
+  const body=$('evBody'), f=evF||evFilters();
+  const filt=[f.game&&f.game.split(',').map(c=>EV_GAMES[c][0]).join('・'), f.type&&'形式で絞り込み中'].filter(Boolean).join('・');
+  $('evWhere').innerHTML = f.pref ? `${esc(locName(f.pref))}${filt?` · ${esc(filt)}`:''} <a href="/events/">変更</a>` : '';
+  $('evN').innerHTML = ev&&ev.counts ? `<b>${ev.counts[TODAY]||0}</b> 件` : '';
+  $('evGo').href = f.pref ? (ev&&ev.counts&&ev.counts[TODAY] ? dayLink(f,TODAY) : monthLink(f)) : '/events/';
+  $('evHint').textContent = f.pref && user() ? 'アカウントに保存した地域・絞り込みで表示しています。' : '';
+  if(!f.pref){
+    body.innerHTML = `<div class="none"><b>地域を選ぶと、今日のイベントを表示します</b><span>イベントカレンダーで都道府県（またはオンライン）を1つ選ぶと、このページにもその地域のイベントが表示されます。</span><a class="go" href="/events/">都道府県を選ぶ ›</a></div>`;
+    return;
+  }
+  if(!ev || ev.loading){ body.innerHTML='<div class="sk" aria-hidden="true"></div><div class="sk" aria-hidden="true" style="margin-top:6px"></div><span class="sr">読み込み中…</span>'; return; }
+  if(ev.error){
+    const busy=ev.error.status===429||ev.error.status===503;
+    body.innerHTML = `<div class="none err"><b>${busy?'混み合っています':'イベント情報を読み込めませんでした'}</b><span>${busy?'少し時間をおいて、もう一度お試しください。':'通信状況を確認して、もう一度お試しください。'}</span><button class="go" id="evRetry" type="button">再読み込み</button></div>`;
+    return;
+  }
+  const n=ev.counts[TODAY]||0;
+  if(!n){
+    const nx=Object.keys(ev.counts).filter(d=>d>TODAY).sort()[0];
+    body.innerHTML = `<div class="none"><b>今日、${esc(locName(f.pref))}で予定されているイベントはありません</b>${nx?`<a class="go" href="${esc(dayLink(f,nx))}">次は ${md(nx)}・${ev.counts[nx]}件 ›</a>`:''}</div>`;
+    return;
+  }
+  const shown=ev.list.slice(0,EV_SHOW), rest=n-shown.length;
+  body.innerHTML = `<ul class="evs">${shown.map(evRow).join('')}</ul>${rest>0?`<a class="go" style="align-self:start;margin-top:8px;display:inline-block" href="${esc(dayLink(f,TODAY))}">ほか ${rest}件・地図で見る ›</a>`:''}`;
+}
+
+// ---- tomorrow and the rest of the week
+function renderWeek(){
+  const f=EVENTS?(evF||evFilters()):null, ym=TODAY.slice(0,7);
+  $('wkSub').textContent = `${md(WEEK[0])}〜${md(WEEK[WEEK.length-1])}`;
+  $('wkBody').innerHTML = WEEK.map((d,i)=>{
+    const w=dowOf(d), its=covered(d)?relsOn(d):null;
+    const rel = its==null ? '<p class="q">発売情報は新弾カレンダーで</p>'
+      : its.length ? `<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}"><i aria-hidden="true"></i>${esc(x.name)}</a></li>`).join('')}</ul>`
+      : '<p class="q">発売なし</p>';
+    const links=[];
+    if(its&&its.length) links.push(`<a href="/releases/#d=${d}">発売 <b>${its.length}</b>件</a>`);
+    if(f&&f.pref){
+      // this month's /days only; later days link without a count (no extra request)
+      const c = ev&&ev.counts&&d.slice(0,7)===ym ? (ev.counts[d]||0) : null;
+      if(c==null) links.push(`<a href="${esc(dayLink(f,d))}">イベント</a>`);
+      else if(c) links.push(`<a href="${esc(dayLink(f,d))}">イベント <b>${c}</b>件</a>`);
+    }
+    return `<div class="wd"><h3>${+d.slice(5,7)}/${+d.slice(8)}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${i===0?'<span class="lb">明日</span>':''}</h3>${rel}${links.length?`<div class="wl">${links.join('')}</div>`:''}</div>`;
+  }).join('');
+}
+
+function renderAll(){ renderRel(); renderEv(); renderWeek(); }
+readStars(); renderAll(); loadEvents();
+document.addEventListener('click',e=>{ if(e.target.closest('#evRetry')) loadEvents(true); });
+// logged in, corner.html replaces the local favourites / saved filters with the account's: re-read them
+document.addEventListener('sn:prefs',()=>{ readStars(); renderAll(); loadEvents(); });
+document.addEventListener('sn:user',()=>{ renderRel(); renderEv(); });
+})();
+</script>

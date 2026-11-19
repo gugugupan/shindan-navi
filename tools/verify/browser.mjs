@@ -102,14 +102,74 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   }
   await ctx.close();
 }
-{
-  // / stands in for the today page and forwards to the release calendar with the query and hash intact
-  const page = await browser.newPage();
-  await page.goto(`${BASE}/?utm_source=x#top`);
-  await page.waitForURL(u => u.pathname === '/releases/', { timeout: 5000 }).catch(() => {});
-  const u = new URL(page.url());
-  if (u.pathname + u.search + u.hash !== '/releases/?utm_source=x#top') fail('/', `forwards to ${u.pathname + u.search + u.hash}`);
-  await page.close();
+// / is the today page: today (Asia/Tokyo) from the embedded releases, favourites first, the saved location's events
+// from at most 2 API requests (stubbed here; none without a location), and day deep links into /releases/.
+for (const [vp, opt] of Object.entries(VIEWPORTS)) {
+  const where = `${vp} /`;
+  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  const bad = [], api = [];
+  page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
+  await page.route('**/api/v1/**', route => {
+    const u = new URL(route.request().url());
+    api.push(u.pathname + u.search);
+    const body = u.pathname.endsWith('/days') ? { days: [{ date: TODAY, count: 7 }] }
+      : { events: Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, name: `テスト大会 ${i + 1}`, game_code: 'OPCG', game_codes: ['OPCG'],
+        starts_on: TODAY, time_precision: 'datetime', starts_at: `${TODAY}T${String(10 + i).padStart(2, '0')}:00:00+09:00`, timezone: 'Asia/Tokyo',
+        attendance_mode: 'offline', venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' })) };
+    route.fulfill({ json: body });
+  });
+  const res = await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  if (!res || res.status() !== 200) fail(where, `status ${res && res.status()}`);
+  const H = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]));
+  const todays = H.items.filter(d => d.date === TODAY);
+  const hasEvents = await page.locator('#evBody').count() > 0;
+  const st = await page.evaluate(() => ({ date: document.getElementById('hDate').textContent, cards: document.querySelectorAll('#relBody a.pk').length,
+    none: !!document.querySelector('#relBody .none'), days: document.querySelectorAll('#wkBody .wd').length,
+    prompt: !!document.querySelector('#evBody .none a[href="/events/"]'), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+  const [, m, d] = TODAY.split('-').map(Number);
+  if (!st.date.startsWith(`${m}月${d}日`)) fail(where, `date ${st.date}`);
+  if (st.cards !== todays.length || (!todays.length && !st.none)) fail(where, `today shows ${st.cards} releases, data has ${todays.length}`);
+  if (st.days !== 6) fail(where, `week shows ${st.days} days`);
+  if (hasEvents && !st.prompt) fail(where, 'no location: the pick-a-location prompt is missing');
+  if (api.length) fail(where, `API called without a location: ${api.join(' ')}`);
+  if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
+  await page.screenshot({ path: path.join(OUT, `${vp}-home-nopref.png`), fullPage: true });
+
+  // a favourite and a saved location
+  const fav = todays[todays.length - 1];
+  await page.evaluate(([id]) => { localStorage.setItem('tcg.stars', JSON.stringify(id ? [id] : []));
+    localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13,JP-14', game: 'OPCG', days: 'weekend' })); }, [fav && fav.id]);
+  await page.reload({ waitUntil: 'networkidle' });
+  if (fav) {
+    const first = await page.locator('#relBody a.pk').first().getAttribute('href');
+    if (first !== `/releases/#i=${fav.id}`) fail(where, `favourite not first: ${first}`);
+  }
+  if (hasEvents) {
+    const ym = TODAY.slice(0, 7), next = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 1)).toISOString().slice(0, 10);
+    const want = [`/api/v1/events/days?from=${ym}-01&until=${next}&game=OPCG&pref=JP-13`, `/api/v1/events?from=${TODAY}&until=${next}&game=OPCG&pref=JP-13&limit=50`];
+    if (JSON.stringify([...api].sort()) !== JSON.stringify(want.sort())) fail(where, `API requests ${api.join(' ')}`);
+    const ev = await page.evaluate(() => ({ rows: document.querySelectorAll('#evBody .ev').length, more: document.querySelector('#evBody a.go')?.getAttribute('href'),
+      where: document.getElementById('evWhere').textContent }));
+    if (ev.rows !== 5) fail(where, `today's events show ${ev.rows} rows`);
+    if (ev.more !== `/events/?game=OPCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `day view link ${ev.more}`);
+    if (!ev.where.startsWith('東京都')) fail(where, `location ${ev.where}`);
+  }
+  await page.screenshot({ path: path.join(OUT, `${vp}-home.png`), fullPage: true });
+  for (const b of [...new Set(bad)]) fail(where, b);
+
+  // deep links into the release calendar
+  if (todays.length) {
+    await page.goto(`${BASE}/releases/#d=${TODAY}`, { waitUntil: 'load' });
+    const dlg = await page.evaluate(() => ({ open: document.getElementById('dlg').open, n: document.querySelectorAll('#dlgBody .dl-item').length, hash: location.hash }));
+    if (!dlg.open || dlg.n !== todays.length || dlg.hash) fail(`${vp} /releases/#d=`, `dialog ${JSON.stringify(dlg)}`);
+  }
+  console.log(`  ${where.padEnd(22)} today=${todays.length} events=${hasEvents} api=${api.length}`);
+  await ctx.close();
 }
 await browser.close();
 server.close();

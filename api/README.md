@@ -220,6 +220,12 @@ prefecture (東京都, 178 events) ≈ `/days` + 4 pages ≈ 700 rows; 5 largest
 pages + meta, the cap) ≈ 7,100 rows. That is ~700 uncached worst-case day views per 5M reads (~350 if D1 counts
 every scanned row twice).
 
+**Today page** (`/`, `src/home.html`): only with a saved location, 2 requests per visit, both keys the `/events/`
+page uses too: `/events/days` for this month (calendar view) and `/events` from today to the 1st of next month with
+`limit=50` (first list page), with the saved `game`/`type` (not `days`). Uncached, one prefecture: ≤ ~290 + ~103
+rows (Tokyo, unfiltered; filtered ≤ ~290 + ~444). Usually both are cache hits. No `/geo`, no `/events/meta`; no
+request at all without a saved location. Days of the next month in its week strip link without a count.
+
 **Worst case.** A miss costs at most ~2.3k rows (a filtered `/events` page on the 5 largest prefectures: the whole
 month's day_counts when matches are sparse, up to 200 rows per location, the ≤ 50 matches in full). ~2,200 distinct
 uncached requests use up 5M/day (~1,100 if D1 counts every scanned row twice). The key space is small but not tiny
