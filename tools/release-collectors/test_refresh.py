@@ -74,9 +74,45 @@ class Reset(Repo):
         self.assertEqual(self.read('out/items.json.before-refresh'), '[1, 2]\n')
         self.assertEqual((self.read('public/thumbs/a.jpg'), self.read('public/thumbs/b.jpg')), ('a', 'b'))
         self.assertEqual(sorted(os.listdir(os.path.join(self.root, 'public/thumbs'))), ['a.jpg', 'b.jpg', 'notes.txt'])
-        self.assertIn('removed 1 untracked thumbnails: new.jpg', out)
+        self.assertIn('moved 1 new thumbnails not in data/overrides.json to out/thumbs.before-refresh/: new.jpg', out)
+        self.assertEqual(self.read('out/thumbs.before-refresh/new.jpg'), 'n')
         self.assertIn('restored 2 files from HEAD', out)
         self.assertEqual(self.quiet(refresh.reset_merge_base, self.logdir), '')  # nothing left to reset
+
+    def test_keeps_new_thumbs_referenced_by_overrides(self):
+        # add_thumb.py: a new jpg plus an override pointing at it; overrides.json is not reset
+        self.write('data/overrides.json', '{"i1": {"_name": "x", "thumb": "thumbs/hand.jpg"}, "i2": {"thumb": ""}}')
+        self.write('public/thumbs/hand.jpg', 'h')
+        self.write('public/thumbs/stray.jpg', 's')
+        out = self.quiet(refresh.reset_merge_base, self.logdir)
+        self.assertEqual(self.read('public/thumbs/hand.jpg'), 'h')
+        self.assertFalse(os.path.exists(os.path.join(self.root, 'public/thumbs/stray.jpg')))
+        self.assertEqual(self.read('out/thumbs.before-refresh/stray.jpg'), 's')
+        self.assertIn('kept 1 new thumbnails referenced by data/overrides.json: hand.jpg', out)
+        self.assertIn('moved 1 new thumbnails', out)
+        self.assertIn('referenced by data/overrides.json', self.quiet(refresh.reset_merge_base, self.logdir))
+
+    def test_staged_new_thumbs(self):
+        self.write('data/overrides.json', '{"i1": {"thumb": "thumbs/hand.jpg"}}')
+        self.write('public/thumbs/hand.jpg', 'h')
+        self.write('public/thumbs/stray.jpg', 's')
+        sh(self.root, 'add', 'public/thumbs/hand.jpg', 'public/thumbs/stray.jpg')
+        out = self.quiet(refresh.reset_merge_base, self.logdir)
+        self.assertNotIn('restored', out)
+        self.assertEqual(self.read('public/thumbs/hand.jpg'), 'h')
+        self.assertEqual(self.read('out/thumbs.before-refresh/stray.jpg'), 's')
+        staged = subprocess.run(['git', '-C', self.root, 'diff', '--cached', '--name-only'],
+                                capture_output=True, text=True).stdout.split()
+        self.assertEqual(staged, ['public/thumbs/hand.jpg'])  # kept one stays staged, the other is unstaged
+        self.assertEqual(sorted(os.listdir(os.path.join(self.root, 'public/thumbs'))), ['a.jpg', 'b.jpg', 'hand.jpg'])
+
+    def test_invalid_overrides_resets_nothing(self):
+        self.write('data/overrides.json', '{')
+        self.write('data/items.json', '[1, 2]\n')
+        with self.assertRaises(SystemExit) as cm:
+            self.quiet(refresh.reset_merge_base, self.logdir)
+        self.assertIn('data/overrides.json is not valid JSON', str(cm.exception))
+        self.assertEqual(self.read('data/items.json'), '[1, 2]\n')
 
     def test_failed_git_show_writes_nothing(self):
         sh(self.root, 'rm', '-q', '--cached', 'data/meta.json')
@@ -135,6 +171,32 @@ class Packet(Repo):
             '- cardlabo: 3 records, complete true, fetched_at T',
             '- torecamap: 3 records, complete true, fetched_at T (unknown_labels: 新TCG) — STALE (today 2026-11-18, not 2026-11-19)',
             '- official: skipped (--no-official)'])
+
+
+class Main(Repo):
+    def test_dry_run_does_not_reset(self):
+        self.write('data/items.json', '[1, 2]\n')
+        self.write('public/thumbs/new.jpg', 'n')
+        self.write('data/update-report.md', '# r\n')
+        ran = []
+
+        def step(name, cmd, env, logdir, n):
+            ran.append(name)
+            return 0, ''
+        with mock.patch.object(refresh, 'check_worktree', lambda: 'wt'), \
+                mock.patch.object(refresh, 'check_prereqs', lambda *a: None), \
+                mock.patch.object(refresh, 'env_keys', lambda: set()), \
+                mock.patch.object(refresh, 'RELEASES', os.path.join(self.root, 'nowhere')), \
+                mock.patch.object(refresh, 'run_step', step), \
+                mock.patch.object(refresh, 'reset_merge_base', mock.Mock()) as reset, \
+                mock.patch.object(sys, 'argv', ['refresh.py', '--dry-run', '--skip-collect']), \
+                mock.patch.dict(os.environ, {'TODAY': '2026-11-19'}):
+            out = self.quiet(refresh.main)
+        self.assertEqual(ran, ['merge'])
+        reset.assert_not_called()
+        self.assertIn('dry run: data/ and public/thumbs are not reset', out)
+        self.assertEqual(self.read('data/items.json'), '[1, 2]\n')
+        self.assertTrue(os.path.exists(os.path.join(self.root, 'public/thumbs/new.jpg')))
 
 
 class Steps(unittest.TestCase):

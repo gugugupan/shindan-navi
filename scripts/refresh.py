@@ -6,8 +6,9 @@
   python3 -I scripts/refresh.py --no-official    # aggregators only: no official collector, no official merge, no enrich
 
 TODAY (env, else today in Asia/Tokyo) is fixed once and passed to every step. The merge always starts from HEAD's
-data/items.json, meta.json and public/thumbs (untracked *.jpg there are removed and listed), so a re-run reports
-against the committed data, not against the previous run. --dry-run resets nothing.
+data/items.json, meta.json and public/thumbs, so a re-run reports against the committed data, not against the
+previous run: new thumbnails (untracked or staged) are kept when data/overrides.json references them (add_thumb.py),
+others are moved to out/refresh-<TODAY>/thumbs.before-refresh/. --dry-run resets nothing.
 Stops at the first failing step with its exit code. Never commits or pushes. The packet and per-step logs go to
 out/refresh-<TODAY>/ (git-ignored).
 """
@@ -115,9 +116,25 @@ def head_file(rel):
     return r.stdout
 
 
+def override_thumbs():
+    """public/thumbs paths data/overrides.json (as on disk) points at: add_thumb.py writes there, not to items.json."""
+    path = os.path.join(ROOT, 'data/overrides.json')
+    if not os.path.exists(path):
+        return set()
+    try:
+        overrides = json.load(open(path))
+    except ValueError as e:
+        sys.exit(f'data/overrides.json is not valid JSON ({e}): nothing reset')
+    return {'public/' + v['thumb'] for v in overrides.values()
+            if isinstance(v, dict) and isinstance(v.get('thumb'), str) and v['thumb'].startswith('thumbs/')}
+
+
 def reset_merge_base(logdir):
     """data/items.json, meta.json and public/thumbs back to HEAD so the merge (and its report) is against the
-    committed data, and a rerun never keeps thumbnails of the previous run or misses ones it deleted."""
+    committed data, and a rerun never keeps thumbnails of the previous run or misses ones it deleted.
+    New thumbnails (untracked or staged) that data/overrides.json references are kept; other new ones are moved
+    to logdir (a staged one is unstaged first)."""
+    keep = override_thumbs()
     heads = {rel: head_file(rel) for rel in ('data/items.json', 'data/meta.json')}
     for rel, head in heads.items():
         path = os.path.join(ROOT, rel)
@@ -128,16 +145,33 @@ def reset_merge_base(logdir):
                 open(backup, 'wb').write(cur)
                 print(f'{rel} differed from HEAD: restored from HEAD (previous copy: {os.path.relpath(backup, ROOT)})')
             open(path, 'wb').write(head)
-    changed = (git('diff', '--name-only', 'HEAD', '--', 'public/thumbs') or '').splitlines()
+    changed = (git('diff', '--name-only', '--diff-filter=a', 'HEAD', '--', 'public/thumbs') or '').splitlines()
     if changed:
         git('checkout', 'HEAD', '--', 'public/thumbs')
         print(f'public/thumbs: restored {len(changed)} files from HEAD')
-    untracked = [p for p in (git('ls-files', '--others', '--exclude-standard', '--', 'public/thumbs') or '').splitlines()
-                 if os.path.dirname(p) == 'public/thumbs' and p.endswith('.jpg')]
-    for p in untracked:
-        os.remove(os.path.join(ROOT, p))
-    if untracked:
-        print(f'public/thumbs: removed {len(untracked)} untracked thumbnails: ' + ', '.join(os.path.basename(p) for p in untracked))
+
+    def new_jpgs(*args):
+        return [p for p in (git(*args, '--', 'public/thumbs') or '').splitlines()
+                if os.path.dirname(p) == 'public/thumbs' and p.endswith('.jpg')]
+    staged = new_jpgs('diff', '--cached', '--name-only', '--diff-filter=A', 'HEAD')
+    untracked = new_jpgs('ls-files', '--others', '--exclude-standard')
+    kept = sorted(p for p in staged + untracked if p in keep)
+    removed = sorted(p for p in staged + untracked if p not in keep)
+    to_unstage = [p for p in staged if p not in keep]
+    if to_unstage:
+        git('rm', '-q', '--cached', '--', *to_unstage)
+    backup = os.path.join(logdir, 'thumbs.before-refresh')
+    for p in removed:
+        src = os.path.join(ROOT, p)
+        if os.path.exists(src):
+            os.makedirs(backup, exist_ok=True)
+            shutil.move(src, os.path.join(backup, os.path.basename(p)))
+    if removed:
+        print(f'public/thumbs: moved {len(removed)} new thumbnails not in data/overrides.json to '
+              f'{os.path.relpath(backup, ROOT)}/: ' + ', '.join(os.path.basename(p) for p in removed))
+    if kept:
+        print(f'public/thumbs: kept {len(kept)} new thumbnails referenced by data/overrides.json: '
+              + ', '.join(os.path.basename(p) for p in kept))
 
 
 def run_steps(steps, env, logdir, before_merge=None):

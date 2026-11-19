@@ -44,6 +44,8 @@ Then re-run merge + build + verify on the same collector output:
 python3 -I scripts/refresh.py --skip-collect    # TODAY=<the run's date> if the date has rolled over since the collect
 ```
 
+The rerun resets `items.json`, `meta.json` and `public/thumbs` to HEAD but keeps new thumbnails (untracked or staged) that `data/overrides.json` references, so `add_thumb.py` images survive; other new thumbnails are moved to `out/refresh-<TODAY>/thumbs.before-refresh/` (staged ones unstaged).
+
 If the set of main-title pages or their lead images changed a lot, rerun `python3 -I scripts/og.py` after the build and include `public/og/`.
 
 ## 4. Publish
