@@ -6,7 +6,8 @@
   python3 -I scripts/refresh.py --no-official    # aggregators only: no official collector, no official merge, no enrich
 
 TODAY (env, else today in Asia/Tokyo) is fixed once and passed to every step. The merge always starts from HEAD's
-data/items.json and meta.json, so a re-run reports against the committed data, not against the previous run.
+data/items.json, meta.json and public/thumbs (untracked *.jpg there are removed and listed), so a re-run reports
+against the committed data, not against the previous run. --dry-run resets nothing.
 Stops at the first failing step with its exit code. Never commits or pushes. The packet and per-step logs go to
 out/refresh-<TODAY>/ (git-ignored).
 """
@@ -107,10 +108,18 @@ def run_step(name, cmd, env, logdir, n):
     return p.returncode, ''.join(out)
 
 
+def head_file(rel):
+    r = subprocess.run(['git', '-C', ROOT, 'show', f'HEAD:{rel}'], capture_output=True)
+    if r.returncode or not r.stdout:
+        sys.exit(f'git show HEAD:{rel} failed ({r.stderr.decode(errors="replace").strip() or "empty"}): nothing reset')
+    return r.stdout
+
+
 def reset_merge_base(logdir):
-    """data/items.json and meta.json back to HEAD so the merge (and its report) is against the committed data."""
-    for rel in ('data/items.json', 'data/meta.json'):
-        head = subprocess.run(['git', '-C', ROOT, 'show', f'HEAD:{rel}'], capture_output=True).stdout
+    """data/items.json, meta.json and public/thumbs back to HEAD so the merge (and its report) is against the
+    committed data, and a rerun never keeps thumbnails of the previous run or misses ones it deleted."""
+    heads = {rel: head_file(rel) for rel in ('data/items.json', 'data/meta.json')}
+    for rel, head in heads.items():
         path = os.path.join(ROOT, rel)
         cur = open(path, 'rb').read() if os.path.exists(path) else None
         if cur != head:
@@ -119,6 +128,30 @@ def reset_merge_base(logdir):
                 open(backup, 'wb').write(cur)
                 print(f'{rel} differed from HEAD: restored from HEAD (previous copy: {os.path.relpath(backup, ROOT)})')
             open(path, 'wb').write(head)
+    changed = (git('diff', '--name-only', 'HEAD', '--', 'public/thumbs') or '').splitlines()
+    if changed:
+        git('checkout', 'HEAD', '--', 'public/thumbs')
+        print(f'public/thumbs: restored {len(changed)} files from HEAD')
+    untracked = [p for p in (git('ls-files', '--others', '--exclude-standard', '--', 'public/thumbs') or '').splitlines()
+                 if os.path.dirname(p) == 'public/thumbs' and p.endswith('.jpg')]
+    for p in untracked:
+        os.remove(os.path.join(ROOT, p))
+    if untracked:
+        print(f'public/thumbs: removed {len(untracked)} untracked thumbnails: ' + ', '.join(os.path.basename(p) for p in untracked))
+
+
+def run_steps(steps, env, logdir, before_merge=None):
+    """Runs the steps in order until one fails; returns (None or (failed step, exit code), outputs by step)."""
+    stopped, outputs = None, {}
+    for n, (name, cmd) in enumerate(steps, 1):
+        if name == 'merge' and before_merge:
+            before_merge()
+        code, out = run_step(name, cmd, env, logdir, n)
+        outputs[name] = out
+        if code:
+            stopped = (name, code)
+            break
+    return stopped, outputs
 
 
 def collector_lines(today, sources):
@@ -252,15 +285,9 @@ def main():
                   ('verify-release', py + [os.path.join(ROOT, 'scripts/verify_release.py'), '--base', BASE, '--today', today, '--skip-build']),
                   ('verify-browser', ['node', os.path.join(VERIFY_DIR, 'browser.mjs'), '--today', today, '--out', SCREENSHOTS])]
 
-    stopped, outputs = None, {}
-    for n, (name, cmd) in enumerate(steps, 1):
-        if name == 'merge':
-            reset_merge_base(logdir)
-        code, out = run_step(name, cmd, env, logdir, n)
-        outputs[name] = out
-        if code:
-            stopped = (name, code)
-            break
+    if args.dry_run:
+        print('dry run: data/ and public/thumbs are not reset to HEAD; the report compares against the working copy')
+    stopped, outputs = run_steps(steps, env, logdir, None if args.dry_run else lambda: reset_merge_base(logdir))
 
     packet = [f'# Refresh packet {today}', '',
               f'- branch {branch}, HEAD {git("rev-parse", "--short", "HEAD")}; flags: '
