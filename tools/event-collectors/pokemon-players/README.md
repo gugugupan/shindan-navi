@@ -18,10 +18,15 @@ node collect.mjs --from-raw out/run-<ts>/raw.json                  # re-normaliz
 ```
 
 Options: `--chunk-days` (default 1), `--delay-ms` (default 1000, minimum 750),
-`--max-requests` (default 1500), `--headless` (not live-validated), `--note "<text>"` (repeatable, appended to `_run.json` notes).
+`--max-requests` (default 1500, list), `--max-detail-requests` (default 3000, geo pass),
+`--geo lookup|cache` (default `lookup`; `cache` only applies the venue cache), `--profile <dir>` (Chrome profile, default
+`$PTCG_PROFILE` or `.session/chrome/`), `--headless` (not live-validated), `--note "<text>"` (repeatable, appended to `_run.json` notes).
 
-A full 3-month run is ~800 sequential requests (~15 min). Chrome opens visibly with a
-dedicated profile in `.session/chrome/` (ignored). Diagnostics and raw rows go to `out/run-<ts>/` (ignored).
+A full 3-month list run is ~800 sequential requests (~15 min). Chrome opens visibly with a
+dedicated profile (ignored). Diagnostics and raw rows go to `out/run-<ts>/` (ignored).
+
+`players.pokemon-card.com/robots.txt` is `User-agent: * Allow: /` with a Content-Signal `ai-train=no`; this collector only
+lists events and reads coordinates, no training use.
 
 ## What it fetches
 
@@ -43,6 +48,19 @@ writes nothing under `data/events/`. `complete: true` therefore means distinct i
 
 The source only lists events organizers have already published (roughly 1–2 months ahead), so later
 weeks of the window are sparse or empty; that is source state, not missing coverage.
+
+## Venue coordinates (geo pass)
+
+After the list, the collector requests `/event_detail_search?event_holding_id=…&trainers_flg=…&shop_id=…&event_date=…&date_id=…`
+(the same call the detail page makes) for **one event per venue** and reads `event.geocoding` (`"lat,lng"`) into
+`venue.geo` (`source: "ptcg"`, see `contracts/README.md` › Venue geo). Venue key: `id:<shop_id>` for shop venues,
+`fp:<name+address hash>` for events with their own venue. The first full pass is ~2300 requests (≥1 s apart, ~40–60 min);
+results are cached in `data/events/.venues/ptcg.json` (saved every 10 lookups and on Ctrl-C), so later runs only look
+up new venues, and negative entries are retried after 30 days. An interrupted pass resumes with
+`node collect.mjs --from-raw out/run-<ts>/raw.json` (no list requests). A detail 404 tries one more event of the venue;
+transport errors leave the venue uncached and three in a row stop the pass (the run still writes, with `geo: null` for
+the rest). `--dry-run` never requests details. Coverage is in `_run.json` `query.geo` and the notes.
+For own-venue events the detail `geocoding` is assumed to describe the event address (not verified for every row).
 
 ## Identity
 

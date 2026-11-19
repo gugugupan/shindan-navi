@@ -3,7 +3,7 @@
 import { chromium } from 'playwright-core';
 
 const ORIGIN = 'https://players.pokemon-card.com';
-const ALLOWED = [/^\/event_search\?/];
+const ALLOWED = [/^\/event_search\?/, /^\/event_detail_search\?/];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
