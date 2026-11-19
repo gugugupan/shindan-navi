@@ -37,8 +37,12 @@ GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポ�
 
 # Prices come as 6600円(税込) / 6,050円 / 240円 depending on the source; pages say once that prices include tax.
 def price_label(s):
-    s=re.sub(r'\s*[（(]税込[)）]','',s or '').strip()
-    return re.sub(r'(?<![\d,])\d{4,}(?![\d,])',lambda m:f'{int(m.group()):,}',s)
+    s=re.sub(r'\s*[（(]税込み?\s*(?:\d+\s*[%％])?[)）]','',s or '').strip()
+    return re.sub(r'(?<![\d,.])\d{4,}(?=円)',lambda m:f'{int(m.group()):,}',s)
+for _a,_b in [('6600円(税込)','6,600円'),('6600円（税込）','6,600円'),('6600円(税込み)','6,600円'),('6600円(税込10%)','6,600円'),
+              ('6,050円','6,050円'),('240円','240円'),('2026年版 1100円','2026年版 1,100円'),('1.5000','1.5000'),('1.5000円','1.5000円'),
+              ('値段設定なし','値段設定なし'),('','')]:
+    assert price_label(_a)==_b,(_a,price_label(_a))
 
 overrides=json.load(open(os.path.join(ROOT,'data/overrides.json')))
 it=json.load(open(os.path.join(ROOT,'data/items.json')))

@@ -743,7 +743,7 @@ function render(){
   const nx=isCal && mnote.hidden && state.month>=curMonth && !list.some(d=>d.date>=TODAY&&d.date.startsWith(state.month))
     ? list.find(d=>d.date>=TODAY&&d.date.slice(0,7)>state.month) : null;
   nn.hidden=!nx;
-  if(nx) nn.innerHTML=`この月の発売予定はありません・<button class="nextbtn" data-next="${nx.date}">次の発売 ${fmtDate(nx.date,false)} へ ›</button>`;
+  if(nx) nn.innerHTML=`${state.sel.size||state.starOnly?'この条件':'この月'}の発売予定はありません・<button class="nextbtn" data-next="${nx.date}">次の発売 ${fmtDate(nx.date,false)} へ ›</button>`;
   const inMonth=list.filter(d=>d.date.startsWith(state.month));
   if(isCal){ renderCal(list); document.getElementById('count').innerHTML=`この月 <b>${inMonth.length}</b> 件`; }
   else if(scoped){ renderTable(inMonth); document.getElementById('count').innerHTML=`この月 <b>${inMonth.length}</b> 件`; }

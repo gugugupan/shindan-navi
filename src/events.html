@@ -154,6 +154,8 @@ button.cd:hover{background:var(--surface-2)}
   .mapv:not(.open) .mapbox{display:none}
   .dayv .ev[data-mk]{cursor:auto}
 }
+/* short screens (landscape phones): a sticky map would leave no room for the list */
+@media (max-width:760px) and (max-height:500px){.mapv.open{position:static}}
 @media (min-width:761px){
   .dayv.nomap .mapv-head{display:none}
   .ev{grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
@@ -353,10 +355,11 @@ const chip = (key,val,label,on,extra='') => `<button class="chip${extra}" data-k
 const metaGame = c => meta && meta.games ? meta.games.find(g=>g.code===c) : null;
 const hasData = c => { const g=metaGame(c); return !meta || (g && g.record_count>0); };
 
-// Title chip numbers: what each title would list for the chosen location, type / day filters and months on screen
-// (meta.loc_counts, as the location picker). Without them (older meta, no location yet) the chips show no numbers.
+// Title chip numbers (calendar view only, matching its この月 count): what each title would list for the chosen
+// location, type / day filters and month on screen (meta.loc_counts, as the location picker). Without them (older
+// meta, no location yet) and in the list / day views the chips show no numbers.
 function gameCounts(){
-  if(!state.pref.length) return null;
+  if(!state.pref.length || state.view!=='cal') return null;
   const {months}=scopeMonths(), out={};
   for(const g of GAMES){
     const r=window.snLoc.countsFromMeta(meta,{mask:g.bit, type:state.type, days:state.days, months});
@@ -489,10 +492,10 @@ function prefCounts(){
   return {...r, filtered:!!(state.game.length||state.type.length||state.days),
     label:!r.all?'掲載中のイベント数':ym?`${+ym.slice(5)}月のイベント数`:`${+months[0].slice(5)}月〜${+months[months.length-1].slice(5)}月のイベント数`};
 }
-function openPref(){
+function openPref(fromHead){
   window.snLoc.open({current:()=>state.pref[0], counts:prefCounts, onPick:c=>{
     if(state.pref.length!==1||state.pref[0]!==c){ commit({pref:[c]}); track('events_filter',{key:'pref',value:c}); }
-    document.querySelector('[data-f="pref"]')?.focus();
+    document.querySelector(fromHead?'#locBtn':'[data-f="pref"]')?.focus();
   }});
 }
 
@@ -734,7 +737,7 @@ function resetMap(){ userMoved=false; selKey=null; hoverKey=null; fitted=null; f
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Scrolls the page so the card sits just below the sticky toolbar, unless it is already fully visible there.
 function revealCard(c){
-  const r=c.getBoundingClientRect(), top=document.querySelector('.bar').getBoundingClientRect().bottom+(narrow.matches&&mapOpen&&!mapFail?mapEls.v.offsetHeight:0);
+  const r=c.getBoundingClientRect(), top=document.querySelector('.bar').getBoundingClientRect().bottom+(getComputedStyle(mapEls.v).position==='sticky'&&narrow.matches?mapEls.v.offsetHeight:0);
   if(r.top>=top && r.bottom<=window.innerHeight) return;
   const dy=r.top-top-8;
   window.scrollTo({top:Math.max(0,window.scrollY+dy), behavior:reducedMotion()||Math.abs(dy)>2*window.innerHeight?'auto':'smooth'});
@@ -766,6 +769,14 @@ const MAX_FETCH_PER_LOAD = 3;
 // (~13 API requests with /days, under the 20 uncached requests/min per client), then asks.
 const DAY_AUTO_PAGES = 12;
 let dayBudget = DAY_AUTO_PAGES;
+// The list keeps loading today's pages by itself (up to TODAY_AUTO_PAGES loads) while every loaded event of today has
+// already started, so the upcoming ones are not left on a later page. todayOrder: today's order for this load, fixed
+// once today is complete: 'ranked' (upcoming first) unless the reader had scrolled into or past today, else 'start'.
+const TODAY_AUTO_PAGES = 4;
+let todayBudget = TODAY_AUTO_PAGES, todayOrder = null;
+const todayRows = () => events.filter(e=>e.starts_on===TODAY);
+const todayComplete = () => !!dayCounts && dayCounts[TODAY]!=null && todayRows().length>=dayCounts[TODAY];
+const needToday = () => { const t=todayRows(); return t.length>0 && !todayComplete() && !t.some(e=>dayRank(e)===0); };
 // A day view keeps loading by itself until done, an error or the DAY_AUTO_PAGES cap (then 「さらに読み込む」 resumes it).
 const autoLoading = () => !done && !failed && (loading || dayBudget>0);
 const autoEnded = () => !autoLoading();
@@ -783,8 +794,8 @@ function reload(){
   if(ctrl) ctrl.abort();
   ctrl=new AbortController(); gen++;
   events=[]; segs=segments(rangeOf(state)); seg=0; nextCursor=null; done=false; total=null; dayCounts=null; failed=false;
-  dayBudget=DAY_AUTO_PAGES; resetMap(); syncMap();
-  renderNotice();
+  dayBudget=DAY_AUTO_PAGES; todayBudget=TODAY_AUTO_PAGES; todayOrder=null; resetMap(); syncMap();
+  renderNotice(); renderHead();
   clearTimeout(reloadTimer);
   if(!state.pref.length){ renderPrompt(); return; }
   loading=true;
@@ -836,7 +847,7 @@ async function loadPage(){
     failed=err;
   }
   loading=false;
-  const more=isDay() && my===gen && !done && !failed && --dayBudget>0;
+  const more=my===gen && !done && !failed && (isDay() ? --dayBudget>0 : state.view==='list' && needToday() && --todayBudget>0);
   renderList();
   if(more) setTimeout(()=>{ if(my===gen) loadPage(); },0);
 }
@@ -853,8 +864,10 @@ function renderHead(){
   document.getElementById('count').innerHTML = count;
   // phones: the toolbar count sits behind 絞り込み, so the head repeats it
   const mcount = count ? `<span class="count mcount">${count}</span>` : '';
+  const refocus = document.activeElement && document.activeElement.id==='locBtn';
   el.innerHTML = state.view==='cal' ? `${where}${mcount}`
     : `${isDay()?`<button class="dayback" id="dayBack">‹ ${backView()==='list'?'一覧':'カレンダー'}に戻る</button>`:''}<span class="rng">${rng}</span>${where}${mcount}`;
+  if(refocus) document.getElementById('locBtn')?.focus();
 }
 function renderNotice(){
   const sel=state.game.length?state.game:GAMES.map(g=>g.code);
@@ -888,11 +901,17 @@ function renderList(){
   }
   const byDay=new Map();
   events.forEach(e=>{ if(!byDay.has(e.starts_on)) byDay.set(e.starts_on,[]); byDay.get(e.starts_on).push(e); });
+  if(todayOrder==null && byDay.has(TODAY) && todayComplete()){
+    const sec=listEl.querySelector(`.ag[data-day="${TODAY}"]`);
+    todayOrder = !sec || sec.getBoundingClientRect().top >= document.querySelector('.bar').getBoundingClientRect().bottom-1 ? 'ranked' : 'start';
+  }
+  // other days (and today until its order is fixed) only move cancelled events to their end
+  const rank = (e,k) => k===TODAY&&todayOrder==='ranked' ? dayRank(e) : e.event_status==='cancelled' ? 2 : 0;
   let h='';
   const day=isDay();
   byDay.forEach((its,k)=>{
     const [,,dd]=k.split('-').map(Number), w=dowOf(k);
-    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${[...its].sort((a,b)=>dayRank(a)-dayRank(b)).map((e,i,a)=>(dayRank(e)===1&&(!i||dayRank(a[i-1])===0)?'<p class="evsep">開始済みのイベント</p>':'')+card(e,day)).join('')}</div></section>`;
+    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${[...its].sort((a,b)=>rank(a,k)-rank(b,k)).map((e,i,a)=>(rank(e,k)===1&&(!i||rank(a[i-1],k)===0)?'<p class="evsep">開始済みのイベント</p>':'')+card(e,day)).join('')}</div></section>`;
   });
   const rest = total!=null && segs.every(x=>x.count!=null) ? total-events.length : null;
   if(!done) h+=`<button class="loadmore" id="loadMore"${busy?' disabled':''}>${busy?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;
@@ -941,7 +960,7 @@ function closeDay(){
   if(history.state&&history.state.day){ history.back(); return; }
   commit(backView()==='list' ? {view:'list',range:'upcoming'} : {view:'cal',range:'upcoming',month:clampMonth(monthOf(state.from))});
 }
-document.getElementById('rhead').addEventListener('click',e=>{ if(e.target.closest('#dayBack')) closeDay(); else if(e.target.closest('#locBtn')) openPref(); });
+document.getElementById('rhead').addEventListener('click',e=>{ if(e.target.closest('#dayBack')) closeDay(); else if(e.target.closest('#locBtn')) openPref(true); });
 narrow.addEventListener('change',()=>{ renderControls(); });
 const io = 'IntersectionObserver' in window ? new IntersectionObserver(es=>{
   if(es.some(x=>x.isIntersecting) && !done && !loading && !failed && state.view==='list' && !isDay()) loadPage();
