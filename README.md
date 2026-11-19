@@ -19,7 +19,7 @@ Working notes for people and coding agents: `CLAUDE.md` (architecture, owner dec
 A local, reviewed step run by hand from a worktree — GitHub Actions never touches data, and nothing refreshes it on a schedule.
 
 ```bash
-.venv/bin/pip install fonttools brotli pillow   # once (+ beautifulsoup4 when the official API keys are set)
+.venv/bin/pip install fonttools brotli pillow truststore   # once (+ beautifulsoup4 when the official API keys are set)
 (cd tools/verify && npm ci)                     # once
 python3 -I scripts/refresh.py                   # collect → merge → build → verify → review packet
 python3 -I scripts/refresh.py --skip-collect    # after manual fixes: reuse today's data/releases, merge + build + verify again

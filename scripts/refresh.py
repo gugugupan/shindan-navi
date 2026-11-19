@@ -67,10 +67,13 @@ def check_worktree():
 def check_prereqs(args, keys):
     errors = []
     if not os.path.exists(VENV_PY):
-        errors.append('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli pillow')
+        errors.append('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli pillow truststore')
     else:
         if subprocess.run([VENV_PY, '-I', '-c', 'import PIL'], capture_output=True).returncode:
             errors.append('.venv has no Pillow: .venv/bin/pip install pillow')
+        if subprocess.run([VENV_PY, '-I', '-c', 'import truststore'], capture_output=True).returncode:
+            errors.append('.venv has no truststore (official sites with incomplete TLS chains fail without it): '
+                          '.venv/bin/pip install truststore')
         official_collect = not args.skip_collect and not args.no_official and len(keys) == len(KEYS)
         enrich = not args.no_official and 'OPENROUTER_API_KEY' in keys
         if (official_collect or enrich) and subprocess.run([VENV_PY, '-I', '-c', 'import bs4'], capture_output=True).returncode:

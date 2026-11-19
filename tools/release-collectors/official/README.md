@@ -4,7 +4,7 @@ Reads release info straight from official TCG sites. `scripts/update_data.py`
 reads `data/releases/official/` and imports `run.match` / `run.product_details` from this package.
 
 ```bash
-.venv/bin/pip install beautifulsoup4            # once (plus fonttools brotli pillow for the rest of the repo)
+.venv/bin/pip install beautifulsoup4 truststore # once (plus fonttools brotli pillow for the rest of the repo)
 cp .env.example .env                           # TYPESAFE_API_KEY, OPENROUTER_API_KEY
 .venv/bin/python -I tools/release-collectors/official/collect.py [--games pokemon,onepiece] [--today YYYY-MM-DD] [--root DIR]
 .venv/bin/python -I tools/release-collectors/official/run.py [--games pokemon,onepiece,mtg] [--adopt-sources]   # pilot report
@@ -42,7 +42,9 @@ Every entry gets a `source` (`scripts/sourcekey.py`): canonical official page af
 | ONE PIECE | 2 | 2 (100%) | 2/2 | 2/2 | 3 (incl. HEROINES PRECIOUS BOX 10/31, missing from our data) |
 | MTG | 13 | 4 (31%) | 4/4 | – | 12 |
 
-About $0.016 (OpenRouter) + Jev per full run, ~20 s.
+About $0.016 (OpenRouter) + Jev for these three titles, ~20 s. A full collect over every title in `sources.json` costs
+~$0.16 (2026-11-19: OpenRouter 74 calls, ~357k prompt + ~46k completion tokens, $0.158; Jev 29 calls) plus ~$0.0005
+for the merge's matching; box-info enrich (`fill_box_info`) adds one light-LLM call per item it reads.
 
 Findings:
 - pokemon-card.com's product DB lists upcoming sets once announced; the news index adds things like series logos and figures that the LLM correctly drops.

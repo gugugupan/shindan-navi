@@ -1,6 +1,14 @@
 """Helpers shared by the release collectors and scripts/update_data.py."""
 import urllib.request
 
+try:
+    import truststore
+except ImportError:  # scripts/refresh.py checks .venv for it
+    pass
+else:
+    # Several official sites (Bandai's) serve incomplete chains; the OS verifier completes them via AIA, OpenSSL does not.
+    truststore.inject_into_ssl()
+
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
 
 # Source labels → one display name per title (both sites abbreviate differently).

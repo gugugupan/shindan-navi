@@ -121,6 +121,11 @@ Merge (refuses to write anything):
   come from this run's matches only, and only checked titles are listed under 公式サイトで確認できなかった今後の商品.
 - The official name wins: an item with `official` in `sources` whose name equals its `official_name` keeps that name
   whatever the aggregators call it, whether or not the official step runs. Other items take the aggregator name.
+- Source identity first, at any date: `match()` only sees upcoming items, so an official record it leaves unpaired is
+  folded into an item of the same title with the same source (page + key, or product code) even when that item's
+  date is already past. The merge never creates an official item whose source an item of the title already has. A
+  date change from such a fold that crosses TODAY (an item already released per the calendar moving into the future,
+  or the reverse) is not applied: it is listed under 公式と既存で発売日が大きく違う for a person.
 - The report keeps `unknown_labels` from both aggregator runs (未対応のタイトル名) and the counts from `record_count`.
 
 Enrich (`fill_box_info`) runs after the merge's official step, may use network and the LLM, is skipped without

@@ -20,15 +20,17 @@ import io
 import json
 import os
 import re
+import ssl
 import sys
 import time
 import unicodedata
 import urllib.error
+import urllib.parse
 
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sourcekey import is_official, make_source, product_code  # noqa: E402
+from sourcekey import is_official, make_source, product_code, same_release  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools', 'release-collectors'))
 from lib.common import fetch  # noqa: E402
@@ -270,6 +272,12 @@ def apply_official(items, today, report, dry, log, records, run):
         supplies = 0
         for e in result['entries']:
             x = by_id.get(e.get('match'))
+            if not x:
+                # match() only sees upcoming items; an item already past its (aggregator) date can still be this product
+                x = next((y for y in items if y['id'] not in matched and same_identity(y, e)), None)
+                if x:
+                    e['match'] = x['id']
+                    log.append(f"official {key}: 「{e['name']}」 = 「{x['name']}」 ({x['date']}) by source identity")
             if x:
                 matched.add(x['id'])
                 fold_official(x, e, report, dry)
@@ -288,6 +296,10 @@ def apply_official(items, today, report, dry, log, records, run):
             if any(o is not e and o['date'] == e['date'] and not o.get('match') and o['kind'] in ADD_KINDS
                    and plain(e['name']) != plain(o['name']) and plain(e['name']) in plain(o['name']) for o in result['entries']):
                 continue  # a more specific listing of the same product (e.g. with its edition) is on the same page
+            twin = next((y for y in items if same_identity(y, e)), None)
+            if twin:
+                log.append(f"official {key}: skipped 「{e['name']}」: same source as 「{twin['name']}」, matched by another listing")
+                continue
             new = new_from_official(e, dry)
             if new['id'] in by_id:
                 continue
@@ -309,6 +321,16 @@ def apply_official(items, today, report, dry, log, records, run):
     for label, usage in (('collect', run.get('usage') or {}), ('match', official.LEDGER.rows)):
         log.append(f'official cost ({label}): ' + ', '.join(f"{p} {v['calls']} calls {v['prompt_tokens']}+{v['completion_tokens']} tok ${v['cost']:.4f}" for p, v in usage.items()))
     return items
+
+
+def same_identity(item, entry):
+    """Same release by source: page + key, or the official product code within the title (contracts/releases.md)."""
+    if item['game'] != entry['game']:
+        return False
+    if same_release(item.get('source'), entry['source'], item['game'], entry['game']):
+        return True
+    code = product_code(entry['name'])
+    return bool(code) and product_code(item['name']) == code
 
 
 def plain(name):
@@ -333,7 +355,7 @@ def fold_official(x, e, report, dry):
     x['sources'] = sorted(set(x.get('sources') or []) | {'official'})
     if e['date'] and e['date'] != x['date']:
         gap = abs((datetime.date.fromisoformat(e['date']) - datetime.date.fromisoformat(x['date'])).days)
-        if gap > 60 or (e['date'] < today_iso() <= x['date']):
+        if gap > 60 or (e['date'] < today_iso() <= x['date']) or (x['date'] < today_iso() <= e['date']):
             # official pages sometimes carry a stale or copied date; a big jump needs a person to look
             report['date_conflict'].append(f"[{x['game']}] {x['name']}  既存 {x['date']} / 公式 {e['date']}  {e.get('url') or e['source_page']}")
         else:
@@ -393,6 +415,19 @@ def product_page(x):
     return src['url'] if src.get('site') == 'official' and src.get('url') else ''
 
 
+def with_www(url):
+    """The `www.` address of a canonical source URL (canonical_url drops `www.`; some official hosts only answer on it), or None."""
+    p = urllib.parse.urlsplit(url or '')
+    if not p.netloc or p.netloc.startswith('www.') or p.netloc.count('.') != 1:
+        return None
+    return urllib.parse.urlunsplit(p._replace(netloc='www.' + p.netloc))
+
+
+def hostname_mismatch(ex):
+    reason = getattr(ex, 'reason', ex)
+    return isinstance(reason, ssl.SSLCertVerificationError) and 'match' in str(reason)
+
+
 def fill_box_info(items, today, report, log):
     """Open each upcoming item's own official page for what the listings left out: box price, packs per box, cards per pack."""
     from official import run as official
@@ -406,22 +441,24 @@ def fill_box_info(items, today, report, log):
     todo = [x for x in items if x['date'] >= today.isoformat() and needs_box_info(x) and product_page(x)]
     failed = 0
     for x in todo:
-        got = None
-        for wait in (0, 10):
-            time.sleep(wait)
+        got, page, waits = None, product_page(x), [10]
+        while True:
             try:
-                got = official.product_details(full_name.get(x['game'], x['game']), x.get('official_name') or x['name'], product_page(x))
+                got = official.product_details(full_name.get(x['game'], x['game']), x.get('official_name') or x['name'], page)
                 break
             except urllib.error.HTTPError as ex:
                 err = ex
-                if ex.code not in (429, 503):
+                if ex.code not in (429, 503) or not waits:
                     break
+                time.sleep(waits.pop())
             except Exception as ex:
                 err = ex
-                break
+                if not (hostname_mismatch(ex) and with_www(page)):
+                    break
+                page = with_www(page)
         if got is None:
             failed += 1
-            log.append(f"box info: {x['name']} {product_page(x)} FAILED {err!r}")
+            log.append(f"box info: {x['name']} {page} FAILED {err!r}")
             continue
         added = []
         if got['per_pack'] and not x.get('per_pack'):

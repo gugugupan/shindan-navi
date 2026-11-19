@@ -14,7 +14,7 @@ For data updates `scripts/refresh.py` already runs both steps (build with `BUILD
 Needs Python 3.12 (same as CI) and Node ≥ 20; Chrome from `/Applications` (override with `CHROME=`).
 
 ```bash
-uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0 pillow
+uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0 pillow truststore
 (cd tools/verify && npm ci)
 ```
 

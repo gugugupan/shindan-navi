@@ -8,6 +8,8 @@ import time
 import urllib.parse
 import urllib.request
 
+from lib import common as _lib  # noqa: F401 — verifies TLS with the OS trust store
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 CACHE = os.path.join(HERE, 'cache')

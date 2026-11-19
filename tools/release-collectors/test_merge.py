@@ -325,6 +325,80 @@ class OfficialNotRun(OfficialCase):
         self.assertEqual(ud.official_checked({'pages': run['pages']}), set())  # a run file without scope checks nothing
 
 
+class SourceIdentity(OfficialCase):
+    """An official record whose source an item already has is that item, whatever its date or name."""
+    PAGE = 'https://example.test/products/beam.html'
+    BUNDLE = 'ワンピース | ビーム Beam Me Up Bundle'
+
+    def setUp(self):
+        super().setUp()
+        # released per the aggregator (before TODAY), so match() never sees it; named in English by the aggregator
+        self.past = dict(item('2026-11-13', OP, 'ONE PIECE Beam Me Up Bundle EN', pack='15,180円',
+                              source=make_source(self.PAGE, self.BUNDLE, 'official')),
+                         sources=['clabo', 'official'], official_name=self.BUNDLE)
+        self.write_data([E1, E2, E3, E4, self.past], {})
+
+    def merge(self, *records):
+        self.write_official(records=OFFICIAL + list(records))
+        return self.merged()
+
+    def test_past_item_with_same_source_is_folded_not_duplicated(self):
+        items = self.merge(off('onepiece', OP, self.BUNDLE, '2026-12-04', kind='PRODUCT_SET_OR_BOX', final=self.PAGE,
+                               editions=['英語版']))
+        self.assertNotIn(ud.item_id(OP, self.BUNDLE), items)
+        past = items[self.past['id']]
+        self.assertEqual((past['date'], past['name'], past['sources']), ('2026-11-13', self.past['name'], ['official']))
+        self.assertEqual([x for x in self.section('公式と既存で発売日が大きく違う') if 'Beam' in x],
+                         ['[ONE PIECE] ONE PIECE Beam Me Up Bundle EN  既存 2026-11-13 / 公式 2026-12-04  https://example.test/onepiece/products/'])
+        self.assertIn(f"official onepiece: 「{self.BUNDLE}」 = 「{self.past['name']}」 (2026-11-13) by source identity",
+                      self.section('公式サイト取得ログ'))
+        self.assertFalse([x for x in self.section('公式サイトから追加') if 'Beam' in x])
+
+    def test_other_edition_has_its_own_key_and_is_added(self):
+        jp = self.BUNDLE + ' 日本語版'
+        items = self.merge(off('onepiece', OP, self.BUNDLE, '2026-12-04', kind='PRODUCT_SET_OR_BOX', final=self.PAGE),
+                           off('onepiece', OP, jp, '2026-12-04', kind='PRODUCT_SET_OR_BOX', final=self.PAGE))
+        self.assertNotEqual(make_source(self.PAGE, jp)['key'], self.past['source']['key'])
+        self.assertEqual(items[ud.item_id(OP, jp)]['source']['key'], make_source(self.PAGE, jp)['key'])
+        self.assertNotIn(ud.item_id(OP, self.BUNDLE), items)
+
+    def test_never_adds_an_item_whose_source_exists(self):
+        # two listings of one product (a second date on the page): the first folds, the second is not added
+        items = self.merge(off('onepiece', OP, self.BUNDLE, '2026-12-04', kind='PRODUCT_SET_OR_BOX', final=self.PAGE),
+                           off('onepiece', OP, self.BUNDLE, '2026-12-11', kind='PRODUCT_SET_OR_BOX', final=self.PAGE))
+        keys = [(x['game'], x['source']['key']) for x in items.values()]
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertIn(f"official onepiece: skipped 「{self.BUNDLE}」: same source as 「{self.past['name']}」, matched by another listing",
+                      self.section('公式サイト取得ログ'))
+
+
+class BoxInfoAddress(unittest.TestCase):
+    def test_with_www(self):
+        self.assertEqual(ud.with_www('https://yugioh-card.com/japan/products'), 'https://www.yugioh-card.com/japan/products')
+        self.assertIsNone(ud.with_www('https://www.konami.com/yugioh/'))
+        self.assertIsNone(ud.with_www('https://dm.takaratomy.co.jp/product/'))  # a subdomain is a real host
+
+    def test_hostname_mismatch_retries_on_www(self):
+        import ssl
+        import urllib.error
+        x = dict(item('2026-12-19', '遊戯王OCG', 'PREMIUM PACK 2027', source=make_source('https://www.yugioh-card.com/japan/products/', 'PREMIUM PACK 2027', 'official')))
+        x['source']['url'] = 'https://yugioh-card.com/japan/products'  # canonical: www. dropped
+        tried = []
+
+        def details(full_name, name, url):
+            tried.append(url)
+            if '//www.' not in url:
+                raise urllib.error.URLError(ssl.SSLCertVerificationError(1, 'Hostname mismatch, certificate is not valid for yugioh-card.com'))
+            return {'pack_yen': 198, 'box_yen': None, 'per_box': 15, 'per_pack': 5}
+        report, log = {'box': []}, []
+        with mock.patch.dict(os.environ, {'OPENROUTER_API_KEY': 'test'}), mock.patch.object(official_run, 'product_details', details), \
+                mock.patch.object(ud.time, 'sleep', lambda s: None):
+            ud.fill_box_info([x], __import__('datetime').date(2026, 11, 19), report, log)
+        self.assertEqual(tried, ['https://yugioh-card.com/japan/products', 'https://www.yugioh-card.com/japan/products'])
+        self.assertEqual((x['per_pack'], x['pack']), (5, '198円'))
+        self.assertIn('box info: 1 product pages read, 1 items filled, 0 failed', log)
+
+
 class Thumbs(MergeCase):
     def test_save_and_cleanup(self):
         pinned = item('2026-12-03', 'MTG', '固定画像の商品')
