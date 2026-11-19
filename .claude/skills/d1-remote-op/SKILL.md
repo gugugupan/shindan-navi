@@ -5,51 +5,53 @@ description: Runbook for any write to the production D1 (shindan-navi-events) �
 
 # Write to the production D1
 
-D1 is on the Free plan and the event data has no copy in git, so every remote write is planned, budgeted and reviewed first. Numbers live in `api/README.md` (› D1 budget, › Import behaviour, › Remote import, › Migrations, and a migration's own runbook section such as › Migration 0005 runbook); read the sections for your op instead of trusting figures here. Shipping code that goes with the op follows the `ship-gate` skill and the "Approvals: Fable first" rule in `~/.claude/CLAUDE.md`.
+D1 is on the Free plan and the event data has no copy in git, so every remote write is planned, budgeted and reviewed first. Numbers live in `api/README.md` (› D1 budget, › Import behaviour, › Remote import, › Migrations, and a migration's own runbook section such as › Migration 0005 runbook, on branch `ev-bandai` until it is merged); read the sections for your op instead of trusting figures here. Shipping code that goes with the op follows the `ship-gate` skill and the "Approvals: Fable first" rule in `~/.claude/CLAUDE.md`.
 
 ## Always ask the owner first
 
-Whatever Fable rates: overwriting or rewriting the owner's event data dir (the only copy), migrations and time-travel restores, and anything the owner said to confirm in this conversation. Imports that only add / update rows go through Fable (high → proceed).
+Whatever Fable rates: overwriting or rewriting the owner's event data dir (the only copy); migrations and time-travel restores; ad-hoc `wrangler d1 execute --remote` writes or deletes; `--allow-shrink`; raising `--max-writes`; anything the owner said to confirm in this conversation. Imports that only add / update rows go through Fable (high → proceed). `--allow-incomplete` needs a stated reason in the Fable brief.
+
+If the permission classifier blocks a command (e.g. `migrations apply`), give the owner the exact line to run with `!` and wait. Never reach the same effect by another route: not through `import:remote -- --yes` (it applies pending migrations), not through `d1 execute`.
 
 ## 0. Setup and secrets
 
-- Work from `api/` in a worktree whose importer is the **newest on main** (`git fetch && git merge origin/main` first). An older importer drops meta fields added since (e.g. `loc_counts`) and may reject newer game directories.
-- `D1_DATABASE_ID` comes from the environment; the lead keeps the real value and the owner's data dir path outside the repo (the git-ignored `wrangler.remote.json` / the lead's memory). Never print, echo, log or commit the id; never paste it into a brief.
-- `node scripts/remote-config.mjs` writes `../wrangler.remote.json`. Delete it when the op is done.
+- Work from `api/` in a worktree whose importer is the **newest on main** (`git fetch && git merge origin/main` first). An older importer drops meta fields added since (e.g. `loc_counts`) and may reject newer game directories. A new worktree needs `cd api && npm ci` (or a symlinked `node_modules`).
+- The database id comes from env `D1_DATABASE_ID`, which the lead keeps outside the repo (with the owner's data dir path, in the lead's memory). `node scripts/remote-config.mjs` writes the git-ignored `../wrangler.remote.json` from it; delete that file when the op is done.
+- Never print the id. Wrangler prints the database uuid on `execute` / `migrations apply` and in `d1 info`: filter JSON to the fields you need, and mask the uuid (`sed -E 's/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}/<db-id>/g'`) in anything passed to Fable, kb or a report.
 
-## 1. Budget: quota is per UTC day
+## 1. Budget
 
-Free-plan writes and reads reset at 00:00 UTC (09:00 JST) and count everything on the database that day, including earlier imports and user traffic. Before any write:
+Free-plan quotas reset at 00:00 UTC (09:00 JST) and count everything on the database that day, including earlier imports and user traffic. Before any write:
 
 ```bash
-./node_modules/.bin/wrangler d1 info shindan-navi-events --config ../wrangler.remote.json --json   # rows_written_24h
+./node_modules/.bin/wrangler d1 info shindan-navi-events --config ../wrangler.remote.json --json | jq '{rows_written_24h, rows_read_24h}'
 ```
 
-Compare `rows_written_24h` plus the plan's rows with the daily limit in › D1 budget. If it does not fit with a wide margin, split (`--games`) or wait for the next UTC day.
+`rows_written_24h` is a rolling 24 h value, so it is a conservative upper bound for today; when the window spans the UTC-day boundary, use the dashboard's UTC-day number (D1 → Metrics). Add the plan's rows and compare with the daily limit in › D1 budget. If it does not fit with a wide margin, split (`--games`) or wait for the next UTC day.
 
 ## 2. Imports: plan, compare, then apply
 
 1. Back up the data dir before anything rewrites it (collectors, re-normalisation scripts):
-   `tar czf ~/shindan-backups/events-$(date +%F-%H%M).tgz -C <owner data dir> .`
-2. Plan, always with an explicit data dir. Without `--data` the importer reads the worktree's `../data/events`, which is usually empty or stale, and the plan silently writes nothing useful:
+   `mkdir -p ~/shindan-backups && tar czhf ~/shindan-backups/events-$(date +%F-%H%M).tgz -C <owner data dir> .`
+2. Plan, always with an explicit data dir. Without `--data` the importer uses the worktree's `../data/events`; when that dir is missing it prints `… does not exist; nothing to import` and exits 0, which looks like success:
    ```bash
    npm run import:remote -- --data <owner data dir> [--games A,B] --plan
    ```
 3. Write down the expected numbers before reading the plan (from the collector run, the change you made, › D1 budget). Then compare per game: inserted, updated (rewritten), unchanged, hidden, D1-now vs records, total rows written, and whether `site_meta` is rewritten. Stop on any surprise: a large `hidden` count, rewrites when nothing changed, a game shrinking, rows far above the estimate.
-4. Guards — use them deliberately, never to get past a surprise:
-   - `--allow-incomplete GAME`: that game's run is not complete; it adds and updates events but hides none. Only for a game whose run is known to be partial.
-   - `--allow-shrink`: only after confirming the source really lists fewer events.
-   - `--max-writes N`: the cap; a bigger first import is split with `--games` across UTC days, not by raising it.
-5. Have Fable review the plan output (paste it, with the expectations and the budget check) and rate `CONFIDENCE`. High → `npm run import:remote -- --data <owner data dir> [--games …] --yes` with the same flags.
-6. `--yes` runs `migrations apply --remote` first. If a migration is pending that is not meant to run today, do not run `--yes`.
+4. Guards are deliberate choices, never a way past a surprise:
+   - `--allow-incomplete GAME`: that game's run is not complete; it adds and updates events but hides none. Only for a game whose run is known to be partial, with the reason in the brief.
+   - `--allow-shrink`: owner OK, after confirming the source really lists fewer events.
+   - `--max-writes N`: the cap. Split a bigger import with `--games` across UTC days; raising it is an owner OK.
+5. Check for pending migrations: `./node_modules/.bin/wrangler d1 migrations list shindan-navi-events --remote --config ../wrangler.remote.json`. `--yes` applies them first and `--plan` does not show them. Anything pending: stop and ask the owner.
+6. Have Fable review the plan output (masked, with the expectations and the budget check) and rate `CONFIDENCE`. High → `npm run import:remote -- --data <owner data dir> [--games …] --yes` with the same flags.
 
-## 3. Migrations
+## 3. Migrations (owner OK)
 
 1. Read the migration's runbook section in `api/README.md`. Rebuild-type migrations (table copies) write roughly one row per existing row plus indexes: schedule them near the end of a UTC day (about 08:30 JST) on a day with little usage, so an overrun locks D1 for minutes, not hours.
 2. No `import:remote -- --yes` earlier that day: its writes add to the migration's.
 3. Record a Time Travel bookmark first and keep it in the report:
    `./node_modules/.bin/wrangler d1 time-travel info shindan-navi-events --config ../wrangler.remote.json`
-4. Apply: `./node_modules/.bin/wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json`. The auto-mode classifier may block this command; then give the owner the exact line to run themselves with `!` in the prompt, and continue once they paste the output.
+4. Apply: `./node_modules/.bin/wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json` (or hand it to the owner if blocked, see above).
 5. Check the runbook's post-conditions (row counts unchanged, new tables / rows present, `/api/v1/events/meta` answers). On failure, a restore to the bookmark is an owner decision: it also undoes account / feedback writes made since.
 6. Migrations go in **before** pushing code that needs them; imports that need the new code go **after** the push.
 
@@ -61,6 +63,6 @@ Compare `rows_written_24h` plus the plan's rows with the daily limit in › D1 b
 
 ## 5. After the op
 
-- Spot-check the live API: `/api/v1/events/meta` (new `state.version`, windows, game list), one `/api/v1/events/days` and one `/api/v1/events` call with the `pref` / month the page sends, and `/events/` in a browser. Cached answers keep serving the old version for up to 60 s.
+- Spot-check the live API: `/api/v1/events/meta` (new `state.version`, windows, game list), one `/api/v1/events/days` and one `/api/v1/events` call with the `pref` / month the page sends, and `/events/` in a browser. Isolates pick up the new data version within 60 s.
 - `rm ../wrangler.remote.json`.
-- Report to the owner in Chinese: what ran, the plan numbers vs expectations, `rows_written_24h` before and after, the bookmark (migrations), Fable's rating, live checks. Record it in the kb plan when one exists.
+- Report to the owner in Chinese: what ran, the plan numbers vs expectations, rows written before and after, the bookmark (migrations), Fable's rating, live checks. Record it in the kb plan when one exists.
