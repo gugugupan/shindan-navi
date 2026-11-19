@@ -2,7 +2,8 @@
   DRAFT: the owner must review this policy before it goes live. It is written from what the code does
   (GA4, Cloudflare, localStorage, /events/ Google Maps, Google login), not checked by a lawyer.
   Owner placeholders are span.todo elements carrying the owner-fill data attribute; build.py refuses
-  LOGIN_ENABLED=1 while one is left. The effective date is PRIVACY_EFFECTIVE in build.py.
+  LOGIN_ENABLED=1 while one is left. Dates: PRIVACY_EFFECTIVE_BASE (制定, EFFECTIVE) and PRIVACY_EFFECTIVE_LOGIN
+  (login revision, REVISED) in build.py.
   Parts wrapped in the EVENTS / LOGIN marker comments are kept only with BUILD_EVENTS on / LOGIN_ENABLED=1.
   Section numbers are CSS counters, so they stay in order when a LOGIN part is left out.
 -->
@@ -47,7 +48,7 @@
 
   <main class="doc">
     <h1>プライバシーポリシー</h1>
-    <p class="meta">制定日：<!--EFFECTIVE--></p>
+    <p class="meta">制定日：<!--EFFECTIVE--><!--LOGIN-->（最終改定日：<!--REVISED-->）<!--/LOGIN--></p>
 
     <section class="seo about">
       <p>新弾ナビ（https://shindan-navi.app/、以下「本サイト」）は、利用者の情報を、個人情報の保護に関する法律（個人情報保護法）その他の法令に沿って取り扱います。このページでは、本サイトがどのような情報を、何のために、どこへ送信・保存しているかを説明します。</p>
@@ -70,7 +71,7 @@
       <!--EVENTS--><p>イベントカレンダー（/events/）を初めて開いたときは、接続元 IP アドレスから Cloudflare が推定した都道府県を初期表示に使います。位置情報の許可は求めず、推定結果を本サイトが保存することもありません。</p><!--/EVENTS-->
 
       <h3>アクセス解析（Google アナリティクス）</h3>
-      <p>サイトの利用状況を把握して改善するため、Google LLC（米国）の Google アナリティクス 4 を利用しています（本サイトのドメイン shindan-navi.app で表示した場合のみ）。Google アナリティクスは Cookie を使い、閲覧したページ、参照元、端末・ブラウザの情報、おおよその地域のほか、本サイト上の操作（選んだタイトル<!--EVENTS-->や都道府県<!--/EVENTS-->、表示の切り替え、お気に入り登録した商品名、カレンダー追加など）を Google に送信します。<!--LOGIN-->ログイン中であっても、アカウントの ID やメールアドレスを Google アナリティクスに送信することはありません（ログイン・ログアウトしたという事実のみ送信します）。<!--/LOGIN--></p>
+      <p>サイトの利用状況を把握して改善するため、Google LLC（米国）の Google アナリティクス 4 を利用しています（本サイトのドメイン shindan-navi.app で表示した場合のみ）。Google アナリティクスは Cookie を使い、閲覧したページ、参照元、端末・ブラウザの情報、おおよその地域のほか、本サイト上の操作（選んだタイトル<!--EVENTS-->や都道府県<!--/EVENTS-->、表示の切り替え、お気に入り登録した商品名、カレンダー追加など）を Google に送信します。<!--LOGIN-->ログイン中であっても、アカウントの ID やメールアドレスを Google アナリティクスに送信することはありません。ログイン・ログアウト・アカウント削除については、その操作をしたという事実（操作の種類）のみを送信します。<!--/LOGIN--></p>
       <p>Google によるデータの取り扱いは <a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener">Google のサービスを使用するサイトやアプリから収集した情報の Google による使用</a> をご覧ください。送信を止めたい場合は、<a href="https://tools.google.com/dlpage/gaoptout?hl=ja" target="_blank" rel="noopener">Google アナリティクス オプトアウト アドオン</a> の利用やブラウザの Cookie 設定で無効にできます。</p>
 
       <h3>ブラウザに保存する情報（localStorage）</h3>
@@ -84,7 +85,8 @@
           <tr><td><code>tcg.calAskOff</code></td><td>お気に入り登録時のカレンダー追加確認を表示しない設定</td></tr>
           <tr><td><code>tcg.theme</code></td><td>表示テーマ（自動・ライト・ダーク）</td></tr>
           <!--EVENTS--><tr><td><code>tcg.ev.filters</code></td><td>イベントカレンダーの絞り込み条件（選んだ都道府県を含む）</td></tr><!--/EVENTS-->
-          <!--LOGIN--><tr><td><code>tcg.sync.user</code></td><td>このブラウザのデータを同期したアカウントの ID（別のアカウントでログインしたときの判定用）</td></tr><!--/LOGIN-->
+          <!--LOGIN--><tr><td><code>tcg.sync.user</code></td><td>このブラウザのデータを同期したアカウントの ID（別のアカウントでログインしたときの判定用）。アカウントを削除すると消去します</td></tr>
+          <tr><td><code>tcg.sync.base</code></td><td>このブラウザが最後に確認した、アカウントに保存されているお気に入りと設定（まだ同期していない変更を求めるために使います）。アカウントを削除すると消去します</td></tr><!--/LOGIN-->
         </tbody>
       </table></div>
       <p>お気に入りの商品を Google カレンダーに追加する操作をした場合は、商品名と発売日を含むリンクで Google カレンダーが開きます。.ics ファイルはブラウザ内で作成され、本サイトのサーバーには送信されません。</p>
@@ -124,7 +126,7 @@
         <tbody>
           <tr><td>Google アナリティクス（Google LLC）</td><td>shindan-navi.app のページを表示・操作したとき</td><td>Cookie の識別子、閲覧ページ、参照元、端末・ブラウザ情報、IP アドレス、操作の内容</td></tr>
           <!--EVENTS--><tr><td>Google マップ（Google LLC）</td><td>イベントカレンダーで日付ごとの会場地図を開いたとき</td><td>IP アドレス、端末・ブラウザ情報、表示した地図の範囲</td></tr><!--/EVENTS-->
-          <!--LOGIN--><tr><td>Google ログイン（Google LLC）</td><td>「Google でログイン」を押したとき</td><td>Google の画面で行う認証の情報（本サイトはパスワードを受け取りません）</td></tr>
+          <!--LOGIN--><tr><td>Google ログイン（Google LLC）</td><td>「ログイン」を押して Google アカウントでログインするとき</td><td>Google の画面で行う認証の情報（本サイトはパスワードを受け取りません）</td></tr>
           <tr><td>Google のプロフィール画像配信（Google LLC）</td><td>ログイン中、アカウントのアイコンを表示したとき</td><td>IP アドレス、端末・ブラウザ情報</td></tr><!--/LOGIN-->
           <tr><td>Google カレンダー（Google LLC）</td><td>「Google カレンダーに追加」を押したとき</td><td>商品名・発売日（リンクに含まれる内容）</td></tr>
         </tbody>
@@ -144,7 +146,7 @@
         <li>アカウントの情報（2-4）は、アカウントを削除するまで保存します。</li>
         <li>セッション情報は、ログアウトしたときに削除します。有効期限（180 日）を過ぎたものは、次にログインしたときに削除します。</li>
         <li>設定画面の「アカウントを削除」から、いつでもアカウントを削除できます。削除すると、アカウント・連携した Google アカウントの情報・同期したお気に入りと設定・セッションをデータベースからすぐに完全に削除します（ブラウザの localStorage に残っているお気に入り等は消えません）。</li>
-        <li>Cloudflare D1 の障害復旧機能により、削除後も最大 30 日間、復元用のデータが Cloudflare のシステム内に残る場合があります。運営者がこれを通常の業務で利用することはありません。</li>
+        <li>Cloudflare D1 の障害復旧機能（Time Travel）により、削除後も一定期間（Cloudflare の契約プランに応じて 7 日間または 30 日間、最大 30 日間）、復元用のデータが Cloudflare のシステム内に残る場合があります。運営者がこれを通常の業務で利用することはありません。</li>
       </ul>
     </section>
 <!--/LOGIN-->
@@ -176,6 +178,7 @@
       <h3 class="nn">改定履歴</h3>
       <ul>
         <li><!--EFFECTIVE-->：制定</li>
+        <!--LOGIN--><li><!--REVISED-->：Google アカウントでのログインとお気に入り等の同期の開始にあわせて改定</li><!--/LOGIN-->
       </ul>
     </section>
   </main>

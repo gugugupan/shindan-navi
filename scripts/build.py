@@ -323,8 +323,14 @@ def render_events():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
-# Privacy policy (/privacy/). PRIVACY_EFFECTIVE is set by hand when a revision goes live; the page lists it as 制定日.
-PRIVACY_EFFECTIVE='2026-11-20'
+# Privacy policy (/privacy/). Each date is the day that variant first went live, set by hand: BASE = 制定 (the policy
+# without login), LOGIN = the revision that adds login, published only with LOGIN_ENABLED=1. Leave LOGIN None until
+# the day login is enabled.
+PRIVACY_EFFECTIVE_BASE='2026-11-19'
+PRIVACY_EFFECTIVE_LOGIN=None
+if LOGIN_ENABLED and not PRIVACY_EFFECTIVE_LOGIN:
+    sys.exit('LOGIN_ENABLED=1 needs PRIVACY_EFFECTIVE_LOGIN in scripts/build.py: set it to the date login goes live (YYYY-MM-DD)')
+PRIVACY_LASTMOD=PRIVACY_EFFECTIVE_LOGIN if LOGIN_ENABLED else PRIVACY_EFFECTIVE_BASE
 PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
     desc='新弾ナビのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
 def render_privacy():
@@ -335,11 +341,14 @@ def render_privacy():
     src=flags(src)
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    e=jd(PRIVACY_EFFECTIVE); eff=f'<time datetime="{PRIVACY_EFFECTIVE}">{e.year}年{e.month}月{e.day}日</time>'
+    def day(d):
+        e=jd(d); return f'<time datetime="{d}">{e.year}年{e.month}月{e.day}日</time>'
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/privacy/'))):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
-    src=src.replace('<!--EFFECTIVE-->',eff)
+    src=src.replace('<!--EFFECTIVE-->',day(PRIVACY_EFFECTIVE_BASE))
+    if LOGIN_ENABLED: src=src.replace('<!--REVISED-->',day(PRIVACY_EFFECTIVE_LOGIN))
+    assert '<!--REVISED-->' not in src
     assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
     title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
@@ -389,7 +398,7 @@ open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
-sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_EFFECTIVE}</lastmod></url>')
+sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
 open(os.path.join(dist,'robots.txt'),'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n')
