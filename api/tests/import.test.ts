@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALL_PREFS, api, apiAll, importDir, newDb, run, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
+import { ALL_PREFS, api, apiAll, importDir, newDb, run, sampleEvents, SOURCE, synthetic, writeDataDir, type Ev } from './helpers';
 import { emptyState, estimateCost, loadAll, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
-import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
+import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 const snapshot = (db: SqliteD1) => ({
   events: db.db.prepare('SELECT * FROM events ORDER BY id').all(),
@@ -243,6 +243,57 @@ describe('shared events', () => {
   it('warns when shared copies differ', () => {
     const dir = writeDataDir([...opcg, ...uatcg.map((e) => (e.id === shared.id ? { ...e, name: 'different' } : e))]);
     expect(loadAll(dir).flatMap((r) => r.warnings).join('\n')).toMatch(/tcgp:shared1: differs from the copy in OPCG/);
+  });
+});
+
+describe('games with bits above 8', () => {
+  // SYNTHETIC: the four-game data plus events of the Bandai games added in 0005 (bits 16-128), one of them shared
+  // by OPCG, GCG and DCG (mask 145).
+  const base = synthetic(40);
+  const more = ['GCG', 'DBFW', 'BS', 'DCG'].flatMap((g, i) => synthetic(6, 1_000 + i * 6).map((e) => ({
+    ...e, game_code: g, source_code: SOURCE[g], id: `tcgp:${g}${e.external_id}`, external_id: `${g}${e.external_id}`,
+  })));
+  const opcgEv = base.find((e) => e.game_code === 'OPCG' && e.venue)!;
+  const shared: Ev = { ...opcgEv, source_code: 'bandai_tcg_plus', id: 'tcgp:shared9', external_id: 'shared9', name: '【SYNTHETIC】shared 3 games' };
+  const evs = [...base, ...more, ...['OPCG', 'GCG', 'DCG'].map((g) => ({ ...shared, game_code: g }))];
+
+  it('stores, filters and counts them like the first four', async () => {
+    const db = newDb();
+    const results = importDir(db, writeDataDir(evs), 1_000);
+    expect(results.flatMap((r) => [...r.errors, ...r.warnings])).toEqual([]);
+    expect(mask(db, shared.id)).toBe(1 | 16 | 128);
+    const ev = (await apiAll(db, Q)).body.events.find((e: Ev) => e.id === shared.id);
+    expect(ev.game_codes).toEqual(['DCG', 'GCG', 'OPCG']);
+    for (const g of ['GCG', 'DBFW', 'BS', 'DCG']) {
+      const want = more.filter((e) => e.game_code === g).length + (['GCG', 'DCG'].includes(g) ? 1 : 0);
+      expect((await apiAll(db, `${Q}&game=${g}`)).body.events).toHaveLength(want);
+      const days = (await apiAll(db, `/api/v1/events/days?from=2026-11-18&until=2027-02-18&${ALL_PREFS}&game=${g}`)).body.days;
+      expect(days.reduce((n: number, d: Ev) => n + d.by_game[g], 0)).toBe(want);
+    }
+    const meta = (await api(db, '/api/v1/events/meta')).body;
+    expect(meta.games.find((g: Ev) => g.code === 'BS').record_count).toBe(6);
+    const rows: number[] = Object.values(meta.loc_counts.rows).flat() as number[];
+    expect(rows.filter((_, i) => i % 5 === 0)).toContain(145);
+  });
+
+  it('0005 keeps the rows of a database migrated before it', async () => {
+    const db = new SqliteD1();
+    db.db.exec("CREATE TABLE d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL); INSERT INTO d1_migrations (name) VALUES ('0005_more_games.sql')");
+    db.migrate();
+    const old = base.filter((e) => ['OPCG', 'UATCG', 'CONAN', 'PTCG'].includes(e.game_code));
+    importDir(db, writeDataDir(old), 1_000);
+    expect(() => db.db.exec("UPDATE events SET game_mask = 16")).toThrow(/CHECK/);
+    const before = snapshot(db);
+    const dayCounts = db.db.prepare('SELECT * FROM day_counts ORDER BY 1, 2, 3, 4').all();
+    db.db.exec("DELETE FROM d1_migrations WHERE name = '0005_more_games.sql'");
+    db.migrate();
+    expect(snapshot(db)).toEqual(before);
+    expect(db.db.prepare('SELECT * FROM day_counts ORDER BY 1, 2, 3, 4').all()).toEqual(dayCounts);
+    expect(db.db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'events' AND sql IS NOT NULL").all()).toEqual([{ name: 'idx_events_loc' }]);
+    // Adding the new games is now an ordinary diff.
+    const plan = importDir(db, writeDataDir(evs), 2_000).plan;
+    expect(plan.stats).toMatchObject({ inserted: more.length + 1 });
+    expect(mask(db, shared.id)).toBe(145);
   });
 });
 

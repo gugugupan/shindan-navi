@@ -101,7 +101,7 @@ for p in pages:
         big, sub, game = 'トレカ<em>新弾</em>\n発売日カレンダー', 'ポケカ・ワンピ・MTG・遊戯王・ヴァイスほか', None
     elif name == 'events':
         thumbs = [t[0] for t in (thumbs_for(g) for g in ('ONE PIECE', 'UNION ARENA', 'ポケモンカード')) if t]
-        render(name, card_html(name, 'TCG<em>イベント</em>\n大会カレンダー', 'ワンピ・ユニアリ・コナン・ポケカの店舗大会', thumbs))
+        render(name, card_html(name, 'TCG<em>イベント</em>\n大会カレンダー', 'ワンピ・ポケカ・ガンダムほか8タイトルの店舗大会', thumbs))
         continue
     else:
         game = p['js']['game']

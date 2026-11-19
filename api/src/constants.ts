@@ -3,6 +3,10 @@ export const GAMES = [
   { code: 'UATCG', name: 'UNION ARENA', slug: 'unionarena', bit: 2 },
   { code: 'CONAN', name: '名探偵コナン カードゲーム', slug: 'conan', bit: 4 },
   { code: 'PTCG', name: 'ポケモンカードゲーム', slug: 'pokemon', bit: 8 },
+  { code: 'GCG', name: 'ガンダムカードゲーム', slug: 'gundam', bit: 16 },
+  { code: 'DBFW', name: 'ドラゴンボールスーパーカードゲーム フュージョンワールド', slug: 'dragonball', bit: 32 },
+  { code: 'BS', name: 'バトルスピリッツ', slug: 'battlespirits', bit: 64 },
+  { code: 'DCG', name: 'デジモンカードゲーム', slug: 'digimon', bit: 128 },
 ] as const;
 export const GAME_CODES = GAMES.map((g) => g.code);
 export const MAX_PREFS = 5;
@@ -48,4 +52,13 @@ export const TYPE_LABELS: Record<string, string> = {
   union_rare_battle: 'ユニオンレア争奪バトル',
   challenge: 'チャレンジ戦',
   fan_meeting: 'ファンミーティング',
+  shop_battle: 'ショップバトル',
+  tamer_battle: 'テイマーバトル',
+  battlers_cup: 'バトラーズカップ',
+  evolution_cup: 'エボリューションカップ',
+  ultimate_battle: 'アルティメットバトル',
+  ultimate_cup: 'アルティメットカップ',
+  newtype_challenge: 'ニュータイプチャレンジ',
+  team_battle: 'チーム戦',
+  battleski_event: 'バトルスキー主催大会',
 };

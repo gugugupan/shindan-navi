@@ -293,8 +293,8 @@ EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
 # Browser key for the /events/ day-view map (Maps JavaScript API only, HTTP-referrer restricted; public by design). Empty = placeholder.
 MAPS_BROWSER_KEY=os.environ.get('MAPS_BROWSER_KEY','').strip()
 EVENTS_PAGE=dict(path='/events/',og='events',
-    desc='ONE PIECEカードゲーム・UNION ARENA・名探偵コナン カードゲーム・ポケモンカードの店舗大会・ジムバトル・交流会・体験会を、開催日・都道府県・イベント形式で探せるTCGイベントカレンダー。公式イベント情報をまとめて一覧でチェックできます。',
-    keywords=['TCG イベント','トレカ 大会','店舗大会','ジムバトル','交流会','体験会','ワンピカード 大会','ユニアリ 大会','コナンカード 大会','ポケカ 大会','イベントカレンダー'],
+    desc='ONE PIECEカードゲーム・UNION ARENA・名探偵コナン カードゲーム・ポケモンカード・ガンダムカードゲーム・ドラゴンボール フュージョンワールド・バトルスピリッツ・デジモンカードゲームの店舗大会・ジムバトル・交流会・体験会を、開催日・都道府県・イベント形式で探せるTCGイベントカレンダー。公式イベント情報をまとめて一覧でチェックできます。',
+    keywords=['TCG イベント','トレカ 大会','店舗大会','ジムバトル','交流会','体験会','ワンピカード 大会','ユニアリ 大会','コナンカード 大会','ポケカ 大会','ガンダムカード 大会','フュージョンワールド 大会','バトスピ 大会','デジカ 大会','イベントカレンダー'],
     h1='TCG イベントカレンダー',lead='店舗大会・交流会・体験会を開催日・都道府県・イベント形式で探せます。',js=None)
 def render_events():
     src=flags(open(os.path.join(ROOT,'src/events.html')).read())

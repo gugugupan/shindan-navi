@@ -70,7 +70,8 @@ Tests use the same stand-in.
   should be identical apart from `game_code`/`last_seen_at`; if not, the importer warns and the last game read wins.
 - Meta (game windows, prefecture / online / category / type counts over each game's latest window, and `loc_counts`:
   per location × game_mask × type × month weekend/weekday counts for the location picker) is computed in the importer
-  from the post-import state and stored as JSON, so `/events/meta` reads one row (~20 KB with the current data).
+  from the post-import state and stored as JSON, so `/events/meta` reads one row (~40 KB with the eight games' data of
+  2026-11-19).
 - Statements are chunked to at most 60,000 UTF-8 bytes including the INSERT head and ON CONFLICT tail (D1 limit
   100 KB). A first import of the current data (~33k events) is ~580 statements, ~34 MB of SQL (`wrangler d1
   execute --file` accepts up to 5 GiB).
@@ -97,6 +98,11 @@ keys `stars` / `event_filters` / `ask_calendar`), and the unused billing placeho
 `migrations/0004_feedback.sql`: `feedback` (one row per form submission: `kind`, `message`, optional `reply_to` /
 `page` / `user_id`, `email_status` `pending`/`sent`/`failed` + `email_error`), indexes on `created_at` (retention
 purge) and `user_id` (account deletion). No IP address or user agent. See Feedback.
+
+`migrations/0005_more_games.sql`: the TCG+ games GCG, DBFW, BS, DCG (`games` bits 16-128) and `events` / `day_counts`
+rebuilt with `game_mask` up to 255 (SQLite cannot change a CHECK in place). The rebuild copies every row, so on D1 it
+writes about as much as a first import of the current data; see D1 budget › Adding games. The code works before the
+migration as long as no new-game data is imported (the four games' masks still fit the old CHECK).
 
 ## Accounts (Google login, synced preferences)
 
@@ -233,7 +239,17 @@ Writes (D1 counts each table row and each index entry; `--plan` prints the exact
 | First import with `venue.geo` (one-time) | 2 × events whose venue gains a geo + 2; upper bound ~65,954 (all 32,976 events with a venue) |
 
 The importer refuses to apply a plan above `--max-writes` (default 90,000); split a bigger first import with
-`--games` across UTC days. Free-plan limits are per day across everything, so check the dashboard before a large
+`--games` across UTC days.
+
+**Adding games** (measured on a copy of the 2026-11-19 data: 33,491 events, 10,498 day_counts rows). Migration
+`0005_more_games.sql` rebuilds `events` and `day_counts`: ~77,500 rows written (33,491 events + their 33,491
+`idx_events_loc` entries + 10,498 day_counts), more if D1 also counts the rows dropped with the old tables (not
+documented). Apply it alone on a UTC day (`wrangler d1 migrations apply` without an import; `import:remote -- --yes`
+would run it first in the same day). A later day: the first import of GCG, DBFW, BS, DCG (20,736 events, window
+2026-11-20..2027-02-18) is ~50,000 rows (`--games GCG,DBFW,BS,DCG`; per game GCG ~18.9k, BS ~12.4k, DBFW ~10.6k,
+DCG ~8.0k), so it fits one day, or two (`--games GCG,DCG` / `--games BS,DBFW`) next to a routine refresh. Order: migration, then push
+the code, then import: the Worker before this change does not know bits 16-128 and would serve those events without a
+`game_code`. The rebuild keeps every column, so the code before and after it both work on the migrated database. Free-plan limits are per day across everything, so check the dashboard before a large
 import on a day that already had one.
 
 `venue.geo` is stored inside `venue_json` (no migration, no extra reads per request). A `geo` of `null` and a missing

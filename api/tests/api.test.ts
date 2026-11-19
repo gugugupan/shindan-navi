@@ -271,7 +271,9 @@ describe('GET /api/v1/events/meta', () => {
     const r = await api(db, '/api/v1/events/meta');
     expect(r.status).toBe(200);
     const m = r.body;
-    expect(m.games.map((g: Ev) => [g.code, g.slug])).toEqual([['OPCG', 'onepiece'], ['UATCG', 'unionarena'], ['CONAN', 'conan'], ['PTCG', 'pokemon']]);
+    expect(m.games.map((g: Ev) => [g.code, g.slug])).toEqual([['OPCG', 'onepiece'], ['UATCG', 'unionarena'], ['CONAN', 'conan'], ['PTCG', 'pokemon'],
+      ['GCG', 'gundam'], ['DBFW', 'dragonball'], ['BS', 'battlespirits'], ['DCG', 'digimon']]);
+    expect(m.games.find((g: Ev) => g.code === 'DCG')).toMatchObject({ record_count: 0, fetched_at: null, complete: false, window: null });
     const opcg = m.games[0];
     expect(opcg).toMatchObject({ name: 'ONE PIECEカードゲーム', fetched_at: '2026-11-18T00:00:00Z', complete: true, window: { from: '2026-11-18', until: '2027-02-18' } });
     expect(opcg.record_count).toBe(all.filter((e) => e.game_code === 'OPCG').length);

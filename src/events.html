@@ -1,4 +1,4 @@
-<title>TCGイベント・大会カレンダー（ワンピ・ユニアリ・コナン・ポケカ）｜トレカカレンダー</title>
+<title>TCGイベント・大会カレンダー（ポケカ・ワンピ・ガンダム・デジモンほか）｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
 <style>/*EVENT_FONTS*/</style>
 <style>
@@ -203,7 +203,7 @@ button.cd:hover{background:var(--surface-2)}
     <div id="calv"></div>
   </main>
 
-  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
+  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード・ガンダム・DBフュージョンワールド・バトルスピリッツ・デジモン）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
   <p class="legend">イベント情報は各タイトルの公式イベントページで公開されている内容をもとに掲載しています。開催可否・参加費・定員・申込方法は変わることがあるため、参加前に必ず「公式で詳細・申込」から最新情報をご確認ください。定員は募集人数で、残り枠ではありません。</p>
   <p class="legend"><!--NOLOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存されます。ログインすると、絞り込み条件（都道府県を含む）をアカウントに保存し、ほかの端末と同期します。<!--/LOGIN-->初めて開いたときの都道府県は、接続元 IP アドレスから推定したものです（位置情報の許可は求めず、推定結果も保存しません）。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。日付ごとの会場地図には Google マップを使っており、地図を開くと IP アドレスなどの情報が Google に送信されます。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
@@ -220,7 +220,11 @@ const GAMES = [
   {code:'OPCG', name:'ONE PIECE', h:4, bit:1},
   {code:'UATCG', name:'UNION ARENA', h:272, bit:2},
   {code:'CONAN', name:'名探偵コナン', h:205, bit:4},
-  {code:'PTCG', name:'ポケモンカード', h:44, bit:8}
+  {code:'PTCG', name:'ポケモンカード', h:44, bit:8},
+  {code:'GCG', name:'ガンダム', h:325, bit:16},
+  {code:'DBFW', name:'DBフュージョンワールド', h:26, bit:32},
+  {code:'BS', name:'バトルスピリッツ', h:140, bit:64},
+  {code:'DCG', name:'デジモン', h:178, bit:128}
 ];
 const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
 // One location at a time (owner decision): a prefecture, or 'online' for events without a venue. Older links and

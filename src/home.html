@@ -81,6 +81,8 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .wd .rl b{font-family:var(--mono)}
 .wd .rl:hover{text-decoration:underline}
 .gcs{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
+.gcs.gmore{align-items:center;margin-top:8px}
+.gmore .lab{font-size:12px;color:var(--muted);margin-right:2px}
 .gc{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid hsl(var(--h) var(--chip-s) var(--chip-l));background:hsl(var(--h) 70% var(--tint-l));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
 .gc span{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .gc i{width:7px;height:7px;border-radius:50%;flex:none;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
@@ -214,7 +216,11 @@ const EV_GAMES = [
   {code:'OPCG', name:'ONE PIECE', short:'ワンピ', h:4, bit:1},
   {code:'UATCG', name:'UNION ARENA', short:'ユニアリ', h:272, bit:2},
   {code:'CONAN', name:'名探偵コナン', short:'コナン', h:205, bit:4},
-  {code:'PTCG', name:'ポケモンカード', short:'ポケカ', h:44, bit:8}
+  {code:'PTCG', name:'ポケモンカード', short:'ポケカ', h:44, bit:8},
+  {code:'GCG', name:'ガンダム', short:'ガンダム', h:325, bit:16},
+  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', h:26, bit:32},
+  {code:'BS', name:'バトルスピリッツ', short:'バトスピ', h:140, bit:64},
+  {code:'DCG', name:'デジモン', short:'デジカ', h:178, bit:128}
 ];
 const EVG = Object.fromEntries(EV_GAMES.map(g=>[g.code,g]));
 const SAVED_KEY = 'tcg.ev.filters';
@@ -245,13 +251,21 @@ async function api(path,query){
   return body;
 }
 const codesOf = e => Array.isArray(e.game_codes)&&e.game_codes.length ? e.game_codes : [e.game_code];
-// Today's columns: the games with events today (by_game of /days), in EV_GAMES order.
-function todayCols(){
+// Today's games with events (by_game of /days, which already follows the saved game filter), in EV_GAMES order.
+function todayGames(){
   const bg=ev.byGame[TODAY];
   if(bg) return EV_GAMES.filter(g=>bg[g.code]>0).map(g=>({g, n:bg[g.code]}));
   // /days without by_game: what the loaded page holds
   const n={}; ev.list.filter(e=>e.starts_on===TODAY).forEach(e=>codesOf(e).forEach(c=>n[c]=(n[c]||0)+1));
   return EV_GAMES.filter(g=>n[g.code]).map(g=>({g, n:n[g.code]}));
+}
+// At most MAX_COLS columns: the games with the most events today (ties in EV_GAMES order), still in EV_GAMES order.
+const MAX_COLS = 5;
+function todayCols(){
+  const all=todayGames();
+  if(all.length<=MAX_COLS) return all;
+  const top=new Set([...all].sort((a,b)=>b.n-a.n).slice(0,MAX_COLS));
+  return all.filter(c=>top.has(c));
 }
 // Within a day: today, events that already started follow the upcoming ones; cancelled ones go last (as on /events/).
 const started = e => e.starts_on===TODAY && e.time_precision==='datetime' && !!e.starts_at && Date.parse(e.starts_at)<=Date.now();
@@ -326,14 +340,15 @@ function renderEv(){
     body.innerHTML = `<p class="none"><b>今日、${esc(LOC.locName(f.pref))}で予定されているイベントはありません</b>${nx?`<a class="go" href="${esc(dayLink(f,nx))}">次は ${md(nx)}・${ev.counts[nx]}件 ›</a>`:''}</p>`;
     return;
   }
-  const cols=todayCols(), k=SHOW(cols.length);
+  const cols=todayCols(), k=SHOW(cols.length), hidden=todayGames().filter(c=>!cols.some(x=>x.g===c.g));
+  const others = hidden.length ? `<div class="gcs gmore"><span class="lab">ほかのタイトル</span>${hidden.map(({g,n})=>`<a class="gc" style="--h:${g.h}" href="${esc(dayLink(f,TODAY,g.code))}" title="${esc(g.name)}・${n}件"><span><i aria-hidden="true"></i>${esc(g.name)}</span><b>${n}</b></a>`).join('')}</div>` : '';
   body.innerHTML = `<div class="gcols" style="--n:${Math.max(cols.length,1)}">${cols.map(({g,n})=>{
     const rows=rowsFor(g.code,TODAY).slice(0,k), rest=n-rows.length, href=esc(dayLink(f,TODAY,g.code));
     const list = rows.length ? `<ul class="evs">${rows.map(e=>evRow(e,g.code)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件 ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
     return `<section class="gcol" style="--h:${g.h}" aria-label="${esc(g.name)}"><h3><span class="gn"><i aria-hidden="true"></i>${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${list}${more}</section>`;
-  }).join('')}</div>`;
+  }).join('')}</div>${others}`;
 }
 
 // ---- tomorrow and the rest of the week: releases, and with a location the events per game (this month's /days only;

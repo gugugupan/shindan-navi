@@ -12,7 +12,7 @@ export const REPO_DIR = resolve(API_DIR, '..');
 export const CONTRACTS_DIR = join(REPO_DIR, 'contracts');
 export const DEFAULT_DATA_DIR = join(REPO_DIR, 'data', 'events');
 
-export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG'];
+export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG'];
 const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan' };
 // 9999-12-31T23:59:59Z: date-only events sort after timed ones on the same day.
 export const NULL_SORT = 253402300799;
@@ -175,7 +175,7 @@ export function sqlLiteral(v) {
 }
 
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;
-export const GAME_BITS = { OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8 };
+export const GAME_BITS = { OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8, GCG: 16, DBFW: 32, BS: 64, DCG: 128 };
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'];
 const VENUE_KEYS = ['name', 'source_id', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code', 'geo'];
 

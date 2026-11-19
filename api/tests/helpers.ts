@@ -11,7 +11,10 @@ export const WINDOW = { from: '2026-11-18', until: '2027-02-18' };
 export const sampleEvents = (): Ev[] =>
   JSON.parse(readFileSync(join(REPO_DIR, 'contracts/fixtures/sample-events.json'), 'utf8'));
 
-export const SOURCE: Record<string, string> = { OPCG: 'bandai_tcg_plus', UATCG: 'bandai_tcg_plus', CONAN: 'conan_official', PTCG: 'pokemon_players' };
+export const SOURCE: Record<string, string> = {
+  OPCG: 'bandai_tcg_plus', UATCG: 'bandai_tcg_plus', CONAN: 'conan_official', PTCG: 'pokemon_players',
+  GCG: 'bandai_tcg_plus', DBFW: 'bandai_tcg_plus', BS: 'bandai_tcg_plus', DCG: 'bandai_tcg_plus',
+};
 const PREFIX: Record<string, string> = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan' };
 
 export function run(game: string, count: number, extra: Ev = {}): Ev {

@@ -260,7 +260,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
   // Stub API. Default: 7 OPCG events today, /days without by_game (the page then groups the list itself).
   // scenario 'busy': 50 OPCG events fill the first page; PTCG's 3 come only on the cursor page.
+  // scenario 'many': seven games today; the five busiest get columns, the other two chips.
   let scenario = 'plain';
+  const MANY = { GCG: 9, OPCG: 8, PTCG: 7, DCG: 6, BS: 5, UATCG: 2, DBFW: 1 };
   const evt = (i, code, hh, day = TODAY) => ({ id: `${code}${i}`, name: `テスト大会 ${code} ${i + 1}`, game_code: code, game_codes: [code],
     starts_on: day, time_precision: 'datetime', starts_at: `${day}T${String(hh).padStart(2, '0')}:00:00+09:00`, timezone: 'Asia/Tokyo',
     attendance_mode: 'offline', venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
@@ -274,6 +276,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         { date: WEEK1, count: 4, by_game: { UATCG: 1, CONAN: 3 } }] } });
       return route.fulfill({ json: u.searchParams.get('cursor') ? { events: [0, 1, 2].map(i => evt(i, 'PTCG', 20)), next_cursor: null }
         : { events: Array.from({ length: 50 }, (_, i) => evt(i, 'OPCG', 10 + (i % 9))), next_cursor: 'c1' } });
+    }
+    if (scenario === 'many') {
+      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 38, by_game: MANY }] } });
+      return route.fulfill({ json: { events: Object.entries(MANY).flatMap(([code, n]) => Array.from({ length: n }, (_, i) => evt(i, code, 13 + (i % 6)))), next_cursor: null } });
     }
     const body = u.pathname.endsWith('/days') ? { days: [{ date: TODAY, count: 7 }] }
       : { events: Array.from({ length: 7 }, (_, i) => evt(i, 'OPCG', 10 + i)) };
@@ -342,6 +348,18 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (busy.chips !== 2) fail(where, `tomorrow shows ${busy.chips} game chips`);
     if (busy.overflow > 1) fail(where, `busy: page scrolls horizontally by ${busy.overflow}px`);
     await page.screenshot({ path: path.join(OUT, `${vp}-home-busy.png`), fullPage: true });
+
+    scenario = 'many'; api.length = 0;
+    await page.reload({ waitUntil: 'networkidle' });
+    const many = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => c.getAttribute('aria-label')),
+      rest: [...document.querySelectorAll('#evBody .gmore a.gc')].map(a => [a.textContent, a.getAttribute('href')]),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+    if (JSON.stringify(many.cols) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ガンダム', 'バトルスピリッツ', 'デジモン'])) fail(where, `many: columns ${JSON.stringify(many.cols)}`);
+    if (JSON.stringify(many.rest) !== JSON.stringify([['UNION ARENA2', `/events/?game=UATCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`],
+      ['DBフュージョンワールド1', `/events/?game=DBFW&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`]])) fail(where, `many: other titles ${JSON.stringify(many.rest)}`);
+    if (api.length !== 2) fail(where, `many: API requests ${api.join(' ')}`);
+    if (many.overflow > 1) fail(where, `many: page scrolls horizontally by ${many.overflow}px`);
+    await page.screenshot({ path: path.join(OUT, `${vp}-home-many.png`), fullPage: true });
   }
   await page.screenshot({ path: path.join(OUT, `${vp}-home.png`), fullPage: true });
   for (const b of [...new Set(bad)]) fail(where, b);
