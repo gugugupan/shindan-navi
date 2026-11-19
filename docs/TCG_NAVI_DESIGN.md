@@ -25,7 +25,7 @@ TCG Navi 面向玩家聚合不同卡牌游戏的新品、赛事和资讯。用�
 | 能力 | 当前实际状态 | 目标 |
 | --- | --- | --- |
 | 多游戏新品日历 | Python 静态构建；商品来自 git JSON；10 个主要游戏有落地页 | 保持静态构建与既有数据身份 |
-| 商品数据更新 | `scripts/update_data.py` 本地运行：抓取カードラボ、トレカの地図，默认还处理官方站点来源，并调用 LLM（OpenRouter）与 Jev 提取，需要 `.env` 凭据并产生费用 | 作为已有的商品来源适配器保留；不另建第二套商品采集 |
+| 商品数据更新 | `scripts/refresh.py` 本地手动运行：`tools/release-collectors/` 的采集器（カードラボ、トレカの地図、官方站点）写 `data/releases/`，`scripts/update_data.py` 合并为 `items.json`，再构建与验证；官方来源与补充信息调用 LLM（OpenRouter）与 Jev，需要 `.env` 凭据并产生费用，无凭据时跳过 | 作为已有的商品来源适配器保留；不另建第二套商品采集 |
 | ONE PIECE 日本赛事 | 本地采集原型 `tools/event-collectors/tcg-plus/`（见 [TCG_PLUS_COLLECTOR.md](TCG_PLUS_COLLECTOR.md)）；正常浏览器中来源声明 2026-11-18 起的总数为 13,587，完整分页尚未验收 | 可恢复、可核对覆盖范围的采集与导入 |
 | UNION ARENA 赛事 | 本地采集（TCG+，game_title_id 9） | 复用 TCG+ 适配器 |
 | 名探偵コナン 赛事 | 本地采集（タカラトミー官方「公認店イベント 開催日程検索」）；TCG+ 不收录 | 独立适配器；来源无活动 ID |
@@ -66,7 +66,7 @@ TCG Navi 面向玩家聚合不同卡牌游戏的新品、赛事和资讯。用�
 - TCG+ 赛事适配器覆盖万代游戏（OPCG、UATCG）。
 - 名探偵コナン カードゲーム由タカラトミー发行，不在 TCG+；使用官方店铺活动检索页的独立适配器。
 - PTCG 赛事使用独立的官方平台适配器。
-- 商品来源沿用 `scripts/update_data.py` 与 `scripts/official/`。
+- 商品来源沿用 `tools/release-collectors/`（カードラボ、トレカの地図、官方站点）与合并脚本 `scripts/update_data.py`，契约见 `contracts/releases.md`。
 
 每个组合记录 `planned / experimental / active / paused` 等能力状态，以及覆盖市场、最后成功时间和已知局限。只有具备合格数据的能力才作为正式支持展示。
 
@@ -205,7 +205,7 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 1. TCG+ 与 Pokémon 官方站的条款是否允许采集，是否需要登录。
 2. 赛事数据的新鲜度目标、刷新频率、保留时间（商品目前删除 30 天前的数据，赛事是否保留历史）与月度预算上限。
 3. 远端 Worker + D1 的上线时间（路由已定：同域，`/api/*`；D1 Free，读写预算见 `api/README.md`）。
-4. 新采集器与 `scripts/official/` 是否需要共享代码。
+4. 赛事采集器（`tools/event-collectors/`）与商品采集器（`tools/release-collectors/`）是否需要共享代码。
 5. 是否为各游戏建赛事落地页（沿用“仅 10 个主要游戏有落地页”的决定）。`/events/` 已决定进 sitemap。
 6. TCG Navi 的最终日语名称、视觉与域名策略。
 

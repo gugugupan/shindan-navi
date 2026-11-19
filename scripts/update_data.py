@@ -1,9 +1,9 @@
 """Merge step of the release update (contracts/releases.md): the collectors' data/releases/ files plus
 data/items.json and data/overrides.json → items.json, meta.json, update-report.md and public/thumbs/.
 
-Run the collectors first with the same TODAY (tools/release-collectors/{cardlabo,torecamap,official}/collect.py), then
-review data/update-report.md and `git diff`, commit and push (the push is what publishes). Nothing is written when a
-required source is missing, stale, incomplete or looks broken.
+Normally run by scripts/refresh.py (collectors → this merge → build → verify, one TODAY). By hand: run the collectors
+first with the same TODAY (tools/release-collectors/{cardlabo,torecamap,official}/collect.py). Nothing is written when
+a required source is missing, stale, incomplete or looks broken.
 
   .venv/bin/python -I scripts/update_data.py              # merge + enrich, write data + report
   .venv/bin/python -I scripts/update_data.py --dry-run    # report only

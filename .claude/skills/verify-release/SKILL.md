@@ -7,6 +7,8 @@ description: Pre-merge gate for 新弾ナビ — checks a branch's data diff aga
 
 Merging to `main` and pushing deploys the site, so every branch passes this gate first and the owner sees the result before anything is merged. Work happens in a worktree (`../.worktrees/<branch>`), never in the main checkout.
 
+For data updates `scripts/refresh.py` already runs both steps (build with `BUILD_TODAY`, then `verify_release.py --base origin/main --skip-build` and `browser.mjs`, same `TODAY`) and puts the RESULT lines in its packet; run them by hand for other branches.
+
 ## Setup (once per worktree)
 
 Needs Python 3.12 (same as CI) and Node ≥ 20; Chrome from `/Applications` (override with `CHROME=`).

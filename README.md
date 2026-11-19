@@ -16,16 +16,29 @@ Working notes for people and coding agents: `CLAUDE.md` (architecture, owner dec
 
 ## Updating the data
 
-A local, reviewed step — GitHub Actions never touches data.
+A local, reviewed step run by hand from a worktree — GitHub Actions never touches data, and nothing refreshes it on a schedule.
 
 ```bash
-.venv/bin/pip install fonttools brotli pillow   # once
-.venv/bin/python -I scripts/update_data.py --dry-run   # see what would change
-.venv/bin/python -I scripts/update_data.py             # write items.json, meta.json, new thumbs, update-report.md
-git diff data/ && git add data public/thumbs && git commit -m "Data update YYYY-MM-DD" && git push   # push = publish
+.venv/bin/pip install fonttools brotli pillow   # once (+ beautifulsoup4 when the official API keys are set)
+(cd tools/verify && npm ci)                     # once
+python3 -I scripts/refresh.py                   # collect → merge → build → verify → review packet
+python3 -I scripts/refresh.py --skip-collect    # after manual fixes: reuse today's data/releases, merge + build + verify again
+python3 -I scripts/refresh.py --dry-run         # collect + report only (data/update-report.md), no build
 ```
 
-It scrapes カードラボ (daily tables) and トレカの地図 (this month + 5), matches them to existing items by id or by close name within 90 days (so date changes and small renames keep their id, thumbnail and links), downloads トレカの地図 images for new items or to replace `approx` ones, drops items released more than 30 days ago, and keeps upcoming items that vanished from both sources (listed in the report — hide them via overrides if cancelled). It aborts without writing anything if a source returns nothing or the release count falls below 70% of what is already known. Unknown title labels are listed in the report so `GAME` can be extended.
+`TODAY` (env, else today in Asia/Tokyo) is fixed once for every step. The collectors in `tools/release-collectors/`
+(カードラボ, トレカの地図 this month + 5, official sites when `TYPESAFE_API_KEY` / `OPENROUTER_API_KEY` are in `.env`)
+write `data/releases/` (git-ignored); `scripts/update_data.py` merges them into `data/items.json` starting from HEAD's
+copy, so re-runs report against the committed data. The merge matches existing items by source identity, then id or
+close name within 90 days (date changes and small renames keep their id, thumbnail and links), downloads トレカの地図
+images for new items or to replace `approx` ones, drops items released more than 30 days ago, and keeps upcoming items
+that vanished from the sources (listed in the report — hide them via overrides if cancelled). It refuses to write
+anything if a source run is missing, stale, incomplete or empty, or the release count falls below 70% of what is
+already known. Unknown title labels are listed so `GAME` (`tools/release-collectors/lib/common.py`) can be extended.
+
+The command stops at the first failing step, never commits or pushes, and saves a review packet (collector counts,
+report section counts, data diff, verify results) to `out/refresh-<TODAY>/packet.md`. Contract:
+`contracts/releases.md`; workflow and publishing: `.claude/skills/update-data/`.
 
 ## Pages
 

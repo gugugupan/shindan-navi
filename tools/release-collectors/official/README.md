@@ -1,6 +1,6 @@
 # Official-site collector (and pilot)
 
-Reads release info straight from official TCG sites (moved here from `scripts/official/`). `scripts/update_data.py`
+Reads release info straight from official TCG sites. `scripts/update_data.py`
 reads `data/releases/official/` and imports `run.match` / `run.product_details` from this package.
 
 ```bash
