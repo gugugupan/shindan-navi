@@ -100,6 +100,7 @@ function venueFrom(name, postal, address) {
     city: null,
     address,
     postal_code: postal,
+    geo: null,
   };
 }
 

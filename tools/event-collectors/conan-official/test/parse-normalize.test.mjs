@@ -120,3 +120,7 @@ test('outputs validate against contracts and reject contact leaks', () => {
   const leak = [{ ...events[0], fee_text: '予約は 090-1234-5678 まで' }];
   assert.throws(() => buildOutputs(leak, run, v), /contact-like/);
 });
+
+test('every venue carries geo: null before the geo step', () => {
+  for (const e of events) assert.equal(e.venue.geo, null);
+});

@@ -6,6 +6,8 @@ import { parseArgs } from 'node:util';
 import { fingerprint, normalizeEvent, parseStart, sortEvents } from './lib/normalize.mjs';
 import { buildOutputs, makeValidators } from './lib/output.mjs';
 import { parseRows, parseSeriesOptions, searchUrl } from './lib/parse.mjs';
+import { geocodeVenues, loadApiKey, tokyoDate } from '../lib/google-geocode.mjs';
+import { geoForEvent, getEntry, loadCache } from '../lib/venue-cache.mjs';
 
 export const COLLECTOR_VERSION = 'conan-official/0.1.0';
 const USER_AGENT = 'Mozilla/5.0 (compatible; shindan-navi-event-collector/0.1)';
@@ -22,6 +24,8 @@ const { values: opt } = parseArgs({
     'accept-fingerprint-ids': { type: 'boolean', default: false },
     'from-raw': { type: 'string' },
     note: { type: 'string', multiple: true, default: [] },
+    'no-geocode': { type: 'boolean', default: false },
+    'geocode-max': { type: 'string' },
   },
 });
 
@@ -97,6 +101,31 @@ if (allIds.size !== ids.length || ids.some((id) => !allIds.has(id))) {
 }
 
 const events = sortEvents(rows.map((row) => normalizeEvent(row, fetchedAt)));
+
+// Venue geo from the google cache (data/events/.venues/google.json). New lookups only with the key and
+// without --dry-run / --no-geocode; cached geo older than 30 days is dropped either way.
+const dataDir = join(repo, 'data', 'events');
+const today = tokyoDate();
+const geoCache = loadCache(dataDir, 'google');
+const apiKey = loadApiKey(join(repo, '.env'));
+let geoNote;
+if (!apiKey || opt['dry-run'] || opt['no-geocode']) {
+  geoNote = `Geocoding: skipped (${!apiKey ? 'no GOOGLE_GEOCODING_API_KEY' : opt['dry-run'] ? '--dry-run' : '--no-geocode'}); geo from the cache only.`;
+  log(geoNote);
+} else {
+  const venues = events.map((e) => e.venue);
+  const stats = await geocodeVenues(venues, geoCache, {
+    key: apiKey,
+    today,
+    dataDir,
+    max: opt['geocode-max'] ? Number(opt['geocode-max']) : Infinity,
+    log,
+  });
+  geoNote = `Geocoding (Google, ${today}): ${stats.looked_up} venues looked up, ${stats.found} found, ${stats.negative} not found, ${stats.skipped_fresh} cached${stats.aborted ? `; aborted: ${stats.aborted}` : ''}.`;
+  log(geoNote);
+}
+for (const e of events) if (e.venue) e.venue.geo = geoForEvent(getEntry(geoCache, e.venue), today);
+const withGeo = events.filter((e) => e.venue?.geo).length;
 const seriesCounts = Object.fromEntries(series.map((s) => [s, rows.filter((r) => r.series === s).length]));
 const external = events.filter((e) => /external_venue=/.test(e.source_status_text));
 const run = {
@@ -127,6 +156,7 @@ const run = {
     'fee_amount comes from 参加条件: 0 only for 無料/0円, N for a plain N円, otherwise null (purchase conditions, table fees) with the text in fee_text. registration_* unknown: store notices are free text and not mapped.',
     `Venue: ${external.length} rows carry an [外部会場] notice; the stated external venue is used (name + address, or address only with the store name when the notice gives no venue name; source_status_text external_venue=1|address_only).`,
     'Store phone numbers listed on the page are not collected; notices (お知らせ) are not stored.',
+    `${geoNote} ${withGeo}/${events.length} events have venue.geo (source google; shown on Google Maps only, dropped 30 days after geocoded_at).`,
     ...opt.note,
   ],
 };

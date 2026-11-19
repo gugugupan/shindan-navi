@@ -18,7 +18,8 @@ node collect.mjs --from-raw out/run-<ts> [--accept-fingerprint-ids]   # re-norma
 node spotcheck.mjs out/run-<ts>/CONAN conan:<id> ...                  # re-fetch source_url per event and compare
 ```
 
-Options: `--from`, `--until`, `--delay-ms` (default 1500, minimum 1000), `--dry-run`, `--note "<text>"` (repeatable, appended to `_run.json` notes).
+Options: `--from`, `--until`, `--delay-ms` (default 1500, minimum 1000), `--dry-run`, `--note "<text>"` (repeatable, appended to `_run.json` notes),
+`--no-geocode`, `--geocode-max <n>` (cap on Google lookups this run).
 
 Every run saves the fetched HTML and the staged files under `out/run-<ts>/` (ignored). `data/events/CONAN/` is only
 written with `--accept-fingerprint-ids`, because ids are content fingerprints (see Identity), which the contract
@@ -71,3 +72,25 @@ returned exactly that one row in the spot-checks.
 - `event_status: scheduled` for every listed row (the page has no cancellation flag).
 - Privacy: store phones and notices are not stored; `参加条件`/`大会形式` are dropped when they contain contact-like
   text, and the run fails if any contact-like text reaches the output.
+
+## Venue geo (optional Google geocoding)
+
+The page has no coordinates, so `venue.geo` comes from Google (`../lib/google-geocode.mjs`) and is cached in
+`data/events/.venues/google.json` (contract: `contracts/README.md` › Venue geo). Without `GOOGLE_GEOCODING_API_KEY`
+(env or the repo `.env`), or with `--dry-run` / `--no-geocode`, no request is made and venues get the cached geo or
+`null`.
+
+Per distinct venue that has no fresh cache entry: Geocoding API (`address`, `region=jp`, `language=ja`,
+`components=country:JP`); a `ROOFTOP` / `RANGE_INTERPOLATED` result is used. Otherwise Places API (New) Text Search
+with `store name + address` (`precision: PLACES_TEXT_SEARCH`). If that finds nothing, a non-partial `GEOMETRIC_CENTER`
+result is kept; `APPROXIMATE` and area results (prefecture, city, ward, postcode) never are. Nothing found → negative
+entry, retried after 30 days. Google lat/lng are re-looked-up after 30 days (by the cached `place_id` first) and
+events never carry a google geo older than that. A key/quota/billing error stops the pass, keeps what was found and
+writes no negative entry for the venue that hit it; the cache is saved every 50 lookups. The geocoding outcome is in
+`_run.json` notes. Google results may only be shown on a Google map.
+
+Key setup (owner): in a GCP project with billing, enable Geocoding API and Places API (New); create an API key
+restricted to exactly those two APIs, with no application restriction (it runs locally, so no referrer); set a
+daily quota and a budget alert. Put it in the repo `.env` as `GOOGLE_GEOCODING_API_KEY=…` (never commit it; it is
+separate from the browser Maps key). ~1,000 distinct CONAN venues means about that many Geocoding requests on the
+first run plus Places requests for the imprecise ones; later runs only look up new or expired venues.
