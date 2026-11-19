@@ -6,6 +6,15 @@ interface StoredMeta {
   online: number;
   categories: Record<string, number>;
   types: Array<[string, string, number]>;
+  /** Absent in meta written by importers before it existed. */
+  loc_counts?: LocCounts;
+}
+
+/** Per-location counts by game_mask, type, month and weekend/weekday; see computeLocCounts in the importer. */
+export interface LocCounts {
+  months: string[];
+  types: string[];
+  rows: Record<string, number[]>;
 }
 
 export interface DataState {
@@ -46,5 +55,6 @@ export async function getMeta(db: D1Database) {
     online: { count: m.online },
     categories: CATEGORIES.map((code) => ({ code, count: m.categories[code] ?? 0 })),
     types: m.types.map(([game_code, code, count]) => ({ game_code, code, name: TYPE_LABELS[code] ?? code, count })),
+    ...(m.loc_counts ? { loc_counts: m.loc_counts } : {}),
   };
 }

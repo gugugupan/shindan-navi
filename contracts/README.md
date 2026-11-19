@@ -112,7 +112,10 @@ GET /api/v1/events/meta         no parameters
     "prefectures": [{ "code": "JP-01", "name": "北海道", "count": n }],
     "online": { "count": n },
     "categories": [{ "code", "count" }],
-    "types": [{ "game_code", "code", "name", "count" }] }
+    "types": [{ "game_code", "code", "name", "count" }],
+    "loc_counts": { "months": ["YYYY-MM", ...], "types": ["event_type_code", ...],
+                    "rows": { "JP-13": [game_mask, type_index, month_index, weekend, weekday, ...], "online": [...] } } }
+   loc_counts is absent in meta written before it existed; clients fall back to prefectures/online.
 
 GET /api/v1/geo                 prefecture guessed from the visitor's IP (Cloudflare request.cf), not stored
 → { "region_code": "JP-13" | null }   null outside Japan or when unknown; Cache-Control: private, no-store
@@ -128,7 +131,7 @@ Locations:
 
 - `pref` is a location: a prefecture (`JP-xx`) matches in-person and hybrid events whose venue is in it; `online`
   matches events without a venue (`attendance_mode` online). A hybrid event with a venue is found under its
-  prefecture. There is no nationwide query; the page always sends 1-5 locations.
+  prefecture. There is no nationwide query. The API accepts 1-5 locations; the page sends exactly one.
 
 Caching and limits:
 
@@ -151,6 +154,11 @@ Clarifications:
 - `days` include cancelled/postponed events; the page marks them.
 - `meta.types[].name` is a short button label maintained in the API per `event_type_code` (e.g. `standard_battle` → スタンダードバトル), not the series name.
 - Meta counts are global over each game's latest window, not per current filter; computed by the importer.
+- `loc_counts` lets the page compute, per location, what /events/days would total for any game / type / days filter and
+  month without a request: the visible events with a location inside the data window, one row per (location,
+  exact game_mask, event_type_code, month) with weekend (Sat/Sun) and weekday counts, as a flat list of 5-tuples.
+  `type_index` points into `loc_counts.types` (-1 = no type), `month_index` into `loc_counts.months`. A game filter
+  matches rows with `game_mask & selected bits` (OPCG 1, UATCG 2, CONAN 4, PTCG 8), so a multi-game event counts once.
 - `last_seen_at` in API events is the `fetched_at` of the newest import among the event's games (the collectors
   write the run time there, and storing it per event would rewrite every row on every import).
 - Shared events: the same `id` may appear in several game files (e.g. BANDAI CARD GAMES shared series listed under OPCG and UATCG). The importer stores one event with multiple games; `game=` matches any of them. API events carry `game_codes` (all games, sorted) in addition to `game_code` (first of `game_codes`).

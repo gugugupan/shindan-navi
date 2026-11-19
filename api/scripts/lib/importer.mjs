@@ -308,6 +308,39 @@ function chunked(head, items, tail = '') {
   return out;
 }
 
+/**
+ * Per-location counts the page filters itself (game, type, weekday/weekend, month), so the location picker can
+ * show what each location would list under the current filters without a request per location.
+ * Same events as day_counts (visible, with a location) inside the data window, so a month's sum equals the
+ * page's この月 total. Each event is one row under its exact game_mask: the page matches rows by
+ * mask & selected bits, which counts a multi-game event once. rows[loc] is a flat list of
+ * [game_mask, type index (-1 = none), month index, weekend count, weekday count] tuples.
+ */
+export function computeLocCounts(events, window) {
+  const months = new Set();
+  const types = new Set();
+  const cells = new Map();
+  for (const e of events.values()) {
+    if (!e.game_mask || !e.loc || !window || e.starts_on < window.from || e.starts_on >= window.until) continue;
+    const month = e.starts_on.slice(0, 7);
+    months.add(month);
+    if (e.event_type_code !== null) types.add(e.event_type_code);
+    const k = [e.loc, e.game_mask, e.event_type_code ?? '', month].join('\t');
+    const c = cells.get(k) ?? [0, 0];
+    const dow = new Date(`${e.starts_on}T00:00:00Z`).getUTCDay();
+    c[dow === 0 || dow === 6 ? 0 : 1]++;
+    cells.set(k, c);
+  }
+  const monthList = [...months].sort();
+  const typeList = [...types].sort();
+  const rows = {};
+  for (const [k, [weekend, weekday]] of [...cells].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const [loc, mask, type, month] = k.split('\t');
+    (rows[loc] ??= []).push(Number(mask), type ? typeList.indexOf(type) : -1, monthList.indexOf(month), weekend, weekday);
+  }
+  return { months: monthList, types: typeList, rows };
+}
+
 /** The /events/meta body without labels, over each game's latest import window. */
 export function computeMeta(events, imports) {
   const latest = {};
@@ -343,9 +376,11 @@ export function computeMeta(events, imports) {
   }
   const typeList = [...types].map(([k, n]) => [...k.split('\t'), n]).sort((a, b) => (a[0] + '\t' + a[1] < b[0] + '\t' + b[1] ? -1 : 1));
   const windows = Object.values(latest);
+  const window = windows.length ? { from: windows.map((w) => w.window_from).sort()[0], until: windows.map((w) => w.window_until).sort().pop() } : null;
   return {
     games,
-    window: windows.length ? { from: windows.map((w) => w.window_from).sort()[0], until: windows.map((w) => w.window_until).sort().pop() } : null,
+    window,
+    loc_counts: computeLocCounts(events, window),
     prefectures: Object.fromEntries(Object.entries(prefectures).sort()),
     online,
     categories: Object.fromEntries(CATEGORIES.filter((c) => categories[c]).map((c) => [c, categories[c]])),

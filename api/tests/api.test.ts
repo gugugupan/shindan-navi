@@ -286,6 +286,45 @@ describe('GET /api/v1/events/meta', () => {
     expect(m.types).toContainEqual(expect.objectContaining({ game_code: 'OPCG', code: 'standard_battle', name: 'スタンダードバトル' }));
   });
 
+  it('loc_counts give each location the month total /events/days gives under the same filters', async () => {
+    const lc = (await api(db, '/api/v1/events/meta')).body.loc_counts;
+    expect(lc.months).toEqual(['2026-11', '2026-12', '2027-01', '2027-02']);
+    const bits: Record<string, number> = { OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8 };
+    // The page's sum: rows whose mask shares a selected game bit, whose type is selected, in the month and day class.
+    const fromMeta = (loc: string, month: string, games: string[], types: string[], days: string) => {
+      const sel = games.reduce((m, g) => m | bits[g], 0);
+      const mi = lc.months.indexOf(month);
+      const r: number[] = lc.rows[loc] ?? [];
+      let n = 0;
+      for (let i = 0; i < r.length; i += 5) {
+        if (sel && !(r[i] & sel)) continue;
+        if (types.length && (r[i + 1] < 0 || !types.includes(lc.types[r[i + 1]]))) continue;
+        if (r[i + 2] !== mi) continue;
+        n += days === 'weekend' ? r[i + 3] : days === 'weekday' ? r[i + 4] : r[i + 3] + r[i + 4];
+      }
+      return n;
+    };
+    const cases: Array<[string[], string[], string]> = [[[], [], ''], [['OPCG'], [], ''], [['OPCG', 'UATCG'], [], 'weekend'], [[], ['standard_battle', 'gym_battle'], 'weekday'], [['PTCG'], ['gym_battle'], '']];
+    let checked = 0;
+    for (const loc of ['JP-13', 'JP-27', 'online', 'JP-01']) {
+      for (const month of lc.months) {
+        const until = month === '2026-12' ? '2027-01-01' : `${month.slice(0, 5)}${String(+month.slice(5) + 1).padStart(2, '0')}-01`;
+        for (const [games, types, days] of cases) {
+          const q = new URLSearchParams({ from: `${month}-01`, until, pref: loc });
+          if (games.length) q.set('game', games.join(','));
+          if (types.length) q.set('type', types.join(','));
+          if (days) q.set('days', days);
+          const r = await api(db, `/api/v1/events/days?${q.toString().replace(/%2C/g, ',')}`);
+          expect(r.status, JSON.stringify(r.body)).toBe(200);
+          const want = r.body.days.reduce((t: number, d: Ev) => t + d.count, 0);
+          expect(fromMeta(loc, month, games, types, days), `${loc} ${month} ${q}`).toBe(want);
+          checked += want;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
   it('reports games without an import as empty', async () => {
     const m = (await api(newDb(), '/api/v1/events/meta')).body;
     expect(m.games[0]).toEqual({ code: 'OPCG', name: 'ONE PIECEカードゲーム', slug: 'onepiece', record_count: 0, fetched_at: null, complete: false, window: null });

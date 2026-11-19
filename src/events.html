@@ -130,8 +130,8 @@ button.cd:hover{background:var(--surface-2)}
 .prefdlg{width:min(640px,calc(100vw - 32px))}
 .prefdlg fieldset{border:0;margin:0;padding:10px 0 0;border-top:1px solid var(--line);display:grid;gap:6px}
 .prefdlg legend{float:left;width:100%;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--muted);padding:0}
-.prefdlg .chip:disabled,.prefdlg .sbtn:disabled{opacity:.45;cursor:not-allowed}
 .prefdlg .fc{clear:both}
+.prefdlg .chip em.z{opacity:.55}
 .prefdlg .note{margin:0;font-size:12px;color:var(--muted)}
 .prefdlg .foot{display:flex;justify-content:space-between;gap:8px;position:sticky;bottom:-20px;background:var(--surface);padding:10px 0 20px;margin-bottom:-20px;border-top:1px solid var(--line)}
 
@@ -219,10 +219,10 @@ button.cd:hover{background:var(--surface-2)}
 <script>
 const API_BASE = /*API_BASE*/'/api/v1';
 const GAMES = [
-  {code:'OPCG', name:'ONE PIECE', h:4},
-  {code:'UATCG', name:'UNION ARENA', h:272},
-  {code:'CONAN', name:'名探偵コナン', h:205},
-  {code:'PTCG', name:'ポケモンカード', h:44}
+  {code:'OPCG', name:'ONE PIECE', h:4, bit:1},
+  {code:'UATCG', name:'UNION ARENA', h:272, bit:2},
+  {code:'CONAN', name:'名探偵コナン', h:205, bit:4},
+  {code:'PTCG', name:'ポケモンカード', h:44, bit:8}
 ];
 const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
 const REGIONS = [
@@ -236,8 +236,9 @@ const REGIONS = [
 ];
 const PREF = {}; let pi=0;
 REGIONS.forEach(([r,ps])=>ps.forEach(p=>{ pi++; PREF['JP-'+String(pi).padStart(2,'0')]=p; }));
-// 'online' is the location for events without a venue; it counts toward MAX_PREFS like a prefecture.
-const ONLINE='online', MAX_PREFS=5;
+// One location at a time (owner decision): a prefecture, or 'online' for events without a venue. Older links and
+// saved filters may list several; the first one is kept.
+const ONLINE='online', MAX_PREFS=1;
 const locName = c => c===ONLINE ? 'オンライン' : PREF[c];
 const PREF_REGION = {}; pi=0;
 REGIONS.forEach(([r,ps],ri)=>ps.forEach(()=>{ pi++; PREF_REGION['JP-'+String(pi).padStart(2,'0')]=ri; }));
@@ -389,6 +390,7 @@ function renderControls(){
     fb('days','曜日',(DAYS.find(d=>d[0]===state.days&&d[0])||[])[1]||'') +
     (activeFilterCount()||state.range==='custom'?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
   if(fDlg.open) renderF();
+  if(prefDlg.open) renderPref();
 
   document.getElementById('vList').setAttribute('aria-pressed',state.view==='list');
   document.getElementById('vCal').setAttribute('aria-pressed',state.view==='cal');
@@ -474,46 +476,68 @@ document.getElementById('filterBtn').onclick=e=>{
 document.getElementById('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'event_list'}); };
 document.getElementById('vCal').onclick=()=>{ commit({view:'cal',month:clampMonth(monthOf(rangeOf(state)[0])),...(isDay()?{range:'upcoming'}:{})}); track('switch_view',{view:'event_calendar'}); };
 
-// ---- prefecture dialog (edits a draft; applied with the footer button)
+// ---- prefecture dialog: picking a location applies it and closes the dialog
 const prefDlg=document.getElementById('prefDlg');
-let draft=[];
-function prefCount(code){
+// What picking each location would list under the current game / type / day filters, from meta.loc_counts (rows of
+// [game_mask, type index, month index, weekend, weekday]): the month on screen, or the months of the upcoming list.
+// Meta from an importer without loc_counts only has overall totals, shown while nothing is filtered.
+function prefCounts(){
   if(!meta) return null;
-  if(code===ONLINE) return meta.online ? meta.online.count : null;
-  const p=meta.prefectures&&meta.prefectures.find(x=>x.code===code); return p?p.count:null;
+  const lc=meta.loc_counts;
+  if(!lc||!lc.rows){
+    if(state.game.length||state.type.length||state.days) return null;
+    const n=Object.fromEntries((meta.prefectures||[]).map(p=>[p.code,p.count]));
+    n[ONLINE]=meta.online?meta.online.count:0;
+    return {n, label:'掲載中のイベント数'};
+  }
+  const ym=state.view==='cal'?state.month:isDayState(state)?monthOf(state.from):null;
+  const months=ym?[ym]:[];
+  if(!ym) for(let m=monthOf(TODAY), last=monthOf(addD(TODAY,MAX_DAYS-1)); m<=last; m=addM(m,1)) months.push(m);
+  const mi=new Set(months.map(m=>lc.months.indexOf(m)).filter(i=>i>=0));
+  const sel=state.game.reduce((b,c)=>b|GAME[c].bit,0);
+  const ti=new Set(state.type.map(t=>lc.types.indexOf(t)).filter(i=>i>=0));
+  const n={};
+  for(const [loc,r] of Object.entries(lc.rows)){
+    let t=0;
+    for(let i=0;i+4<r.length;i+=5){
+      if(sel&&!(r[i]&sel)) continue;
+      if(state.type.length&&!ti.has(r[i+1])) continue;
+      if(!mi.has(r[i+2])) continue;
+      t+=state.days==='weekend'?r[i+3]:state.days==='weekday'?r[i+4]:r[i+3]+r[i+4];
+    }
+    n[loc]=t;
+  }
+  return {n, all:true, label:ym?`${+ym.slice(5)}月のイベント数`:'これからのイベント数'};
 }
+let prefN=null;
 function prefChip(c){
-  const n=prefCount(c), on=draft.includes(c), full=!on&&draft.length>=MAX_PREFS;
-  return `<button type="button" class="chip k" data-pref="${c}" aria-pressed="${on}"${full?' disabled':''}>${esc(locName(c))}${n!=null?` <em>${n.toLocaleString('ja-JP')}</em>`:''}</button>`;
+  const n=prefN?prefN.n[c]||0:null, on=state.pref.includes(c);
+  return `<button type="button" class="chip k" data-pref="${c}" aria-pressed="${on}">${esc(locName(c))}${n!=null?` <em${n?'':' class="z"'}>${n.toLocaleString('ja-JP')}</em>`:''}</button>`;
 }
 function renderPref(){
-  document.getElementById('prefBody').innerHTML = `<p class="note">${MAX_PREFS}つまで選べます（オンライン開催も1つと数えます）。選んだ地域は次回も使われます。</p>` +
+  prefN=prefCounts();
+  const filtered=state.game.length||state.type.length||state.days;
+  const what=prefN?`数字は${filtered&&prefN.all?'いまの絞り込み条件での':''}${prefN.label}です。`:'';
+  document.getElementById('prefBody').innerHTML = `<p class="note">都道府県かオンラインを1つ選びます。選んだ地域は次回も使われます。${what}</p>` +
     REGIONS.map(([r],ri)=>{
       const codes=Object.keys(PREF_REGION).filter(c=>PREF_REGION[c]===ri);
       return `<fieldset><legend><span>${esc(r)}</span></legend><div class="fc">${codes.map(prefChip).join('')}</div></fieldset>`;
     }).join('') +
-    `<fieldset><legend><span>会場なし</span></legend><div class="fc">${prefChip(ONLINE)}</div></fieldset>` +
-    `<div class="foot"><button type="button" class="sbtn ghost" id="prefClear"${draft.length?'':' disabled'}>選択を解除</button><button type="button" class="sbtn" id="prefApply"${draft.length?'':' disabled'}>${draft.length?`${draft.length}件で表示`:'1つ以上選んでください'}</button></div>`;
+    `<fieldset><legend><span>会場なし</span></legend><div class="fc">${prefChip(ONLINE)}</div></fieldset>`;
 }
 function openPref(){
-  draft=[...state.pref]; renderPref();
+  renderPref();
   if(prefDlg.showModal) prefDlg.showModal(); else prefDlg.setAttribute('open','');
+  prefDlg.querySelector('[data-pref][aria-pressed="true"]')?.focus();
 }
 prefDlg.addEventListener('click',e=>{
   if(e.target===prefDlg){ prefDlg.close(); return; }
   const p=e.target.closest('[data-pref]');
-  if(p){
-    if(p.disabled) return;
-    draft=draft.includes(p.dataset.pref)?draft.filter(x=>x!==p.dataset.pref):[...draft,p.dataset.pref].slice(0,MAX_PREFS);
-    renderPref(); prefDlg.querySelector(`[data-pref="${p.dataset.pref}"]`).focus(); return;
-  }
-  if(e.target.closest('#prefClear')){ draft=[]; renderPref(); return; }
-  if(e.target.closest('#prefApply')){
-    if(!draft.length) return;
-    const sorted=[...Object.keys(PREF),ONLINE].filter(c=>draft.includes(c));
-    prefDlg.close(); commit({pref:sorted}); track('events_filter',{key:'pref',value:sorted.join(',')});
-    document.querySelector('[data-f="pref"]')?.focus();
-  }
+  if(!p) return;
+  const c=p.dataset.pref;
+  prefDlg.close();
+  if(state.pref.length!==1||state.pref[0]!==c){ commit({pref:[c]}); track('events_filter',{key:'pref',value:c}); }
+  document.querySelector('[data-f="pref"]')?.focus();
 });
 document.getElementById('prefClose').onclick=()=>prefDlg.close();
 
@@ -809,13 +833,13 @@ function reload(){
   const my=gen;
   reloadTimer=setTimeout(()=>{ if(my!==gen) return; loading=false; if(state.view==='cal') loadCal(); else loadPage(); },300);
 }
-// The API needs 1-5 locations: without one (no IP guess) the page asks instead of loading.
+// The API needs a location: without one (no IP guess) the page asks instead of loading.
 function renderPrompt(){
   renderHead();
   const el=document.getElementById(state.view==='cal'?'calv':'list');
   el.innerHTML = state.guessing
     ? Array.from({length:2},()=>'<div class="sk" aria-hidden="true"></div>').join('')+'<span class="sr">地域を確認中…</span>'
-    : `<div class="state" id="prefPrompt"><b>地域を選んでください</b><span>都道府県（またはオンライン）を${MAX_PREFS}つまで選ぶと、その地域のイベントを表示します。</span><button class="sbtn" id="pickPref">都道府県を選ぶ</button></div>`;
+    : `<div class="state" id="prefPrompt"><b>地域を選んでください</b><span>都道府県（またはオンライン）を1つ選ぶと、その地域のイベントを表示します。</span><button class="sbtn" id="pickPref">都道府県を選ぶ</button></div>`;
 }
 // /days for one month of the list (whole month requested, cut to the range here)
 async function loadMonthDays(sg, signal, my){
