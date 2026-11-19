@@ -5,10 +5,8 @@
 /* /events/: reuses the site stylesheet above (tokens, chips, seg, .ag day groups); only event-specific parts live here */
 .evlabel{font-family:var(--display);font-weight:400;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow);white-space:nowrap}
 .evlabel small{font-family:var(--body);font-size:10px;font-weight:700;color:var(--accent);margin-left:6px;letter-spacing:.06em;vertical-align:2px}
-.quick{display:flex;gap:6px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px}
-.quick::-webkit-scrollbar{display:none}
-.chip.q{font-weight:700;padding:4px 12px}
-.chip.q[aria-pressed="true"],.chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.panel>.row>.seg{margin-right:auto}
+.chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .chip.k[aria-pressed="true"] em{color:inherit;opacity:.7}
 .chip.g em.none{font-family:var(--body);font-size:10.5px}
 .trow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -124,6 +122,7 @@ button.cd:hover{background:var(--surface-2)}
 .ev-pin:hover{border-color:var(--accent)}
 .nomapt{font:inherit;font-size:11px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:999px;padding:0 7px;line-height:1.6;cursor:help}
 .nomapt:hover,.nomapt[aria-expanded="true"]{border-color:var(--muted);color:var(--ink)}
+.nomtip:empty{display:none}
 .nomtip{position:absolute;z-index:5;max-width:min(260px,calc(100% - 16px));padding:7px 10px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:12px;line-height:1.5;box-shadow:var(--shadow)}
 .mleg{display:inline-flex;flex-wrap:wrap;gap:2px 8px;margin-left:4px}
 .mleg span{display:inline-flex;align-items:center;gap:3px}
@@ -146,7 +145,6 @@ button.cd:hover{background:var(--surface-2)}
   .evlabel{font-size:13px;padding:5px 10px}
   .evlabel small{display:none}
   .panel>.row{flex-wrap:nowrap}
-  .quick{margin-inline:-2px}
   .fg{grid-template-columns:minmax(0,1fr);gap:4px}
   .fl{padding-top:0}
   .frow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-8px;padding-inline:8px}
@@ -155,7 +153,6 @@ button.cd:hover{background:var(--surface-2)}
   .trow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-8px;padding-inline:8px}
   .trow::-webkit-scrollbar{display:none}
   .trow .chip{flex:none}
-  .chip.q{padding:4px 10px}
   .ag h3{top:112px}
   .ag h3 .mo{font-family:var(--body);font-size:10px;font-weight:700;color:var(--muted)}
   .fresh{flex-direction:column}
@@ -193,7 +190,6 @@ button.cd:hover{background:var(--surface-2)}
 
   <div class="bar"><div class="panel">
     <div class="row">
-      <div class="quick" id="quick" role="group" aria-label="開催日"></div>
       <div class="seg" role="group" aria-label="表示">
         <button id="vList" aria-pressed="false" aria-label="リスト"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>リスト</span></button>
         <button id="vCal" aria-pressed="true" aria-label="カレンダー"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>カレンダー</span></button>
@@ -256,7 +252,6 @@ const CATS = [['tournament','大会'],['casual','交流会'],['teaching','体験
 const CAT_LABEL = Object.fromEntries([...CATS,['other','その他'],['unknown','種類未分類']]);
 const REG_METHOD = {first_come:'先着',lottery:'抽選',walk_in:'当日参加OK',invitation:'招待制'};
 const DAYS = [['','すべて'],['weekend','土日'],['weekday','平日']];
-const QUICK = [['upcoming','これから'],['today','今日'],['weekend','今週末'],['nextweek','来週'],['month','今月']];
 const DOW = ['日','月','火','水','木','金','土'];
 const MAX_DAYS = 92, PAGE_SIZE = 50;
 
@@ -274,17 +269,8 @@ const md = s => { const [,m,d]=s.split('-').map(Number); return `${m}/${d}(${DOW
 const monthOf = s => s.slice(0,7);
 const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m<1){m+=12;y--} while(m>12){m-=12;y++} return y+'-'+String(m).padStart(2,'0'); };
 
-function rangeOf(s){
-  const w=dowOf(TODAY);
-  switch(s.range){
-    case 'today': return [TODAY, addD(TODAY,1)];
-    case 'weekend': { if(w===0) return [TODAY,addD(TODAY,1)]; if(w===6) return [TODAY,addD(TODAY,2)]; const sat=addD(TODAY,6-w); return [sat,addD(sat,2)]; }
-    case 'nextweek': { const mon=addD(TODAY,(8-w)%7||7); return [mon,addD(mon,7)]; }
-    case 'month': return [TODAY, addM(monthOf(TODAY),1)+'-01'];
-    case 'custom': return [s.from, addD(s.to,1)];
-    default: return [TODAY, addD(TODAY,MAX_DAYS)];
-  }
-}
+// Two ranges: 'upcoming' (the list and calendar) and 'custom', one day (the day view).
+const rangeOf = s => s.range==='custom' ? [s.from, addD(s.to,1)] : [TODAY, addD(TODAY,MAX_DAYS)];
 
 // ---- state <-> URL
 const LIST_KEYS = {game:'game', pref:'pref', type:'type'};
@@ -297,7 +283,7 @@ function readURL(){
     game:list('game').filter(g=>GAME[g]), pref:[...new Set(list('pref').filter(p=>PREF[p]||p===ONLINE))].slice(0,MAX_PREFS),
     type:list('type').filter(t=>/^[a-z0-9_]+$/.test(t)),
     days:DAYS.some(x=>x[0]===q.get('days'))?q.get('days'):'',
-    range:(QUICK.some(x=>x[0]===q.get('range'))||q.get('range')==='custom')?q.get('range'):'upcoming',
+    range:q.get('range')==='custom'?'custom':'upcoming',
     from:q.get('from'), to:q.get('to'),
     view:['cal','list'].includes(q.get('view'))?q.get('view'):null, month:/^\d{4}-\d{2}$/.test(q.get('month')||'')?q.get('month'):null
   };
@@ -307,21 +293,26 @@ function readURL(){
   if(!s.month) s.month=monthOf(rangeOf(s)[0]);
   return s;
 }
+// Only single days remain of custom ranges; anything else (older range links included) is the upcoming range.
 function normCustom(s){
-  if(s.range!=='custom'){ s.from=s.to=null; return; }
-  if(!isDate(s.from)) s.from=TODAY;
-  if(!isDate(s.to)) s.to=addD(s.from,6);
-  if(s.to<s.from) [s.from,s.to]=[s.to,s.from];
-  if(diffD(s.from,s.to)+1>MAX_DAYS) s.to=addD(s.from,MAX_DAYS-1);
+  if(s.range==='custom' && isDate(s.from) && s.to===s.from) return;
+  s.range='upcoming'; s.from=s.to=null;
 }
 // The calendar is the default; a single-day range without a view is a day view (its links predate view=list).
 const defaultView = s => s.range==='custom' && s.from===s.to ? 'list' : 'cal';
+const isDayState = s => s.view==='list' && s.range==='custom' && s.from===s.to;
+// The view a day view returns to: the one it was opened from, else the saved preference.
+function backView(){
+  const h=history.state;
+  if(h&&h.day&&(h.back==='list'||h.back==='cal')) return h.back;
+  const saved=store.get(SAVED_KEY,null);
+  return saved&&saved.view==='list' ? 'list' : 'cal';
+}
 function toQuery(s){
   const q=new URLSearchParams();
   Object.keys(LIST_KEYS).forEach(k=>{ if(s[k].length) q.set(k,s[k].join(',')); });
   if(s.days) q.set('days',s.days);
-  if(s.range!=='upcoming') q.set('range',s.range);
-  if(s.range==='custom'){ q.set('from',s.from); q.set('to',s.to); }
+  if(s.range==='custom'){ q.set('range','custom'); q.set('from',s.from); q.set('to',s.to); }
   if(s.view!==defaultView(s)) q.set('view',s.view);
   if(s.view==='cal' && s.month!==monthOf(rangeOf(s)[0])) q.set('month',s.month);
   return q.toString().replace(/%2C/g,',');
@@ -336,7 +327,7 @@ function apiQuery(s,[from,until]){
 }
 
 let state = readURL();
-history.replaceState(null,'',location.pathname+(toQuery(state)?'?'+toQuery(state):''));
+history.replaceState(history.state,'',location.pathname+(toQuery(state)?'?'+toQuery(state):''));
 let meta = null, metaErr = false;
 
 // filters (not the date range) survive visits
@@ -344,16 +335,18 @@ function saveFilters(){
   const o={}; ['game','pref','type'].forEach(k=>{ if(state[k].length) o[k]=state[k].join(','); });
   if(state.days) o.days=state.days;
   // A day view is not a choice of view: keep the one saved before it.
-  const day=state.view==='list'&&state.range==='custom'&&state.from===state.to, prev=store.get(SAVED_KEY,null);
-  if(day ? prev&&prev.view==='list' : state.view==='list') o.view='list';
+  const prev=store.get(SAVED_KEY,null);
+  if(isDayState(state) ? prev&&prev.view==='list' : state.view==='list') o.view='list';
   store.set(SAVED_KEY,o);
 }
 function commit(changes, opts={}){
-  const back=state.view;
+  const back=state.view, wasDay=isDayState(state), backTo=wasDay?backView():null;
   Object.assign(state, changes);
   normCustom(state);
+  // Leaving a day view (条件をクリア) goes back to the view it was opened from, not to its list.
+  if(wasDay && !('view' in changes) && state.range!=='custom') state.view=backTo;
   if(!opts.auto){ state.autoPref=false; saveFilters(); }
-  if(!('month' in changes) && ('range' in changes || 'from' in changes || 'to' in changes)) state.month=monthOf(rangeOf(state)[0]);
+  if(!('month' in changes) && ('range' in changes || 'from' in changes || 'to' in changes)) state.month=clampMonth(monthOf(rangeOf(state)[0]));
   const qs=toQuery(state), url=location.pathname+(qs?'?'+qs:'');
   if(url!==location.pathname+location.search) history[opts.replace?'replaceState':'pushState'](opts.day?{day:1,back}:null,'',url);
   renderControls();
@@ -370,7 +363,6 @@ function renderControls(){
   const focusKey = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.k
     ? [document.activeElement.dataset.k, document.activeElement.dataset.v] : null;
 
-  document.getElementById('quick').innerHTML = QUICK.map(([v,l])=>chip('range',v,l,state.range===v,' q')).join('');
 
   document.getElementById('games').innerHTML =
     chip('game','',`すべて`,!state.game.length,' all') +
@@ -410,7 +402,6 @@ function toggleIn(arr,v){ return arr.includes(v)?arr.filter(x=>x!==v):[...arr,v]
 function onChip(e){
   const b=e.target.closest('[data-k]'); if(!b) return;
   const k=b.dataset.k, v=b.dataset.v;
-  if(k==='range'){ commit({range:v}); track('events_filter',{key:'range',value:v}); return; }
   if(k==='game'){ commit({game: v ? toggleIn(state.game,v) : [], type: v ? state.type : []}); track('events_filter',{key:'game',value:v||'all'}); return; }
   if(k==='days'){ commit({[k]:v}); track('events_filter',{key:k,value:v}); return; }
   if(LIST_KEYS[k]){ commit({[k]:toggleIn(state[k],v)}); track('events_filter',{key:k,value:v}); }
@@ -452,7 +443,7 @@ fDlg.addEventListener('click',e=>{
   onChip(e);
 });
 document.getElementById('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'event_list'}); };
-document.getElementById('vCal').onclick=()=>{ commit({view:'cal',month:monthOf(rangeOf(state)[0])}); track('switch_view',{view:'event_calendar'}); };
+document.getElementById('vCal').onclick=()=>{ commit({view:'cal',month:clampMonth(monthOf(rangeOf(state)[0]))}); track('switch_view',{view:'event_calendar'}); };
 
 // ---- prefecture dialog (edits a draft; applied with the footer button)
 const prefDlg=document.getElementById('prefDlg');
@@ -576,8 +567,11 @@ function groupVenues(evs){
     let x=out.get(k);
     if(!x){ x={key:k, lat:e.venue.geo.lat, lng:e.venue.geo.lng, label:venueLabel(e.venue), ids:[], games:[]}; out.set(k,x); }
     if(!x.ids.includes(e.id)) x.ids.push(e.id);
-    if(!x.games.includes(e.game_code)) x.games.push(e.game_code);
+    for(const c of Array.isArray(e.game_codes)&&e.game_codes.length?e.game_codes:[e.game_code]) if(c&&!x.games.includes(c)) x.games.push(c);
   }
+  // stripes in GAMES order, so a venue's pin (and its cached icon) does not depend on which event came first
+  const ord=c=>{ const i=GAMES.findIndex(g=>g.code===c); return i<0?GAMES.length:i; };
+  out.forEach(x=>x.games.sort((a,b)=>ord(a)-ord(b)||(a<b?-1:a>b?1:0)));
   return out;
 }
 // → {bounds:{south,west,north,east}} for several places, else {center,zoom}
@@ -596,7 +590,7 @@ function mapView(groups, prefs){
   return {center:{lat,lng}, zoom:p==='JP-01'?7:10};
 }
 // Pin SVG in the games' colours (light-theme chip colour, the map is always light): one game fills the pin, several
-// split it into vertical stripes. A white disc in the head carries the count label, or stays a dot for one event.
+// split it into vertical stripes. A white disc in the head carries the count label (larger from 10), or stays a dot.
 const pinColor = c => `hsl(${(GAME[c]||{h:0}).h} 62% 46%)`;
 function pinSvg(games, n, hl){
   const cs=(games.length?games:['']).map(pinColor), w=28/cs.length;
@@ -604,7 +598,7 @@ function pinSvg(games, n, hl){
   return `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38"><defs><clipPath id="p"><path d="${shape}"/></clipPath></defs>`
     + `<g clip-path="url(#p)">${cs.map((c,i)=>`<rect x="${(i*w).toFixed(2)}" y="0" width="${(w+.3).toFixed(2)}" height="38" fill="${c}"/>`).join('')}</g>`
     + `<path d="${shape}" fill="none" stroke="${hl?'#1b1f2e':'#fff'}" stroke-width="${hl?2.4:1.6}"/>`
-    + `<circle cx="14" cy="14" r="${n>1?7.5:3.6}" fill="#fff"/></svg>`;
+    + `<circle cx="14" cy="14" r="${n>9?9:n>1?7.5:3.6}" fill="#fff"/></svg>`;
 }
 // ---- map: end pure helpers
 
@@ -615,7 +609,7 @@ const narrow = window.matchMedia('(max-width:760px)');
 const mapEls = {v:document.getElementById('mapv'), tog:document.getElementById('mapTog'), sum:document.getElementById('mapSum'), box:document.getElementById('mapbox'), gmap:document.getElementById('gmap'), ph:document.getElementById('mapph')};
 let mapsP=null, gm=null, gmap=null, mapFail=MAPS_KEY?null:'nokey', mapOpen=false, userMoved=false, selKey=null, fitted=null, progMove=null, hoverKey=null, tipBtn=null;
 const markers=new Map();
-const isDay = () => state.view==='list' && state.range==='custom' && state.from===state.to;
+const isDay = () => isDayState(state);
 function loadMaps(){
   if(mapsP) return mapsP;
   mapsP=new Promise((resolve,reject)=>{
@@ -672,7 +666,7 @@ function renderMapPane(){
     : '<b>地図を読み込めませんでした</b><span>広告ブロックや通信状況により Google マップを表示できません。イベントは一覧でご覧ください。</span>';
   const groups=groupVenues(events), nogeo=events.filter(e=>e.venue&&!geoKey(e.venue.geo)).length;
   const present=GAMES.filter(g=>[...groups.values()].some(x=>x.games.includes(g.code)));
-  const leg=present.length?`<span class="mleg" aria-label="ピンの色">${present.map(g=>`<span style="--h:${g.h}"><i></i>${esc(g.name)}</span>`).join('')}</span>`:'';
+  const leg=present.length?`<span class="mleg"><span class="sr">ピンの色：</span>${present.map(g=>`<span style="--h:${g.h}"><i></i>${esc(g.name)}</span>`).join('')}</span>`:'';
   mapEls.sum.innerHTML = events.length && !mapFail ? `会場 <b>${groups.size}</b> か所${nogeo?` · 地図なし ${nogeo}件`:''}${autoLoading()?' · 読み込み中':''}${leg}` : '';
 }
 // Markers follow the loaded events: added as pages arrive, removed when the day or filters change.
@@ -682,10 +676,13 @@ function syncMap(){
   const groups=groupVenues(events);
   for(const [k,m] of markers) if(!groups.has(k)){ m.setMap(null); markers.delete(k); }
   groups.forEach(g=>{
-    const n=g.ids.length, label=n>1?{text:String(n),color:'#1b1f2e',fontSize:'11px',fontWeight:'700'}:null, title=`${g.label}（${n}件）`;
+    const n=g.ids.length, title=`${g.label}（${n}件）`;
+    const label=n>1?{text:n>99?'99+':String(n),color:'#1b1f2e',fontSize:n>99?'8px':n>9?'10px':'11px',fontWeight:'700'}:null;
     let m=markers.get(g.key);
     if(!m){
-      m=new gm.Marker({map:gmap, position:{lat:g.lat,lng:g.lng}, title, label});
+      const icon=pinIcon(g.games,n,false);
+      m=new gm.Marker({map:gmap, position:{lat:g.lat,lng:g.lng}, title, label, icon});
+      m.sn={icon, z:null};
       m.addListener('click',()=>selectVenue(g.key,'map'));
       markers.set(g.key,m);
     } else { m.setLabel(label); m.setTitle(title); }
@@ -701,7 +698,7 @@ function syncMap(){
 }
 const PIN_ICONS=new Map();
 function pinIcon(games,n,hl){
-  const id=games.join(',')+'|'+(n>1)+'|'+!!hl;
+  const id=games.join(',')+'|'+(n>9?2:n>1?1:0)+'|'+!!hl;
   if(!PIN_ICONS.has(id)){
     const k=hl?1.3:1, w=Math.round(28*k), h=Math.round(38*k);
     PIN_ICONS.set(id,{url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(pinSvg(games,n,hl)), scaledSize:new gm.Size(w,h), anchor:new gm.Point(w/2,h), labelOrigin:new gm.Point(w/2,14*k)});
@@ -839,7 +836,7 @@ function renderHead(){
   const exact = state.view==='cal' || segs.every(x=>x.count!=null);
   const cnt = total==null ? '' : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件${exact?'':'以上'}</span>`;
   el.innerHTML = state.view==='cal' ? `<span class="sub">${esc(where)}</span>`
-    : `${isDay()?`<button class="dayback" id="dayBack">‹ ${history.state&&history.state.day&&history.state.back==='list'?'一覧':'カレンダー'}に戻る</button>`:''}${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}</span>`;
+    : `${isDay()?`<button class="dayback" id="dayBack">‹ ${backView()==='list'?'一覧':'カレンダー'}に戻る</button>`:''}${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}</span>`;
 }
 function renderNotice(){
   const sel=state.game.length?state.game:GAMES.map(g=>g.code);
@@ -868,7 +865,7 @@ function renderList(){
     return;
   }
   if(!events.length){
-    listEl.innerHTML=`<div class="state"><b>条件に合うイベントはありません</b><span>日付を広げたり、都道府県や絞り込み条件を減らしてみてください。</span>${activeFilterCount()||state.game.length||state.range!=='upcoming'?'<button class="sbtn ghost" id="resetAll2">条件をリセット</button>':''}</div>`;
+    listEl.innerHTML=`<div class="state"><b>条件に合うイベントはありません</b><span>都道府県を増やしたり、絞り込み条件を減らしてみてください。</span>${activeFilterCount()||state.game.length||state.range!=='upcoming'?'<button class="sbtn ghost" id="resetAll2">条件をリセット</button>':''}</div>`;
     return;
   }
   const byDay=new Map();
@@ -883,29 +880,36 @@ function renderList(){
   if(!done) h+=`<button class="loadmore" id="loadMore"${busy?' disabled':''}>${busy?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;
   tipBtn=null; listEl.innerHTML=h;
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
-  if(hoverKey && !listEl.querySelector(`.ev[data-mk="${CSS.escape(hoverKey)}"]:is(:hover,:focus-within)`)) hoverVenue(null);
+  // Auto-paging re-renders under the pointer: keep the highlight while its venue still has a card (mouseleave clears it).
+  if(hoverKey && !listEl.querySelector(`.ev[data-mk="${CSS.escape(hoverKey)}"]`)) hoverVenue(null);
 }
-// 地図なし explains itself in a small popover (click / Enter / Space toggle; outside click and Escape close).
+// 地図なし is a toggletip: the button fills a role=status region next to it, so the text is announced on open.
+// Click / Enter / Space toggle it; outside click, focus moving away and Escape close it.
 function closeTip(focus){
   if(!tipBtn) return;
   const b=tipBtn; tipBtn=null;
   document.getElementById('nomTip')?.remove();
-  b.setAttribute('aria-expanded','false'); b.removeAttribute('aria-describedby');
+  b.setAttribute('aria-expanded','false');
   if(focus) b.focus();
 }
 function toggleTip(b){
   if(tipBtn===b){ closeTip(); return; }
   closeTip();
   const ev=b.closest('.ev'), t=document.createElement('div');
-  t.id='nomTip'; t.className='nomtip'; t.setAttribute('role','tooltip');
-  t.textContent=b.dataset.why==='online' ? 'オンライン開催のため地図には表示されません。' : 'この会場は位置情報が公開されていないため、地図に表示できません。';
+  t.id='nomTip'; t.className='nomtip'; t.setAttribute('role','status');
   ev.appendChild(t);
-  t.style.top=(b.offsetTop+b.offsetHeight+4)+'px';
-  t.style.left=Math.max(8,Math.min(b.offsetLeft,ev.clientWidth-t.offsetWidth-8))+'px';
-  b.setAttribute('aria-expanded','true'); b.setAttribute('aria-describedby','nomTip');
+  // filled after insertion: screen readers announce changes to a live region, not its initial content
+  requestAnimationFrame(()=>{
+    if(tipBtn!==b) return;
+    t.textContent=b.dataset.why==='online' ? 'オンライン開催のため地図には表示されません。' : 'この会場は位置情報が公開されていないため、地図に表示できません。';
+    t.style.top=(b.offsetTop+b.offsetHeight+4)+'px';
+    t.style.left=Math.max(8,Math.min(b.offsetLeft,ev.clientWidth-t.offsetWidth-8))+'px';
+  });
+  b.setAttribute('aria-expanded','true');
   tipBtn=b;
 }
 document.addEventListener('click',e=>{ if(tipBtn && e.target.closest('button.nomapt')!==tipBtn && !e.target.closest('#nomTip')) closeTip(); });
+document.addEventListener('focusin',e=>{ if(tipBtn && e.target!==tipBtn) closeTip(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape' && tipBtn) closeTip(true); });
 // Hovering (fine pointers only) or keyboard-focusing a day-view card highlights its marker; it never moves the map.
 const finePtr=window.matchMedia('(hover:hover) and (pointer:fine)');
@@ -915,7 +919,10 @@ listEl.addEventListener('mouseover',e=>{ if(finePtr.matches&&isDay()) hoverVenue
 listEl.addEventListener('mouseleave',()=>{ if(finePtr.matches) hoverVenue(kbFocus(document.activeElement)?cardKey(document.activeElement):null); });
 listEl.addEventListener('focusin',e=>{ if(finePtr.matches&&isDay()&&kbFocus(e.target)) hoverVenue(cardKey(e.target)); });
 listEl.addEventListener('focusout',e=>{ if(finePtr.matches) hoverVenue(cardKey(e.relatedTarget)); });
-function closeDay(){ if(history.state&&history.state.day) history.back(); else commit({view:'cal',range:'upcoming',month:monthOf(state.from)}); }
+function closeDay(){
+  if(history.state&&history.state.day){ history.back(); return; }
+  commit(backView()==='list' ? {view:'list',range:'upcoming'} : {view:'cal',range:'upcoming',month:clampMonth(monthOf(state.from))});
+}
 document.getElementById('rhead').addEventListener('click',e=>{ if(e.target.closest('#dayBack')) closeDay(); });
 narrow.addEventListener('change',()=>{ renderControls(); });
 const io = 'IntersectionObserver' in window ? new IntersectionObserver(es=>{
@@ -957,6 +964,7 @@ async function loadCal(){
   total=(r.days||[]).reduce((t,d)=>t+d.count,0); renderHead();
   renderCal({counts,total});
 }
+function clampMonth(ym){ const [lo,hi]=calBounds(); return ym<lo?lo:ym>hi?hi:ym; }
 function calBounds(){
   const ws=(meta&&meta.games||[]).filter(g=>g.window&&g.record_count>0);
   const lo=ws.length?ws.map(g=>g.window.from).sort()[0]:TODAY, hi=ws.length?ws.map(g=>g.window.until).sort().pop():addD(TODAY,MAX_DAYS);
