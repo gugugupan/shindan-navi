@@ -8,6 +8,16 @@ export const KEY_NAME = 'GOOGLE_GEOCODING_API_KEY';
 const GEOCODE_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
 const PLACES_URL = 'https://places.googleapis.com/v1/places:searchText';
 const PRECISE = new Set(['ROOFTOP', 'RANGE_INTERPOLATED']);
+// A Places result farther than this from the address's GEOMETRIC_CENTER geocode is another place of that name.
+export const PLACES_MAX_KM = 3;
+// Index + 1 = the number in region_code JP-NN.
+const PREFECTURES = [
+  '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県', '茨城県', '栃木県', '群馬県',
+  '埼玉県', '千葉県', '東京都', '神奈川県', '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県',
+  '岐阜県', '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県', '奈良県', '和歌山県',
+  '鳥取県', '島根県', '岡山県', '広島県', '山口県', '徳島県', '香川県', '愛媛県', '高知県', '福岡県',
+  '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県',
+];
 // Area-level results (prefecture, city, ward, postcode) are centroids, which the contract forbids.
 const AREA_TYPES = new Set([
   'country', 'administrative_area_level_1', 'administrative_area_level_2', 'locality', 'sublocality',
@@ -36,12 +46,16 @@ export function tokyoDate(date = new Date()) {
 const geo = (lat, lng, precision, placeId, today) =>
   normalizeGeo({ lat, lng, source: 'google', precision, place_id: placeId, geocoded_at: today });
 
+// Statuses that mean "nothing for this place_id" (stale or malformed id), not a key/quota problem.
+const PLACE_ID_MISSES = new Set(['INVALID_REQUEST', 'NOT_FOUND']);
+
 async function geocodeRequest(params, key, fetchImpl) {
   const url = `${GEOCODE_URL}?${new URLSearchParams({ ...params, region: 'jp', language: 'ja', key })}`;
   const res = await fetchImpl(url, { signal: AbortSignal.timeout(30000) });
   if (!res.ok) throw new GeocodeAbort(`Geocoding API HTTP ${res.status}`);
   const body = await res.json();
   if (body.status === 'OK' || body.status === 'ZERO_RESULTS') return body.results ?? [];
+  if (params.place_id && PLACE_ID_MISSES.has(body.status)) return [];
   // Never echo error_message wholesale elsewhere: it is short and key-free, but keep it on one line.
   throw new GeocodeAbort(`Geocoding API ${body.status}${body.error_message ? `: ${String(body.error_message).slice(0, 200)}` : ''}`);
 }
@@ -52,7 +66,8 @@ async function placesRequest(textQuery, key, fetchImpl) {
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'places.id,places.location',
+      // places.location and places.formattedAddress bill as Text Search Pro.
+      'X-Goog-FieldMask': 'places.id,places.location,places.formattedAddress',
     },
     body: JSON.stringify({ textQuery, languageCode: 'ja', regionCode: 'JP', pageSize: 1 }),
     signal: AbortSignal.timeout(30000),
@@ -66,11 +81,36 @@ async function placesRequest(textQuery, key, fetchImpl) {
 
 const isArea = (r) => (r.types ?? []).some((t) => AREA_TYPES.has(t));
 
+function km(a, b) {
+  const rad = Math.PI / 180;
+  const h = Math.sin(((b.lat - a.lat) * rad) / 2) ** 2
+    + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(((b.lng - a.lng) * rad) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/** The prefecture name for JP-NN, else null. */
+export function prefectureName(regionCode) {
+  const m = /^JP-(\d{2})$/.exec(regionCode ?? '');
+  return m ? PREFECTURES[Number(m[1]) - 1] ?? null : null;
+}
+
+/**
+ * Text Search matches names loosely and can return a same-named shop elsewhere: with a known prefecture the result's
+ * address must name it, and with a GEOMETRIC_CENTER geocode of the address it must lie within PLACES_MAX_KM of it.
+ */
+export function placeMatches(place, venue, geometricCenter) {
+  const pref = prefectureName(venue.region_code);
+  if (pref && !String(place.formattedAddress ?? '').includes(pref)) return false;
+  if (geometricCenter && km(place, geometricCenter) > PLACES_MAX_KM) return false;
+  return true;
+}
+
 /**
  * Looks up one venue. Returns a google geo or null (nothing usable). Throws GeocodeAbort on key/quota errors.
  * Order: refresh by cached place_id (Geocoding by place_id) → Geocoding by address (ROOFTOP/RANGE_INTERPOLATED)
- * → Places Text Search "name address" → a GEOMETRIC_CENTER, non-partial, non-area Geocoding result → null.
- * APPROXIMATE results are never used.
+ * → Places Text Search "name address" (if it passes placeMatches) → a GEOMETRIC_CENTER, non-partial, non-area
+ * Geocoding result → null. APPROXIMATE results are never used. A place_id the Geocoding API no longer knows
+ * (INVALID_REQUEST / NOT_FOUND) falls through to the address lookup.
  */
 export async function geocodeVenue(venue, { key, today, placeId = null, fetch: fetchImpl = fetch }) {
   if (placeId) {
@@ -95,7 +135,7 @@ export async function geocodeVenue(venue, { key, today, placeId = null, fetch: f
   if (text) {
     const [p] = await placesRequest(text, key, fetchImpl);
     const g = p && geo(p.location?.latitude, p.location?.longitude, 'PLACES_TEXT_SEARCH', p.id, today);
-    if (g) return g;
+    if (g && placeMatches({ ...g, formattedAddress: p.formattedAddress }, venue, fallback)) return g;
   }
   return fallback;
 }
@@ -124,7 +164,7 @@ export async function geocodeVenues(venues, cache, { key, today, dataDir, fetch:
       stats.looked_up++;
       let g;
       try {
-        g = await geocodeVenue(venue, { key, today, placeId: entry?.geo?.place_id ?? null, fetch: fetchImpl });
+        g = await geocodeVenue(venue, { key, today, placeId: entry?.geo?.place_id ?? entry?.place_id ?? null, fetch: fetchImpl });
       } catch (err) {
         if (err instanceof GeocodeAbort) {
           stats.aborted = err.message;

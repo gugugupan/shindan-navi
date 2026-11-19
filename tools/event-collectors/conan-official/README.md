@@ -82,10 +82,13 @@ The page has no coordinates, so `venue.geo` comes from Google (`../lib/google-ge
 
 Per distinct venue that has no fresh cache entry: Geocoding API (`address`, `region=jp`, `language=ja`,
 `components=country:JP`); a `ROOFTOP` / `RANGE_INTERPOLATED` result is used. Otherwise Places API (New) Text Search
-with `store name + address` (`precision: PLACES_TEXT_SEARCH`). If that finds nothing, a non-partial `GEOMETRIC_CENTER`
+with `store name + address` (`precision: PLACES_TEXT_SEARCH`); its result is used only when its address names the
+venue's prefecture and, when the address geocoded to a `GEOMETRIC_CENTER`, it lies within 3 km of that (Text Search
+matches names loosely). If that finds nothing usable, a non-partial `GEOMETRIC_CENTER`
 result is kept; `APPROXIMATE` and area results (prefecture, city, ward, postcode) never are. Nothing found → negative
-entry, retried after 30 days. Google lat/lng are re-looked-up after 30 days (by the cached `place_id` first) and
-events never carry a google geo older than that. A key/quota/billing error stops the pass, keeps what was found and
+entry, retried after 30 days. Google lat/lng are re-looked-up after 30 days (by the cached `place_id` first; a
+`place_id` Google no longer knows, `INVALID_REQUEST` / `NOT_FOUND`, falls back to the address) and events never carry
+a google geo older than that; the cache file keeps only the `place_id` of expired entries. A key/quota/billing error stops the pass, keeps what was found and
 writes no negative entry for the venue that hit it; the cache is saved every 50 lookups. The geocoding outcome is in
 `_run.json` notes. Google results may only be shown on a Google map.
 
@@ -93,4 +96,7 @@ Key setup (owner): in a GCP project with billing, enable Geocoding API and Place
 restricted to exactly those two APIs, with no application restriction (it runs locally, so no referrer); set a
 daily quota and a budget alert. Put it in the repo `.env` as `GOOGLE_GEOCODING_API_KEY=…` (never commit it; it is
 separate from the browser Maps key). The 2026-11-19 run had 417 distinct venues (2,139 events), so about that many Geocoding requests on the
-first run plus Places requests for the imprecise ones; later runs only look up new or expired venues.
+first run plus Places requests for the imprecise ones; later runs only look up new or expired venues. Billing: the
+Geocoding API is one SKU per request; the Places request asks for `places.id,places.location,places.formattedAddress`,
+and `places.location` (like `formattedAddress`) puts every Text Search call in the **Text Search Pro** SKU, priced
+above Geocoding (check the current Google Maps Platform price list and free monthly caps before a full run).
