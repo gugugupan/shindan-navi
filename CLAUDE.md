@@ -54,7 +54,7 @@ Local preview: `api/` `npm run dev:node` (site + API), or serve `dist/` alone (l
 
 ## Decisions the owner made (keep them)
 
-- Top of every page is only the logo row (logo lockup, 次の発売日 card, the corner on its right) and the toolbar. Page H1, breadcrumbs and lead text sit **below** the calendar as muted secondary text.
+- Top of every page is only the logo row (logo lockup + the corner on its right) and the toolbar. The 次の発売日 card next to the logo was removed by owner decision (2026-11-19); don't bring it back. Page H1, breadcrumbs and lead text (with 次の発売は…) sit **below** the calendar as muted secondary text.
 - No search box. Default title chips: MTG, ヴァイスシュヴァルツ, ポケモンカード, UNION ARENA, ONE PIECE; the rest behind ほか○タイトル.
 - Desktop calendar shows at most 3 items per day; quiet weekdays become slim columns; today is gold. Mobile: day list collapses to starred items + the first item, with 閉じる under the date as well as at the bottom.
 - Star button is the full-height right strip of each card (34px desktop, 46px mobile).

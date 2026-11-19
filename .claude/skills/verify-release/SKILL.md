@@ -36,7 +36,7 @@ uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0
 node tools/verify/browser.mjs --today YYYY-MM-DD    # same date as step 1
 ```
 
-Serves `dist/` locally with the browser clock pinned to that date, opens every page at 1280px and 390px, and fails on console errors, failed or 4xx/5xx local requests, broken images, horizontal scroll, a hidden or past 次の発売日 card, or an empty calendar whose 次の発売日 opens nothing. On `/` it also toggles a title chip and stars a card. Screenshots go to `.verify/` (git-ignored) — look at a few, at least home and one title page per width.
+Serves `dist/` locally with the browser clock pinned to that date, opens every page at 1280px and 390px, and fails on console errors, failed or 4xx/5xx local requests, broken images, horizontal scroll, a calendar that does not open on the current month (month pages: their month), or no visible release cards while the page has upcoming items (a title with nothing this month passes if 次月 reaches its items within 3 months). On `/` it also toggles a title chip and stars a card. Screenshots go to `.verify/` (git-ignored) — look at a few, at least home and one title page per width.
 
 ## 3. Report to the owner
 

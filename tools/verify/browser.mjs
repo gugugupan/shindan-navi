@@ -55,24 +55,27 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.waitForLoadState('networkidle');
 
     const st = await page.evaluate(() => {
-      const next = document.getElementById('next');
       const visibleCards = [...document.querySelectorAll('.pk')].filter(e => e.offsetParent).length;
       const brokenImgs = [...document.images].filter(i => i.complete && i.naturalWidth === 0).map(i => i.getAttribute('src'));
-      return { nextHidden: next.hidden, nextDay: next.dataset.day, nextText: next.innerText.replace(/\s+/g, ' '),
+      return { month: document.getElementById('monthLabel').textContent,
         noneUpcoming: (document.querySelector('.ptitle p')?.textContent || '').includes('発売予定の新弾はありません'),
         visibleCards, brokenImgs, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
     });
-    if (st.noneUpcoming) { if (!st.nextHidden) fail(where, 'page says nothing is upcoming but 次の発売日 card is shown'); }
-    else if (st.nextHidden) fail(where, '次の発売日 card is hidden');
-    else if (st.nextDay < TODAY) fail(where, `次の発売日 points to past date ${st.nextDay}`);
-    if (!st.visibleCards && !st.nextHidden) {
-      // the current month can be empty for a title; the next-release button opens that day's items instead
-      await page.locator('#next').click();
-      await page.waitForTimeout(300);
-      const n = await page.evaluate(() => document.getElementById('dlg').open ? document.querySelectorAll('#dlgBody [data-star-id]').length : 0);
-      if (!n) fail(where, 'month is empty and 次の発売日 opens no items');
-      else await page.locator('#dlgClose').click();
-    } else if (!st.visibleCards && !st.noneUpcoming) fail(where, 'no visible release cards');
+    const m = /^\/(\d{4})-(\d{2})\/$/.exec(p);
+    const [wy, wm] = m ? [m[1], m[2]] : TODAY.split('-');
+    const want = `${+wy}年${+wm}月`;
+    if (st.month !== want) fail(where, `calendar opens on ${st.month}, expected ${want}`);
+    let shown = st.visibleCards;
+    if (!shown && !st.noneUpcoming && !m) {
+      // a title can have nothing this month; its upcoming items must then be a few 次月 clicks away
+      for (let i = 0; i < 3 && !shown; i++) {
+        if (await page.locator('#nextM').isDisabled()) break;
+        await page.locator('#nextM').click();
+        shown = await page.evaluate(() => [...document.querySelectorAll('.pk')].filter(e => e.offsetParent).length);
+      }
+      if (shown) await page.locator('#goToday').click();
+    }
+    if (!shown && !st.noneUpcoming) fail(where, 'no visible release cards');
     if (st.brokenImgs.length) fail(where, `broken images ${st.brokenImgs.slice(0, 3).join(', ')}`);
     if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
     for (const b of [...new Set(bad)]) fail(where, b);
@@ -94,7 +97,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       } else fail(where, 'no visible star button');
     } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
     await page.screenshot({ path: path.join(OUT, `${vp}-${p.replace(/\//g, '') || 'home'}.png`), fullPage: false });
-    console.log(`  ${where.padEnd(22)} next=${st.nextDay} cards=${st.visibleCards}`);
+    console.log(`  ${where.padEnd(22)} month=${st.month} cards=${st.visibleCards}`);
     await page.close();
   }
   await ctx.close();
