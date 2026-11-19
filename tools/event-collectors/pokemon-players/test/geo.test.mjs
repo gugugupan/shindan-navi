@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeEvent } from '../lib/normalize.mjs';
-import { applyGeo, detailPath, geoPass, tokyoDate, venueLookups } from '../lib/geo.mjs';
+import { addressChanged, applyGeo, detailPath, geoPass, tokyoDate, venueLookups } from '../lib/geo.mjs';
 import { loadCache, saveCache, setEntry } from '../../lib/venue-cache.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -117,4 +117,25 @@ test('a stale negative entry is looked up again', async () => {
   const lookups = venueLookups([pairs[2]]);
   await geoPass({ fetchJson: api.fetchJson, cache, lookups, today: TODAY, save: () => {} });
   assert.equal(cache.entries['id:2'].geo.lng, 139);
+});
+
+test('an entry cached for another address is looked up again and not applied meanwhile', async () => {
+  const venue = pairs[2].event.venue;
+  const cache = { version: 1, source: 'ptcg', entries: {} };
+  setEntry(cache, { ...venue, address: '大阪府大阪市北区1-1' }, { lat: 34.7, lng: 135.5, source: 'ptcg' }, TODAY);
+  assert.equal(addressChanged(cache.entries['id:2'], venue), true);
+  const events = [structuredClone(pairs[2].event)];
+  applyGeo(events, cache, TODAY);
+  assert.equal(events[0].venue.geo, null);
+  const api = fakeDetail({ 3: ok('35,139') });
+  const stats = await geoPass({ fetchJson: api.fetchJson, cache, lookups: venueLookups([pairs[2]]), today: TODAY, save: () => {} });
+  assert.equal(stats.todo, 1);
+  assert.equal(cache.entries['id:2'].geo.lng, 139);
+  assert.equal(cache.entries['id:2'].address, venue.address);
+});
+
+test('address comparison ignores width and whitespace differences', () => {
+  assert.equal(addressChanged({ address: '東京都千代田区１－１　ビル' }, { address: '東京都千代田区1-1 ビル' }), false);
+  assert.equal(addressChanged({ address: null }, { address: null }), false);
+  assert.equal(addressChanged(undefined, { address: 'x' }), false);
 });

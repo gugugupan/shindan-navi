@@ -135,6 +135,10 @@ if (opt.geo === 'lookup' && !opt['dry-run']) {
   log(`geo pass: ${pending} venues, looking up those not cached (>=${opt['delay-ms']} ms apart)`);
   try {
     geoStats = await geoPass({ fetchJson: t.fetchJson, cache, lookups, today, save, maxRequests: Number(opt['max-detail-requests']), log });
+  } catch (err) {
+    // A thrown pass would otherwise leave Chrome running and keep the process alive.
+    await t.close().catch(() => {});
+    throw err;
   } finally {
     process.off('SIGINT', onSignal).off('SIGTERM', onSignal);
   }

@@ -56,7 +56,8 @@ After the list, the collector requests `/event_detail_search?event_holding_id=�
 `venue.geo` (`source: "ptcg"`, see `contracts/README.md` › Venue geo). Venue key: `id:<shop_id>` for shop venues,
 `fp:<name+address hash>` for events with their own venue. The first full pass is ~2300 requests (≥1 s apart, ~40–60 min);
 results are cached in `data/events/.venues/ptcg.json` (saved every 10 lookups and on Ctrl-C), so later runs only look
-up new venues, and negative entries are retried after 30 days. An interrupted pass resumes with
+up new venues (or a shop whose address no longer matches the cached one, NFKC/whitespace-folded; its old geo is not
+used meanwhile), and negative entries are retried after 30 days. An interrupted pass resumes with
 `node collect.mjs --from-raw out/run-<ts>/raw.json` (no list requests). A detail 404 tries one more event of the venue;
 transport errors leave the venue uncached and three in a row stop the pass (the run still writes, with `geo: null` for
 the rest). `--dry-run` never requests details. Coverage is in `_run.json` `query.geo` and the notes.

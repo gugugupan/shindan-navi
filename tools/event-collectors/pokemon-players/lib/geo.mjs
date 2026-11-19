@@ -20,6 +20,21 @@ export function tokyoDate(at = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(at);
 }
 
+const foldAddress = (v) => (typeof v === 'string' ? v.normalize('NFKC').replace(/\s+/g, ' ').trim() : '');
+
+/**
+ * The cache key is the shop id, so a shop that moved keeps its key: an entry whose address differs from the
+ * venue's current one is stale (looked up again, and its geo not used meanwhile).
+ */
+export function addressChanged(entry, venue) {
+  return Boolean(entry) && foldAddress(entry.address) !== foldAddress(venue.address);
+}
+
+const usableEntry = (cache, venue) => {
+  const entry = getEntry(cache, venue);
+  return addressChanged(entry, venue) ? undefined : entry;
+};
+
 // trainers_flg=1 rows with a date_id are the shape the detail route was observed with; cancelled rows last.
 const rank = (row) => (row.trainers_flg === 1 && row.date_id ? 0 : 2) + (row.discontinuance_flg === 1 ? 1 : 0);
 
@@ -49,7 +64,7 @@ export function venueLookups(pairs) {
  * `maxConsecutiveErrors` in a row stop the pass (likely blocked).
  */
 export async function geoPass({ fetchJson, cache, lookups, today, save, maxRequests = 3000, maxCandidates = 2, saveEvery = 10, maxConsecutiveErrors = 3, log = () => {} }) {
-  const todo = lookups.filter((l) => needsLookup(getEntry(cache, l.venue), today));
+  const todo = lookups.filter((l) => needsLookup(usableEntry(cache, l.venue), today));
   const stats = { venues: lookups.length, todo: todo.length, requests: 0, found: 0, negative: 0, skipped: 0, errors: 0, stopped: null };
   let consecutive = 0;
   let unsaved = 0;
@@ -91,14 +106,14 @@ export async function geoPass({ fetchJson, cache, lookups, today, save, maxReque
   return stats;
 }
 
-/** Sets venue.geo on every event with a venue (null when the cache has nothing usable). */
+/** Sets venue.geo on every event with a venue (null when the cache has nothing usable or a stale address). */
 export function applyGeo(events, cache, today) {
   let withGeo = 0;
   let venues = 0;
   for (const e of events) {
     if (!e.venue) continue;
     venues += 1;
-    e.venue.geo = geoForEvent(getEntry(cache, e.venue), today);
+    e.venue.geo = geoForEvent(usableEntry(cache, e.venue), today);
     if (e.venue.geo) withGeo += 1;
   }
   return { events_with_venue: venues, events_with_geo: withGeo };
