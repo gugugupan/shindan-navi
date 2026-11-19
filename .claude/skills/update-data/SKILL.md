@@ -1,6 +1,6 @@
 ---
 name: update-data
-description: Refresh 新弾ナビ's release data (カードラボ, トレカの地図, official sites) with scripts/refresh.py, review the packet, fix gaps (new title labels, missing images, cancelled items) and publish by pushing to main. Use when the owner says 更新新弾ナビ / 更新数据 / update the data / refresh the calendar, or asks whether new releases are on the site.
+description: Refresh トレカカレンダー's release data (カードラボ, トレカの地図, official sites) with scripts/refresh.py, review the packet, fix gaps (new title labels, missing images, cancelled items) and publish by pushing to main. Use when the owner says 更新トレカカレンダー / 更新新弾ナビ / 更新数据 / update the data / refresh the calendar, or asks whether new releases are on the site.
 ---
 
 # Update the release data

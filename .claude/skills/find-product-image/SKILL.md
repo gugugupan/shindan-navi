@@ -1,6 +1,6 @@
 ---
 name: find-product-image
-description: Find and set the package image for a 新弾ナビ release that shows the 画像準備中 placeholder or a 参考画像 stand-in. Use when the update report lists 画像なし items, when the owner sends an official product/news link with an image, or asks to replace a placeholder or stand-in thumbnail.
+description: Find and set the package image for a トレカカレンダー release that shows the 画像準備中 placeholder or a 参考画像 stand-in. Use when the update report lists 画像なし items, when the owner sends an official product/news link with an image, or asks to replace a placeholder or stand-in thumbnail.
 ---
 
 # Find a product image

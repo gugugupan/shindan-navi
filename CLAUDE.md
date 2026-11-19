@@ -1,4 +1,6 @@
-# 新弾ナビ (shindan-navi.app)
+# トレカカレンダー (shindan-navi.app)
+
+Brand トレカカレンダー (formerly 新弾ナビ; the home page JSON-LD keeps 新弾ナビ as `alternateName`). Feature names: 新弾カレンダー (`/releases/`) and イベントカレンダー (`/events/`). Repo, Worker, D1, Pages project, localStorage keys and the domain keep the `shindan-navi` names.
 
 TCG / トレカ new-release calendar for Japanese players: every title's boosters, decks and sets on one calendar, with favourites (★), add-to-calendar and SEO landing pages. Static site plus a TCG event calendar (`/events/`), both served by one Cloudflare Worker: static assets from `dist/`, `/api/*` from the Worker with D1.
 

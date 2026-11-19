@@ -173,7 +173,7 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 - 商品 ID 与 `overrides.json` 保持不变。收藏、`.ics` UID（`<id>@shindan-navi.app`）都依赖商品 ID。
 - 收藏保存在浏览器 localStorage，按 origin 隔离：更换域名会让所有用户的收藏消失。默认保留 `shindan-navi.app`，新功能挂在子路径（如 `/events/`）。若将来更换域名，需先设计收藏迁移。
 - 域名在 `scripts/build.py`（`SITE_HOST`、GA 判断）与 `.ics` UID 中硬编码，迁移时一并处理。
-- TCG Navi 作为平台品牌、新弾ナビ作为新品功能延续，品牌、导航、视觉和域名变更单独审阅。
+- TCG Navi 作为平台品牌、新弾ナビ作为新品功能延续，品牌、导航、视觉和域名变更单独审阅。（2026-11 已决定：品牌改为 トレカカレンダー，功能名为 新弾カレンダー / イベントカレンダー，域名暂留 shindan-navi.app。）
 - 现有 URL 与 canonical 不变；`/events/` 公开（可索引、进 sitemap、有 canonical 与 OG 图），暂不加入站内导航（导航单独设计）。
 - 本设计不引入游戏门户互链。
 

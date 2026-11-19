@@ -99,15 +99,15 @@ def page_def():
     soon=[d for d in up if d['date']<=(jd(TODAY)+datetime.timedelta(days=30)).isoformat()]
     gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if k in used)
     pages.append(dict(path='/releases/',slug='releases',og='home',
-        title='新弾ナビ｜TCG・トレカ新弾 発売日カレンダー（ポケカ・ワンピ・MTGほか）',
+        title='TCG・トレカ新弾 発売日カレンダー（ポケカ・ワンピ・MTGほか）｜トレカカレンダー',
         desc=f'TCG・トレカ新弾の発売日カレンダー。ポケカ（ポケモンカード）・ワンピカード・MTG・遊戯王・デュエマ・ヴァイス・ユニアリなど{len(used)}タイトルの拡張パック・スターターデッキの発売日と価格を一覧でチェック。お気に入り登録・Googleカレンダー追加にも対応。',
         keywords=COMMON_KW+['ポケカ','ワンピカード','MTG','遊戯王','デュエマ','ヴァイス','ユニアリ'],
         h1='TCG・トレカ新弾 発売日カレンダー',
         lead=f'{len(used)}タイトル・{len(data)}件の新弾／新商品を掲載（{upd_label}更新）',
         crumbs=[('トップ','/'),('新弾カレンダー',None)], js=None,
         list=static_list(soon,'直近30日の発売予定',f'{fmt(TODAY,True)}から30日以内に発売されるTCG・トレカ新弾 {len(soon)}件。')
-            +about_block('新弾ナビについて',[
-              f'新弾ナビは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をひとつのカレンダーにまとめたサイトです。ポケモンカード、ONE PIECEカードゲーム、マジック：ザ・ギャザリング、遊戯王OCG、デュエル・マスターズ、ヴァイスシュヴァルツ、UNION ARENA など{len(used)}タイトルの拡張パック・ブースターパック・スターターデッキの発売日と価格（税込）を掲載しています。',
+            +about_block('新弾カレンダーについて',[
+              f'トレカカレンダーの新弾カレンダーは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をひとつのカレンダーにまとめたページです。ポケモンカード、ONE PIECEカードゲーム、マジック：ザ・ギャザリング、遊戯王OCG、デュエル・マスターズ、ヴァイスシュヴァルツ、UNION ARENA など{len(used)}タイトルの拡張パック・ブースターパック・スターターデッキの発売日と価格（税込）を掲載しています。',
               'タイトルで絞り込んで推しのTCGだけを表示したり、☆でお気に入り登録した商品をまとめて確認・予算計算したりできます。お気に入りの商品は Google カレンダーや iPhone のカレンダーに追加でき、発売日の前日に通知を受け取れます。',
               f'タイトル別の発売日一覧：{gl}']),
         ld_items=soon))
@@ -132,7 +132,7 @@ def page_def():
             list_head,list_note=f'{short} 最近の発売',f'{name}の最近発売された商品 {len(lst)}件。新しい発売予定が発表され次第掲載します。価格は税込。'
             about_next=f'現在、発売予定の新弾は掲載していません。最近の発売は{fmt(last["date"])}「{esc(last["name"])}」です。'
         pages.append(dict(path=f'/{slug}/',slug=slug,og=slug,
-            title=f'{short}（{al[0] if al[0]!=short else name}）新弾 発売日一覧【{year}年最新】｜新弾ナビ',
+            title=f'{short}（{al[0] if al[0]!=short else name}）新弾 発売日一覧【{year}年最新】｜トレカカレンダー',
             desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}{year}年の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
             keywords=names+[f'{short} 新弾',f'{short} 発売日']+COMMON_KW,
             h1=f'{name} 新弾 発売日カレンダー' if short in name else f'{name}（{short}）新弾 発売日カレンダー',
@@ -150,7 +150,7 @@ def page_def():
         main_links='・'.join(f'<a href="/{SLUG[g]}/">{esc(g)}</a>' if g in SLUG else esc(g) for g,_ in cnt.most_common(8))
         days=sorted({d['date'] for d in its})
         pages.append(dict(path=f'/{ym}/',slug=ym,og='home',
-            title=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧｜新弾ナビ',
+            title=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧｜トレカカレンダー',
             desc=f'{mlabel(ym)}発売のTCG・トレカ新弾{len(its)}件（{top}ほか）の発売日と価格を一覧でチェック。拡張パック・スターターデッキの発売スケジュールをカレンダーで確認できます。',
             keywords=[f'{mlabel(ym)} 新弾',f'{int(ym[5:])}月 トレカ 発売',f'{int(ym[5:])}月 TCG 新弾']+COMMON_KW,
             h1=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧',
@@ -187,7 +187,7 @@ def corner(tool):
     return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
 def siterow(cur):
     cur_=lambda p:' aria-current="page"' if cur==p else ''
-    return f'<div><b>新弾ナビ</b><a href="/"{cur_("/")}>トップ</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a></div>'
+    return f'<div><b>トレカカレンダー</b><a href="/"{cur_("/")}>トップ</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a></div>'
 def toolrow(cur):
     if len(TOOLS)<2: return ''
     return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{a}{b}</a>' for p,a,b,ic in TOOLS)+'</div>'
@@ -236,7 +236,7 @@ def render(pg):
 <link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="canonical" href="{url}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="新弾ナビ">
+<meta property="og:site_name" content="トレカカレンダー">
 <meta property="og:locale" content="ja_JP">
 <meta property="og:title" content="{esc(pg['title'])}">
 <meta property="og:description" content="{esc(pg['desc'])}">
@@ -244,7 +244,7 @@ def render(pg):
 <meta property="og:image" content="{og}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="{esc(pg['h1'])}｜新弾ナビ">
+<meta property="og:image:alt" content="{esc(pg['h1'])}｜トレカカレンダー">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{esc(pg['title'])}">
 <meta name="twitter:description" content="{esc(pg['desc'])}">
@@ -301,7 +301,7 @@ def render_events():
 <link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="canonical" href="{url}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="新弾ナビ">
+<meta property="og:site_name" content="トレカカレンダー">
 <meta property="og:locale" content="ja_JP">
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(pg['desc'])}">
@@ -309,7 +309,7 @@ def render_events():
 <meta property="og:image" content="{og}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="{esc(pg['h1'])}｜新弾ナビ">
+<meta property="og:image:alt" content="{esc(pg['h1'])}｜トレカカレンダー">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{esc(title)}">
 <meta name="twitter:description" content="{esc(pg['desc'])}">
@@ -330,7 +330,7 @@ if LOGIN_ENABLED and not PRIVACY_EFFECTIVE_LOGIN:
     sys.exit('LOGIN_ENABLED=1 needs PRIVACY_EFFECTIVE_LOGIN in scripts/build.py: set it to the date login goes live (YYYY-MM-DD)')
 PRIVACY_LASTMOD=PRIVACY_EFFECTIVE_LOGIN if LOGIN_ENABLED else PRIVACY_EFFECTIVE_BASE
 PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
-    desc='新弾ナビのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
+    desc='トレカカレンダーのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
 def render_privacy():
     src=open(os.path.join(ROOT,'src/privacy.html')).read()
     if LOGIN_ENABLED and 'data-owner-fill' in src:
@@ -367,7 +367,7 @@ def render_privacy():
 <link rel="manifest" href="/site.webmanifest">
 <link rel="canonical" href="{url}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="新弾ナビ">
+<meta property="og:site_name" content="トレカカレンダー">
 <meta property="og:locale" content="ja_JP">
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(pg['desc'])}">
@@ -389,7 +389,7 @@ def home_page():
     soon=[d for d in data if TODAY<=d['date']<=hi]
     ev='・TCGイベント' if BUILD_EVENTS else ''
     return dict(path='/',og='home',lo=lo,hi=hi,
-        title=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}｜新弾ナビ',
+        title=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}｜トレカカレンダー',
         desc=(f'今日発売のTCG・トレカ新弾（ポケカ・ワンピカード・MTG・遊戯王・デュエマ・ヴァイスほか{len(used)}タイトル）'
               +('と、選んだ都道府県で今日開催されるTCGイベント（店舗大会・交流会・体験会）' if BUILD_EVENTS else '')
               +'をひと目でチェック。明日・今週の発売予定もまとめて確認できます。'),
@@ -397,8 +397,8 @@ def home_page():
         h1=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}',
         lead=f'{len(used)}タイトルの新弾{ev}を日本時間の今日で表示（{upd_label}更新）',
         list=static_list(soon,'今後2週間の発売予定',f'{fmt(TODAY,True)}から{HOME_AFTER}日以内に発売されるTCG・トレカ新弾 {len(soon)}件。')
-            +about_block('新弾ナビについて',[
-              f'新弾ナビは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をまとめた<a href="/releases/">新弾カレンダー</a>'
+            +about_block('トレカカレンダーについて',[
+              f'トレカカレンダーは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をまとめた<a href="/releases/">新弾カレンダー</a>'
               +('と、店舗大会・交流会を都道府県で探せる<a href="/events/">イベントカレンダー</a>' if BUILD_EVENTS else '')
               +'のサイトです。このページでは、今日発売の商品'+('と今日のイベント' if BUILD_EVENTS else '')+'、明日からの1週間の予定をまとめて表示します。',
               '新弾カレンダーで ☆ を付けたお気に入りの商品は、このページでも先頭に表示されます。'
@@ -423,7 +423,7 @@ def render_home():
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
     url=SITE+'/'
     og=f'{SITE}/og/{pg["og"]}.png'
-    ld=[{'@context':'https://schema.org','@type':'WebSite','name':'新弾ナビ','url':url,'inLanguage':'ja'}]
+    ld=[{'@context':'https://schema.org','@type':'WebSite','name':'トレカカレンダー','alternateName':'新弾ナビ','url':url,'inLanguage':'ja'}]
     if pg['ld_items']:
         ld.append({'@context':'https://schema.org','@type':'ItemList','name':'今後2週間の発売予定','numberOfItems':len(pg['ld_items']),
             'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],**({'url':d['url']} if d['url'] else {})} for i,d in enumerate(pg['ld_items'])]})
@@ -444,7 +444,7 @@ def render_home():
 <link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="canonical" href="{url}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="新弾ナビ">
+<meta property="og:site_name" content="トレカカレンダー">
 <meta property="og:locale" content="ja_JP">
 <meta property="og:title" content="{esc(pg['title'])}">
 <meta property="og:description" content="{esc(pg['desc'])}">
@@ -452,7 +452,7 @@ def render_home():
 <meta property="og:image" content="{og}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="{esc(pg['h1'])}｜新弾ナビ">
+<meta property="og:image:alt" content="{esc(pg['h1'])}｜トレカカレンダー">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{esc(pg['title'])}">
 <meta name="twitter:description" content="{esc(pg['desc'])}">

@@ -1,6 +1,6 @@
 ---
 name: verify-release
-description: Pre-merge gate for 新弾ナビ — checks a branch's data diff against main, builds dist/ with a pinned date, validates every page's JSON-LD and static list, then drives the built site in headless Chrome at desktop and mobile widths. Use before merging any branch to main (data updates, template/build changes, structured data), or when the owner asks to verify / test a change.
+description: Pre-merge gate for トレカカレンダー — checks a branch's data diff against main, builds dist/ with a pinned date, validates every page's JSON-LD and static list, then drives the built site in headless Chrome at desktop and mobile widths. Use before merging any branch to main (data updates, template/build changes, structured data), or when the owner asks to verify / test a change.
 ---
 
 # Verify a branch before merging

@@ -1,4 +1,4 @@
-# 新弾ナビ
+# トレカカレンダー（旧 新弾ナビ）
 
 TCG new-release calendar (static pages) and TCG event calendar (`/events/`, API + D1) for https://shindan-navi.app, served by one Cloudflare Worker (`shindan-navi`, config `wrangler.jsonc`).
 
