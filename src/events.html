@@ -392,7 +392,7 @@ function ygoUrl(){
   const q=new URLSearchParams({sDate:from}); if(to) q.set('eDate',to);
   return 'https://cardgame-network.konami.net/tournament_search?'+q;
 }
-const ygoLink = () => `<a class="ygo" href="${esc(ygoUrl())}" target="_blank" rel="noopener" data-ygo>遊戯王の大会は公式サイトで探す ↗</a>`;
+const ygoLink = () => `<a class="ygo" href="${esc(ygoUrl())}" target="_blank" rel="noopener noreferrer" data-ygo>遊戯王の大会は公式サイトで探す ↗</a>`;
 function renderControls(){
   const focusKey = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.k
     ? [document.activeElement.dataset.k, document.activeElement.dataset.v] : null;

@@ -30,6 +30,9 @@ export function withoutExpiredGeo(ev, cutoff) {
 }
 // D1 rejects statements over 100 KB (UTF-8 bytes); stay well below.
 export const MAX_STATEMENT_BYTES = 60_000;
+// The site_meta statement holds the whole meta JSON in one row, so it cannot be chunked: refuse to plan one D1 would
+// reject (100 KB), with some margin. ~50 KB with the 13 games of 2026-11-19 (loc_counts grows with games and types).
+export const MAX_SITE_META_BYTES = 90_000;
 const MAX_ROWS_PER_STATEMENT = 200;
 
 let validators;
@@ -403,7 +406,7 @@ export function computeMeta(events, imports) {
  * - new runs get an imports row; site_meta ('meta', 'state') is rewritten when anything changed.
  * Nothing is deleted. Statements stay under D1's 100 KB limit.
  */
-export function planImport(accepted, state = emptyState(), { now = Math.floor(Date.now() / 1000) } = {}) {
+export function planImport(accepted, state = emptyState(), { now = Math.floor(Date.now() / 1000), maxSiteMetaBytes = MAX_SITE_META_BYTES } = {}) {
   const rows = new Map();
   const listed = new Map();
   const cutoff = googleCutoff(now * 1000);
@@ -522,10 +525,13 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
   const changed = statements.length > 0 || metaStale;
   const version = String(now);
   if (changed) {
-    statements.push(
-      `INSERT INTO site_meta (key, value) VALUES ('meta', ${sqlLiteral(metaJson)}), ('state', ${sqlLiteral(JSON.stringify({ version, fetched_at, window }))})\n` +
-        'ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-    );
+    const sql = `INSERT INTO site_meta (key, value) VALUES ('meta', ${sqlLiteral(metaJson)}), ('state', ${sqlLiteral(JSON.stringify({ version, fetched_at, window }))})\n` +
+      'ON CONFLICT(key) DO UPDATE SET value = excluded.value';
+    const bytes = Buffer.byteLength(sql, 'utf8');
+    if (bytes > maxSiteMetaBytes) {
+      throw new Error(`site_meta statement is ${bytes.toLocaleString('en-US')} bytes (limit ${maxSiteMetaBytes.toLocaleString('en-US')}; D1 rejects statements over 100 KB): shrink the meta (loc_counts) before importing`);
+    }
+    statements.push(sql);
   }
   const stats = {
     inserted,

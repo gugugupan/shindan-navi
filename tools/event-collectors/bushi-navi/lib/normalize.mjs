@@ -41,8 +41,9 @@ const text = (v) => {
 };
 
 const CONTACT = /[A-Za-z0-9._%+-]+[@＠][A-Za-z0-9-]+\.[A-Za-z]{2,}|(?<![A-Za-z])TEL(?![A-Za-z])|ＴＥＬ|電話|[0-9０-９]{2,5}[-－ー‐][0-9０-９]{2,4}[-－ー‐][0-9０-９]{3,4}|(?<![0-9])0[0-9]{9,10}(?![0-9])|https?:/i;
-// Addresses legitimately read like 12-34-567 (丁目-番-号 + room), so they are checked without the dashed pattern.
-const ADDRESS_CONTACT = /[A-Za-z0-9._%+-]+[@＠][A-Za-z0-9-]+\.[A-Za-z]{2,}|(?<![A-Za-z])TEL(?![A-Za-z])|ＴＥＬ|電話|(?<![0-9])0[0-9]{9,10}(?![0-9])|https?:/i;
+// Addresses legitimately read like 12-34-567 (丁目-番-号 + room), so only dashed numbers starting with 0 (phone
+// numbers; 丁目 / 番地 never start with 0) count there.
+const ADDRESS_CONTACT = /[A-Za-z0-9._%+-]+[@＠][A-Za-z0-9-]+\.[A-Za-z]{2,}|(?<![A-Za-z])TEL(?![A-Za-z])|ＴＥＬ|電話|(?<![0-9])0[0-9]{9,10}(?![0-9])|(?<![0-9０-９\-－ー‐−])[0０][0-9０-９]{1,4}[-－ー‐−][0-9０-９]{1,4}[-－ー‐−][0-9０-９]{3,4}(?![0-9０-９\-－ー‐−])|https?:/i;
 export function containsContact(s, { address = false } = {}) {
   return (address ? ADDRESS_CONTACT : CONTACT).test(s);
 }
@@ -156,8 +157,9 @@ export function splitPlace(place, prefName) {
   return { address, postal_code: m ? `${m[1]}-${m[2]}` : null, label };
 }
 
-// The street number ends the address part: 3-11-1, 3番40号, 1丁目20−10, 193番地. What follows is the building.
-const STREET_NUMBER = /^.*?\d+(?:丁目\d+)?(?:(?:[-−‐‑ー]|番地?|号)\d+)*(?:番地|番|号)?\s*/;
+// The street number ends the address part: 3-11-1, 3番40号, 1丁目20−10, 193番地, 南1条西4丁目2, 3丁目 11-1,
+// 9番地の1. What follows is the building.
+const STREET_NUMBER = /^.*?\d+(?:(?:丁目\s?|番地|番|号|条|[-−‐‑ー]|の)+[東西南北]?\d+)*(?:丁目|番地|番|号|条)?\s*/;
 const FLOORS = /B?\d+(?:[,，~〜-]\d+)*\s*(?:F|階)?/gi;
 /** The building / hall part of an address (「東京ビッグサイト 南4ホール」), or null when there is none or only a floor. */
 export function buildingOf(address) {

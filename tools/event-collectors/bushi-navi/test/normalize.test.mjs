@@ -116,6 +116,10 @@ test('buildingOf keeps what follows the street number, not a bare floor', () => 
     ['福岡市博多区 博多駅中央街9-1 7階', null],
     ['金沢市 此花町3-2\u3000B1F', null],
     ['長野市川中島町 御厨字堂野946-3', null],
+    ['札幌市中央区南1条西4丁目2 札幌パルコ7F', '札幌パルコ7F'],
+    ['江東区有明3丁目 11-1 東京ビッグサイト 南4ホール', '東京ビッグサイト 南4ホール'],
+    ['金沢市本町9番地の1 金沢フォーラス6F', '金沢フォーラス6F'],
+    ['新潟市東区古川町4-12 中地区公民館 ４階 講座室', '中地区公民館 4階 講座室'],
     [null, null],
   ];
   for (const [address, building] of cases) assert.equal(buildingOf(address), building, address);
@@ -144,6 +148,12 @@ test('geo, times and contact checks', () => {
   assert.ok(containsContact('09012345678'));
   assert.ok(!containsContact('名古屋市中村区椿町11-1 Vプラザ7-10階'));
   assert.ok(!containsContact('港区1-23-456', { address: true }));
+  for (const a of ['江東区有明3-11-1 東京ビッグサイト', '中野区中野2-9-7 なかのZERO', '豊島区東池袋1-20-10 としま区民センタ-504', '名古屋市中村区椿町11-1 Vプラザ7-10階', '港区10-203-1001']) {
+    assert.ok(!containsContact(a, { address: true }), a);
+  }
+  for (const a of ['渋谷区1-2-3 03-1234-5678', '大阪市北区1-2 06-6123-4567', 'ＸＸビル ０３－１２３４－５６７８', '0120-123-456']) {
+    assert.ok(containsContact(a, { address: true }), a);
+  }
 });
 
 test('normalized fixture rows pass the contract and split by month', () => {

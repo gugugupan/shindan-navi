@@ -58,10 +58,11 @@ export function stateSiteMetaSql(): string;
 export function stateDayCountsSql(): string;
 export function computeDayCounts(events: ImportState['events']): Map<string, number>;
 export const MAX_STATEMENT_BYTES: number;
+export const MAX_SITE_META_BYTES: number;
 export function stateEventsSql(afterId: string | null, pageSize: number): string;
 export function stateImportsSql(): string;
 export function computeMeta(events: ImportState['events'], imports: Record<string, any>[]): Record<string, any>;
-export function planImport(accepted: GameLoad[], state?: ImportState, opts?: { now?: number }): {
+export function planImport(accepted: GameLoad[], state?: ImportState, opts?: { now?: number; maxSiteMetaBytes?: number }): {
   statements: string[];
   stats: PlanStats;
   perGame: Record<string, GamePlan>;

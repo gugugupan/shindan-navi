@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALL_PREFS, api, apiAll, importDir, newDb, run, sampleEvents, SOURCE, synthetic, writeDataDir, type Ev } from './helpers';
-import { emptyState, estimateCost, GAME_BITS, GAME_CODES, loadAll, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
+import { emptyState, estimateCost, GAME_BITS, GAME_CODES, loadAll, MAX_SITE_META_BYTES, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
 import { GAMES, MAX_GAMES } from '../src/constants';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
@@ -296,6 +296,13 @@ describe('games with bits above 8', () => {
     expect(meta.types).toContainEqual(expect.objectContaining({ game_code: 'HOCG', code: 'shop_tournament', name: 'ショップ大会' }));
     const withGeo = (await apiAll(db, `${Q}&game=WS`)).body.events.find((e: Ev) => e.venue);
     if (withGeo) expect(withGeo.venue.geo.source).toBe('bushinavi');
+  });
+
+  it('refuses a plan whose site_meta statement would be too large for D1', () => {
+    const accepted = loadAll(writeDataDir(evs)).filter((r) => r.errors.length === 0);
+    expect(() => planImport(accepted, emptyState(), { now: 1_000, maxSiteMetaBytes: 2_000 })).toThrow(/site_meta statement is [\d,]+ bytes/);
+    const sql = planImport(accepted, emptyState(), { now: 1_000 }).statements.find((s: string) => s.startsWith('INSERT INTO site_meta'))!;
+    expect(Buffer.byteLength(sql)).toBeLessThan(MAX_SITE_META_BYTES);
   });
 
   it('a re-import of only the games imported last writes nothing (meta does not depend on import order)', () => {
