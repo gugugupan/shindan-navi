@@ -1,11 +1,18 @@
-"""Refresh data/items.json from カードラボ and トレカの地図.
+"""Merge step of the release update (contracts/releases.md): the collectors' data/releases/ files plus
+data/items.json and data/overrides.json → items.json, meta.json, update-report.md and public/thumbs/.
 
-Run locally with the project venv, review data/update-report.md and `git diff`, then commit and push
-(the push is what publishes). Nothing is written when a source looks broken.
+Run the collectors first with the same TODAY (tools/release-collectors/{cardlabo,torecamap,official}/collect.py), then
+review data/update-report.md and `git diff`, commit and push (the push is what publishes). Nothing is written when a
+required source is missing, stale, incomplete or looks broken.
 
-  .venv/bin/python -I scripts/update_data.py            # update data + report
-  .venv/bin/python -I scripts/update_data.py --dry-run  # report only
+  .venv/bin/python -I scripts/update_data.py              # merge + enrich, write data + report
+  .venv/bin/python -I scripts/update_data.py --dry-run    # report only
+  options: --no-official (skip the official files and enrich)  --no-enrich  --releases DIR  --data DIR
+
+No network for カードラボ / トレカの地図. The official step may call Jev / the LLM to match; enrich (fill_box_info)
+opens product pages with the LLM; thumbnails are downloaded unless --dry-run.
 """
+import argparse
 import datetime
 import hashlib
 import io
@@ -20,14 +27,12 @@ import urllib.error
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sourcekey import canonical_url, is_official, make_source, product_code  # noqa: E402
+from sourcekey import is_official, make_source, product_code  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools', 'release-collectors'))
-from cardlabo.parse import parse_clabo  # noqa: E402
 from lib.common import fetch  # noqa: E402
-from torecamap.parse import parse_torecamap  # noqa: E402
+from lib.output import RELEASES, Refused  # noqa: E402
 
-OFFICIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'official')
 # official-only entries of these kinds are added to the calendar; supplies are only counted
 ADD_KINDS = {'BOOSTER_PACK', 'DECK', 'PRODUCT_SET_OR_BOX'}
 PLACEHOLDER_IMG = re.compile(r'now[_-]?(printing|designing)|noimage|no[_-]image|dummy|comingsoon|coming[_-]soon', re.I)
@@ -190,25 +195,33 @@ def yen_text(n):
     return f'{n:,}円' if n else ''
 
 
-def apply_official(items, today, report, dry, log):
-    """Read the official sites in scripts/official/sources.json and fold them into the merged items (official wins)."""
-    sys.path.insert(0, OFFICIAL_DIR)
-    import run as official  # noqa: E402
-    from common import load_env  # noqa: E402
+def has_official_keys():
+    from official.common import load_env
     load_env()
-    if not (os.environ.get('TYPESAFE_API_KEY') and os.environ.get('OPENROUTER_API_KEY')):
+    return bool(os.environ.get('TYPESAFE_API_KEY') and os.environ.get('OPENROUTER_API_KEY'))
+
+
+def apply_official(items, today, report, dry, log, records, run):
+    """Fold the official collector's records (data/releases/official) into the merged items (official wins).
+    Matching (identity first, then Jev / LLM) happens here because it needs items.json; each record keeps the
+    `source` the collector computed."""
+    from official import run as official
+    if not has_official_keys():
         log.append('official: skipped (TYPESAFE_API_KEY / OPENROUTER_API_KEY not set in .env)')
         return items
-    sources = json.load(open(os.path.join(OFFICIAL_DIR, 'sources.json')))
+    log.extend(run['notes'])
     since = today.isoformat()
     by_id = {x['id']: x for x in items}
     matched = set()
-    covered = set()
-    for key, src in sources.items():
-        if key.startswith('_'):
-            continue
-        covered.add(src['game'])
-        result = official.run_game(key, src, items, since, since, log, skip_ids=matched)
+    covered = {p['game'] for p in run['pages'] if p.get('game')} | {r['game'] for r in records}
+    groups = {}
+    for r in records:
+        groups.setdefault(r['source_key'], []).append(dict(r))
+    for key, entries in groups.items():
+        game = entries[0]['game']
+        existing = [x for x in items if x['game'] == game and x['date'] >= since and x['id'] not in matched]
+        official.match(entries, existing)
+        result = {'entries': entries}
         supplies = 0
         for e in result['entries']:
             x = by_id.get(e.get('match'))
@@ -248,8 +261,8 @@ def apply_official(items, today, report, dry, log):
     for x in items:
         if x['game'] in covered and x['date'] >= since and x['id'] not in matched:
             report['official_unconfirmed'].append(f"{x['date']}  [{x['game']}] {x['name']}")
-    usage = official.LEDGER.rows
-    log.append('official cost: ' + ', '.join(f"{p} {v['calls']} calls {v['prompt_tokens']}+{v['completion_tokens']} tok ${v['cost']:.4f}" for p, v in usage.items()))
+    for label, usage in (('collect', run.get('usage') or {}), ('match', official.LEDGER.rows)):
+        log.append(f'official cost ({label}): ' + ', '.join(f"{p} {v['calls']} calls {v['prompt_tokens']}+{v['completion_tokens']} tok ${v['cost']:.4f}" for p, v in usage.items()))
     return items
 
 
@@ -337,15 +350,14 @@ def product_page(x):
 
 def fill_box_info(items, today, report, log):
     """Open each upcoming item's own official page for what the listings left out: box price, packs per box, cards per pack."""
-    sys.path.insert(0, OFFICIAL_DIR)
-    import run as official  # noqa: E402
-    from common import load_env  # noqa: E402
+    from official import run as official
+    from official.collect import load_sources
+    from official.common import load_env
     load_env()
     if not os.environ.get('OPENROUTER_API_KEY'):
         log.append('box info: skipped (OPENROUTER_API_KEY not set in .env)')
         return
-    sources = json.load(open(os.path.join(OFFICIAL_DIR, 'sources.json')))
-    full_name = {v['game']: v['full_name'] for k, v in sources.items() if not k.startswith('_')}
+    full_name = {v['game']: v['full_name'] for v in load_sources().values()}
     todo = [x for x in items if x['date'] >= today.isoformat() and needs_box_info(x) and product_page(x)]
     failed = 0
     for x in todo:
@@ -414,42 +426,99 @@ def write_report(path, report, counts, unknown, today, log=()):
     open(path, 'w').write('\n'.join(lines))
 
 
-def main():
-    dry = '--dry-run' in sys.argv
+def read_source(root, source):
+    """(records, run) from data/releases/<source>/, or None when either file is missing."""
+    d = os.path.join(root, source)
+    paths = [os.path.join(d, f) for f in ('latest.json', '_run.json')]
+    if not all(os.path.exists(p) for p in paths):
+        return None
+    try:
+        records, run = (json.load(open(p)) for p in paths)
+    except ValueError as e:
+        raise Refused(f'{source}: unreadable release files in {d} ({e})')
+    if run.get('record_count') != len(records):
+        raise Refused(f"{source}: _run.json record_count {run.get('record_count')} != {len(records)} records in latest.json")
+    return records, run
+
+
+def load_required(root, source, today):
+    """The guards of contracts/releases.md › Merge for カードラボ / トレカの地図; raises Refused."""
+    got = read_source(root, source)
+    if got is None:
+        raise Refused(f'{source}: {os.path.join(root, source)}/latest.json + _run.json missing (run its collector first)')
+    records, run = got
+    if run.get('today') != today:
+        raise Refused(f"{source}: stale run (today {run.get('today')}, merge TODAY {today}; rerun the collector)")
+    if not run.get('complete'):
+        raise Refused(f"{source}: incomplete run ({'; '.join(run.get('errors') or []) or 'complete: false'})")
+    if not records:
+        raise Refused(f'{source}: empty source')
+    return records, run
+
+
+def load_official(root, today):
+    """(records, run, None) or (None, None, why it is skipped). Missing or stale is a skip, not a refusal."""
+    got = read_source(root, 'official')
+    if got is None:
+        return None, None, f"official: skipped (no {os.path.join(root, 'official')} files; run the official collector)"
+    records, run = got
+    if run.get('today') != today:
+        return None, None, f"official: skipped (stale run from {run.get('today')}, merge TODAY {today})"
+    return records, run, None
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
+    ap.add_argument('--dry-run', action='store_true', help='write only the report (no items.json, meta.json, thumbs)')
+    ap.add_argument('--no-official', action='store_true', help='skip the official files and enrich (aggregators only)')
+    ap.add_argument('--no-enrich', action='store_true', help='skip fill_box_info')
+    ap.add_argument('--releases', default=RELEASES, help='collector output root (default: data/releases)')
+    ap.add_argument('--data', default=DATA, help='directory with items.json / overrides.json, where the outputs go (default: data)')
+    args = ap.parse_args(argv)
+    dry, data = args.dry_run, args.data
     today = datetime.date.fromisoformat(os.environ['TODAY']) if os.environ.get('TODAY') else datetime.date.today()
-    unknown = set()
-    clabo = parse_clabo(today, unknown)
-    tm = parse_torecamap(today, unknown)
-    if not clabo or not tm:
-        sys.exit(f'abort: empty source (カードラボ {len(clabo)} / トレカの地図 {len(tm)}) — nothing written')
-    existing = json.load(open(os.path.join(DATA, 'items.json')))
+    try:
+        clabo, clabo_run = load_required(args.releases, 'cardlabo', today.isoformat())
+        tm, tm_run = load_required(args.releases, 'torecamap', today.isoformat())
+        official, official_run, official_skip = (None, None, None) if args.no_official else load_official(args.releases, today.isoformat())
+    except Refused as e:
+        sys.exit(f'abort: {e} — nothing written')
+    unknown = set(clabo_run['unknown_labels']) | set(tm_run['unknown_labels'])
+    existing = json.load(open(os.path.join(data, 'items.json')))
     upcoming_before = sum(1 for e in existing if e['date'] >= today.replace(day=1).isoformat())
     scraped = combine(clabo, tm)
     if len(scraped) < MIN_RATIO * upcoming_before:
         sys.exit(f'abort: only {len(scraped)} releases scraped vs {upcoming_before} known for this month onward — nothing written')
-    overrides = json.load(open(os.path.join(DATA, 'overrides.json')))
+    overrides = json.load(open(os.path.join(data, 'overrides.json')))
     report = {k: [] for k in ('new', 'official_new', 'official_review', 'moved', 'date_conflict', 'price', 'box', 'image', 'official_unconfirmed', 'official_undated',
                               'missing', 'dropped', 'noimage')}
     items = merge(existing, scraped, overrides, today, report, dry)
     log = []
-    if '--no-official' not in sys.argv:
-        items = apply_official(items, today, report, dry, log)
-        fill_box_info(items, today, report, log)
+    if not args.no_official:
+        if official is None:
+            log.append(official_skip)
+        else:
+            items = apply_official(items, today, report, dry, log, official, official_run)
+        if args.no_enrich:
+            log.append('box info: skipped (--no-enrich)')
+        else:
+            fill_box_info(items, today, report, log)
         items = apply_overrides(items, overrides)
         items.sort(key=lambda r: (r['date'], r['game'], r['name']))
         report['noimage'] = [f"{i['date']}  [{i['game']}] {i['name']}  ({i['id']})" for i in items if not i.get('thumb')]
-    counts = dict(clabo=len(clabo), torecamap=len(tm), combined=len(scraped), before=len(existing), after=len(items))
-    report_path = os.path.join(DATA, 'update-report.md')
+    counts = dict(clabo=clabo_run['record_count'], torecamap=tm_run['record_count'], combined=len(scraped), before=len(existing), after=len(items))
+    report_path = os.path.join(data, 'update-report.md')
     write_report(report_path, report, counts, unknown, today, log)
     if not dry:
-        json.dump(items, open(os.path.join(DATA, 'items.json'), 'w'), ensure_ascii=False, indent=1)
-        json.dump({'updated': today.isoformat()}, open(os.path.join(DATA, 'meta.json'), 'w'), indent=2)
+        json.dump(items, open(os.path.join(data, 'items.json'), 'w'), ensure_ascii=False, indent=1)
+        json.dump({'updated': today.isoformat()}, open(os.path.join(data, 'meta.json'), 'w'), indent=2)
         referenced = {i['thumb'].split('/')[-1] for i in items if i.get('thumb')}
         for f in os.listdir(THUMBS):
             if f.endswith('.jpg') and f not in referenced:
                 os.remove(os.path.join(THUMBS, f))
     print(open(report_path).read())
-    print('(dry run: nothing written)' if dry else f'wrote data/items.json ({len(items)} items) and data/update-report.md')
+    print('(dry run: nothing written)' if dry else f'wrote {os.path.join(data, "items.json")} ({len(items)} items) and update-report.md')
+    return items
 
 
 if __name__ == '__main__':

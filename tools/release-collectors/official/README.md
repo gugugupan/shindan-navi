@@ -1,8 +1,7 @@
 # Official-site collector (and pilot)
 
-Reads release info straight from official TCG sites. Moved here from `scripts/official/`; `scripts/official/run.py`,
-`common.py` and `sources.json` are thin compatibility shims (re-export / symlink) for `scripts/update_data.py` until the
-merge reads `data/releases/official/` instead.
+Reads release info straight from official TCG sites (moved here from `scripts/official/`). `scripts/update_data.py`
+reads `data/releases/official/` and imports `run.match` / `run.product_details` from this package.
 
 ```bash
 .venv/bin/pip install beautifulsoup4            # once (plus fonttools brotli pillow for the rest of the repo)

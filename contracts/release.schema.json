@@ -32,7 +32,7 @@
       "required": ["source_key", "game", "name", "date", "date_text", "source_page", "url", "image", "pack_yen", "box_yen",
                    "per_box", "per_pack", "type", "tentative", "editions", "kind", "kind_p", "via", "source"],
       "properties": {
-        "source_key": { "type": "string", "description": "Key in scripts/official/sources.json." },
+        "source_key": { "type": "string", "description": "Key in tools/release-collectors/official/sources.json." },
         "game": { "type": "string" },
         "name": { "type": "string", "minLength": 1 },
         "date": { "oneOf": [{ "$ref": "#/definitions/date" }, { "type": "null" }] },

@@ -4,8 +4,7 @@ scripts/.pages.json
 .venv/
 .wrangler/
 .env
-scripts/official/cache/
-scripts/official/out/
+tools/release-collectors/official/cache/
 out/
 wrangler.remote.json
 # Collected event data is local only and reaches D1 through api/scripts/import-events.mjs; never commit it.

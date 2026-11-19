@@ -52,7 +52,7 @@ Behaviour changes to a parser (e.g. the known issues below) are separate, review
 
 ## Official records (`official`)
 
-The collector runs, per key of `scripts/official/sources.json` (in file order): fetch/extract
+The collector runs, per key of `tools/release-collectors/official/sources.json` (in file order): fetch/extract
 (`from_pokemon_api` / `from_records` / `from_listing` / `from_news`) → `dedupe` → `split_editions` → keep
 `date is None or date >= TODAY` → `classify` (Jev; `NOT_A_PRODUCT` dropped). It does **not** match: `match`,
 `fold_official`, `new_from_official`, `same_product_name` / duplicate checks and `--adopt-sources` stay in the merge,
@@ -120,12 +120,15 @@ tools/release-collectors/lib/common.py      UA, GAME, fetch, game_name
 tools/release-collectors/lib/output.py      write_release_files, Refused, today_iso, RELEASES
 tools/release-collectors/cardlabo/parse.py  CLABO_URL, parse_clabo(today, unknown)
 tools/release-collectors/torecamap/parse.py TORECAMAP_URL, TORECAMAP_MONTHS, parse_torecamap(today, unknown)
-tools/release-collectors/<source>/collect.py   entry point (to be written per source)
+tools/release-collectors/<source>/collect.py   entry point per source (--today, --root)
+tools/release-collectors/official/           collect.py, run.py (pilot + match, product_details), common.py, sources.json
+tools/release-collectors/golden.py          golden replay: aggregator collectors on the snapshot → merge --no-official
+scripts/update_data.py                      merge (+ enrich): --dry-run --no-official --no-enrich --releases DIR --data DIR
 ```
 
 `python -I` puts neither the cwd nor the script's directory on `sys.path`: every entry script inserts
 `tools/release-collectors` itself and imports `lib.common`, `cardlabo.parse`, … as packages (as `update_data.py`
-does). Python, not Node, because the parsers, `sourcekey.py`, `scripts/official/` and PIL are Python already.
+does). Python, not Node, because the parsers, `sourcekey.py`, the official collector and PIL are Python already.
 
 ## Known issues in today's parsers (kept by the move; fix as reviewed behaviour changes)
 

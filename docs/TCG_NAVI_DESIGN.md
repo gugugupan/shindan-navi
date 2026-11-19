@@ -213,6 +213,6 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 
 - [现有项目说明](../README.md) 与 [CLAUDE.md](../CLAUDE.md)：静态构建、数据维护方式与已确认的产品决策。
 - [赛事数据表设计](EVENT_DATA_MODEL.md)、[TCG+ 采集器](TCG_PLUS_COLLECTOR.md)、[TCG+ 采集试验](TCG_PLUS_TRIAL.md)、[ONE PIECE 赛事计划](ONE_PIECE_EVENTS_PLAN.md)。
-- [官方来源试验](../scripts/official/README.md)：商品官方来源与 LLM 提取。
+- [官方来源试验](../tools/release-collectors/official/README.md)：商品官方来源与 LLM 提取。
 - [当前部署 workflow](../.github/workflows/deploy.yml)：实际 main push 行为以此为准。
 - [Cloudflare D1](https://developers.cloudflare.com/d1/) 与 [限制](https://developers.cloudflare.com/d1/platform/limits/)、[Cloudflare Workers](https://developers.cloudflare.com/workers/)。

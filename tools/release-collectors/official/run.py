@@ -365,7 +365,8 @@ def match(entries, existing):
     pairs need no model; what is left goes to Jev, shortlisted by shared official page, then by release date."""
     used, method = {}, {}
     for i, e in enumerate(entries):
-        e['source'] = make_source(final_url(e.get('url') or e['source_page']), e['name'], 'official')
+        if not isinstance(e.get('source'), dict):  # collector records carry it (computed where the redirects were followed)
+            e['source'] = make_source(final_url(e.get('url') or e['source_page']), e['name'], 'official')
         code = product_code(e['name'])
         for x in existing:
             if x['id'] in used:
