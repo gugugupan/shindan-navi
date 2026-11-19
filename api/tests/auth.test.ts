@@ -389,6 +389,9 @@ describe('limits and misc', () => {
     expect((await call('/api/v1/me/prefs', { method: 'POST' })).status).toBe(405);
     expect((await call('/api/v1/auth/google/start', { method: 'POST' })).status).toBe(405);
   });
+  it('the Worker entry exports only the handler', async () => {
+    expect(Object.keys(await import('../src/index'))).toEqual(['default']);
+  });
   it('the Worker bundle has no dev login', async () => {
     const out = await build({ entryPoints: [join(__dirname, '../src/index.ts')], bundle: true, format: 'esm', platform: 'neutral', write: false, logLevel: 'silent' });
     const code = out.outputFiles[0].text;

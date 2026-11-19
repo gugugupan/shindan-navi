@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import worker, { BROWSER_TTL, clientKey, EDGE_TTL, STATE_TTL_MS } from '../src/index';
+import worker from '../src/index';
+import { BROWSER_TTL, clientKey, EDGE_TTL, STATE_TTL_MS } from '../src/worker';
 import { importDir, newDb, run, synthetic, writeDataDir } from './helpers';
 import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
