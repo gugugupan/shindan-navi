@@ -32,6 +32,13 @@ export function run(game: string, count: number, extra: Ev = {}): Ev {
 
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
+// A third of the venues each: a geo, geo null, and no geo key (files written before venue.geo).
+const syntheticGeo = (vk: number): Ev => [
+  { geo: { lat: Math.round((35.6 + vk / 1000) * 1e6) / 1e6, lng: 139.7, source: 'tcgplus', precision: null, place_id: null, geocoded_at: null } },
+  { geo: null },
+  {},
+][vk % 3];
+
 /** SYNTHETIC events for tests only; every name starts with 【SYNTHETIC】. */
 export function synthetic(n: number, seed = 0): Ev[] {
   const games = ['OPCG', 'UATCG', 'CONAN', 'PTCG'];
@@ -62,7 +69,7 @@ export function synthetic(n: number, seed = 0): Ev[] {
       group: { source_id: gk % 2 ? `g${gk}` : null, name: `【SYNTHETIC】group ${gk}`, category: cats[gk], event_type_code: types[gk % 3] },
       name: `【SYNTHETIC】event ${k}`,
       attendance_mode: online ? 'online' : k % 13 === 0 ? 'hybrid' : 'in_person',
-      venue: online ? null : { name: `【SYNTHETIC】shop ${vk}`, source_id: vk % 2 ? `v${vk}` : null, country_code: 'JP', region_code: pref, region_name: prefName, city: null, address: null, postal_code: null },
+      venue: online ? null : { name: `【SYNTHETIC】shop ${vk}`, source_id: vk % 2 ? `v${vk}` : null, country_code: 'JP', region_code: pref, region_name: prefName, city: null, address: null, postal_code: null, ...syntheticGeo(vk) },
       starts_on: startsOn,
       ends_on: null,
       // Hours repeat so several events share starts_at and order falls back to id.
@@ -173,6 +180,9 @@ export function conflicting(n: number): Ev[] {
 
 /** The API shape of a single-game event from the data files. */
 export function asApi(ev: Ev): Ev {
-  const { id, game_code, ...rest } = ev;
+  const { id, game_code, ...rest } = withGeo(ev);
   return { id, game_code, game_codes: [game_code], ...rest };
 }
+
+/** The event as the API serves it: a venue without geo (older files) has geo null. */
+export const withGeo = (ev: Ev): Ev => (ev.venue ? { ...ev, venue: { ...ev.venue, geo: ev.venue.geo ?? null } } : ev);

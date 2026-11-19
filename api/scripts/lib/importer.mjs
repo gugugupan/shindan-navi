@@ -17,6 +17,8 @@ const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_offi
 // 9999-12-31T23:59:59Z: date-only events sort after timed ones on the same day.
 export const NULL_SORT = 253402300799;
 const MAX_ERRORS = 50;
+// Same rule as the Worker (src/events.ts): Google geocodes may be cached for 30 days.
+const GOOGLE_GEO_MAX_AGE_DAYS = 30;
 // D1 rejects statements over 100 KB (UTF-8 bytes); stay well below.
 export const MAX_STATEMENT_BYTES = 60_000;
 const MAX_ROWS_PER_STATEMENT = 200;
@@ -76,6 +78,8 @@ export function loadGame(dataDir, game) {
 
   const seen = new Set();
   const unreachable = [];
+  const expired = [];
+  const googleCutoff = new Date(Date.now() + 9 * 3_600_000 - GOOGLE_GEO_MAX_AGE_DAYS * 86_400_000).toISOString().slice(0, 10);
   const files = readdirSync(dir).filter((f) => f !== '_run.json').sort();
   for (const file of files) {
     if (!/^\d{4}-\d{2}\.json$/.test(file)) {
@@ -114,11 +118,14 @@ export function loadGame(dataDir, game) {
       if (ev.time_precision === 'datetime' && ev.starts_at === null) err(`${at}: time_precision datetime needs starts_at`);
       if (ev.starts_at !== null && Number.isNaN(Date.parse(ev.starts_at))) err(`${at}: unparseable starts_at`);
       if (locOf(ev) === null) unreachable.push(ev.id);
+      const geo = ev.venue?.geo;
+      if (geo?.source === 'google' && geo.geocoded_at < googleCutoff) expired.push(ev.id);
     });
     out.events.push(...events);
   }
   // Every location filter needs a prefecture or "online"; these events would be stored but never shown.
   if (unreachable.length) out.warnings.push(`${game}: ${unreachable.length} in-person event(s) with a venue but no region_code are unreachable by location (e.g. ${unreachable.slice(0, 3).join(', ')})`);
+  if (expired.length) out.warnings.push(`${game}: ${expired.length} event(s) with a google geo older than ${GOOGLE_GEO_MAX_AGE_DAYS} days, served as null until re-geocoded (e.g. ${expired.slice(0, 3).join(', ')})`);
   if (run.record_count !== out.events.length) {
     err(`${game}: run.record_count ${run.record_count} != ${out.events.length} events in files`);
   }
@@ -161,11 +168,18 @@ export function sqlLiteral(v) {
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;
 export const GAME_BITS = { OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8 };
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'];
-const VENUE_KEYS = ['name', 'source_id', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code'];
+const VENUE_KEYS = ['name', 'source_id', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code', 'geo'];
 
-/** Event content minus the fields that legitimately differ between copies (game file, run time). */
+/**
+ * Event content minus the fields that legitimately differ between copies (game file, run time).
+ * venue.geo null and absent hash alike, so rows stored before geo existed are rewritten only when they gain one.
+ */
 export function eventContent(ev) {
   const { last_seen_at, game_code, ...content } = ev;
+  if (content.venue && content.venue.geo == null) {
+    const { geo, ...venue } = content.venue;
+    content.venue = venue;
+  }
   return content;
 }
 

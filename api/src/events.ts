@@ -356,8 +356,25 @@ export async function listDays(db: D1Database, q: Filters) {
 }
 export const gamesOf = (mask: number): string[] => GAMES.filter((g) => mask & g.bit).map((g) => g.code).sort();
 
+// Google Geocoding results may be cached for 30 days. Responses live up to EDGE_TTL (1 day) at the edge, so a
+// geo is dropped one day early to keep every served copy inside the 30 days.
+export const GOOGLE_GEO_MAX_AGE_DAYS = 30;
+
+/** Oldest google geocoded_at (YYYY-MM-DD, Asia/Tokyo) still served at `now`. */
+export const googleGeoCutoff = (now: number) =>
+  new Date(now + 9 * 3_600_000 - (GOOGLE_GEO_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+
+/** venue_json as served: rows imported before venue.geo existed have no geo key; expired google geos become null. */
+export function parseVenue(json: unknown, cutoff: string) {
+  if (json === null) return null;
+  const venue = JSON.parse(String(json));
+  const geo = venue.geo ?? null;
+  venue.geo = geo && geo.source === 'google' && !(geo.geocoded_at >= cutoff) ? null : geo;
+  return venue;
+}
+
 /** last_seen_at is the fetched_at of the newest import among the event's games (collectors set it to the run time). */
-export function rowToEvent(r: Row, fetchedAt: Record<string, string>) {
+export function rowToEvent(r: Row, fetchedAt: Record<string, string>, cutoff = googleGeoCutoff(Date.now())) {
   const gameCodes = gamesOf(Number(r.game_mask));
   const seen = gameCodes.map((g) => fetchedAt[g]).filter(Boolean).sort();
   return {
@@ -370,7 +387,7 @@ export function rowToEvent(r: Row, fetchedAt: Record<string, string>) {
     group: { source_id: r.group_source_id, name: r.group_name, category: r.category, event_type_code: r.event_type_code },
     name: r.name,
     attendance_mode: r.attendance_mode,
-    venue: r.venue_json === null ? null : JSON.parse(String(r.venue_json)),
+    venue: parseVenue(r.venue_json, cutoff),
     starts_on: r.starts_on,
     ends_on: r.ends_on,
     starts_at: r.starts_at,

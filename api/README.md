@@ -99,10 +99,23 @@ Writes (D1 counts each table row and each index entry; `--plan` prints the exact
 | First import | ~75,709 (events 2 × 32,980, day_counts 9,743, imports 4, site_meta 2) |
 | Re-import with nothing changed | 0 |
 | Typical refresh | 2 × changed events + 1 × mask changes + changed day_counts rows + new runs + 2 |
+| First import with `venue.geo` (one-time) | 2 × events whose venue gains a geo + 2; upper bound ~65,954 (all 32,976 events with a venue) |
 
 The importer refuses to apply a plan above `--max-writes` (default 90,000); split a bigger first import with
 `--games` across UTC days. Free-plan limits are per day across everything, so check the dashboard before a large
-import on a day that already had one. Reads per import: the state read (every event, import, site_meta and
+import on a day that already had one.
+
+`venue.geo` is stored inside `venue_json` (no migration, no extra reads per request). A `geo` of `null` and a missing
+`geo` give the same content hash, so rows imported before the field existed are rewritten only when their venue gains
+coordinates; until then the Worker serves them with `geo: null`. Measured on a copy of the 2026-11-18 data with
+SYNTHETIC geo on 90% of venues: 30,156 rewrites, ~60,314 rows written (2× per rewrite is an upper bound; the index entry
+does not change). With all four games refreshed the same day (new runs, mask and day_counts changes on top), run
+`--plan` first; above ~70,000 split by game across UTC days (per game ≈ 2 × its events with a venue: PTCG ~28.8k,
+OPCG ~27.2k, UATCG ~8.9k, CONAN ~1.1k), e.g. `--games PTCG` on one day and `--games OPCG,UATCG,CONAN` the next.
+A `google` geo with `geocoded_at` more than 29 days before today (Asia/Tokyo) is served as `null` (30-day Google
+caching limit minus the 1-day edge cache); the importer warns about expired ones so CONAN is re-geocoded first.
+
+Reads per import: the state read (every event, import, site_meta and
 day_counts row, ~43k) plus one primary-key lookup per written row.
 
 Reads per uncached request, measured with SQLite on the current data (rows stepped; D1 may count index entries too,

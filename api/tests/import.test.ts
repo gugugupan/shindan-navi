@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALL_PREFS, api, apiAll, importDir, newDb, run, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
 import { emptyState, estimateCost, loadAll, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
@@ -243,5 +243,49 @@ describe('shared events', () => {
   it('warns when shared copies differ', () => {
     const dir = writeDataDir([...opcg, ...uatcg.map((e) => (e.id === shared.id ? { ...e, name: 'different' } : e))]);
     expect(loadAll(dir).flatMap((r) => r.warnings).join('\n')).toMatch(/tcgp:shared1: differs from the copy in OPCG/);
+  });
+});
+
+describe('venue geo', () => {
+  const tokyo = (ev: Ev) => ev.venue?.region_code === 'JP-13';
+  const geo = { lat: 35.690921, lng: 139.700258, source: 'tcgplus', precision: null, place_id: null, geocoded_at: null };
+  const evs = () => synthetic(40).filter((e) => e.venue).map((e) => ({ ...e, venue: { ...e.venue, geo: undefined } }));
+  const strip = (list: Ev[]): Ev[] => list.map((e) => { const { geo: _, ...venue } = e.venue; return { ...e, venue }; });
+  const geoOf = async (db: SqliteD1, id: string) => (await apiAll(db, Q)).body.events.find((e: Ev) => e.id === id).venue.geo;
+
+  it('ignores dot directories such as .venues', () => {
+    const dir = writeDataDir(sampleEvents());
+    mkdirSync(join(dir, '.venues'));
+    writeFileSync(join(dir, '.venues', 'tcgplus.json'), '{"version":1,"source":"tcgplus","entries":{}}\n');
+    const results = loadAll(dir);
+    expect(results.map((r) => r.game).sort()).toEqual(['OPCG', 'PTCG', 'UATCG']);
+    expect(results.flatMap((r) => [...r.errors, ...r.warnings])).toEqual([]);
+  });
+
+  it('rewrites only events that gain a geo; geo null and absent hash alike', async () => {
+    const db = newDb();
+    const base = strip(evs());
+    importDir(db, writeDataDir(base), 1_000);
+    const withNull = base.map((e) => ({ ...e, venue: { ...e.venue, geo: null } }));
+    expect(importDir(db, writeDataDir(withNull), 2_000).plan.statements).toEqual([]);
+    const target = base.find(tokyo)!;
+    expect(await geoOf(db, target.id)).toBeNull();
+    const gained = withNull.map((e) => (tokyo(e) ? { ...e, venue: { ...e.venue, geo } } : e));
+    const plan = importDir(db, writeDataDir(gained), 3_000).plan;
+    expect(plan.stats).toMatchObject({ inserted: 0, rewritten: base.filter(tokyo).length, mask_updates: 0 });
+    expect(await geoOf(db, target.id)).toEqual(geo);
+  });
+
+  it('serves a google geo as null more than 30 days after geocoded_at', async () => {
+    const db = newDb();
+    const day = (n: number) => new Date(Date.now() + 9 * 3_600_000 - n * 86_400_000).toISOString().slice(0, 10);
+    const list = strip(evs()).filter(tokyo).slice(0, 3);
+    const google = (n: number) => ({ ...geo, source: 'google', precision: 'ROOFTOP', place_id: 'ChIJ-SAMPLE', geocoded_at: day(n) });
+    const files = list.map((e, i) => ({ ...e, venue: { ...e.venue, geo: google([0, 28, 31][i]) } }));
+    const results = importDir(db, writeDataDir(files));
+    expect(results.flatMap((r) => r.warnings).join('\n')).toMatch(/1 event\(s\) with a google geo older than 30 days/);
+    expect(await geoOf(db, list[0].id)).toEqual(google(0));
+    expect(await geoOf(db, list[1].id)).toEqual(google(28));
+    expect(await geoOf(db, list[2].id)).toBeNull();
   });
 });

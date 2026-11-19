@@ -3,7 +3,7 @@
 //   ROUNDTRIP_DATA=<data/events dir> [ROUNDTRIP_DB=<sqlite file>] npx vitest run tests/roundtrip.test.ts
 // Without ROUNDTRIP_DATA it runs on the sample fixture plus SYNTHETIC conflicting groups/venues and a shared event.
 import { describe, expect, it } from 'vitest';
-import { apiAll, conflicting, importDir, sampleEvents, synthetic, writeDataDir, type Ev } from './helpers';
+import { apiAll, conflicting, importDir, sampleEvents, synthetic, withGeo, writeDataDir, type Ev } from './helpers';
 import { locOf } from '../scripts/lib/importer.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
@@ -55,7 +55,7 @@ describe('round trip', () => {
       const got = seen.get(id)!;
       const shared = games.size > 1;
       if (JSON.stringify(got.game_codes) !== JSON.stringify([...games].sort())) mismatches.push(`${id}: game_codes ${got.game_codes}`);
-      if (JSON.stringify(strip(got, shared)) !== JSON.stringify(strip(ev, shared))) mismatches.push(id);
+      if (JSON.stringify(strip(got, shared)) !== JSON.stringify(strip(withGeo(ev), shared))) mismatches.push(id);
     }
     console.log(`round trip: ${files.size} events, ${[...files.values()].filter((f) => f.games.size > 1).length} shared, ${mismatches.length} mismatches`);
     expect(mismatches.slice(0, 20)).toEqual([]);
