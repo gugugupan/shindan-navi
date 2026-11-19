@@ -588,7 +588,7 @@ function mapView(groups, prefs){
 const MAPS_KEY = /*MAPS_KEY*/'';
 const narrow = window.matchMedia('(max-width:760px)');
 const mapEls = {v:document.getElementById('mapv'), tog:document.getElementById('mapTog'), sum:document.getElementById('mapSum'), box:document.getElementById('mapbox'), gmap:document.getElementById('gmap'), ph:document.getElementById('mapph')};
-let mapsP=null, gm=null, gmap=null, mapFail=MAPS_KEY?null:'nokey', mapOpen=false, userMoved=false, selKey=null;
+let mapsP=null, gm=null, gmap=null, mapFail=MAPS_KEY?null:'nokey', mapOpen=false, userMoved=false, selKey=null, fitted=null, progMove=null;
 const markers=new Map();
 const isDay = () => state.view==='list' && state.range==='custom' && state.from===state.to;
 function loadMaps(){
@@ -622,14 +622,18 @@ async function openMap(){
     const v0=mapView(new Map(),state.pref);
     gmap=new gm.Map(mapEls.gmap,{center:v0.center, zoom:v0.zoom, clickableIcons:false, mapTypeControl:false, streetViewControl:false,
       gestureHandling:narrow.matches?'cooperative':'greedy'});
+    // zoom_changed also fires for fitBounds/setZoom: those run inside moveMap, which marks them until the next idle.
     gmap.addListener('dragstart',()=>{ userMoved=true; });
+    gmap.addListener('zoom_changed',()=>{ if(!progMove) userMoved=true; });
+    gmap.addListener('idle',()=>{ clearTimeout(progMove); progMove=null; });
   }
   syncMap();
   if(selKey) selectVenue(selKey,'card');
 }
 function renderMapPane(){
   const day=isDay();
-  mapEls.v.hidden=!day;
+  // Without a key a phone gets no map block at all (the button would only open the 準備中 note).
+  mapEls.v.hidden=!day || (mapFail==='nokey' && narrow.matches);
   const res=document.getElementById('results');
   res.classList.toggle('dayv',day);
   res.classList.toggle('nomap',day&&!!mapFail);
@@ -642,7 +646,7 @@ function renderMapPane(){
     ? '<b>地図は準備中です</b><span>この日のイベントは一覧でご覧ください。</span>'
     : '<b>地図を読み込めませんでした</b><span>広告ブロックや通信状況により Google マップを表示できません。イベントは一覧でご覧ください。</span>';
   const groups=groupVenues(events), nogeo=events.filter(e=>e.venue&&!geoKey(e.venue.geo)).length;
-  mapEls.sum.innerHTML = events.length && !mapFail ? `会場 <b>${groups.size}</b> か所${nogeo?` · 地図なし ${nogeo}件`:''}${done?'':' · 読み込み中'}` : '';
+  mapEls.sum.innerHTML = events.length && !mapFail ? `会場 <b>${groups.size}</b> か所${nogeo?` · 地図なし ${nogeo}件`:''}${autoLoading()?' · 読み込み中':''}` : '';
 }
 // Markers follow the loaded events: added as pages arrive, removed when the day or filters change.
 function syncMap(){
@@ -659,22 +663,34 @@ function syncMap(){
       markers.set(g.key,m);
     } else { m.setLabel(label); m.setTitle(title); }
   });
-  if(userMoved || (!groups.size && !done)) return;
+  // The view is fitted to the first venues and once more when the day's auto-loading ends, never after the user moved it.
+  if(userMoved || fitted==='final' || !mapOpen) return;
+  const end=autoEnded();
+  if(!end && (fitted || !groups.size)) return;
   const v=mapView(groups,state.pref);
-  if(v.bounds) gmap.fitBounds(v.bounds,48); else { gmap.setCenter(v.center); gmap.setZoom(v.zoom); }
+  moveMap(()=>{ if(v.bounds) gmap.fitBounds(v.bounds,48); else { gmap.setCenter(v.center); gmap.setZoom(v.zoom); } });
+  fitted=end?'final':'first';
 }
-function resetMap(){ userMoved=false; selKey=null; for(const m of markers.values()) m.setMap(null); markers.clear(); }
+function moveMap(fn){ clearTimeout(progMove); progMove=setTimeout(()=>{ progMove=null; },1000); fn(); }
+function resetMap(){ userMoved=false; selKey=null; fitted=null; for(const m of markers.values()) m.setMap(null); markers.clear(); }
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Scrolls the page so the card sits just below the sticky toolbar, unless it is already fully visible there.
+function revealCard(c){
+  const r=c.getBoundingClientRect(), top=document.querySelector('.bar').getBoundingClientRect().bottom;
+  if(r.top>=top && r.bottom<=window.innerHeight) return;
+  const dy=r.top-top-8;
+  window.scrollTo({top:Math.max(0,window.scrollY+dy), behavior:reducedMotion()||Math.abs(dy)>2*window.innerHeight?'auto':'smooth'});
+}
 function selectVenue(key, from){
   selKey=key;
   listEl.querySelectorAll('.ev.hl').forEach(x=>x.classList.remove('hl'));
   const cards=[...listEl.querySelectorAll(`.ev[data-mk="${CSS.escape(key)}"]`)];
   cards.forEach(c=>c.classList.add('hl'));
-  if(from==='map' && cards[0]) cards[0].scrollIntoView({behavior:reducedMotion()?'auto':'smooth', block:'center'});
+  if(from==='map' && cards[0]) revealCard(cards[0]);
   const m=markers.get(key);
   if(!m||!gmap) return;
   markers.forEach(x=>x.setZIndex(x===m?1000:null));
-  if(from==='card'){ userMoved=true; gmap.panTo(m.getPosition()); if(gmap.getZoom()<14) gmap.setZoom(15); }
+  if(from==='card'){ userMoved=true; moveMap(()=>{ gmap.panTo(m.getPosition()); if(gmap.getZoom()<14) gmap.setZoom(15); }); }
   if(!reducedMotion() && gm.Animation){ m.setAnimation(gm.Animation.BOUNCE); setTimeout(()=>m.setAnimation(null),1400); }
 }
 mapEls.tog.onclick=()=>{ if(mapOpen){ mapOpen=false; renderMapPane(); } else { openMap(); track('events_map',{action:'open'}); } };
@@ -692,6 +708,9 @@ const MAX_FETCH_PER_LOAD = 3;
 // (~13 API requests with /days, under the 20 uncached requests/min per client), then asks.
 const DAY_AUTO_PAGES = 12;
 let dayBudget = DAY_AUTO_PAGES;
+// A day view keeps loading by itself until done, an error or the DAY_AUTO_PAGES cap (then 「さらに読み込む」 resumes it).
+const autoLoading = () => !done && !failed && (loading || dayBudget>0);
+const autoEnded = () => !autoLoading();
 function segments([f,u]){ const out=[]; for(let a=f;a<u;){ const next=addM(monthOf(a),1)+'-01'; out.push({from:a, until:next, month:monthOf(a), count:null, got:0}); a=next; } return out; }
 const rangeEnd=()=>rangeOf(state)[1];
 const listEl=document.getElementById('list');
@@ -756,8 +775,10 @@ async function loadPage(){
     if(err.name==='AbortError'||my!==gen) return;
     failed=err;
   }
-  loading=false; renderList();
-  if(isDay() && my===gen && !done && !failed && --dayBudget>0) setTimeout(()=>{ if(my===gen) loadPage(); },0);
+  loading=false;
+  const more=isDay() && my===gen && !done && !failed && --dayBudget>0;
+  renderList();
+  if(more) setTimeout(()=>{ if(my===gen) loadPage(); },0);
 }
 function renderHead(){
   const el=document.getElementById('rhead');
@@ -784,7 +805,9 @@ function errorState(err){
 function renderList(){
   renderHead();
   if(state.view!=='list') return;
-  listEl.setAttribute('aria-busy',loading);
+  // A day view stays busy between its automatic pages, not only while a request is open.
+  const busy=loading||(isDay()&&autoLoading());
+  listEl.setAttribute('aria-busy',busy);
   syncMap();
   if(failed && !events.length){ listEl.innerHTML=errorState(failed); return; }
   if(loading && !events.length){ listEl.innerHTML=Array.from({length:4},()=>'<div class="sk" aria-hidden="true"></div>').join('')+'<span class="sr">読み込み中…</span>'; return; }
@@ -806,7 +829,7 @@ function renderList(){
     h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${its.map(e=>card(e,day)).join('')}</div></section>`;
   });
   const rest = total!=null && segs.every(x=>x.count!=null) ? total-events.length : null;
-  if(!done) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;
+  if(!done) h+=`<button class="loadmore" id="loadMore"${busy?' disabled':''}>${busy?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;
   listEl.innerHTML=h;
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
 }
