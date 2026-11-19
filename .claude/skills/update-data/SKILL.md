@@ -50,6 +50,12 @@ The rerun resets `items.json`, `meta.json` and `public/thumbs` to HEAD but keeps
 
 If the set of main-title pages or their lead images changed a lot, rerun `python3 -I scripts/og.py` after the build and include `public/og/`.
 
+### Review and overrides (lessons from 2026-11-19)
+
+- Have the Fable reviewer cross-check suspicious values against the official pages (dates that moved, prices on prerelease / promo items, box prices that look like case prices, near-identical names), not only the packet's numbers. That run found a duplicate, a wrong box price and two dates that the official site had moved.
+- `data/overrides.json` is the owner's file of hand decisions. Propose each fix (id, `_name`, the key and value, the official page as evidence) and apply it only after the owner's OK. Keys: `url`, `thumb`, `name`, `date`, `pack` / `box` (`""` = no price), `approx`, `hide`, plus `_name` / `note` for people.
+- Merged names are not stable between runs: when a source renames an item (e.g. adds ブースターパック), the merge can give it a new id next to the old one, so the same product shows twice. Hide the extra id with a `note` naming the kept id; don't rename to force a match, because ids follow the name.
+
 ## 4. Publish
 
 Commit in the worktree (only these paths; never `git add -A`):
