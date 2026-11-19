@@ -48,9 +48,10 @@ data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptc
   stable. Files written before this field have no `geo`; consumers read that as `null`. Online events keep `venue: null`.
 - TCG+: `event_place_geo` (fallback `place_geo`) is `{x, y}` with **x = latitude, y = longitude**.
 - PTCG: the event detail field `geocoding` is the string `"lat,lng"`.
-- Google: results may only be shown on a Google map. `lat`/`lng` are re-geocoded when older than 30 days; the importer/
-  Worker treats a `google` geo with `geocoded_at` more than 30 days before today as `null`. `place_id` may be kept
-  indefinitely (the cache keeps it to refresh by id).
+- Google: results may only be shown on a Google map. `lat`/`lng` are re-geocoded when older than 30 days. The Worker
+  serves a `google` geo only while `geocoded_at` is at most 28 days before today (Asia/Tokyo): `geocoded_at` is a date,
+  and answers stay up to 1 day in the edge cache plus 5 minutes in browsers, so no served copy outlives 30 days.
+  `place_id` may be kept indefinitely (the cache keeps it to refresh by id).
 - Never guess coordinates (no prefecture/city centroids).
 
 ### Venue cache (`data/events/.venues/<source>.json`, local only)

@@ -356,13 +356,15 @@ export async function listDays(db: D1Database, q: Filters) {
 }
 export const gamesOf = (mask: number): string[] => GAMES.filter((g) => mask & g.bit).map((g) => g.code).sort();
 
-// Google Geocoding results may be cached for 30 days. Responses live up to EDGE_TTL (1 day) at the edge, so a
-// geo is dropped one day early to keep every served copy inside the 30 days.
+// Google Geocoding results may be cached for 30 days. geocoded_at is a date (the lookup may have run at its first
+// minute), and a response lives up to EDGE_TTL (1 day) at the edge plus BROWSER_TTL in browsers, so a geo is served
+// only while geocoded_at is at most 28 days before today: every copy then ages out within the 30 days.
 export const GOOGLE_GEO_MAX_AGE_DAYS = 30;
+export const GOOGLE_GEO_SERVE_DAYS = GOOGLE_GEO_MAX_AGE_DAYS - 2;
 
 /** Oldest google geocoded_at (YYYY-MM-DD, Asia/Tokyo) still served at `now`. */
 export const googleGeoCutoff = (now: number) =>
-  new Date(now + 9 * 3_600_000 - (GOOGLE_GEO_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  new Date(now + 9 * 3_600_000 - GOOGLE_GEO_SERVE_DAYS * 86_400_000).toISOString().slice(0, 10);
 
 /** venue_json as served: rows imported before venue.geo existed have no geo key; expired google geos become null. */
 export function parseVenue(json: unknown, cutoff: string) {

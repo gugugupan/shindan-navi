@@ -124,7 +124,8 @@ A browser key is public by design; restrictions are what protect it. Owner check
    locally `MAPS_BROWSER_KEY=… python3 -I scripts/build.py`.
 5. Geocoding uses a **separate** server key, `GOOGLE_GEOCODING_API_KEY` (Geocoding API only), which lives only in the
    git-ignored `.env` for the collectors and is never given to the build or CI. Google results (`geo.source = google`)
-   may only be shown on a Google map and count as null 30 days after `geocoded_at` (the Worker enforces it).
+   may only be shown on a Google map and are served as null 28 days after `geocoded_at` (the Worker enforces it, so
+   cached answers stay inside Google's 30 days).
 
 ## GA events
 

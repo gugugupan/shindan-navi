@@ -112,8 +112,9 @@ SYNTHETIC geo on 90% of venues: 30,156 rewrites, ~60,314 rows written (2× per r
 does not change). With all four games refreshed the same day (new runs, mask and day_counts changes on top), run
 `--plan` first; above ~70,000 split by game across UTC days (per game ≈ 2 × its events with a venue: PTCG ~28.8k,
 OPCG ~27.2k, UATCG ~8.9k, CONAN ~1.1k), e.g. `--games PTCG` on one day and `--games OPCG,UATCG,CONAN` the next.
-A `google` geo with `geocoded_at` more than 29 days before today (Asia/Tokyo) is served as `null` (30-day Google
-caching limit minus the 1-day edge cache); the importer warns about expired ones so CONAN is re-geocoded first.
+A `google` geo with `geocoded_at` more than 28 days before today (Asia/Tokyo) is served as `null` (30-day Google
+caching limit minus the date granularity of `geocoded_at` and the 1-day edge + 5-minute browser cache); the importer
+warns about expired ones so CONAN is re-geocoded first.
 
 Reads per import: the state read (every event, import, site_meta and
 day_counts row, ~43k) plus one primary-key lookup per written row.
