@@ -139,6 +139,14 @@ Paging through December with all cursors: Tokyo unfiltered 1,693 events in 34 re
 with `days=weekend` 1,912 events in 39 requests / 12,521 rows (scan only). An uncached Tokyo list view costs ~340
 rows (one month's `/days` + the first page).
 
+**Day view** (`/events/` with one day open, the map's data): the page pages through the whole day by itself, up to 12
+`/events` loads, then asks (「さらに読み込む」). Its `/events` requests use the API's month-shaped range (`from` = the day,
+`until` = 1st of the next month; a single-day `until` would be a 400 and a new cache key per day) and stop once the
+day's count from `/days` has arrived, so they read the same pages as the list. Busiest day so far (11/22): one
+prefecture (東京都, 178 events) ≈ `/days` + 4 pages ≈ 700 rows; 5 largest (640 events) ≈ 14 requests (`/days` + 12
+pages + meta, the cap) ≈ 7,100 rows. That is ~700 uncached worst-case day views per 5M reads (~350 if D1 counts
+every scanned row twice).
+
 **Worst case.** A miss costs at most ~2.3k rows (a filtered `/events` page on the 5 largest prefectures: the whole
 month's day_counts when matches are sparse, up to 200 rows per location, the ≤ 50 matches in full). ~2,200 distinct
 uncached requests use up 5M/day (~1,100 if D1 counts every scanned row twice). The key space is small but not tiny

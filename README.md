@@ -130,3 +130,6 @@ A browser key is public by design; restrictions are what protect it. Owner check
 ## GA events
 
 `favorite`, `filter_game`, `filter_favorites`, `switch_view`, `view_item`, `copy_favorites`, `change_theme`, `click_official`.
+
+`/events/`: `events_filter`, `switch_view`, `change_theme`, `click_event_source`, `events_map` (`action`: `day` = a
+day view opened from the list or calendar, `open` = the map opened with 地図を表示).
