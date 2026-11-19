@@ -104,11 +104,24 @@ export function loadCache(dataDir, source) {
   return data;
 }
 
+/** Today in Asia/Tokyo as YYYY-MM-DD. */
+const tokyoToday = () => new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
+
+/**
+ * Google lat/lng may be stored for 30 days only, place_id indefinitely: an expired google entry is written as a
+ * negative entry that keeps its place_id (geocodeVenues refreshes by it). The in-memory cache is left as is.
+ */
+function storedEntry(entry, today) {
+  if (!isExpired(entry?.geo, today)) return entry;
+  const { geo, ...rest } = entry;
+  return { ...rest, geo: null, place_id: geo.place_id ?? null };
+}
+
 /** Writes pretty JSON (keys sorted) via a temp file + rename. */
-export function saveCache(dataDir, cache) {
+export function saveCache(dataDir, cache, { today = tokyoToday() } = {}) {
   const path = cachePath(dataDir, cache.source);
   mkdirSync(dirname(path), { recursive: true });
-  const entries = Object.fromEntries(Object.keys(cache.entries).sort().map((k) => [k, cache.entries[k]]));
+  const entries = Object.fromEntries(Object.keys(cache.entries).sort().map((k) => [k, storedEntry(cache.entries[k], today)]));
   const body = `${JSON.stringify({ version: CACHE_VERSION, source: cache.source, entries }, null, 2)}\n`;
   const tmp = `${path}.${process.pid}.tmp`;
   writeFileSync(tmp, body);

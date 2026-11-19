@@ -48,6 +48,7 @@ export interface PlanStats {
 export function loadGame(dataDir: string, game: string): GameLoad;
 export function loadAll(dataDir: string, games?: string[]): GameLoad[];
 export function eventContent(ev: Record<string, any>): Record<string, any>;
+export function withoutExpiredGeo(ev: Record<string, any>, cutoff: string): Record<string, any>;
 export function locOf(ev: Record<string, any>): string | null;
 export function sqlLiteral(v: unknown): string;
 export function importId(run: Record<string, any>): string;

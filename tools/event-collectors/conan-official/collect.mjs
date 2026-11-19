@@ -7,7 +7,7 @@ import { fingerprint, normalizeEvent, parseStart, sortEvents } from './lib/norma
 import { buildOutputs, makeValidators } from './lib/output.mjs';
 import { parseRows, parseSeriesOptions, searchUrl } from './lib/parse.mjs';
 import { geocodeVenues, loadApiKey, tokyoDate } from '../lib/google-geocode.mjs';
-import { geoForEvent, getEntry, loadCache } from '../lib/venue-cache.mjs';
+import { geoForEvent, getEntry, loadCache, saveCache } from '../lib/venue-cache.mjs';
 
 export const COLLECTOR_VERSION = 'conan-official/0.1.0';
 const USER_AGENT = 'Mozilla/5.0 (compatible; shindan-navi-event-collector/0.1)';
@@ -125,6 +125,8 @@ if (!apiKey || opt['dry-run'] || opt['no-geocode']) {
   log(geoNote);
 }
 for (const e of events) if (e.venue) e.venue.geo = geoForEvent(getEntry(geoCache, e.venue), today);
+// Rewriting the cache drops expired google lat/lng (place_id stays) even when nothing was looked up.
+if (!opt['dry-run'] && Object.keys(geoCache.entries).length) saveCache(dataDir, geoCache, { today });
 const withGeo = events.filter((e) => e.venue?.geo).length;
 const seriesCounts = Object.fromEntries(series.map((s) => [s, rows.filter((r) => r.series === s).length]));
 const external = events.filter((e) => /external_venue=/.test(e.source_status_text));

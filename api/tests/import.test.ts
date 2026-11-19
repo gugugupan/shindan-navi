@@ -276,16 +276,36 @@ describe('venue geo', () => {
     expect(await geoOf(db, target.id)).toEqual(geo);
   });
 
-  it('serves a google geo as null more than 30 days after geocoded_at', async () => {
+  const day = (n: number, now = Date.now()) => new Date(now + 9 * 3_600_000 - n * 86_400_000).toISOString().slice(0, 10);
+  const google = (n: number, now?: number) => ({ ...geo, source: 'google', precision: 'ROOFTOP', place_id: 'ChIJ-SAMPLE', geocoded_at: day(n, now) });
+  const storedGeo = (db: SqliteD1, id: string) =>
+    JSON.parse((db.db.prepare('SELECT venue_json v FROM events WHERE id = ?').get(id) as { v: string }).v).geo;
+
+  it('serves a google geo only while geocoded_at is at most 28 days old; stores none older than 30', async () => {
     const db = newDb();
-    const day = (n: number) => new Date(Date.now() + 9 * 3_600_000 - n * 86_400_000).toISOString().slice(0, 10);
-    const list = strip(evs()).filter(tokyo).slice(0, 3);
-    const google = (n: number) => ({ ...geo, source: 'google', precision: 'ROOFTOP', place_id: 'ChIJ-SAMPLE', geocoded_at: day(n) });
-    const files = list.map((e, i) => ({ ...e, venue: { ...e.venue, geo: google([0, 28, 31][i]) } }));
+    const list = strip(evs()).filter(tokyo).slice(0, 4);
+    const files = list.map((e, i) => ({ ...e, venue: { ...e.venue, geo: google([0, 28, 29, 31][i]) } }));
     const results = importDir(db, writeDataDir(files));
     expect(results.flatMap((r) => r.warnings).join('\n')).toMatch(/1 event\(s\) with a google geo older than 30 days/);
     expect(await geoOf(db, list[0].id)).toEqual(google(0));
     expect(await geoOf(db, list[1].id)).toEqual(google(28));
     expect(await geoOf(db, list[2].id)).toBeNull();
+    expect(storedGeo(db, list[2].id)).toEqual(google(29));
+    expect(await geoOf(db, list[3].id)).toBeNull();
+    expect(storedGeo(db, list[3].id)).toBeNull();
+  });
+
+  it('rewrites a row once its stored google geo expires, then leaves it alone', () => {
+    const db = newDb();
+    const t0 = Date.now() - 40 * 86_400_000;
+    const list = strip(evs()).filter(tokyo).slice(0, 2);
+    const files = list.map((e, i) => ({ ...e, venue: { ...e.venue, geo: i === 0 ? google(0, t0) : null } }));
+    const dir = writeDataDir(files);
+    importDir(db, dir, Math.floor(t0 / 1000));
+    expect(storedGeo(db, list[0].id)).toEqual(google(0, t0));
+    const later = importDir(db, dir).plan;
+    expect(later.stats).toMatchObject({ inserted: 0, rewritten: 1 });
+    expect(storedGeo(db, list[0].id)).toBeNull();
+    expect(importDir(db, dir).plan.stats).toMatchObject({ inserted: 0, rewritten: 0 });
   });
 });

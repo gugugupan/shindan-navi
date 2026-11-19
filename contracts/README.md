@@ -73,7 +73,10 @@ One file per geo source, pretty JSON (2-space indent, keys sorted, trailing newl
 - Key: `id:<venue.source_id>` (TCG+ organizer id, PTCG shop id) when present, else `fp:` + first 16 hex of SHA-1 over
   NFKC-folded, whitespace-collapsed, lower-cased `name`, `address` and `region_code`.
 - `geo: null` is a negative entry: the lookup found nothing usable on `checked_at`; it is retried after 30 days, not on
-  every run. A `google` entry is looked up again once its geo is expired.
+  every run. A `google` entry is looked up again once its geo is expired. Writing the file drops expired google
+  lat/lng: such an entry is stored as `geo: null` plus `"place_id": "…"` (refreshed by that id on the next lookup).
+- The importer stores a `google` geo whose `geocoded_at` is more than 30 days before the import day as `null` in D1
+  (it hashes like no geo, so the next import after expiry rewrites the row).
 - `name` / `address` are for review only. Helper: `tools/event-collectors/lib/venue-cache.mjs`
   (`node --test tools/event-collectors/lib/test/*.test.mjs`).
 

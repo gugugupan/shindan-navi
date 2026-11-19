@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { GeocodeAbort, geocodeVenue, geocodeVenues, loadApiKey, tokyoDate } from '../google-geocode.mjs';
-import { getEntry, loadCache, setEntry } from '../venue-cache.mjs';
+import { getEntry, loadCache, saveCache, setEntry } from '../venue-cache.mjs';
 
 const KEY = 'test-key';
 const TODAY = '2026-11-19';
@@ -124,6 +124,18 @@ test('geocodeVenues: a stale place_id does not stop the pass', async () => {
   const fetch = stub({ geocode: [json({ status: 'NOT_FOUND' }), json(geocodeResult('ROOFTOP')), json(geocodeResult('ROOFTOP'))] });
   const stats = await geocodeVenues([venue, other], cache, { key: KEY, today: TODAY, dataDir: dir, fetch, delayMs: 0 });
   assert.deepEqual(stats, { looked_up: 2, found: 2, negative: 0, skipped_fresh: 0, aborted: null });
+});
+
+test('geocodeVenues refreshes a purged entry by its kept place_id', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'geo-'));
+  const cache = loadCache(dir, 'google');
+  setEntry(cache, venue, { lat: 35.0, lng: 139.0, source: 'google', place_id: 'kept', geocoded_at: '2026-10-01' }, '2026-10-01');
+  saveCache(dir, cache, { today: TODAY });
+  const purged = loadCache(dir, 'google');
+  const fetch = stub({ geocode: [json(geocodeResult('ROOFTOP', { place_id: 'kept' }))] });
+  await geocodeVenues([venue], purged, { key: KEY, today: TODAY, dataDir: dir, fetch, delayMs: 0 });
+  assert.equal(new URL(fetch.calls[0].url).searchParams.get('place_id'), 'kept');
+  assert.equal(getEntry(purged, venue).geo.geocoded_at, TODAY);
 });
 
 test('refresh uses the cached place_id first', async () => {

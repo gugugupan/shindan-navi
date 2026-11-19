@@ -94,6 +94,24 @@ test('load/save round trip, sorted pretty JSON, atomic write, negative entries',
   assert.throws(() => setEntry(back, venue, null, 'today'), /checked_at/);
 });
 
+test('saveCache keeps only the place_id of an expired google entry', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'venue-cache-'));
+  const cache = loadCache(dir, 'google');
+  const fresh = { ...venue, name: 'Fresh' };
+  const old = { ...venue, name: 'Old' };
+  setEntry(cache, fresh, { lat: 35, lng: 139, source: 'google', place_id: 'pf', geocoded_at: '2026-10-20' }, '2026-10-20');
+  setEntry(cache, old, { lat: 35, lng: 139, source: 'google', place_id: 'po', geocoded_at: '2026-10-19' }, '2026-10-19');
+  saveCache(dir, cache, { today: '2026-11-19' });
+  assert.equal(getEntry(cache, old).geo.lat, 35, 'in-memory cache untouched');
+  const text = readFileSync(cachePath(dir, 'google'), 'utf8');
+  const back = loadCache(dir, 'google');
+  assert.equal(getEntry(back, fresh).geo.place_id, 'pf');
+  assert.deepEqual(getEntry(back, old), { name: 'Old', address: venue.address, geo: null, checked_at: '2026-10-19', place_id: 'po' });
+  assert.equal((text.match(/"lat"/g) ?? []).length, 1);
+  assert.equal(needsLookup(getEntry(back, old), '2026-11-19'), true);
+  assert.equal(geoForEvent(getEntry(back, old), '2026-11-19'), null);
+});
+
 test('loadCache rejects a file for another source', () => {
   const dir = mkdtempSync(join(tmpdir(), 'venue-cache-'));
   mkdirSync(join(dir, '.venues'));

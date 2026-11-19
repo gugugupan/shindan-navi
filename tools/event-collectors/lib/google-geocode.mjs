@@ -174,11 +174,11 @@ export async function geocodeVenues(venues, cache, { key, today, dataDir, fetch:
       }
       setEntry(cache, venue, g, today);
       stats[g ? 'found' : 'negative']++;
-      if (dataDir && stats.looked_up % saveEvery === 0) saveCache(dataDir, cache);
+      if (dataDir && stats.looked_up % saveEvery === 0) saveCache(dataDir, cache, { today });
       if (stats.looked_up % 100 === 0) log(`geocoded ${stats.looked_up} (found ${stats.found})`);
     }
   } finally {
-    if (dataDir && stats.looked_up > 0) saveCache(dataDir, cache);
+    if (dataDir && stats.looked_up > 0) saveCache(dataDir, cache, { today });
   }
   return stats;
 }
