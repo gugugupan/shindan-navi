@@ -1,0 +1,136 @@
+# Release contracts
+
+How the release calendar's data is refreshed: one collector per source writes normalized records, a merge-only
+`scripts/update_data.py` turns them plus `data/items.json` / `data/overrides.json` into the new `items.json`. Mirrors
+the event pipeline (`contracts/README.md`). Change only through the lead; collectors and the merge read from here.
+
+```
+collect   tools/release-collectors/{cardlabo,torecamap,official}/  → data/releases/<source>/latest.json + _run.json
+merge     scripts/update_data.py  (pure: release files + items.json + overrides.json, Jev/LLM only for official matching)
+enrich    fill_box_info: box price / packs per box / cards per pack from each item's official page (network + LLM)
+then      apply overrides → sort → items.json, meta.json, update-report.md, thumbs → build → verify
+```
+
+## Data files (`data/releases/`, local only)
+
+`/data/releases` is git-ignored: an intermediate, rebuilt by every update (like `data/events`). What gets reviewed and
+committed is still `data/items.json`, `data/meta.json`, `data/update-report.md` and `public/thumbs/`.
+
+```
+data/releases/<source>/latest.json   array of records (release.schema.json), in source page order, NOT sorted
+data/releases/<source>/_run.json     the run that wrote latest.json (release-run.schema.json)
+```
+
+- `<source>` is `cardlabo`, `torecamap` or `official`.
+- JSON with 2-space indent, `ensure_ascii=False`, trailing newline. Write with `lib/output.py`
+  (`write_release_files`): it validates the field set, writes `latest.json` then `_run.json` via temp file + rename.
+- Record order is the order the parser emits (page order, then items within a day). `combine()` and the matching
+  break ties by order, so sorting would change results. Never sort or dedupe in the writer.
+
+## Aggregator records (`cardlabo`, `torecamap`)
+
+Exactly what `parse_clabo` / `parse_torecamap` return today, field for field, so `combine()` and `merge()` run
+unchanged on them (`release.schema.json` › `aggregator`):
+
+| field | value |
+| --- | --- |
+| `date` | `YYYY-MM-DD`. カードラボ headings carry no year: the year (TODAY's, next, previous) whose weekday matches. |
+| `game` | display title via `GAME` (`lib/common.py`); an unknown label is kept as-is and listed in `_run.json` `unknown_labels`. |
+| `name` | product name, HTML-unescaped, tags stripped, trimmed (トレカの地図 also drops U+200B). |
+| `pack` | price text as the source writes it (`440円`, `418円(税込)`, even `値段設定なし`), `""` if none. Not normalized. |
+| `box` | トレカの地図 `1BOX：` text with `値段設定なし` removed; `""` for カードラボ. |
+| `url` | トレカの地図 product link (often official), `""` if none / カードラボ. |
+| `img` | トレカの地図 image URL, `""` if none, a no-image placeholder, or カードラボ. |
+| `src` | `"clabo"` (directory `cardlabo`) or `"torecamap"`. Keep these strings: they end up in `items.json` `sources`. |
+
+Scope: カードラボ = every row of the 日付別 (`#hatsubai_daily`) tables on `/special/2028/`; トレカの地図 = TODAY's
+month and the next 5 (`?year=&month=`), deduped by `(date, name)`, rendered items only (`ProductInfo_name`). No date
+filter in the collector: the merge drops releases older than `KEEP_PAST_DAYS` (30).
+
+Behaviour changes to a parser (e.g. the known issues below) are separate, reviewed changes: the golden replay
+(`tools/release-collectors/test_golden.py`) is expected to differ and is recaptured on purpose.
+
+## Official records (`official`)
+
+The collector runs, per key of `scripts/official/sources.json` (in file order): fetch/extract
+(`from_pokemon_api` / `from_records` / `from_listing` / `from_news`) → `dedupe` → `split_editions` → keep
+`date is None or date >= TODAY` → `classify` (Jev; `NOT_A_PRODUCT` dropped). It does **not** match: `match`,
+`fold_official`, `new_from_official`, `same_product_name` / duplicate checks and `--adopt-sources` stay in the merge,
+because they need `items.json`. Records (`release.schema.json` › `official`):
+
+| field | value |
+| --- | --- |
+| `source_key` | sources.json key (`pokemon`, `onepiece`, …). The merge groups by it in this order (`skip_ids` carry across keys). |
+| `game` | display title (sources.json `game`). |
+| `name` | product name (edition appended by `split_editions`, e.g. `… 日本語版`). |
+| `date` / `date_text` | ISO date or `null` (undated → report 公式で発表済み・発売日未定) / the date as written, or `null`. |
+| `source_page` | page the entry was read from. |
+| `url` / `image` | product link / package image as given by the page, or `null`. Placeholder images are filtered by the merge (`PLACEHOLDER_IMG`), not here. |
+| `pack_yen` / `box_yen` | integer yen or `null`. |
+| `per_box` / `per_pack` | packs per box / cards per pack, integer 1-999 or `null` (always `null` for `pokemon_api`). |
+| `type` | product type text from the page, or `null`. |
+| `tentative` | boolean. |
+| `editions` | language editions (`[]` when not stated; one element after `split_editions`). |
+| `kind` / `kind_p` | Jev class `BOOSTER_PACK` / `DECK` / `PRODUCT_SET_OR_BOX` / `SUPPLY_OR_ACCESSORY` and its probability. |
+| `via` | page kind that produced it: `pokemon_api`, `records`, `listing`, `news`. (Today's in-memory `source` string.) |
+| `source` | `{url, key, site: "official"}` = `make_source(final_url(url or source_page), name, "official")`, computed **in the collector**: `final_url` only knows redirects followed in the fetching process. The merge's `match()` must use this value instead of recomputing it. |
+
+## `_run.json`
+
+`{source, today, fetched_at, record_count, complete, errors, pages, unknown_labels, notes, usage, collector_version}`
+(`release-run.schema.json`). `today` is the date the run parsed for (`TODAY` env, else the local date);
+`fetched_at` is UTC. `pages` lists every fetch: `{key, game, url, records, error}`. Official `notes` carry today's
+「公式サイト取得ログ」 lines and `usage` the provider ledger (`LEDGER.rows`).
+
+## Guards
+
+Collectors (exit non-zero and leave the previous files untouched):
+
+- No records, or a layout marker missing: カードラボ `id="hatsubai_daily"` / `id="hatsubai_cate"`; トレカの地図
+  `NewReleaseScheduleSection_days` on every month page (a far month may legitimately have no items, so per-month
+  item counts are not a guard; zero items over all months is).
+- Any page fetch fails (aggregators): today the updater crashes on it; the collector refuses instead.
+- `official` writes a partial run (`complete: false`, failed pages in `errors`) because today the updater logs a
+  failed page and carries on. Without `TYPESAFE_API_KEY` / `OPENROUTER_API_KEY` it exits 0 and writes nothing
+  (today's "official: skipped" log line comes from the merge).
+
+Merge (refuses to write anything):
+
+- Required sources `cardlabo` and `torecamap`: both files present, `_run.json` `today == TODAY` (else stale),
+  `complete: true`, `record_count == len(latest.json)`, non-empty (today's "abort: empty source").
+- `MIN_RATIO`: `len(combine(cardlabo, torecamap)) >= 0.7 ×` items already known from TODAY's month on (unchanged;
+  never lowered to get past it).
+- `official` is optional: missing or `today != TODAY` → skipped with a log line, as without keys today. An
+  incomplete official run is used for the keys it has.
+- The report keeps `unknown_labels` from both aggregator runs (未対応のタイトル名) and the counts from `record_count`.
+
+Enrich (`fill_box_info`) runs after the merge's official step, may use network and the LLM, is skipped without
+`OPENROUTER_API_KEY`, and is followed by `apply_overrides`, sort and the 画像なし list, as in today's `main()`.
+
+## Product decisions kept
+
+Stable ids (`item_id`, never renumbered), `overrides.json` applied but never written, de-duplication by source
+identity first (`find_by_source`, official `source`) before name similarity / Jev, official variants listed
+separately, releases older than 30 days dropped, upcoming items that vanished from the sources kept and reported.
+
+## Code layout (Python, run with `.venv/bin/python -I` from the repo root)
+
+```
+tools/release-collectors/lib/common.py      UA, GAME, fetch, game_name
+tools/release-collectors/lib/output.py      write_release_files, Refused, today_iso, RELEASES
+tools/release-collectors/cardlabo/parse.py  CLABO_URL, parse_clabo(today, unknown)
+tools/release-collectors/torecamap/parse.py TORECAMAP_URL, TORECAMAP_MONTHS, parse_torecamap(today, unknown)
+tools/release-collectors/<source>/collect.py   entry point (to be written per source)
+```
+
+`python -I` puts neither the cwd nor the script's directory on `sys.path`: every entry script inserts
+`tools/release-collectors` itself and imports `lib.common`, `cardlabo.parse`, … as packages (as `update_data.py`
+does). Python, not Node, because the parsers, `sourcekey.py`, `scripts/official/` and PIL are Python already.
+
+## Known issues in today's parsers (kept by the move; fix as reviewed behaviour changes)
+
+- トレカの地図 now serves product images as plain `<img src="https://…cloudfront.net/master-packs/…">`; the parser only
+  looks for `/_next/image?url=`, so real images are missed, and the last item of each month page picks up a site
+  chrome image (`/images/section-title-small.png`, relative) from the page tail. In a non-dry run `save_thumb` would
+  fail on that relative URL. The trimmed fixture reproduces both.
+- トレカの地図 prices keep `(税込)` and `値段設定なし` can land in `pack` (only `box` strips it).

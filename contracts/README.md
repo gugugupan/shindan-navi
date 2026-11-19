@@ -1,5 +1,7 @@
 # Event contracts
 
+Release-calendar collectors and merge have their own contract: `releases.md`.
+
 Shared by the collectors (`tools/`), the importer and Worker (`api/`) and the `/events/` page. Change only through the lead; every consumer reads from here.
 
 ## Data files (`data/events/`, local only)
