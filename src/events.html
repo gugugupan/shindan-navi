@@ -5,12 +5,11 @@
 /* /events/: reuses the site stylesheet above (tokens, chips, seg, .ag day groups); only event-specific parts live here */
 .evlabel{font-family:var(--display);font-weight:400;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow);white-space:nowrap}
 .evlabel small{font-family:var(--body);font-size:10px;font-weight:700;color:var(--accent);margin-left:6px;letter-spacing:.06em;vertical-align:2px}
-.panel>.row>.seg{margin-right:auto}
 .chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .chip.k[aria-pressed="true"] em{color:inherit;opacity:.7}
 .chip.g em.none{font-family:var(--body);font-size:10.5px}
-.trow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.frow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:8px;border-top:1px solid var(--line)}
+.filters{flex-wrap:wrap}
+.filters>.frow{order:3;flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:10px;border-top:1px solid var(--line)}
 .fbtn{display:inline-flex;align-items:center;gap:4px;font-weight:700;max-width:16em}
 .fbtn small{font-size:10.5px;font-weight:700;color:var(--muted)}
 .fbtn b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -28,11 +27,9 @@
 .prefsel{border:1px dashed var(--accent);color:var(--accent);font-weight:700}
 .chip.x{padding-right:8px}
 .chip.x::after{content:"×";color:var(--muted);margin-left:2px}
-.fresh{margin:10px 2px 0;display:flex;flex-wrap:wrap;gap:2px 16px;font-size:11.5px;color:var(--muted)}
-.fresh span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
-.fresh i{width:7px;height:7px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
-.fresh b{color:var(--ink);font-weight:700}
-.fresh .no{color:var(--sun)}
+.fresh{margin:4px 0 0;font-size:12px;color:var(--faint)}
+.fresh span{white-space:nowrap}
+.fresh .no{color:var(--muted);font-weight:700}
 .ag h3 .mo{order:1;font-family:var(--body);font-size:12px;font-weight:700;color:var(--muted)}
 .ag h3 .dw{order:2}
 .ag h3 .tbadge,.ag h3 .ct{order:3}
@@ -79,9 +76,6 @@
 
 /* month calendar (counts per day) */
 .ecal{margin-top:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
-.ecal-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line)}
-.ecal-head b{font-family:var(--display);font-weight:400;font-size:20px;min-width:7em;text-align:center}
-.ecal-head .sub{margin-left:auto;font-size:12px;color:var(--muted)}
 .ecal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .cd{min-height:92px;padding:8px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:none;text-align:left;font:inherit;color:inherit;min-width:0}
 .cd:nth-child(7n){border-right:0}
@@ -144,23 +138,13 @@ button.cd:hover{background:var(--surface-2)}
 @media (max-width:760px){
   .evlabel{font-size:13px;padding:5px 10px;min-width:0;overflow:hidden;text-overflow:ellipsis}
   .evlabel small{display:none}
-  .panel>.row{flex-wrap:nowrap}
   .fg{grid-template-columns:minmax(0,1fr);gap:4px}
   .fl{padding-top:0}
-  .frow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-8px;padding-inline:8px}
-  .frow::-webkit-scrollbar{display:none}
-  .frow>*{flex:none}
-  .trow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-8px;padding-inline:8px}
-  .trow::-webkit-scrollbar{display:none}
-  .trow .chip{flex:none}
-  .ag h3{top:112px}
+  .filters>.frow{flex:none;padding-top:8px}
   .ag h3 .mo{font-family:var(--body);font-size:10px;font-weight:700;color:var(--muted)}
-  .fresh{flex-direction:column}
-  .fresh span{white-space:normal}
   .fresh .win{display:none}
   .ag .list{grid-template-columns:minmax(0,1fr)}
   .ev{padding:9px 10px 10px 12px}
-  .ecal-head b{font-size:17px;min-width:0}
   .cd{min-height:58px;padding:4px;gap:2px;align-items:center}
   .cd .gs{display:none}
   .cd .c{font-size:10px}
@@ -191,16 +175,25 @@ button.cd:hover{background:var(--surface-2)}
 
   <div class="bar"><div class="panel">
     <div class="row">
-      <div class="seg" role="group" aria-label="表示">
-        <button id="vList" aria-pressed="false" aria-label="リスト"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>リスト</span></button>
-        <button id="vCal" aria-pressed="true" aria-label="カレンダー"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>カレンダー</span></button>
+      <div class="month" id="monthNav">
+        <button class="ib" id="prev" aria-label="前月">‹</button>
+        <b id="monthLabel"></b>
+        <button class="ib" id="nextM" aria-label="翌月">›</button>
       </div>
+      <button class="todaybtn" id="goToday">今日</button>
+      <div class="seg" role="group" aria-label="表示">
+        <button id="vCal" aria-pressed="true" aria-label="カレンダー"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>カレンダー</span></button>
+        <button id="vList" aria-pressed="false" aria-label="リスト"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>リスト</span></button>
+      </div>
+      <button class="filterbtn" id="filterBtn" aria-expanded="false" aria-controls="filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span>絞り込み</span><em id="filterBadge" hidden></em></button>
     </div>
-    <div class="trow" id="games" role="group" aria-label="タイトルで絞り込み"></div>
-    <div class="frow" id="frow" role="group" aria-label="絞り込み"></div>
+    <div class="filters" id="filters">
+      <div class="row"><span class="count" id="count" aria-live="polite"></span></div>
+      <div class="chips" id="games" role="group" aria-label="タイトルで絞り込み"></div>
+      <div class="frow" id="frow" role="group" aria-label="絞り込み"></div>
+    </div>
   </div></div>
 
-  <div class="fresh" id="fresh" aria-label="データの更新状況"></div>
   <div class="rhead" id="rhead" aria-live="polite"></div>
   <div id="notice"></div>
   <main id="results">
@@ -213,7 +206,7 @@ button.cd:hover{background:var(--surface-2)}
     <div id="calv"></div>
   </main>
 
-  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div></div>
+  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
   <p class="legend">イベント情報は各タイトルの公式イベントページで公開されている内容をもとに掲載しています。開催可否・参加費・定員・申込方法は変わることがあるため、参加前に必ず「公式で詳細・申込」から最新情報をご確認ください。定員は募集人数で、残り枠ではありません。</p>
   <p class="legend"><!--NOLOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存されます。ログインすると、絞り込み条件（都道府県を含む）をアカウントに保存し、ほかの端末と同期します。<!--/LOGIN-->初めて開いたときの都道府県は、接続元 IP アドレスから推定したものです（位置情報の許可は求めず、推定結果も保存しません）。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。日付ごとの会場地図には Google マップを使っており、地図を開くと IP アドレスなどの情報が Google に送信されます。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
@@ -399,6 +392,13 @@ function renderControls(){
 
   document.getElementById('vList').setAttribute('aria-pressed',state.view==='list');
   document.getElementById('vCal').setAttribute('aria-pressed',state.view==='cal');
+  const [lo,hi]=calBounds(), [y,m]=state.month.split('-').map(Number);
+  document.getElementById('monthNav').hidden=state.view!=='cal';
+  document.getElementById('monthLabel').innerHTML=`<small>${y}年</small>${m}月`;
+  document.getElementById('prev').disabled=state.month<=lo;
+  document.getElementById('nextM').disabled=state.month>=hi;
+  const nf=state.game.length+activeFilterCount(), badge=document.getElementById('filterBadge');
+  badge.hidden=!nf; badge.textContent=nf;
   document.getElementById('list').hidden=state.view!=='list';
   document.getElementById('calv').hidden=state.view!=='cal';
   renderMapPane();
@@ -457,6 +457,20 @@ fDlg.addEventListener('click',e=>{
   if(e.target.closest('#fClear')){ commit(F_CLEAR[fKey]); return; }
   onChip(e);
 });
+document.getElementById('prev').onclick=()=>commit({month:clampMonth(addM(state.month,-1))});
+document.getElementById('nextM').onclick=()=>commit({month:clampMonth(addM(state.month,1))});
+document.getElementById('goToday').onclick=()=>{
+  if(state.view==='cal'){ const ym=clampMonth(monthOf(TODAY)); if(ym!==state.month) commit({month:ym}); }
+  else if(isDay()) commit({view:'list',range:'upcoming'});
+  requestAnimationFrame(()=>{
+    const el=state.view==='cal'&&document.querySelector('.cd.today');
+    if(el) el.scrollIntoView({block:'center',behavior:reducedMotion()?'auto':'smooth'}); else window.scrollTo({top:0});
+  });
+};
+document.getElementById('filterBtn').onclick=e=>{
+  const bar=document.querySelector('.bar'), open=!bar.classList.contains('open');
+  bar.classList.toggle('open',open); e.currentTarget.setAttribute('aria-expanded',open); setBarH();
+};
 document.getElementById('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'event_list'}); };
 document.getElementById('vCal').onclick=()=>{ commit({view:'cal',month:clampMonth(monthOf(rangeOf(state)[0])),...(isDay()?{range:'upcoming'}:{})}); track('switch_view',{view:'event_calendar'}); };
 
@@ -849,9 +863,10 @@ function renderHead(){
   const rng = state.view==='cal' ? '' : f===last ? md(f) : `${md(f)}〜${md(last)}`;
   const where = (state.pref.length ? state.pref.slice(0,3).map(locName).join('・')+(state.pref.length>3?` ほか${state.pref.length-3}`:'') : '地域を選んでください')+(state.autoPref?'（現在地から推定）':'');
   const exact = state.view==='cal' || segs.every(x=>x.count!=null);
-  const cnt = total==null ? '' : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件${exact?'':'以上'}</span>`;
+  document.getElementById('count').innerHTML = total==null ? ''
+    : `${state.view==='cal'?'この月 ':isDay()?'この日 ':''}<b>${total.toLocaleString('ja-JP')}</b> 件${exact?'':'以上'}`;
   el.innerHTML = state.view==='cal' ? `<span class="sub">${esc(where)}</span>`
-    : `${isDay()?`<button class="dayback" id="dayBack">‹ ${backView()==='list'?'一覧':'カレンダー'}に戻る</button>`:''}${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}</span>`;
+    : `${isDay()?`<button class="dayback" id="dayBack">‹ ${backView()==='list'?'一覧':'カレンダー'}に戻る</button>`:''}<span class="rng">${rng}</span><span class="sub">${esc(where)}</span>`;
 }
 function renderNotice(){
   const sel=state.game.length?state.game:GAMES.map(g=>g.code);
@@ -960,7 +975,6 @@ document.getElementById('results').addEventListener('click',e=>{
     if(narrow.matches){ if(!mapOpen) openMap(); mapEls.v.scrollIntoView({behavior:reducedMotion()?'auto':'smooth'}); }
     return;
   }
-  const m=e.target.closest('[data-month]'); if(m){ commit({month:m.dataset.month}); }
 });
 
 // ---- month calendar: per-day counts from /events/days
@@ -988,11 +1002,8 @@ function calBounds(){
 function renderCal(data){
   const el=document.getElementById('calv');
   if(state.view!=='cal') return;
-  const ym=state.month, [y,m]=ym.split('-').map(Number);
-  const [lo,hi]=calBounds();
-  const head=`<div class="ecal-head"><button class="ib" data-month="${addM(ym,-1)}" aria-label="前月"${ym<=lo?' disabled':''}>‹</button><b>${y}年${m}月</b><button class="ib" data-month="${addM(ym,1)}" aria-label="翌月"${ym>=hi?' disabled':''}>›</button>
-    <span class="sub">${data&&data.counts?`この月 <b>${data.total.toLocaleString('ja-JP')}</b> 件`:''}</span></div>`;
-  if(data&&data.error){ el.innerHTML=`<div class="ecal">${head}${errorState(data.error)}</div>`; return; }
+  const ym=state.month;
+  if(data&&data.error){ el.innerHTML=errorState(data.error); return; }
   const first=ym+'-01', start=addD(first,-dowOf(first)), days=diffD(first,addM(ym,1)+'-01');
   const cells=Math.ceil((dowOf(first)+days)/7)*7;
   let g=DOW.map((w,i)=>`<div class="dow ${i==0?'sun':i==6?'sat':''}">${w}</div>`).join('');
@@ -1008,21 +1019,21 @@ function renderCal(data){
     const gs=GAMES.filter(x=>c[x.code]).map(x=>`<span style="--h:${x.h}"><i></i>${c[x.code]}</span>`).join('');
     g+=`<button class="${cls.join(' ')}" data-day="${k}" aria-label="${md(k)} ${c.all}件のイベントを一覧で見る"><span class="n">${d}</span><span class="c"><b>${c.all}</b>件</span><span class="gs">${gs}</span></button>`;
   }
-  el.innerHTML=`<div class="ecal" aria-busy="${!data}">${head}<div class="ecal-grid">${g}</div></div>`;
+  el.innerHTML=`<div class="ecal" aria-busy="${!data}"><div class="ecal-grid">${g}</div></div>`;
 }
 
 // ---- meta / freshness
 const dtJST = s => { const d=new Date(s); if(isNaN(d)) return ''; const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo'}).format(d); return `${md(p)} ${timeFmt('Asia/Tokyo').format(d)}`; };
 function renderFresh(){
   const el=document.getElementById('fresh');
-  if(metaErr){ el.innerHTML='<span>更新状況を取得できませんでした</span>'; return; }
+  if(metaErr){ el.innerHTML='<span class="no">イベント情報の更新状況を取得できませんでした</span>'; return; }
   if(!meta){ el.innerHTML=''; return; }
-  el.innerHTML = GAMES.map(g=>{
+  el.innerHTML = 'イベント情報 '+GAMES.map(g=>{
     const m=metaGame(g.code);
-    if(!m || !m.record_count) return `<span style="--h:${g.h}"><i></i><b>${esc(g.name)}</b><span class="no">イベント情報はまだありません</span></span>`;
-    const win = m.window ? `<span class="win"> · ${md(m.window.from)}〜${md(addD(m.window.until,-1))}を掲載</span>` : '';
-    return `<span style="--h:${g.h}"><i></i><b>${esc(g.name)}</b>${m.fetched_at?`最終更新 ${dtJST(m.fetched_at)}`:'更新日時不明'}${win}${m.complete===false?' · 一部未取得':''}</span>`;
-  }).join('');
+    if(!m || !m.record_count) return `<span>${esc(g.name)} <span class="no">準備中</span></span>`;
+    const win = m.window ? `<span class="win">（${md(m.window.from)}〜${md(addD(m.window.until,-1))}）</span>` : '';
+    return `<span>${esc(g.name)} ${m.fetched_at?`${dtJST(m.fetched_at)}更新`:'更新日時不明'}${win}${m.complete===false?' <span class="no">一部未取得</span>':''}</span>`;
+  }).join(' ・ ');
 }
 async function loadMeta(){
   try{ meta=await api('/events/meta'); metaErr=false; }
