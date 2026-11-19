@@ -296,6 +296,23 @@ describe('games with bits above 8', () => {
     expect(() => ins(2 ** 30)).toThrow(/CHECK/);
   });
 
+  it('0005 checks the shape of source columns, not a list of sources', () => {
+    const db = newDb();
+    const ev = (id: string, src = 'bushinavi', platform: string | null = 'bushinavi') => db.db.exec(`INSERT INTO events (id, game_mask, loc, source_code,
+      external_id, source_url, group_name, category, name, attendance_mode, starts_on, starts_sort, timezone, time_precision,
+      registration_method, registration_platform, registration_status, event_status, content_hash, created_at, updated_at)
+      VALUES ('${id}', 1, 'JP-13', '${src}', '1', 'https://example.invalid/', 'g', 'other', 'n', 'in_person', '2026-12-01', 0,
+      'Asia/Tokyo', 'date', 'unknown', ${platform === null ? 'NULL' : `'${platform}'`}, 'unknown', 'scheduled', 'h', 0, 0)`);
+    expect(() => ev('bnavi:1')).not.toThrow();
+    expect(() => ev('newsrc:x-1', 'some_source', null)).not.toThrow();
+    for (const bad of ['BNAVI:2', ':3', 'bnavi:', 'bn4vi:5', 'nocolon']) expect(() => ev(bad), bad).toThrow(/CHECK/);
+    expect(() => ev('bnavi:6', 'Bushi-Navi')).toThrow(/CHECK/);
+    expect(() => ev('bnavi:7', 'bushinavi', '')).toThrow(/CHECK/);
+    const imp = (src: string) => db.db.exec(`INSERT INTO imports VALUES ('${src}:t', 'GCG', '${src}', 't', '2026-11-20', '2027-02-18', 1, 1, 1, 'v', '{}', '[]', 'h', 0)`);
+    expect(() => imp('bushinavi')).not.toThrow();
+    expect(() => imp('Bushinavi')).toThrow(/CHECK/);
+  });
+
   it('0005 keeps the rows of a database migrated before it', async () => {
     const db = new SqliteD1();
     db.db.exec("CREATE TABLE d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL); INSERT INTO d1_migrations (name) VALUES ('0005_more_games.sql')");

@@ -99,11 +99,16 @@ keys `stars` / `event_filters` / `ask_calendar`), and the unused billing placeho
 `page` / `user_id`, `email_status` `pending`/`sent`/`failed` + `email_error`), indexes on `created_at` (retention
 purge) and `user_id` (account deletion). No IP address or user agent. See Feedback.
 
-`migrations/0005_more_games.sql`: the TCG+ games GCG, DBFW, BS, DCG (`games` bits 16-128) and `events` / `day_counts`
-rebuilt with `game_mask` up to 2^30-1, room for 30 games so no later game needs another rebuild (SQLite cannot change a
-CHECK in place; bits stop at 2^29 because JS bit operations are 32-bit signed). The rebuild copies every row, so on D1 it
-writes about as much as a first import of the current data; see D1 budget › Adding games. The code works before the
-migration as long as no new-game data is imported (the four games' masks still fit the old CHECK).
+`migrations/0005_more_games.sql`: the TCG+ games GCG, DBFW, BS, DCG (`games` bits 16-128) and a one-time rebuild of
+`events`, `day_counts` and `imports` (SQLite cannot change a CHECK in place) loosened so no later game or source needs
+another: `game_mask` up to 2^30-1 (30 games; bits stop at 2^29 because JS bit operations are 32-bit signed), and the
+source columns check only their shape (`id` = lowercase prefix `:` external id; `source_code`, `registration_platform`
+lowercase snake_case). The list of sources lives in `contracts/*.schema.json`, which the importer (the only writer)
+enforces before any SQL, so a new source such as ブシナビ (`bnavi:`, `bushinavi`) needs a contract change, not a
+migration. A new game still needs its `games` row (`imports.game_code` references it): a one-row `INSERT` migration.
+The rebuild keeps every column and row (rehearsed on a copy of the live data: tables byte-identical, `content_hash`
+unchanged, integrity and foreign-key checks clean), so the code before and after it both work on the migrated
+database. Runbook: [Migration 0005](#migration-0005-runbook).
 
 ## Accounts (Google login, synced preferences)
 
@@ -228,7 +233,8 @@ it by hand).
 
 ## D1 budget (Free plan: 100,000 rows written, 5,000,000 rows read per UTC day)
 
-Numbers below are on the data of 2026-11-18 (32,980 events, 9,743 day_counts rows).
+Numbers below are on the data of 2026-11-18 (32,980 events, 9,743 day_counts rows). Read numbers for the eight games (54,215 events,
+19,032 day_counts rows, local copy of 2026-11-19 plus the four Bandai games) are given where they changed.
 
 Writes (D1 counts each table row and each index entry; `--plan` prints the exact numbers for a given state):
 
@@ -242,16 +248,11 @@ Writes (D1 counts each table row and each index entry; `--plan` prints the exact
 The importer refuses to apply a plan above `--max-writes` (default 90,000); split a bigger first import with
 `--games` across UTC days.
 
-**Adding games** (measured on a copy of the 2026-11-19 data: 33,491 events, 10,498 day_counts rows). Migration
-`0005_more_games.sql` rebuilds `events` and `day_counts`: ~77,500 rows written (33,491 events + their 33,491
-`idx_events_loc` entries + 10,498 day_counts), more if D1 also counts the rows dropped with the old tables (not
-documented). Apply it alone on a UTC day (`wrangler d1 migrations apply` without an import; `import:remote -- --yes`
-would run it first in the same day). A later day: the first import of GCG, DBFW, BS, DCG (20,736 events, window
-2026-11-20..2027-02-18) is ~50,000 rows (`--games GCG,DBFW,BS,DCG`; per game GCG ~18.9k, BS ~12.4k, DBFW ~10.6k,
-DCG ~8.0k), so it fits one day, or two (`--games GCG,DCG` / `--games BS,DBFW`) next to a routine refresh. Order: migration, then push
-the code, then import: the Worker before this change does not know bits 16-128 and would serve those events without a
-`game_code`. The rebuild keeps every column, so the code before and after it both work on the migrated database. Free-plan limits are per day across everything, so check the dashboard before a large
-import on a day that already had one.
+**Adding games** (2026-11-19 data: 33,491 events, 10,498 day_counts rows). Migration 0005 writes ~77,500 rows on
+its own and the first import of GCG, DBFW, BS, DCG (20,736 events, window 2026-11-20..2027-02-18) ~50,000
+(`--games GCG,DBFW,BS,DCG`; GCG ~18.9k, BS ~12.4k, DBFW ~10.6k, DCG ~8.0k; or two days: `--games GCG,DCG` /
+`--games BS,DBFW`). They go on different UTC days: [Migration 0005](#migration-0005-runbook). Free-plan limits are per
+day across everything, so check the dashboard before a large import on a day that already had one.
 
 `venue.geo` is stored inside `venue_json` (no migration, no extra reads per request). A `geo` of `null` and a missing
 `geo` give the same content hash, so rows imported before the field existed are rewritten only when their venue gains
@@ -302,10 +303,10 @@ month per request.
 
 | Request | Rows |
 | --- | ---: |
-| `/events/days`, one month: 東京都 / 5 largest | ≤ 290 / ≤ 1,238 |
+| `/events/days`, one month: 東京都 / 5 largest (8 games, December) | ≤ 636 / ≤ 2,733 (4 games: ≤ 290 / ≤ 1,238) |
 | `/events` page, no game/type/days filter: 東京都 / 5 largest (max per request while paging Dec) | 103 / 486 |
 | `/events` page with filters, scan per request: 東京都 / 5 largest (max while paging) | 154 / 984 |
-| `/events` page with filters, day lookup | ≤ month's day_counts rows (≤ 290 / ≤ 1,238) |
+| `/events` page with filters, day lookup | ≤ month's day_counts rows (8 games: ≤ 636 / ≤ 2,733) |
 | `/events/meta`, data version | 1, 1 |
 
 Paging through December with all cursors: Tokyo unfiltered 1,693 events in 34 requests / 2,557 rows; 5 largest
@@ -320,7 +321,8 @@ at the first upcoming event or when today is complete.
 day's count from `/days` has arrived, so they read the same pages as the list. Busiest day so far (11/22): one
 prefecture (東京都, 178 events) ≈ `/days` + 4 pages ≈ 700 rows; 5 largest (640 events) ≈ 14 requests (`/days` + 12
 pages + meta, the cap) ≈ 7,100 rows. That is ~700 uncached worst-case day views per 5M reads (~350 if D1 counts
-every scanned row twice).
+every scanned row twice). With eight games the busiest 東京都 day has 217 events (11/21): `/days` + 5 pages
+≈ 1,000 rows uncached.
 
 **Today page** (`/`, `src/home.html`): no request without a saved location. With one, 2-3 requests per visit, all
 keys the `/events/` page uses too, with the saved `game`/`type` (not `days`): `/events/days` for this month (calendar
@@ -333,9 +335,10 @@ total and a link. Uncached, one prefecture: ≤ ~290 + ~103 (+ ~103) rows (Tokyo
 and online do not. `/events/meta` (1 row, same key as `/events/`) only when the location picker is opened, for its
 counts; no `/geo`. Days of the next month in its week strip link without a count.
 
-**Worst case.** A miss costs at most ~2.3k rows (a filtered `/events` page on the 5 largest prefectures: the whole
-month's day_counts when matches are sparse, up to 200 rows per location, the ≤ 50 matches in full). ~2,200 distinct
-uncached requests use up 5M/day (~1,100 if D1 counts every scanned row twice). The key space is small but not tiny
+**Worst case.** A miss costs at most ~3.8k rows with eight games (~2.3k with four): a filtered `/events` page on the
+5 largest prefectures reads the whole month's day_counts when matches are sparse (≤ 2,733), up to 200 rows per
+location and the ≤ 50 matches in full. ~1,300 distinct uncached requests use up 5M/day (~650 if D1 counts every
+scanned row twice). The key space is small but not tiny
 (≤4 months or ~92 start days × location sets × game/type/days), so the limits matter:
 
 - one client (IPv4 address or IPv6 /64) gets 20 misses per minute per location: ≤ ~45k rows/min, so a single client
@@ -347,6 +350,33 @@ So the free quota is protected against accidents and casual abuse, not against a
 for hours. When the quota runs out, D1 fails until 00:00 UTC: cached answers keep serving, misses return 500, the
 static pages are unaffected. If that happens, the options are Workers Paid (25B reads/month) or a WAF rule that
 blocks the offender.
+
+## Migration 0005 runbook
+
+0005 rebuilds the three event tables (~77,500 rows written, possibly more if D1 also counts the dropped tables; that is
+not documented). Free plan: 100,000 rows written per UTC day for everything, and over the limit D1 refuses all queries
+until 00:00 UTC (09:00 JST); cached API answers keep serving.
+
+1. **Pick the window.** Apply at about 08:30 JST, near the end of the UTC day: if it goes over quota, D1 is down for at
+   most ~30 minutes. No `import:remote -- --yes` that day before the migration: `--yes` runs `migrations apply` first
+   and adds the import's writes on top.
+2. **Check today's writes** in the dashboard (Workers & Pages → D1 → shindan-navi-events → Metrics, rows written
+   today, UTC). Go ahead only if well under ~20,000.
+3. **Record a Time Travel bookmark** (from `api/`, with `D1_DATABASE_ID` exported):
+   `node scripts/remote-config.mjs && ./node_modules/.bin/wrangler d1 time-travel info shindan-navi-events --config ../wrangler.remote.json`.
+   Note the bookmark it prints (Time Travel keeps 7 days on the Free plan).
+4. **Apply:** `./node_modules/.bin/wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json`.
+   Then check: `wrangler d1 execute … --remote --command "SELECT COUNT(*) FROM events"` (unchanged count) and
+   `"SELECT code, bit FROM games"` (8 rows); `/api/v1/events/meta` still answers.
+5. **If it fails or the site misbehaves:** a failed migration is not recorded in `d1_migrations`. To roll back to the
+   bookmark: `./node_modules/.bin/wrangler d1 time-travel restore shindan-navi-events --bookmark=<bookmark> --config ../wrangler.remote.json`
+   (it also undoes any account / feedback writes made after the bookmark; at 08:30 JST that is minutes).
+6. **Push the code** (the 8-game Worker). Before this, the old Worker would serve new-game events without a
+   `game_code`, so never import the new games before the push.
+7. **Day 2 (after 09:00 JST, a new UTC day):** `npm run import:remote -- --data <owner data dir> --games GCG,DBFW,BS,DCG --plan`,
+   review (~50,000 rows written, 20,736 inserted), then `-- --yes`. From then on only the new importer (this
+   branch or later) may write to D1: an older one rejects the new game directories and computes meta and `loc_counts`
+   without bits 16-128.
 
 ## Migrations
 
@@ -399,7 +429,8 @@ the first import.
   or a malformed key is 400. A window change while someone scrolls does not void it.
 - Filtered `/events` pages (game/type/days) first read the next matching days from `day_counts` (`DAY_ROWS` = 62
   rows in total across the locations), then scan only those days, per location the cursor's day and the later days
-  capped at 100 rows each (`SCAN_LIMIT` 200 per location, above the busiest location-day), filter in the Worker and
+  capped at 100 rows each (`SCAN_LIMIT` 200 per location; with eight games the busiest location-day, 東京都 11/21,
+  has 217 events, so such a day can take one more page), filter in the Worker and
   read the ≤ 50 matches in full. When a branch hits its cap, the page ends at
   that branch's last row and the cursor continues there; a page can then hold fewer than 50 events.
 - `/events` has no `count`; `/events/days` gives per-day totals for the same filters.

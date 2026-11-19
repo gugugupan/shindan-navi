@@ -1,8 +1,11 @@
--- Four more TCG+ games (Bandai): game bits 16-128. SQLite cannot change a CHECK constraint in place, so events and
--- day_counts are rebuilt once with room for 30 games (bits 2^0..2^29; JS bit operations are 32-bit signed, so 2^30 and
--- up are left out). On D1 this copies every row (~2 rows written per event for the
--- row and its idx_events_loc entry, plus 1 per day_counts row): apply it on a day without an event import, see
--- api/README.md › D1 budget.
+-- Four more TCG+ games (Bandai): game bits 16-128. SQLite cannot change a CHECK constraint in place, so events,
+-- day_counts and imports are rebuilt once, loosened so later games and sources need no rebuild:
+-- - game_mask up to 2^30-1: room for 30 games (bits 2^0..2^29; JS bit operations are 32-bit signed).
+-- - Source columns check the shape only (id `<lowercase prefix>:<external id>`, source codes lowercase snake_case).
+--   Which sources exist is checked by the importer against contracts/*.schema.json, its only writer.
+-- A new game still needs its `games` row (imports.game_code references it): a one-row INSERT migration.
+-- On D1 the rebuild copies every row (~2 rows written per event for the row and its idx_events_loc entry, plus 1 per
+-- day_counts and imports row): apply it on a day without an event import, see api/README.md › Migration 0005.
 
 INSERT INTO games (code, name, slug, sort_order, bit) VALUES
   ('GCG', 'ガンダムカードゲーム', 'gundam', 5, 16),
@@ -11,10 +14,11 @@ INSERT INTO games (code, name, slug, sort_order, bit) VALUES
   ('DCG', 'デジモンカードゲーム', 'digimon', 8, 128);
 
 CREATE TABLE events_new (
-  id TEXT PRIMARY KEY CHECK (id GLOB 'tcgp:?*' OR id GLOB 'ptcg:?*' OR id GLOB 'conan:?*'),
+  id TEXT PRIMARY KEY CHECK (instr(id, ':') > 1 AND length(id) > instr(id, ':')
+    AND substr(id, 1, instr(id, ':') - 1) NOT GLOB '*[^a-z]*'),
   game_mask INTEGER NOT NULL CHECK (game_mask BETWEEN 0 AND 1073741823),
   loc TEXT CHECK (loc IS NULL OR loc = 'online' OR loc GLOB 'JP-[0-4][0-9]'),
-  source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official')),
+  source_code TEXT NOT NULL CHECK (length(source_code) > 0 AND source_code NOT GLOB '*[^a-z0-9_]*'),
   external_id TEXT NOT NULL CHECK (length(external_id) > 0),
   source_url TEXT NOT NULL CHECK (source_url GLOB 'https://*'),
   group_source_id TEXT,
@@ -39,7 +43,8 @@ CREATE TABLE events_new (
   fee_currency TEXT CHECK (fee_currency IS NULL OR fee_currency GLOB '[A-Z][A-Z][A-Z]'),
   fee_text TEXT,
   registration_method TEXT NOT NULL CHECK (registration_method IN ('first_come', 'lottery', 'walk_in', 'invitation', 'other', 'unknown')),
-  registration_platform TEXT CHECK (registration_platform IS NULL OR registration_platform IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official', 'store', 'other')),
+  registration_platform TEXT CHECK (registration_platform IS NULL OR (length(registration_platform) > 0
+    AND registration_platform NOT GLOB '*[^a-z0-9_]*')),
   registration_url TEXT CHECK (registration_url IS NULL OR registration_url GLOB 'https://*'),
   registration_opens_at TEXT,
   registration_closes_at TEXT,
@@ -68,3 +73,23 @@ CREATE TABLE day_counts_new (
 INSERT INTO day_counts_new SELECT * FROM day_counts;
 DROP TABLE day_counts;
 ALTER TABLE day_counts_new RENAME TO day_counts;
+
+CREATE TABLE imports_new (
+  id TEXT PRIMARY KEY,
+  game_code TEXT NOT NULL REFERENCES games(code),
+  source_code TEXT NOT NULL CHECK (length(source_code) > 0 AND source_code NOT GLOB '*[^a-z0-9_]*'),
+  fetched_at TEXT NOT NULL,
+  window_from TEXT NOT NULL,
+  window_until TEXT NOT NULL CHECK (window_until > window_from),
+  source_total INTEGER,
+  record_count INTEGER NOT NULL CHECK (record_count >= 0),
+  complete INTEGER NOT NULL CHECK (complete IN (0, 1)),
+  collector_version TEXT NOT NULL,
+  query_json TEXT NOT NULL,
+  notes_json TEXT NOT NULL,
+  run_hash TEXT NOT NULL,
+  imported_at INTEGER NOT NULL
+) WITHOUT ROWID;
+INSERT INTO imports_new SELECT * FROM imports;
+DROP TABLE imports;
+ALTER TABLE imports_new RENAME TO imports;
