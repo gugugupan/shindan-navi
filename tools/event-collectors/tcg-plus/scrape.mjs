@@ -90,6 +90,14 @@ export function prefectureNames(master) {
 const flagOrNull = value => value == null ? null : value === true || value === 1 || value === '1' ? true : value === false || value === 0 || value === '0' ? false : fail('Unexpected boolean flag value in an event record.');
 const intOrNull = (value, label) => value == null || value === '' ? null : /^(0|[1-9]\d*)$/.test(String(value)) ? Number(value) : fail(`Invalid ${label}.`);
 
+// Source geo is {x: latitude, y: longitude}; anything else is kept as null, not rejected.
+const geoPointOrNull = value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const x = typeof value.x === 'string' && value.x.trim() !== '' ? Number(value.x) : value.x;
+  const y = typeof value.y === 'string' && value.y.trim() !== '' ? Number(value.y) : value.y;
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+};
+
 export function formatNames(master) {
   return new Map(Object.values(master.game_format || {}).filter(f => f && typeof f.format_name === 'string').map(f => [String(f.id), redactText(f.format_name)]));
 }
@@ -112,7 +120,9 @@ export function projectEvent(row, prefNames = new Map(), gameCode = 'OPCG', form
     venue_name: textOrNull(row.organizer_name), country_code: 'JP',
     pref_code_source: scalarOrNull(row.pref_code), pref_name: textOrNull(row.pref_name ?? prefNames.get(String(row.pref_code))),
     city_address: textOrNull(row.city_address ?? row.city_code), street_address: textOrNull(row.street_address),
-    postcode: scalarOrNull(row.postcode), online_flag_source: scalarOrNull(row.online_flag),
+    postcode: scalarOrNull(row.postcode),
+    event_place_geo_source: geoPointOrNull(row.event_place_geo), place_geo_source: geoPointOrNull(row.place_geo),
+    online_flag_source: scalarOrNull(row.online_flag),
     entry_fee_source: scalarOrNull(row.entry_fee ?? row.entryFee), entry_fee_currency_code: textOrNull(row.entry_fee_currency_code),
     entry_fee_hidden_source: scalarOrNull(row.entry_fee_hidden ?? row.hidden_entry_fee),
     capacity_source: scalarOrNull(row.max_join_count), capacity_hidden_source: scalarOrNull(row.is_capacity_hidden),

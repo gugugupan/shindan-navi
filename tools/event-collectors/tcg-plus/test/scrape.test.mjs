@@ -104,6 +104,16 @@ test('empty source is explicit and no date range is silently assumed', async () 
   assert.equal(url.searchParams.get('end_date'), '2026-11-30');
 });
 
+test('keeps event_place_geo and place_geo as {x, y} source values; malformed geo becomes null', () => {
+  const event = projectEvent({ ...rows(1, 1)[0], event_place_geo: { x: 35.7072937, y: 139.7946464 }, place_geo: { x: '34.70', y: '135.49' } });
+  assert.deepEqual(event.event_place_geo_source, { x: 35.7072937, y: 139.7946464 });
+  assert.deepEqual(event.place_geo_source, { x: 34.7, y: 135.49 });
+  const bad = projectEvent({ ...rows(1, 1)[0], event_place_geo: { x: null, y: 139 }, place_geo: [35, 139] });
+  assert.equal(bad.event_place_geo_source, null);
+  assert.equal(bad.place_geo_source, null);
+  assert.equal(projectEvent(rows(1, 1)[0]).event_place_geo_source, null);
+});
+
 test('accepts observed event-list title and fee names without inventing a registration status', () => {
   const event = projectEvent({ id: 8501295, event_series_title: 'Observed list field shape', entryFee: '0.000', applicationOpen: '1', start_datetime: '2026-11-18T11:00:00', timezone: 'Asia/Tokyo' });
   assert.equal(event.title, 'Observed list field shape');

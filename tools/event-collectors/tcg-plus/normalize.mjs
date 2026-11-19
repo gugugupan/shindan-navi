@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
+import { geoFromTcgPlus } from '../lib/venue-cache.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const CONTRACTS = path.resolve(HERE, '../../../contracts');
@@ -132,7 +133,8 @@ export function normalizeEvent(record, { fetchedAt }) {
     region_name: region ? text(record.pref_name) : null,
     city: null,
     address: [text(record.pref_name), text(record.city_address), text(record.street_address)].filter(Boolean).join('') || null,
-    postal_code: postalCode(record.postcode)
+    postal_code: postalCode(record.postcode),
+    geo: geoFromTcgPlus(record.event_place_geo_source, record.place_geo_source)
   };
 
   const formats = [...new Set((record.game_format_names || []).filter(Boolean))];
@@ -251,6 +253,7 @@ export function buildOutputs({ records, report, game, window, validators, notes 
       `registration_status: ${['open', 'waitlist', 'not_open', 'closed', 'unknown'].map(s => `${s}=${count(e => e.registration_status === s)}`).join(', ')}`,
       'fee_amount/fee_text are null for every event: the list API omits hidden_entry_fee and sampled events show entryFee 0 with the fee hidden',
       `registration_closes_at known for ${count(e => e.registration_closes_at)} events (list API sends apply_end_datetime only for some entry types); ends_at/ends_on unknown; venue.city null (source mixes city and town)`,
+      `venue.geo (source tcgplus, event_place_geo else place_geo, x=lat y=lng) known for ${count(e => e.venue?.geo)} of ${count(e => e.venue)} events with a venue`,
       'venue.name is the TCG+ organizer name; for official events (series_type=2) that can be the organizer brand rather than the hall, whose name is then in the event title',
       ...notes
     ]

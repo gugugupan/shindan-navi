@@ -76,6 +76,20 @@ test('fully hidden start dates are skipped, not guessed', () => {
   assert.deepEqual(norm('900000106'), { skip: 'start_date_hidden' });
 });
 
+test('venue.geo: x is latitude, y is longitude; event_place_geo wins over place_geo', () => {
+  assert.deepEqual(norm('900000101').event.venue.geo, { lat: 35.690921, lng: 139.700258, source: 'tcgplus', precision: null, place_id: null, geocoded_at: null });
+  assert.deepEqual(norm('900000102').event.venue.geo, { lat: 35.443708, lng: 139.638026, source: 'tcgplus', precision: null, place_id: null, geocoded_at: null });
+});
+
+test('venue.geo is null without coordinates or when the axes would be swapped out of Japan; online keeps venue null', () => {
+  const none = norm('900000104').event;
+  assert.equal(none.venue.geo, null);
+  assert.ok('geo' in none.venue);
+  assert.equal(norm('900000105').event.venue.geo, null);
+  assert.equal(norm('900000103').event.venue, null);
+  assert.ok(validators.events([norm('900000101').event, none]), validators.ajv.errorsText(validators.events.errors));
+});
+
 test('series classification and time helpers', () => {
   assert.deepEqual(classifySeries('ユニチケゲットバトル（11月開催）'), { category: 'tournament', event_type_code: 'unichike_get_battle' });
   assert.deepEqual(classifySeries('CHAMPIONSHIP26-27'), { category: 'tournament', event_type_code: 'championship' });
@@ -104,6 +118,7 @@ test('buildOutputs writes sorted month files and a valid run only for complete c
   assert.equal(run.source_total, 4);
   assert.equal(run.fetched_at, '2026-11-18T00:00:00Z');
   assert.ok(files.get('2026-11.json').endsWith('\n'));
+  assert.ok(run.notes.some(n => /^venue\.geo .* known for 0 of 2 events with a venue$/.test(n)), run.notes.join('\n'));
 
   assert.throws(() => buildOutputs({ records, report: report(records, { coverage: { complete_for_source_total: false, source_total: 9, collected: 4 } }), game: 'OPCG', window, validators }), /not complete/);
   assert.throws(() => buildOutputs({ records, report: report(records, { status: 'failed' }), game: 'OPCG', window, validators }), /status/);
