@@ -12,6 +12,7 @@ operator's machine; `api/scripts/import-events.mjs --target remote` pushes it to
 ```
 data/events/<GAME>/<YYYY-MM>.json   array of events (event.schema.json), month = starts_on, sorted by starts_on, starts_at, id
 data/events/<GAME>/_run.json        last accepted run (run.schema.json)
+data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptcg, google); see "Venue geo"
 ```
 
 - `<GAME>` is one of `OPCG`, `UATCG`, `CONAN`, `PTCG`.
@@ -27,8 +28,53 @@ data/events/<GAME>/_run.json        last accepted run (run.schema.json)
 - Times: `starts_at` etc. are ISO 8601 with offset (`2026-12-05T13:00:00+09:00`); `timezone` is `Asia/Tokyo` for Japanese venues. Date-only events: `time_precision: "date"`, `starts_at: null`.
 - Unknown is `null` / `"unknown"`, never guessed. Hidden fee → `fee_amount: null`. Fee 0 only when the source states free / 0円. Capacity is 定員, not remaining seats.
 - `registration_status: "open"` only when the source explicitly says applications are open now; otherwise `unknown`.
+- `venue.geo`: see "Venue geo".
 - `venue.region_code` is ISO 3166-2:JP (`JP-13` = 東京都); online events have `venue: null`, `attendance_mode: "online"`.
 - `group.category`: `tournament` (大会・バトル・CS・ジムバトル), `casual` (交流会・フリー対戦), `teaching` (体験会・ティーチング), `festival` (フェス・大型イベント), else `other` / `unknown`. Keep the source's own series name in `group.name`.
+
+## Venue geo
+
+`venue.geo` is `null` or `{ lat, lng, source, precision, place_id, geocoded_at }` (`event.schema.json#/definitions/geo`):
+
+| Field | Value |
+| --- | --- |
+| `lat`, `lng` | Numbers rounded to 6 decimals. Outside Japan bounds (lat 20–46, lng 122–154) → the whole geo is `null`. |
+| `source` | `tcgplus` (TCG+ list/detail), `ptcg` (players-site event detail), `google` (Geocoding API, CONAN only). |
+| `precision` | The source's own accuracy label as text (e.g. Google `location_type`), else `null`. |
+| `place_id` | Google place id, else `null`. |
+| `geocoded_at` | `YYYY-MM-DD` (Asia/Tokyo) of the lookup; required for `google`, else may be `null`. |
+
+- Every venue carries `geo`; collectors write `geo: null` when there is no usable coordinate, so content hashes stay
+  stable. Files written before this field have no `geo`; consumers read that as `null`. Online events keep `venue: null`.
+- TCG+: `event_place_geo` (fallback `place_geo`) is `{x, y}` with **x = latitude, y = longitude**.
+- PTCG: the event detail field `geocoding` is the string `"lat,lng"`.
+- Google: results may only be shown on a Google map. `lat`/`lng` are re-geocoded when older than 30 days; the importer/
+  Worker treats a `google` geo with `geocoded_at` more than 30 days before today as `null`. `place_id` may be kept
+  indefinitely (the cache keeps it to refresh by id).
+- Never guess coordinates (no prefecture/city centroids).
+
+### Venue cache (`data/events/.venues/<source>.json`, local only)
+
+The dot directory is skipped by the importer (it reads only non-dot directories under `data/events/` as games).
+One file per geo source, pretty JSON (2-space indent, keys sorted, trailing newline), written atomically:
+
+```json
+{
+  "version": 1,
+  "source": "tcgplus",
+  "entries": {
+    "id:1001": { "name": "…", "address": "…", "geo": { "lat": 35.690921, "lng": 139.700258, "source": "tcgplus", "precision": null, "place_id": null, "geocoded_at": null }, "checked_at": "2026-11-19" },
+    "fp:3f2a9c0d1e4b5a67": { "name": "…", "address": null, "geo": null, "checked_at": "2026-11-19" }
+  }
+}
+```
+
+- Key: `id:<venue.source_id>` (TCG+ organizer id, PTCG shop id) when present, else `fp:` + first 16 hex of SHA-1 over
+  NFKC-folded, whitespace-collapsed, lower-cased `name`, `address` and `region_code`.
+- `geo: null` is a negative entry: the lookup found nothing usable on `checked_at`; it is retried after 30 days, not on
+  every run. A `google` entry is looked up again once its geo is expired.
+- `name` / `address` are for review only. Helper: `tools/event-collectors/lib/venue-cache.mjs`
+  (`node --test tools/event-collectors/lib/test/*.test.mjs`).
 
 ## API (Worker `shindan-navi`, same origin as the site)
 
@@ -136,6 +182,7 @@ events in D1 now, inserted / updated / unchanged / hidden. The operator reads it
 | Path | Owner |
 | --- | --- |
 | `contracts/` | lead |
+| `tools/event-collectors/lib/` | lead |
 | `tools/event-collectors/tcg-plus/`, `data/events/{OPCG,UATCG,CONAN}/` | TCG+ collector |
 | `tools/event-collectors/pokemon-players/`, `data/events/PTCG/` | Pokémon collector |
 | `api/` (Worker, migrations, importer, tests) | backend |

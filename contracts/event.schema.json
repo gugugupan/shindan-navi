@@ -25,8 +25,25 @@
         "region_name": { "$ref": "#/definitions/nullableText" },
         "city": { "$ref": "#/definitions/nullableText" },
         "address": { "$ref": "#/definitions/nullableText" },
-        "postal_code": { "$ref": "#/definitions/nullableText" }
+        "postal_code": { "$ref": "#/definitions/nullableText" },
+        "geo": { "oneOf": [{ "$ref": "#/definitions/geo" }, { "type": "null" }], "description": "Collectors always write it (null when unknown). Absent is read as null for older files." }
       }
+    },
+    "geo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lat", "lng", "source", "precision", "place_id", "geocoded_at"],
+      "description": "Venue coordinates, rounded to 6 decimals, inside Japan bounds. google results may only be shown on a Google map; their lat/lng count as null more than 30 days after geocoded_at.",
+      "properties": {
+        "lat": { "type": "number", "minimum": 20, "maximum": 46 },
+        "lng": { "type": "number", "minimum": 122, "maximum": 154 },
+        "source": { "enum": ["tcgplus", "ptcg", "google"] },
+        "precision": { "$ref": "#/definitions/nullableText", "description": "Source accuracy label as given (e.g. Google location_type ROOFTOP); null when the source has none." },
+        "place_id": { "$ref": "#/definitions/nullableText", "description": "Google place_id; null for other sources." },
+        "geocoded_at": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Lookup date (Asia/Tokyo). Required for google." }
+      },
+      "if": { "properties": { "source": { "const": "google" } } },
+      "then": { "properties": { "geocoded_at": { "type": "string" } } }
     },
     "event": {
       "type": "object",
