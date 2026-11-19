@@ -17,13 +17,15 @@ python3 -I scripts/refresh.py
 
 It pins `TODAY` (env, else today in Asia/Tokyo) and runs: collectors (`tools/release-collectors/{cardlabo,torecamap,official}/collect.py` → `data/releases/`, git-ignored; official only with `TYPESAFE_API_KEY` + `OPENROUTER_API_KEY` in `.env`) → merge (`scripts/update_data.py`, starting from HEAD's `items.json`) → build with `BUILD_TODAY` → `scripts/verify_release.py --base origin/main` → `tools/verify/browser.mjs`. It stops at the first failing step and never commits. `--dry-run` stops after a report-only merge; `--no-official` runs the aggregators only.
 
+A new worktree has no `.env` (it is git-ignored), so without the keys in the environment the official collector and enrich are skipped (the packet says `official: skipped`). To run them, copy the main checkout's `.env` into the worktree (`cp <repo>/.env .env`); never commit it.
+
 If a collector refuses (layout marker missing, no records) or the merge aborts ("empty source", "stale run", "only N releases scraped"), a source page probably changed layout — open it in the browser pane, compare with `tools/release-collectors/cardlabo/parse.py` / `torecamap/parse.py`, fix the parser (a reviewed behaviour change: see `contracts/releases.md` › golden replay), rerun. Do not lower `MIN_RATIO` to get past it.
 
 ## 2. Read the packet
 
 `out/refresh-<TODAY>/packet.md` (also printed at the end; step logs next to it): collector record counts and `complete` flags, the report's section counts, the data diff, items.json field changes vs HEAD, the verify RESULT lines, the screenshot folder (`.verify/`) and the verify base. Full report: `data/update-report.md`.
 
-A `WARNING: … lost "official" from sources` line means the official step ran and did not match those upcoming items: they may be gone from the official site, or the match was missed (check the official page; the item keeps the aggregator name and price). A run without the official step (no keys, `--no-official`) keeps each item's `official` membership and official name, so it shows no such warning; it just brings in nothing new from the official sites.
+A `WARNING: … lost "official" from sources` line means the official step ran and did not match those upcoming items: they may be gone from the official site, or the match was missed (check the official page; the item keeps the aggregator name and price). A run without the official step (no keys, `--no-official`), and titles a partial official run did not check (outside `collect.py --games`, or with a failed page), keep each item's `official` membership, so they show no such warning; they just bring in nothing new from the official sites. An item named by the official site keeps that name in every run.
 
 ## 3. Fix what it asks for
 
