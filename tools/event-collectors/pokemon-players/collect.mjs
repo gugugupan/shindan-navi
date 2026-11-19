@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chunks, collectChunk, PAGE_SIZE, searchUrl } from './lib/collect.mjs';
-import { normalizeEvent, sortEvents } from './lib/normalize.mjs';
+import { normalizeEvent, shopHomes, sortEvents } from './lib/normalize.mjs';
 import { buildOutputs, makeValidators } from './lib/output.mjs';
 import { openBrowserTransport } from './lib/transport.mjs';
 import { applyGeo, geoPass, tokyoDate, venueLookups } from './lib/geo.mjs';
@@ -116,7 +116,8 @@ if (ids.size !== raw.length || ids.size !== sourceTotal) {
   process.exit(1);
 }
 
-const pairs = raw.map((row) => ({ event: normalizeEvent(row, fetchedAt), row }))
+const homes = shopHomes(raw);
+const pairs = raw.map((row) => ({ event: normalizeEvent(row, fetchedAt, homes), row }))
   .filter(({ event: e }) => e.starts_on >= opt.from && e.starts_on < opt.until);
 const events = sortEvents(pairs.map((p) => p.event));
 

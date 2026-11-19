@@ -216,3 +216,75 @@ test('renameVenues keeps geo and carries the cache entry to the renamed key', as
   assert.equal(cache.entries[venueKey(old.venue)].name, 'シゲヤ');
   assert.equal(renameVenues([old], new Map([[String(row.event_holding_id), row]]), cache).changes.length, 0);
 });
+
+test('placeLabel rejects notes, hours and bare rooms but keeps rooms inside a named facility', async () => {
+  const { placeLabel } = await import('../lib/normalize.mjs');
+  for (const s of [
+    '交通アクセス', '多目的トイレ（オストメイト有）', '年中無休', 'お手洗いは2階です', '平日：火～金１４時ー１９時',
+    '公共交通機関(バス・電車)', 'AED常備', '飲食禁止(ふた付き飲み物可)', '研修室4', '会議室2', '本堂2F', 'レンタルの会議室',
+    '施設内集会室', '店内対戦スペース', '2027年　1月10日（日）　9階　『第3学習室』', 'xアカウント【＠cardshop_kaede】',
+  ]) assert.equal(placeLabel(s), null, s);
+  assert.equal(placeLabel('諏訪湖ハイツ\n研修室'), '諏訪湖ハイツ');
+  assert.equal(placeLabel('とかちプラザ4F　研修室'), 'とかちプラザ4F　研修室');
+  for (const s of ['山梨県立青少年センター', '東京都立産業貿易センター', '大阪府立体育会館', '北海道立総合体育センター']) {
+    assert.equal(placeLabel(s), s, s);
+  }
+});
+
+test('placeLabel strips label prefixes, trailers and @handles', async () => {
+  const { placeLabel } = await import('../lib/normalize.mjs');
+  assert.equal(placeLabel('店舗名：TCG SHOP CIAN様\nOwl大江の2階'), 'TCG SHOP CIAN');
+  assert.equal(placeLabel('会場名：三洋堂書店　みのかも店\n店内2階の対戦スペースをお借りして開催します。'), '三洋堂書店　みのかも店');
+  assert.equal(placeLabel('場所　うるま市福祉健康センターうるみん（第二交流室）'), 'うるま市福祉健康センターうるみん（第二交流室）');
+  assert.equal(placeLabel('金谷北地域交流センター開催'), '金谷北地域交流センター');
+  assert.equal(placeLabel('タッチ松本店様デュエルスペースにて開催中'), 'タッチ松本店様デュエルスペース');
+  assert.equal(placeLabel('ブックオフ溝ノ口店 対戦スペースにて受け付け'), 'ブックオフ溝ノ口店 対戦スペース');
+  assert.equal(placeLabel('浦和コミュニティセンター／'), '浦和コミュニティセンター');
+  assert.equal(placeLabel('カードショップキャット 綾瀬店（＠catayasetenn）'), 'カードショップキャット 綾瀬店');
+  assert.equal(placeLabel('GAME SHOP H@PPINESS'), 'GAME SHOP H@PPINESS');
+  assert.equal(placeLabel('連絡先 someone@example.com'), null);
+});
+
+test('address fallback drops the prefecture, 日本 and the postcode', () => {
+  const org = (over) => ({ ...byId(1168984), shop_term: 2, venue: '', ...over });
+  assert.equal(normalizeEvent(org({ address: '福岡県〒813-0013  福岡市東区香椎駅前２丁目13-10', prefecture_name: '福岡県' }), SEEN).venue.name, '福岡市東区香椎駅前２丁目13-10');
+  assert.equal(normalizeEvent(org({ address: '岡山県日本、〒700-0066 岡山市北区野殿西町３２９－１', prefecture_name: '岡山県' }), SEEN).venue.name, '岡山市北区野殿西町３２９－１');
+});
+
+test('a shop event away from the shop usual address is named after its own venue', async () => {
+  const { shopHomes } = await import('../lib/normalize.mjs');
+  const home = '高知県高知市帯屋町2丁目１−24 ３階';
+  const away = '高知県高知市九反田2-1 高知市文化プラザ　かるぽーと';
+  const shop = (id, address, venue = '') => shopRow({ event_holding_id: id, shop_id: 15212, shop_name: 'カードショップ楓', address, venue, prefecture_name: '高知県' });
+  const rows = [shop(1, home), shop(2, '高知県高知市帯屋町2丁目1-24　3階'), shop(5, home), shop(3, away, '外部会場での開催になります。\n来場の際は場所を間違えないようにお願いします。'), shop(4, away, 'かるぽーと 9階 第3学習室')];
+  const homes = shopHomes(rows);
+  const names = rows.map((r) => normalizeEvent(r, SEEN, homes).venue.name);
+  assert.deepEqual(names, ['カードショップ楓', 'カードショップ楓', 'カードショップ楓', '高知市九反田2-1 高知市文化プラザ　かるぽーと', 'かるぽーと 9階 第3学習室']);
+  // A tie leaves the shop without a usual address: every row keeps the shop name.
+  const tie = shopHomes([shop(1, home), shop(3, away)]);
+  assert.equal(normalizeEvent(shop(3, away), SEEN, tie).venue.name, 'カードショップ楓');
+  assert.equal(normalizeEvent(shop(3, away), SEEN).venue.name, 'カードショップ楓');
+});
+
+test('renameVenues leaves an occupied cache key alone and counts rows it cannot find', async () => {
+  const { renameVenues } = await import('../lib/renormalize.mjs');
+  const { venueKey } = await import('../../lib/venue-cache.mjs');
+  const [[over]] = REPORTED;
+  const row = shopRow(over);
+  const geo = (lat) => ({ lat, lng: 135.5, source: 'ptcg', precision: null, place_id: null, geocoded_at: null });
+  const e = normalizeEvent(row, SEEN);
+  const newKey = venueKey(e.venue);
+  e.venue.name = over.venue;
+  e.venue.geo = geo(34.6);
+  const oldKey = venueKey(e.venue);
+  const cache = { entries: {
+    [oldKey]: { name: over.venue, address: over.address, geo: geo(34.6), checked_at: '2026-11-19' },
+    [newKey]: { name: 'シゲヤ', address: over.address, geo: geo(34.7), checked_at: '2026-11-19' },
+  } };
+  const lost = { ...normalizeEvent({ ...row, event_holding_id: 1 }, SEEN) };
+  const r = renameVenues([e, lost], new Map([[String(row.event_holding_id), row]]), cache);
+  assert.equal(r.missing, 1);
+  assert.equal(r.changes.length, 1);
+  assert.deepEqual(cache.entries[newKey].geo, geo(34.7));
+  assert.deepEqual(e.venue.geo, geo(34.6));
+});

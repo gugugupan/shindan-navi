@@ -84,10 +84,13 @@ observed, but the site never states the two share one id space. If a collision e
 - `fee_amount`: `無料` / `0円` → 0; plain `N円` / `¥N` → N; anything else (パック購入, conditional prices) → null with `fee_text` kept.
 - `capacity` = list `capacity` (定員). `eligibility_text` = `<オープン|ジュニア|シニア|マスター>リーグ` from `leagueName`, else null.
 - `venue.name`: the list's `venue` is the organizer's free text (会場), often an address, directions, seat counts or house
-  rules rather than a name. `shop_term` 1 (a shop organizes): the shop name. Otherwise (`shop_term` 2 = a person, whose
-  `shop_name` is a nickname; 大型大会 have none): the first `venue` line that reads as a place (`placeLabel`: no address,
-  directions, notes, floor-only or generic-space lines; `…にて開催` / `様` trailers cut), else `address` without its
-  prefecture (the page shows the prefecture next to the name), else `会場は公式で確認`. Directions and notes are dropped
+  rules rather than a name. `shop_term` 1 (a shop organizes): the shop name, unless the row's address differs from the
+  shop's usual one (the most frequent address of that `shop_id` in the run; ties count as none), i.e. an external venue.
+  Otherwise (and for such external venues; `shop_term` 2 = a person, whose `shop_name` is a nickname; 大型大会 have
+  none): the first `venue` line that reads as a place (`placeLabel`: no address, directions, notes, opening hours,
+  floor-only, generic-space or bare-room lines; `店舗名：` / `会場名：` / `場所` prefixes, `…にて開催` / `様` trailers and
+  `（＠handle）` cut), else `address` without its prefecture and postcode (the page shows the prefecture next to the
+  name), else `会場は公式で確認`. Directions and notes are dropped
   (the detail page has them). `source_id` is null whenever the first `venue` line is usable text (it may describe a place
   other than the shop), else the `shop_id`; this keeps the geo cache keys. `city` is null (not a separate source field;
   not parsed from the address).
@@ -107,6 +110,6 @@ observed, but the site never states the two share one id space. If a collision e
 `node renormalize-venues.mjs --data <data/events> --raw out/run-<ts>/raw.json [--write]` re-derives `venue.name` in
 written files from the raw rows of the run that wrote them (no network; refuses a raw file from another run). It keeps
 every other field, geo included, adds a `_run.json` note and copies venue cache entries to the renamed venues' keys.
-Without `--write` it only reports.
+Without `--write`, or when nothing changes, it writes nothing.
 
 `node spotcheck.mjs ptcg:<id> ...` opens detail pages and compares title/date/time/address/zip/fee/capacity/type/cancel flags.

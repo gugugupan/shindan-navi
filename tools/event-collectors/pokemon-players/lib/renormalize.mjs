@@ -1,6 +1,6 @@
 // Offline venue-name fix for already written PTCG events, from the raw list rows of the same run.
 import { venueKey } from '../../lib/venue-cache.mjs';
-import { venueName } from './normalize.mjs';
+import { shopHomes, venueName } from './normalize.mjs';
 
 /**
  * Sets venue.name from the raw row (by external_id) on every event with a venue; everything else, geo included, is
@@ -8,14 +8,14 @@ import { venueName } from './normalize.mjs';
  * key (when that key is free) and the next collect needs no detail request for it.
  * Mutates `events` and `cache`; returns the changes.
  */
-export function renameVenues(events, rowsById, cache) {
+export function renameVenues(events, rowsById, cache, homes = shopHomes(rowsById.values())) {
   const changes = [];
   let missing = 0;
   for (const e of events) {
     if (!e.venue) continue;
     const row = rowsById.get(e.external_id);
     if (!row) { missing += 1; continue; }
-    const name = venueName(row);
+    const name = venueName(row, homes);
     if (name === e.venue.name) continue;
     const oldKey = venueKey(e.venue);
     changes.push({ id: e.id, from: e.venue.name, to: name });

@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { loadCache, saveCache } from '../lib/venue-cache.mjs';
-import { containsContact } from './lib/normalize.mjs';
+import { containsContact, shopHomes } from './lib/normalize.mjs';
 import { makeValidators } from './lib/output.mjs';
 import { renameVenues } from './lib/renormalize.mjs';
 
@@ -24,6 +24,7 @@ const dataDir = resolve(opt.data);
 const gameDir = join(dataDir, 'PTCG');
 const raw = JSON.parse(readFileSync(resolve(opt.raw), 'utf8'));
 const rowsById = new Map(raw.rows.map((r) => [String(r.event_holding_id), r]));
+const homes = shopHomes(raw.rows);
 const run = JSON.parse(readFileSync(join(gameDir, '_run.json'), 'utf8'));
 if (raw.fetchedAt !== run.fetched_at) {
   console.error(`raw fetchedAt ${raw.fetchedAt} != PTCG/_run.json fetched_at ${run.fetched_at}: use the raw.json of the run that wrote these files`);
@@ -39,7 +40,7 @@ const all = [];
 let missing = 0;
 for (const f of files) {
   const events = JSON.parse(readFileSync(join(gameDir, f), 'utf8'));
-  const r = renameVenues(events, rowsById, cache);
+  const r = renameVenues(events, rowsById, cache, homes);
   missing += r.missing;
   all.push(...r.changes);
   if (!validators.events(events)) throw new Error(`${f} fails event.schema.json: ${JSON.stringify(validators.events.errors.slice(0, 5))}`);
@@ -61,6 +62,10 @@ for (const c of all) {
 
 if (!opt.write) {
   console.log('report only; pass --write to rewrite the files');
+  process.exit(0);
+}
+if (all.length === 0) {
+  console.log('nothing to change; no file written');
   process.exit(0);
 }
 const atomic = (path, body) => {
