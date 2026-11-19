@@ -3,6 +3,7 @@
   One location at a time (owner decision): a prefecture, or 'online' for events without a venue. Both pages keep it as
   `pref` in the /events/ saved filters (localStorage tcg.ev.filters, synced to the account by corner.html), so a
   change on one page is what the other reads. window.snLoc: the prefecture tables, open({current, counts, onPick}),
+  current being a function read on every render (account sync can change the location while the dialog is open),
   refresh() while open, and countsFromMeta() for the per-location numbers of /events/meta.
 -->
 <style>
@@ -66,7 +67,7 @@ window.snLoc=(function(){
   const dlg=document.getElementById('prefDlg'), body=document.getElementById('prefBody');
   let opts=null;
   function chip(c,cn){
-    const n=cn?cn.n[c]||0:null, on=opts.current===c;
+    const n=cn?cn.n[c]||0:null, on=opts.current()===c;
     return `<button type="button" class="chip k" data-pref="${c}" aria-pressed="${on}">${esc(locName(c))}${n!=null?` <em${n?'':' class="z"'}>${n.toLocaleString('ja-JP')}</em>`:''}</button>`;
   }
   // opts.counts() returns null or {n, label (what the numbers are), filtered}
@@ -93,7 +94,7 @@ window.snLoc=(function(){
     opts.onPick(p.dataset.pref);
   });
   document.getElementById('prefClose').onclick=()=>dlg.close();
-  return {REGIONS, PREF, PREF_REGION, ONLINE, locName, isLoc, countsFromMeta, open,
+  return {PREF, ONLINE, locName, isLoc, countsFromMeta, open,
     refresh(){ if(dlg.open&&opts) render(); }, get isOpen(){ return dlg.open; }};
 })();
 </script>

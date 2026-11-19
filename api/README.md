@@ -293,7 +293,9 @@ month per request.
 
 Paging through December with all cursors: Tokyo unfiltered 1,693 events in 34 requests / 2,557 rows; 5 largest
 with `days=weekend` 1,912 events in 39 requests / 12,521 rows (scan only). An uncached Tokyo list view costs ~340
-rows (one month's `/days` + the first page).
+rows (one month's `/days` + the first page). While every loaded event of today has already started (evening, busy
+prefecture), the list loads today's next pages by itself, up to 4 more loads of the same pages 「もっと見る」 reads, and stops
+at the first upcoming event or when today is complete.
 
 **Day view** (`/events/` with one day open, the map's data): the page pages through the whole day by itself, up to 12
 `/events` loads, then asks (「さらに読み込む」). Its `/events` requests use the API's month-shaped range (`from` = the day,
