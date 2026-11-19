@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildOutputs, loadValidators, writeOutputs } from './normalize.mjs';
 import { redactText } from './core.mjs';
+import { GAMES } from './scrape.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.resolve(HERE, '../../../data/events');
@@ -30,7 +31,7 @@ export async function exportEvents(options) {
   const report = JSON.parse(await fs.readFile(path.join(options.dir, 'report.json'), 'utf8'));
   const records = JSON.parse(await fs.readFile(path.join(options.dir, 'competitions.json'), 'utf8'));
   const game = report.query?.game;
-  if (!['OPCG', 'UATCG', 'CONAN'].includes(game)) throw new Error('Collection report has no TCG+ game code.');
+  if (!Object.hasOwn(GAMES, game)) throw new Error('Collection report has no TCG+ game code.');
   const validators = await loadValidators();
   const result = buildOutputs({ records, report, game, window: { from: options.from, until: options.until }, validators, notes: options.notes });
   const target = path.join(options.dataDir, game);

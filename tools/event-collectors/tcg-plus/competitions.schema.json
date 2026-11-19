@@ -10,7 +10,7 @@
     "properties": {
       "source": { "enum": ["bandai_tcg_plus"] },
       "external_id": { "$ref": "#/definitions/id" },
-      "game_code": { "enum": ["OPCG", "UATCG", "CONAN"] },
+      "game_code": { "enum": ["OPCG", "UATCG", "CONAN", "GCG", "DBFW", "BS", "DCG"] },
       "source_game_title_id": { "type": ["string", "null"] },
       "game_scope_match": { "enum": ["direct_game", "series_game_membership", "query_only"] },
       "title": { "type": ["string", "null"] },

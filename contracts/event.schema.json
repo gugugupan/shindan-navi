@@ -11,7 +11,7 @@
       "type": ["string", "null"],
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(\\+09:00|Z|[+-]\\d{2}:\\d{2})$"
     },
-    "gameCode": { "enum": ["OPCG", "UATCG", "CONAN", "PTCG"] },
+    "gameCode": { "enum": ["OPCG", "UATCG", "CONAN", "PTCG", "GCG", "DBFW", "BS", "DCG"] },
     "category": { "enum": ["tournament", "casual", "teaching", "festival", "other", "unknown"] },
     "venue": {
       "type": "object",

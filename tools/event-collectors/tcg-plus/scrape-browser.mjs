@@ -26,7 +26,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const { headless, profile, rest } = splitBrowserArgs(process.argv.slice(2));
     const options = parseScrapeOptions(rest);
     if (options.help) {
-      console.log('TCG+ Japan event collector using normal Chrome requests.\n[--game OPCG|UATCG|CONAN] [--profile DIR | TCG_PLUS_PROFILE=DIR] [--headless] [--page-size 20|40|60|80|100] [--from YYYY-MM-DD] [--until YYYY-MM-DD]\nDefaults to today in Asia/Tokyo. No login, clicks, submissions or database import.');
+      console.log('TCG+ Japan event collector using normal Chrome requests.\n[--game OPCG|UATCG|CONAN|GCG|DBFW|BS|DCG] [--profile DIR | TCG_PLUS_PROFILE=DIR] [--headless] [--page-size 20|40|60|80|100] [--from YYYY-MM-DD] [--until YYYY-MM-DD]\nDefaults to today in Asia/Tokyo. No login, clicks, submissions or database import.');
     } else {
       if (!options.from) {
         const parts = Object.fromEntries(new Intl.DateTimeFormat('en', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).map(p => [p.type, p.value]));

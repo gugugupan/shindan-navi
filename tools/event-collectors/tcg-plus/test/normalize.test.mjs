@@ -93,6 +93,17 @@ test('venue.geo is null without coordinates or when the axes would be swapped ou
 test('series classification and time helpers', () => {
   assert.deepEqual(classifySeries('ユニチケゲットバトル（11月開催）'), { category: 'tournament', event_type_code: 'unichike_get_battle' });
   assert.deepEqual(classifySeries('CHAMPIONSHIP26-27'), { category: 'tournament', event_type_code: 'championship' });
+  // Series of GCG / DBFW / BS / DCG as listed on 2026-11-19.
+  for (const [title, type] of [['ショップバトル（12月開催）', 'shop_battle'], ['【エターナル】ショップバトル (12月開催)', 'shop_battle'],
+    ['テイマーバトル', 'tamer_battle'], ['【スタンダード】バトラーズカップ 2026年度4thシーズン', 'battlers_cup'],
+    ['エボリューションカップ2026 SEASON 4（12～1月開催）', 'evolution_cup'], ['アルティメットバトル', 'ultimate_battle'],
+    ['アルティメットカップ', 'ultimate_cup'], ['ニュータイプチャレンジ 2026 MISSION5（12月開催）', 'newtype_challenge'],
+    ['2on2 チーム戦【26年12月～27年1月開催】', 'team_battle'], ['【エターナル】バトルスキー主催大会 (12月開催)', 'battleski_event'],
+    ['ブースターパック IGNITION OF X【BT-27】 発売記念大会', 'release_event']]) {
+    assert.deepEqual(classifySeries(title), { category: 'tournament', event_type_code: type }, title);
+  }
+  assert.equal(classifySeries('アルティメットバトルEX in CHAMPIONSHIP 26-27 WAVE2 エリア予選 愛知大会').event_type_code, 'championship_qualifier');
+  assert.equal(classifySeries('【スタンダード】バトルスキー初心者講習会(12月開催)').event_type_code, 'teaching');
   assert.deepEqual(classifySeries('謎のイベント'), { category: 'unknown', event_type_code: null });
   assert.equal(isJstZone('Asia/Yakutsk', '2026-12-01'), true);
   assert.equal(isJstZone('Asia/Shanghai', '2026-12-01'), false);

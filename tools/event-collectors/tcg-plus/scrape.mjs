@@ -24,7 +24,11 @@ function dateOption(value) {
 export const GAMES = {
   OPCG: { title: /^ONE\s*PIECE\b/i },
   UATCG: { title: /^UNION\s*ARENA\b/i },
-  CONAN: { title: /コナン|CONAN/i }
+  CONAN: { title: /コナン|CONAN/i },
+  GCG: { title: /^GUNDAM\s*CARD\s*GAME\b/i },
+  DBFW: { title: /^DBSCG\s*FUSION\s*WORLD\b/i },
+  BS: { title: /^BATTLE\s*SPIRITS(?!\s*SAGA)\b/i },
+  DCG: { title: /^DIGIMON\s*CARD\s*GAME\b/i }
 };
 
 export function resolveGameTitle(master, gameCode, expectedId = null) {
@@ -236,7 +240,7 @@ export async function runScrape(options, { collector = collectCompetitions, outR
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const options = parseScrapeOptions(process.argv.slice(2));
-    if (options.help) console.log('TCG+ Japan event collector (direct transport)\n[--game OPCG|UATCG|CONAN] [--game-title-id N] [--page-size 20] [--max-pages 10000] [--from YYYY-MM-DD] [--until YYYY-MM-DD]\nExhausts the public source event list. No database import, browser actions or deployment.');
+    if (options.help) console.log('TCG+ Japan event collector (direct transport)\n[--game OPCG|UATCG|CONAN|GCG|DBFW|BS|DCG] [--game-title-id N] [--page-size 20] [--max-pages 10000] [--from YYYY-MM-DD] [--until YYYY-MM-DD]\nExhausts the public source event list. No database import, browser actions or deployment.');
     else process.exitCode = (await runScrape(options)).exitCode;
   } catch (error) { console.error(redactText(error.message)); process.exitCode = 1; }
 }

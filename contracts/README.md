@@ -15,7 +15,8 @@ data/events/<GAME>/_run.json        last accepted run (run.schema.json)
 data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptcg, google); see "Venue geo"
 ```
 
-- `<GAME>` is one of `OPCG`, `UATCG`, `CONAN`, `PTCG`.
+- `<GAME>` is one of `OPCG`, `UATCG`, `CONAN`, `PTCG`, `GCG` (ガンダムカードゲーム), `DBFW` (ドラゴンボールスーパーカードゲーム
+  フュージョンワールド), `BS` (バトルスピリッツ), `DCG` (デジモンカードゲーム).
 - Window for this round: `starts_on` in [2026-11-18, 2027-02-18). Collectors may fetch wider but only write this window.
 - A run that fails coverage checks writes nothing under `data/events/`; diagnostics stay in the tool's ignored `out/`.
 - Files are pretty-printed with 2-space indent and a trailing newline so they stay easy to inspect and diff locally.
@@ -150,7 +151,7 @@ Caching and limits:
 
 Clarifications:
 
-- `meta.games` always lists all four games; a game without data has `record_count: 0`, `fetched_at: null`, `complete: false`, `window: null`.
+- `meta.games` always lists every game (`GAMES` in `api/src/constants.ts`); a game without data has `record_count: 0`, `fetched_at: null`, `complete: false`, `window: null`.
 - `days` include cancelled/postponed events; the page marks them.
 - `meta.types[].name` is a short button label maintained in the API per `event_type_code` (e.g. `standard_battle` → スタンダードバトル), not the series name.
 - Meta counts are global over each game's latest window, not per current filter; computed by the importer.
@@ -158,12 +159,12 @@ Clarifications:
   month without a request: the visible events with a location inside the data window, one row per (location,
   exact game_mask, event_type_code, month) with weekend (Sat/Sun) and weekday counts, as a flat list of 5-tuples.
   `type_index` points into `loc_counts.types` (-1 = no type), `month_index` into `loc_counts.months`. A game filter
-  matches rows with `game_mask & selected bits` (OPCG 1, UATCG 2, CONAN 4, PTCG 8), so a multi-game event counts once.
+  matches rows with `game_mask & selected bits` (OPCG 1, UATCG 2, CONAN 4, PTCG 8, GCG 16, DBFW 32, BS 64, DCG 128), so a multi-game event counts once.
 - `last_seen_at` in API events is the `fetched_at` of the newest import among the event's games (the collectors
   write the run time there, and storing it per event would rewrite every row on every import).
-- Shared events: the same `id` may appear in several game files (e.g. BANDAI CARD GAMES shared series listed under OPCG and UATCG). The importer stores one event with multiple games; `game=` matches any of them. API events carry `game_codes` (all games, sorted) in addition to `game_code` (first of `game_codes`).
+- Shared events: the same `id` may appear in several game files (e.g. BANDAI CARD GAMES shared series listed under several TCG+ games). The importer stores one event with multiple games; `game=` matches any of them. API events carry `game_codes` (all games, sorted) in addition to `game_code` (first of `game_codes`).
 - Team events: when the source capacity counts teams, not players, `capacity` is `null` and the source wording goes to `eligibility_text`.
-- Sources: OPCG and UATCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the Takara Tomy official event search (https://www.takaratomy.co.jp/products/conan-cardgame/eventsearch; `conan:`, `conan_official`) because the game is not a Bandai title and TCG+ does not list it.
+- Sources: OPCG, UATCG, GCG, DBFW, BS and DCG come from TCG+ (`tcgp:`), PTCG from players.pokemon-card.com (`ptcg:`), CONAN from the Takara Tomy official event search (https://www.takaratomy.co.jp/products/conan-cardgame/eventsearch; `conan:`, `conan_official`) because the game is not a Bandai title and TCG+ does not list it.
 - The page asks `/events/days` per whole month (lazily, as the list reaches each month, and skips months without
   matches), `/events` from the range start (or the 1st) to the end of each month, and cuts both to the selected range
   itself. It waits 300 ms after filter changes before requesting, and loads at most 3 requests per scroll step.
@@ -281,7 +282,7 @@ events in D1 now, inserted / updated / unchanged / hidden. The operator reads it
 | --- | --- |
 | `contracts/` | lead |
 | `tools/event-collectors/lib/` | lead |
-| `tools/event-collectors/tcg-plus/`, `data/events/{OPCG,UATCG,CONAN}/` | TCG+ collector |
+| `tools/event-collectors/tcg-plus/`, `data/events/{OPCG,UATCG,GCG,DBFW,BS,DCG}/` | TCG+ collector |
 | `tools/event-collectors/pokemon-players/`, `data/events/PTCG/` | Pokémon collector |
 | `api/` (Worker, migrations, importer, tests) | backend |
 | `src/events.html`, `scripts/build.py`, `public/events/` | web |

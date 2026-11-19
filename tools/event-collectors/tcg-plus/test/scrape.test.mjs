@@ -156,6 +156,21 @@ test('resolves each game title from masterdata and rejects a mismatched ID', () 
   assert.equal(parseScrapeOptions(['--game', 'UATCG']).game, 'UATCG');
 });
 
+test('resolves the Bandai titles added later by their Japanese masterdata entries', () => {
+  // Titles and ids as in live /api/masterdata on 2026-11-19 (EN editions and BATTLE SPIRITS SAGA must not match).
+  const directory = { game_title: [
+    { id: 7, title: 'BATTLE SPIRITS', language_code: 'JA' }, { id: 5, title: 'BATTLE SPIRITS SAGA', language_code: 'EN' },
+    { id: 11, title: 'DBSCG FUSION WORLD', language_code: 'JA' }, { id: 10, title: 'DBSCG FUSION WORLD', language_code: 'EN' },
+    { id: 1, title: 'DBSCG MASTERS', language_code: 'EN' },
+    { id: 6, title: 'DIGIMON CARD GAME', language_code: 'JA' }, { id: 2, title: 'DIGIMON CARD GAME', language_code: 'EN' },
+    { id: 15, title: 'GUNDAM CARD GAME', language_code: 'JA' }, { id: 16, title: 'GUNDAM CARD GAME', language_code: 'EN' },
+    { id: 14, title: 'BANDAI CARD GAMES', language_code: 'JA' }
+  ] };
+  assert.deepEqual(['GCG', 'DBFW', 'BS', 'DCG'].map(g => resolveGameTitle(directory, g).id), [15, 11, 7, 6]);
+  assert.throws(() => resolveGameTitle({ game_title: [{ id: 5, title: 'BATTLE SPIRITS SAGA', language_code: 'JA' }] }, 'BS'), /0 Japanese-edition titles for BS/);
+  assert.equal(parseScrapeOptions(['--game', 'DCG']).game, 'DCG');
+});
+
 test('UNION ARENA collection uses the resolved ID and labels records UATCG', async () => {
   const uaMaster = { code: 200, game_title: [{ id: 9, title: 'UNION ARENA', language_code: 'JA' }] };
   const h = harness([uaMaster, { code: 200, total: 1, event_list: [{ ...rows(1, 1)[0], game_title_id: '9', game_format_ids: [15] }] }]);
