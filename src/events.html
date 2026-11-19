@@ -275,8 +275,8 @@ const rangeOf = s => s.range==='custom' ? [s.from, addD(s.to,1)] : [TODAY, addD(
 // ---- state <-> URL
 const LIST_KEYS = {game:'game', pref:'pref', type:'type'};
 const SAVED_KEY = 'tcg.ev.filters';
-function readURL(){
-  const q0=new URLSearchParams(location.search), saved=store.get(SAVED_KEY,null);
+function readURL(q0=new URLSearchParams(location.search)){
+  const saved=store.get(SAVED_KEY,null);
   const fromSaved=()=>new URLSearchParams(Object.entries(saved).filter(([,v])=>typeof v==='string'&&v));
   if(!saved||typeof saved!=='object') return parseQuery(q0,false);
   if(!q0.toString()) return parseQuery(fromSaved(),true);
@@ -345,14 +345,24 @@ function saveFilters(){
   const prev=store.get(SAVED_KEY,null);
   if(isDayState(state) ? prev&&prev.view==='list' : state.view==='list') o.view='list';
   store.set(SAVED_KEY,o);
+  if(window.snPrefs) window.snPrefs.changed();
 }
+// Logged in, corner.html syncs SAVED_KEY with the account. Filters that arrive after the page started apply
+// while the visitor has not chosen any and the link carried none.
+let chose=false;
+document.addEventListener('sn:prefs',()=>{
+  if(chose || state.hadQuery) return;
+  const s=readURL(new URLSearchParams()); if(toQuery(s)===toQuery(state)) return;
+  state=s; history.replaceState(history.state,'',location.pathname+(toQuery(s)?'?'+toQuery(s):''));
+  renderControls(); reload();
+});
 function commit(changes, opts={}){
   const back=state.view, wasDay=isDayState(state), backTo=wasDay?backView():null;
   Object.assign(state, changes);
   normCustom(state);
   // Leaving a day view (条件をクリア) goes back to the view it was opened from, not to its list.
   if(wasDay && !('view' in changes) && state.range!=='custom') state.view=backTo;
-  if(!opts.auto){ state.autoPref=false; saveFilters(); }
+  if(!opts.auto){ state.autoPref=false; chose=true; saveFilters(); }
   if(!('month' in changes) && ('range' in changes || 'from' in changes || 'to' in changes)) state.month=clampMonth(monthOf(rangeOf(state)[0]));
   const qs=toQuery(state), url=location.pathname+(qs?'?'+qs:'');
   if(url!==location.pathname+location.search) history[opts.replace?'replaceState':'pushState'](opts.day?{day:1,back}:null,'',url);

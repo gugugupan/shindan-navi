@@ -3,7 +3,8 @@
   Product switch (TOOLS; a bottom tab bar on phones), settings (theme), and with LOGIN_ENABLED the user control.
   The user control calls /api/v1/me only while the __Host-sn_user cookie is set, so logged-out visitors make no
   /api calls. It publishes the user as window.snUser (undefined = not known yet, null = logged out) and a
-  "sn:user" event on document whenever that changes.
+  "sn:user" event on document whenever that changes. Logged in, it also syncs favourites, /events/ saved filters
+  and the add-to-calendar setting with the account (window.snPrefs, "sn:prefs" event; see the sync block below).
 -->
 <div class="corner">
   <!--TOOLTABS-->
@@ -105,8 +106,128 @@
   function setUser(u){
     window.snUser=u; show(u);
     if(u!==undefined) document.dispatchEvent(new CustomEvent('sn:user',{detail:{user:u}}));
+    sync.user(u);
   }
-  const send=(method,path)=>fetch(API+path,{method,credentials:'same-origin',headers:{'content-type':'application/json',accept:'application/json'}});
+  const send=(method,path,body,keepalive)=>fetch(API+path,{method,credentials:'same-origin',keepalive:!!keepalive,
+    headers:{'content-type':'application/json',accept:'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+
+  // ---- synced preferences. localStorage stays the source the pages read (and the whole story when logged out);
+  // logged in it is a cache of the account. tcg.sync.base is the last server state this browser saw, so local
+  // changes are diff(base → local) and survive failed writes, reloads and logged-out edits by the same user.
+  // tcg.sync.user: the account that base belongs to; another account replaces local data instead of merging.
+  // Pages call snPrefs.changed() after writing a synced key and re-read on the "sn:prefs" event.
+  const sync=(()=>{
+    const K={stars:'tcg.stars',filters:'tcg.ev.filters',askOff:'tcg.calAskOff',user:'tcg.sync.user',base:'tcg.sync.base'};
+    const ID=/^i[0-9a-f]{10}$/, FKEYS=['game','pref','type','days','view'], MAX_STARS=2000;
+    const del=k=>{ try{localStorage.removeItem(k)}catch(e){} };
+    const normF=f=>{
+      if(!f||typeof f!=='object') return null;
+      const o={}; FKEYS.forEach(k=>{ if(typeof f[k]==='string'&&f[k]) o[k]=f[k]; });
+      return Object.keys(o).length&&JSON.stringify(o).length<=1024 ? o : null;
+    };
+    const fEq=(a,b)=>JSON.stringify(normF(a))===JSON.stringify(normF(b));
+    const rawStars=()=>{ const s=ls.get(K.stars,[]); return Array.isArray(s)?s.map(String):[]; };
+    const local=()=>({stars:rawStars().filter(k=>ID.test(k)), filters:normF(ls.get(K.filters,null)), askOff:ls.get(K.askOff,false)===true});
+    const fromServer=j=>{ const p=(j&&j.prefs)||{}; return {
+      stars:(Array.isArray(p.stars)?p.stars:[]).filter(k=>ID.test(k)), filters:normF(p.event_filters),
+      askOff:p.ask_calendar===false||p.ask_calendar==='off'}; };
+    function diff(from,to){
+      const a=new Set(from.stars), b=new Set(to.stars), d={};
+      const add=to.stars.filter(k=>!a.has(k)), remove=from.stars.filter(k=>!b.has(k));
+      if(add.length||remove.length) d.stars={add,remove};
+      if(!fEq(from.filters,to.filters)) d.event_filters=to.filters;
+      if(from.askOff!==to.askOff) d.ask_calendar=to.askOff?'off':'ask';
+      return d;
+    }
+    // server state S plus the local changes made since `ref` (the state S already reflects)
+    function adopt(S,ref,dropLegacy){
+      const L=local(), d=diff(ref,L), st=new Set(S.stars);
+      if(d.stars){ d.stars.remove.forEach(k=>st.delete(k)); d.stars.add.forEach(k=>st.add(k)); }
+      const legacy=dropLegacy?[]:rawStars().filter(k=>!ID.test(k));
+      ls.set(K.stars,[...st].slice(0,MAX_STARS).concat(legacy));
+      const f='event_filters' in d ? L.filters : S.filters;
+      f ? ls.set(K.filters,f) : del(K.filters);
+      const off='ask_calendar' in d ? L.askOff : S.askOff;
+      off ? ls.set(K.askOff,true) : del(K.askOff);
+      ls.set(K.base,S);
+      document.dispatchEvent(new CustomEvent('sn:prefs'));
+      if(Object.keys(d).length) schedule(0);
+    }
+    let me=null, ready=false, busy=false, timer=0, lastWrite=0, lastRead=0, holdUntil=0;
+    // false: stop syncing (logged out / login off here); keep local data
+    function check(r){
+      if(r.status===401||r.status===404){ clearMark(); setUser(null); return false; }
+      if(r.status===429) holdUntil=Date.now()+60e3;
+      return r.ok;
+    }
+    async function start(u){
+      const id=String(u.id), prev=ls.get(K.user,null), base=ls.get(K.base,null);
+      try{
+        if(prev!==id || !base){
+          const switched=prev!=null && prev!==id;
+          const L0=local();
+          const r=switched ? await fetch(API+'/me/prefs',{credentials:'same-origin',headers:{accept:'application/json'}})
+            : await send('POST','/me/prefs/merge',{stars:L0.stars, ...(L0.filters?{event_filters:L0.filters}:{}), ...(L0.askOff?{ask_calendar:'off'}:{})});
+          if(!check(r)||me!==u) return;
+          const S=fromServer(await r.json());
+          ls.set(K.user,id); ready=true; lastRead=Date.now();
+          adopt(S, L0, switched);
+        } else {
+          ready=true; await refresh(true);
+        }
+      }catch(e){}
+    }
+    async function refresh(force){
+      if(!ready||busy||(!force&&Date.now()-lastRead<30e3)) return;
+      busy=true; const u=me;
+      try{
+        const r=await fetch(API+'/me/prefs',{credentials:'same-origin',headers:{accept:'application/json'}});
+        if(!check(r)||me!==u) return;
+        const j=await r.json(); lastRead=Date.now();
+        adopt(fromServer(j), ls.get(K.base,null)||fromServer(j));
+      }catch(e){} finally{ busy=false; }
+    }
+    function schedule(ms){
+      if(!ready) return;
+      clearTimeout(timer);
+      // PUT is limited to 30/min per user: at most one write every 2.5 s
+      timer=setTimeout(flush, Math.max(ms, lastWrite+2500-Date.now(), holdUntil-Date.now(), 0));
+    }
+    async function flush(keepalive){
+      clearTimeout(timer); timer=0;
+      if(!ready) return;
+      if(busy){ if(!keepalive) schedule(500); return; }
+      const base=ls.get(K.base,null); if(!base) return;
+      const L0=local(), d=diff(base,L0);
+      if(!Object.keys(d).length) return;
+      if(keepalive){ try{ send('PUT','/me/prefs',d,true); }catch(e){} return; }
+      if(Date.now()<holdUntil){ schedule(0); return; }
+      busy=true; lastWrite=Date.now(); const u=me; let S=null;
+      try{
+        const r=await send('PUT','/me/prefs',d);
+        if(check(r)&&me===u) S=fromServer(await r.json());
+        else if(r.status===429) schedule(0);
+      }catch(e){} finally{ busy=false; }
+      // a failed write leaves the change in diff(base → local): the next load or visit sends it again
+      if(S) adopt(S,L0);
+    }
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='hidden'){ if(timer) flush(true); }
+      else refresh(false);
+    });
+    window.addEventListener('pagehide',()=>{ if(timer) flush(true); });
+    window.snPrefs={changed(){ schedule(1000); }};
+    return {
+      user(u){
+        if(u===me) return;
+        me=u; ready=false; clearTimeout(timer); timer=0;
+        if(u) start(u);
+      },
+      flush,
+      // the account is gone: the next login (a new account) merges this browser's data again
+      forget(){ del(K.user); del(K.base); }
+    };
+  })();
 
   loginBtn.addEventListener('click',()=>{
     loginBtn.href=`${API}/auth/google/start?return=${encodeURIComponent(location.pathname+location.search)}`;
@@ -114,6 +235,7 @@
   });
   async function logout(){
     msg.textContent='';
+    await sync.flush();
     try{
       const r=await send('POST','/auth/logout');
       if(!r.ok && r.status!==401) throw new Error(r.status);
@@ -126,7 +248,7 @@
       const r=await send('DELETE','/me');
       if(r.status===429) throw new Error('busy');
       if(!r.ok && r.status!==401) throw new Error(r.status);
-      clearMark(); setUser(null); track('delete_account');
+      sync.forget(); clearMark(); setUser(null); track('delete_account');
     }catch(e){ msg.textContent=e.message==='busy'?'混み合っています。1 分ほどおいてもう一度お試しください。':'アカウントを削除できませんでした。時間をおいてもう一度お試しください。'; }
   }
   function openDlg(focusDel){

@@ -550,13 +550,23 @@ const stars = new Set(store.get('tcg.stars',[]).map(k=>{
   const d=DATA.find(x=>x.date+'|'+x.name===k); return d?d.id:k;
 }));
 store.set('tcg.stars',[...stars]);
+// logged in, corner.html syncs tcg.stars / tcg.calAskOff with the account: tell it about changes, re-read its updates
+const synced = () => { if(window.snPrefs) window.snPrefs.changed(); };
+document.addEventListener('sn:prefs',()=>{
+  const next=store.get('tcg.stars',[]);
+  if(next.length===stars.size && next.every(k=>stars.has(k))) return;
+  stars.clear(); next.forEach(k=>stars.add(k));
+  if(state.starOnly && !stars.size){ state.starOnly=false; store.set('tcg.starOnly',false); }
+  render();
+  if(dlg.open && dlgItems) openDetail(dlgItems,dlgTitle,true);
+});
 const isStar = d => stars.has(starKey(d));
 const starFirst = (a,b) => (isStar(b)-isStar(a));
 const starBtn = (d,big) => `<button class="star${isStar(d)?' on':''}${big?' big':''}" data-star-id="${d.id}" aria-pressed="${isStar(d)}" aria-label="${isStar(d)?'お気に入りから外す':'お気に入りに追加'}">${isStar(d)?'★':'☆'}${big?`<span>${isStar(d)?'お気に入り済み':'お気に入りに追加'}</span>`:''}</button>`;
 function toggleStar(id){
   const d=DATA.find(x=>x.id===id); if(!d) return;
   const k=starKey(d); stars.has(k)?stars.delete(k):stars.add(k);
-  store.set('tcg.stars',[...stars]);
+  store.set('tcg.stars',[...stars]); synced();
   track('favorite', {action: stars.has(k)?'add':'remove', game: d.game, item_name: d.name});
   if(state.starOnly && !stars.size){ state.starOnly=false; store.set('tcg.starOnly',false); }
   render();
@@ -812,7 +822,7 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#calStars')){ openCalPrompt(filtered().filter(d=>d.date>=TODAY).sort((a,b)=>a.date.localeCompare(b.date)),false); return; }
   const cl=e.target.closest('#clearStars');
   if(cl){
-    if(cl.dataset.armed){ stars.clear(); store.set('tcg.stars',[]); state.starOnly=false; store.set('tcg.starOnly',false); render(); }
+    if(cl.dataset.armed){ stars.clear(); store.set('tcg.stars',[]); synced(); state.starOnly=false; store.set('tcg.starOnly',false); render(); }
     else { cl.dataset.armed='1'; cl.textContent='もう一度押すと解除'; cl.classList.add('warn'); setTimeout(()=>{ if(cl.isConnected){ delete cl.dataset.armed; cl.textContent='すべて解除'; cl.classList.remove('warn'); } },3000); }
     return;
   }
@@ -896,7 +906,7 @@ function openCalPrompt(items,fromStar){
 }
 function closeCal(){
   const off=document.getElementById('calAskOff');
-  if(off && off.checked){ store.set('tcg.calAskOff',true); track('calendar_prompt_off'); }
+  if(off && off.checked){ store.set('tcg.calAskOff',true); synced(); track('calendar_prompt_off'); }
   calDlg.close();
 }
 document.getElementById('calClose').onclick=closeCal;
