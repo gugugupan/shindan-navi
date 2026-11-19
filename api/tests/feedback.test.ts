@@ -14,12 +14,14 @@ let sent: { from: string; to: string; raw: string }[];
 let mailError: Error | null;
 let verify: { body: Record<string, unknown>; status: number; calls: URLSearchParams[] };
 let allow: boolean;
+let allowAll: boolean;
 
 beforeEach(() => {
   db = newDb();
   sent = [];
   mailError = null;
   allow = true;
+  allowAll = true;
   verify = { body: { success: true, hostname: 'shindan-navi.app', action: 'feedback' }, status: 200, calls: [] };
   env = {
     DB: db,
@@ -28,6 +30,7 @@ beforeEach(() => {
     FEEDBACK_TO: TO,
     FEEDBACK_EMAIL: { send: vi.fn(async (m: { from: string; to: string; raw: string }) => { if (mailError) throw mailError; sent.push(m); return { messageId: 'x' }; }) },
     FEEDBACK_LIMIT: { limit: vi.fn(async () => ({ success: allow })) },
+    FEEDBACK_BREAKER: { limit: vi.fn(async () => ({ success: allowAll })) },
   };
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     expect(url).toBe(TURNSTILE_VERIFY_URL);
@@ -72,6 +75,7 @@ describe('POST /api/v1/feedback', () => {
     expect(verify.calls).toHaveLength(1);
     expect(Object.fromEntries(verify.calls[0])).toEqual({ secret: 'ts-secret', response: 'tok', remoteip: '203.0.113.9' });
     expect(env.FEEDBACK_LIMIT.limit).toHaveBeenCalledWith({ key: 'ip:203.0.113.9' });
+    expect(env.FEEDBACK_BREAKER.limit).toHaveBeenCalledWith({ key: 'all' });
     const [row] = await rows();
     expect(row).toMatchObject({ id: res.body.id, kind: 'bug', message: GOOD.message, reply_to: 'me@example.com', page: '/pokemon/', user_id: null, email_status: 'sent', email_error: null });
     expect(sent).toHaveLength(1);
@@ -84,7 +88,7 @@ describe('POST /api/v1/feedback', () => {
     expect(mail.head).toContain('Content-Type: text/plain; charset=UTF-8');
     expect(mail.subject).toBe(`[新弾ナビ] 不具合: ${GOOD.message}`);
     expect(mail.text).toContain(`送信元ページ: ${ORIGIN}/pokemon/`);
-    expect(mail.text).toContain('ユーザー: (未ログイン)');
+    expect(mail.text).toContain('ログインユーザー: いいえ');
     expect(mail.text).toContain(GOOD.message);
   });
 
@@ -99,7 +103,9 @@ describe('POST /api/v1/feedback', () => {
     const [row] = await rows();
     expect(row).toMatchObject({ user_id: 'u1', reply_to: null, page: null, message: 'ダークモード\nがほしい' });
     expect(sent[0].raw).not.toContain('Reply-To');
-    expect(decodeMail(sent[0].raw).text).toContain('ユーザー: u1');
+    const text = decodeMail(sent[0].raw).text;
+    expect(text).toContain('ログインユーザー: はい');
+    expect(text).not.toContain('u1');
   });
 
   it('a failed mail keeps the feedback and records the failure', async () => {
@@ -126,9 +132,13 @@ describe('POST /api/v1/feedback', () => {
     expect(sent).toEqual([]);
   });
 
-  it('is rate limited per client before Turnstile and D1', async () => {
+  it('is rate limited per client and for everyone together, before Turnstile and D1', async () => {
     allow = false;
-    const res = await post(GOOD);
+    let res = await post(GOOD);
+    expect([res.status, res.headers.get('retry-after')]).toEqual([429, '60']);
+    allow = true;
+    allowAll = false;
+    res = await post(GOOD);
     expect([res.status, res.headers.get('retry-after')]).toEqual([429, '60']);
     expect(verify.calls).toEqual([]);
     expect(await rows()).toEqual([]);
@@ -144,6 +154,8 @@ describe('POST /api/v1/feedback', () => {
     for (const b of bad) expect((await post(b)).status, JSON.stringify(b)).toBe(400);
     expect((await post('{')).status).toBe(400);
     expect((await post({ ...GOOD, message: 'a'.repeat(20_000) })).status).toBe(413);
+    expect((await post(GOOD, { headers: { 'content-length': '999999' } })).status).toBe(413);
+    expect((await post({ ...GOOD, message: 'bell\u0007' })).body.error).toBe('message contains control characters');
     expect(verify.calls).toEqual([]);
     expect(await rows()).toEqual([]);
     // 2,000 characters counted as code points, not UTF-16 units
@@ -179,6 +191,36 @@ describe('POST /api/v1/feedback', () => {
     expect(sent).toEqual([]);
   });
 
+  it('deleting the account works before 0004 is applied (no feedback table)', async () => {
+    const now = new Date().toISOString();
+    await db.prepare('INSERT INTO users (id, created_at) VALUES (?, ?)').bind('u2', now).run();
+    const s = await issueSession(db as any, AUTH.SESSION_SECRET, 'u2');
+    await db.batch(s.statements);
+    const cookie = s.cookies.map((c: string) => c.split(';')[0]).join('; ');
+    const del = () => worker.fetch(new Request(`${ORIGIN}/api/v1/me`, { method: 'DELETE', headers: { origin: ORIGIN, 'content-type': 'application/json', cookie } }), { ...env, DB: d1, ...AUTH } as any);
+    // D1's message format for a missing table
+    const d1: any = new Proxy(db, {
+      get(target, prop) {
+        if (prop === 'prepare') return (sql: string) => {
+          if (/feedback/.test(sql)) return { bind: () => ({ run: async () => { throw new Error('D1_ERROR: no such table: feedback: SQLITE_ERROR'); } }) };
+          return target.prepare(sql);
+        };
+        const v = Reflect.get(target, prop);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    expect((await del()).status).toBe(204);
+    expect(await db.prepare('SELECT id FROM users WHERE id = ?').bind('u2').first()).toBeNull();
+    // and the real SQLite error, with the table actually dropped
+    await db.prepare('INSERT INTO users (id, created_at) VALUES (?, ?)').bind('u3', now).run();
+    const s3 = await issueSession(db as any, AUTH.SESSION_SECRET, 'u3');
+    await db.batch(s3.statements);
+    await db.prepare('DROP TABLE feedback').run();
+    const res = await worker.fetch(new Request(`${ORIGIN}/api/v1/me`, { method: 'DELETE', headers: { origin: ORIGIN, 'content-type': 'application/json', cookie: s3.cookies.map((c: string) => c.split(';')[0]).join('; ') } }), { ...env, ...AUTH } as any);
+    expect(res.status).toBe(204);
+    expect(await db.prepare('SELECT id FROM users WHERE id = ?').bind('u3').first()).toBeNull();
+  });
+
   it('deleting the account unlinks its feedback', async () => {
     const now = new Date().toISOString();
     await db.prepare('INSERT INTO users (id, created_at) VALUES (?, ?)').bind('u1', now).run();
@@ -197,17 +239,17 @@ describe('mail encoding', () => {
     const s = 'あ😀'.repeat(30);
     const words = encodeWord(s).split('\r\n ');
     expect(words.length).toBeGreaterThan(1);
-    for (const w of words) expect(w.length).toBeLessThanOrEqual(75);
+    for (const w of words) expect(w.length).toBeLessThanOrEqual(64);
     const back = words.map((w) => new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(Uint8Array.from(atob(w.slice(10, -2)), (c) => c.charCodeAt(0)))).join('');
     expect(back).toBe(s);
     expect(encodeWord('plain ascii')).toBe('plain ascii');
   });
   it('keeps header lines short and never lets user text into a header unencoded', () => {
-    const raw = buildMail({ id: 'id1', createdAt: '2026-11-19T00:00:00.000Z', origin: ORIGIN, to: TO, userId: null,
+    const raw = buildMail({ id: 'id1', createdAt: '2026-11-19T00:00:00.000Z', origin: ORIGIN, to: TO, loggedIn: false,
       feedback: { kind: 'other', message: 'Subject: x\nBcc: y@z.example\n' + 'あ'.repeat(500), reply_to: null, page: null } });
     const head = raw.split('\r\n\r\n')[0];
     expect(head).not.toMatch(/^Bcc:/m);
-    for (const line of head.split('\r\n')) expect(line.length).toBeLessThanOrEqual(998);
+    for (const line of head.split('\r\n')) expect(line.length, line).toBeLessThanOrEqual(78);
     expect(raw.split('\r\n\r\n')[1].split('\r\n').every((l) => l.length <= 76)).toBe(true);
   });
 });

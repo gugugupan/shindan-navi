@@ -64,6 +64,7 @@ async function checkFeedback(ctx, vp) {
     await page.locator('#fbSend').click();
     if (!(await page.locator('#fbKindErr').textContent())) fail(where, 'no error for a missing 種類');
     if (await page.evaluate(() => document.activeElement?.name) !== 'kind') fail(where, 'focus did not move to 種類');
+    if (await page.locator('input[name="kind"][aria-invalid="true"]').count() !== 4) fail(where, '種類 radios not marked aria-invalid');
     await page.locator('input[name="kind"][value="data"]').check();
     const text = '発売日が間違っています\n2行目';
     await page.locator('#fbMessage').fill(text);

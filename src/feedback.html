@@ -110,8 +110,12 @@
 (function(){
   const SITE_KEY=/*TURNSTILE_SITE_KEY*/'';
   const API='/api/v1/feedback', MAX=2000;
+  // same patterns as api/src/feedback.ts (EMAIL, CONTROL)
+  const EMAIL=/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+  const CONTROL=/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/;
   const $=id=>document.getElementById(id);
   const form=$('fbForm'), msg=$('fbMessage'), email=$('fbEmail'), send=$('fbSend'), status=$('fbStatus'), count=$('fbCount');
+  const radios=[...form.querySelectorAll('input[name="kind"]')];
   const track=(name,params)=>{ try{ if(window.gtag) window.gtag('event',name,params||{}); }catch(e){} };
 
   // the page the visitor came from: a same-origin path only
@@ -125,12 +129,12 @@
   }
   msg.addEventListener('input',()=>{ updateCount(); if(msg.getAttribute('aria-invalid')==='true'&&msg.value.trim()) setErr(msg,$('fbMessageErr'),''); });
   updateCount();
-  form.addEventListener('change',e=>{ if(e.target.name==='kind') setErr($('fbKind'),$('fbKindErr'),''); });
+  form.addEventListener('change',e=>{ if(e.target.name==='kind') setErr(radios,$('fbKindErr'),''); });
   email.addEventListener('input',()=>{ if(email.getAttribute('aria-invalid')==='true') setErr(email,$('fbEmailErr'),''); });
 
   function setErr(field,box,text){
     box.textContent=text;
-    if(text) field.setAttribute('aria-invalid','true'); else field.removeAttribute('aria-invalid');
+    for(const f of [].concat(field)){ if(text) f.setAttribute('aria-invalid','true'); else f.removeAttribute('aria-invalid'); }
   }
   function say(text){ status.textContent=text; status.className='fbstatus'+(text?' error':''); }
 
@@ -153,11 +157,12 @@
 
   function validate(){
     const kind=form.querySelector('input[name="kind"]:checked');
-    const text=msg.value.trim(), mail=email.value.trim();
-    setErr($('fbKind'),$('fbKindErr'),kind?'':'種類を選んでください。');
-    setErr(msg,$('fbMessageErr'),!text?'内容を入力してください。':len(text)>MAX?`${MAX} 文字以内で入力してください。`:'');
-    setErr(email,$('fbEmailErr'),mail&&!email.checkValidity()?'メールアドレスの形式を確認してください。':'');
-    const first=!kind?form.querySelector('input[name="kind"]'):$('fbMessageErr').textContent?msg:$('fbEmailErr').textContent?email:null;
+    const text=msg.value.replace(/\r\n?/g,'\n').trim(), mail=email.value.trim();
+    setErr(radios,$('fbKindErr'),kind?'':'種類を選んでください。');
+    setErr(msg,$('fbMessageErr'),!text?'内容を入力してください。':len(text)>MAX?`${MAX} 文字以内で入力してください。`
+      :CONTROL.test(text)?'使用できない制御文字が含まれています。貼り付けた文章の場合は、入力し直してください。':'');
+    setErr(email,$('fbEmailErr'),mail&&!(mail.length<=254&&EMAIL.test(mail))?'メールアドレスの形式を確認してください（半角英数字、@ を 1 つ）。':'');
+    const first=!kind?radios[0]:$('fbMessageErr').textContent?msg:$('fbEmailErr').textContent?email:null;
     if(first){ first.focus(); return null; }
     return {kind:kind.value, message:text, reply_to:mail, page, turnstile:token};
   }

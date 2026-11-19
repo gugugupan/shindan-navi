@@ -351,8 +351,8 @@ PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー'
     desc='新弾ナビのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
 def render_privacy():
     src=open(os.path.join(ROOT,'src/privacy.html')).read()
-    if LOGIN_ENABLED and 'data-owner-fill' in src:
-        sys.exit('src/privacy.html still has owner placeholders (data-owner-fill): fill them before building with LOGIN_ENABLED=1')
+    if (LOGIN_ENABLED or FEEDBACK_ENABLED) and 'data-owner-fill' in src:
+        sys.exit('src/privacy.html still has owner placeholders (data-owner-fill): fill them before building with LOGIN_ENABLED=1 or FEEDBACK_ENABLED=1')
     src=re.sub(r'\A<!--.*?-->\n','',src,count=1,flags=re.S)
     src=flags(src)
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)

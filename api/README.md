@@ -159,24 +159,30 @@ Contract: [`../contracts/README.md`](../contracts/README.md) › Feedback API. C
   The binding is not in `wrangler.jsonc`: `scripts/remote-config.mjs` adds it only when `FEEDBACK_ENABLED=1` is in
   its environment (the workflow passes the repo variable), so deploys keep working before Email Routing is set up.
 
-How a submission goes: same-origin `Origin` + JSON content type → `FEEDBACK_LIMIT` (5/min per client IP, IPv6 by /64;
-before anything costs) → strict validation (exact fields, `kind` in bug/request/data/other, message 1-2,000
-characters, plain address ≤ 254, `page` a same-origin path ≤ 512, body ≤ 16 KB) → Turnstile siteverify (`success`,
+How a submission goes: same-origin `Origin` + JSON content type → `FEEDBACK_LIMIT` (5/min per client IP, IPv6 by /64)
+and `FEEDBACK_BREAKER` (30/min for everyone per location, key `all`), both 429 and before anything costs → strict
+validation (`Content-Length` and body ≤ 16 KB, exact fields, `kind` in bug/request/data/other, message 1-2,000
+characters without control characters, plain address ≤ 254 with the same pattern as the page, `page` a same-origin
+path ≤ 512) → Turnstile siteverify (`success`,
 hostname `shindan-navi.app`, action `feedback`; a siteverify outage is 503) → logged-in user id from the session cookie
 if login is on → one D1 batch (insert + delete rows older than 365 days) → mail → `email_status` update → 202. A D1
 failure is 500 and sends nothing (the page keeps the text). A mail failure is logged and recorded in `email_status` /
 `email_error`; the answer is still 202 because the feedback is stored. Deleting an account sets `user_id` to NULL on
 its feedback rows.
 
-The mail is a hand-built RFC 5322 message (UTF-8 base64 body, RFC 2047 subject, `Message-ID`, `Date`, `Reply-To` when
-an address was given) sent as `EmailMessage` from `cloudflare:email`: From `feedback-form@shindan-navi.app` (pinned by
-the binding's `allowed_sender_addresses`), To the `FEEDBACK_TO` secret. Email Routing only delivers to **verified
+The mail is a hand-built RFC 5322 message (UTF-8 base64 body, RFC 2047 encoded words folded so every header line is
+≤ 78 characters, `Message-ID`, `Date`, `Reply-To` when an address was given). The body has the kind, page, reply
+address, receipt id/time, ログインユーザー はい/いいえ (never the account id; that stays in D1) and the text. It is
+sent as `EmailMessage` from `cloudflare:email`: From `feedback-form@shindan-navi.app` (pinned by the binding's `allowed_sender_addresses`), To the `FEEDBACK_TO` secret. Email Routing only delivers to **verified
 destination addresses**, so `FEEDBACK_TO` must be one. Tests alias `cloudflare:email` to `tests/stubs/`; `dev:node`
 has no binding, so the route answers 404 there and the page shows its 「現在、このフォームはご利用いただけません」 state.
 
 To read submissions: `npx wrangler d1 execute shindan-navi-events --remote --config ../wrangler.remote.json --command
 "SELECT created_at, kind, email_status, page, reply_to, message FROM feedback ORDER BY created_at DESC LIMIT 20"`
 (rows contain personal data: don't paste them into issues or logs). Failed mails: `WHERE email_status != 'sent'`.
+Deleting one submission on request (find its id by the receipt id in the mail, or by time / reply address):
+`npx wrangler d1 execute shindan-navi-events --remote --config ../wrangler.remote.json --command "DELETE FROM feedback
+WHERE id = '<id>'"`, and delete the notification mail too.
 
 ### Owner setup (in this order; nothing is live until step 7)
 
@@ -201,8 +207,10 @@ To read submissions: `npx wrangler d1 execute shindan-navi-events --remote --con
    review the FEEDBACK parts of `src/privacy.html` (retention: 1 year, notification mails deleted within that year).
    Commit it.
 7. **Repo variables** (GitHub → Settings → Secrets and variables → Actions → Variables): `TURNSTILE_SITE_KEY` = the
-   site key, then `FEEDBACK_ENABLED` = `1`. The next push to `main` (or a re-run of Deploy) builds `/feedback/` and
-   adds the mail binding.
+   site key, then `FEEDBACK_ENABLED` = `1`. For the first enable, run Deploy by hand (Actions → Deploy → Run workflow,
+   i.e. `workflow_dispatch`) and watch it: the build step must show `feedback True` and the Worker config step
+   `feedback mail binding`. If the deploy or the page misbehaves, roll back by deleting `FEEDBACK_ENABLED` and running
+   Deploy again (links, page and binding go away; secrets and stored rows can stay).
 8. **Check:** send one test from `https://shindan-navi.app/feedback/`, confirm the mail arrives (send_email mails show
    as "dropped" in the Email Routing summary even when delivered; look under Email → sending logs), and that the row
    has `email_status = 'sent'`.
@@ -253,7 +261,8 @@ day_counts row, ~43k) plus one primary-key lookup per written row.
 | Logout / `DELETE /me` | 0-2 / 2 | 1-2 / every row of the user (+ its feedback rows' `user_id`) |
 | `POST /feedback` | 0 (2 with a session cookie) + rows older than 1 year | ~4 (row + 2-3 index entries), status update ~2, purged rows |
 
-Feedback writes are bounded by `FEEDBACK_LIMIT` (5/min per client IP) and a Turnstile solve per submission.
+Feedback writes are bounded by `FEEDBACK_LIMIT` (5/min per client IP), `FEEDBACK_BREAKER` (30/min per location for
+everyone) and a Turnstile solve per submission.
 
 Writes are what matter: the importer's `--max-writes` default of 90,000 leaves ~10,000 rows/day for accounts on a
 day with a full import (the Free limit is 100,000 for everything). A star toggle is one write, so the page batches

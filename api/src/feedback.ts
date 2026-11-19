@@ -7,8 +7,9 @@ export interface FeedbackEnv extends AuthEnv {
   FEEDBACK_TO?: string;
   /** send_email binding (wrangler.jsonc), restricted to FEEDBACK_FROM as sender, no fixed destination. */
   FEEDBACK_EMAIL?: SendEmail;
-  /** Workers Rate Limiting binding, per client IP; absent locally. */
+  /** Workers Rate Limiting bindings; absent locally. Per client IP, and for everyone together (key "all"). */
   FEEDBACK_LIMIT?: RateLimit;
+  FEEDBACK_BREAKER?: RateLimit;
 }
 
 export const FEEDBACK_PATH = '/api/v1/feedback';
@@ -40,7 +41,7 @@ class HttpError extends Error {
   }
 }
 
-// Deliberately narrower than RFC 5321: one @, no spaces, quotes, angle brackets, commas or control characters, so the
+// Same pattern as src/feedback.html (keep them in sync). Deliberately narrower than RFC 5321: one @, no spaces, quotes, angle brackets, commas or control characters, so the
 // value is safe in a Reply-To header as is.
 const EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 export const isEmail = (s: string) => s.length <= MAX_EMAIL && EMAIL.test(s);
@@ -80,7 +81,8 @@ export function parseFeedback(body: unknown): Feedback {
   if (typeof b.kind !== 'string' || !Object.hasOwn(KINDS, b.kind)) throw bad('kind');
   if (typeof b.message !== 'string') throw bad('message');
   const message = b.message.replace(/\r\n?/g, '\n').trim();
-  if (!message || [...message].length > MAX_MESSAGE || CONTROL.test(message)) throw bad('message');
+  if (!message || [...message].length > MAX_MESSAGE) throw bad('message');
+  if (CONTROL.test(message)) throw bad('message contains control characters');
   let reply: string | null = null;
   if (b.reply_to !== undefined && b.reply_to !== null && b.reply_to !== '') {
     if (typeof b.reply_to !== 'string' || !isEmail(b.reply_to.trim())) throw bad('reply_to');
@@ -124,14 +126,16 @@ function b64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-/** RFC 2047 encoded words, each at most 75 characters, split on character boundaries, folded with CRLF + space. */
+/**
+ * RFC 2047 encoded words split on character boundaries, folded with CRLF + space. 39 bytes of UTF-8 → 52 base64
+ * characters + 12 = 64 per word, so even after "Subject: " every header line stays within 78 characters.
+ */
 export function encodeWord(text: string): string {
   if (/^[\x20-\x7e]*$/.test(text) && !/=\?/.test(text)) return text;
   const words: string[] = [];
   let chunk = '';
   for (const ch of text) {
-    // 45 bytes of UTF-8 → 60 base64 characters + 12 for "=?UTF-8?B?" and "?=" = 72
-    if (enc.encode(chunk + ch).length > 45) {
+    if (enc.encode(chunk + ch).length > 39) {
       words.push(chunk);
       chunk = '';
     }
@@ -145,7 +149,7 @@ export interface MailInput {
   id: string;
   createdAt: string;
   feedback: Omit<Feedback, 'turnstile'>;
-  userId: string | null;
+  loggedIn: boolean;
   origin: string;
   to: string;
 }
@@ -158,7 +162,7 @@ export function buildMail(m: MailInput): string {
     `種類: ${KINDS[f.kind]}`,
     `送信元ページ: ${f.page ? m.origin + f.page : '(なし)'}`,
     `返信先: ${f.reply_to ?? '(なし)'}`,
-    `ユーザー: ${m.userId ?? '(未ログイン)'}`,
+    `ログインユーザー: ${m.loggedIn ? 'はい' : 'いいえ'}`,
     `受付 ID: ${m.id}`,
     `受付日時: ${m.createdAt}`,
     '',
@@ -167,7 +171,7 @@ export function buildMail(m: MailInput): string {
   ].join('\r\n').replace(/\r?\n/g, '\r\n');
   const date = new Date(m.createdAt).toUTCString().replace(/GMT$/, '+0000');
   const headers = [
-    `From: ${encodeWord('新弾ナビ フィードバック')} <${FEEDBACK_FROM}>`,
+    `From: ${encodeWord('新弾ナビ フィードバック')}\r\n <${FEEDBACK_FROM}>`,
     `To: <${m.to}>`,
     ...(f.reply_to ? [`Reply-To: <${f.reply_to}>`] : []),
     `Subject: ${encodeWord(subject)}`,
@@ -190,6 +194,8 @@ async function sendMail(cfg: Config, raw: string): Promise<void> {
 // ---- route
 
 async function readJson(request: Request): Promise<unknown> {
+  const declared = Number(request.headers.get('content-length') ?? 0);
+  if (declared > MAX_BODY_BYTES) throw new HttpError(413, 'body too large');
   const text = await request.text();
   if (enc.encode(text).length > MAX_BODY_BYTES) throw new HttpError(413, 'body too large');
   try {
@@ -204,8 +210,8 @@ async function submit(request: Request, env: FeedbackEnv, cfg: Config, url: URL,
   const type = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') throw new HttpError(415, 'unsupported media type');
   // Before Turnstile and D1: a limited request costs neither a siteverify call nor a write.
-  if (env.FEEDBACK_LIMIT && !(await env.FEEDBACK_LIMIT.limit({ key: `ip:${client}` })).success) {
-    throw new HttpError(429, 'too many requests', { 'retry-after': '60' });
+  for (const [binding, key] of [[env.FEEDBACK_LIMIT, `ip:${client}`], [env.FEEDBACK_BREAKER, 'all']] as const) {
+    if (binding && !(await binding.limit({ key })).success) throw new HttpError(429, 'too many requests', { 'retry-after': '60' });
   }
   const f = parseFeedback(await readJson(request));
   await verifyTurnstile(cfg, f.turnstile, request.headers.get('cf-connecting-ip'));
@@ -223,7 +229,7 @@ async function submit(request: Request, env: FeedbackEnv, cfg: Config, url: URL,
   let status: 'sent' | 'failed' = 'sent';
   let error: string | null = null;
   try {
-    await sendMail(cfg, buildMail({ id, createdAt, feedback: f, userId, origin: cfg.origin, to: cfg.to }));
+    await sendMail(cfg, buildMail({ id, createdAt, feedback: f, loggedIn: userId !== null, origin: cfg.origin, to: cfg.to }));
   } catch (e) {
     status = 'failed';
     const err = e as Error & { code?: string };
