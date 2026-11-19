@@ -157,7 +157,7 @@ export interface MailInput {
 export function buildMail(m: MailInput): string {
   const f = m.feedback;
   const first = [...f.message.replace(/\s+/g, ' ')].slice(0, 40).join('');
-  const subject = `[新弾ナビ] ${KINDS[f.kind]}: ${first}${[...f.message].length > 40 ? '…' : ''}`;
+  const subject = `[トレカカレンダー] ${KINDS[f.kind]}: ${first}${[...f.message].length > 40 ? '…' : ''}`;
   const body = [
     `種類: ${KINDS[f.kind]}`,
     `送信元ページ: ${f.page ? m.origin + f.page : '(なし)'}`,
@@ -171,7 +171,7 @@ export function buildMail(m: MailInput): string {
   ].join('\r\n').replace(/\r?\n/g, '\r\n');
   const date = new Date(m.createdAt).toUTCString().replace(/GMT$/, '+0000');
   const headers = [
-    `From: ${encodeWord('新弾ナビ フィードバック')}\r\n <${FEEDBACK_FROM}>`,
+    `From: ${encodeWord('トレカカレンダー フィードバック')}\r\n <${FEEDBACK_FROM}>`,
     `To: <${m.to}>`,
     ...(f.reply_to ? [`Reply-To: <${f.reply_to}>`] : []),
     `Subject: ${encodeWord(subject)}`,

@@ -86,7 +86,7 @@ describe('POST /api/v1/feedback', () => {
     expect(mail.head).toContain(`Message-ID: <${res.body.id}@shindan-navi.app>`);
     expect(mail.head).toMatch(/^Date: \w{3}, \d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2} \+0000$/m);
     expect(mail.head).toContain('Content-Type: text/plain; charset=UTF-8');
-    expect(mail.subject).toBe(`[新弾ナビ] 不具合: ${GOOD.message}`);
+    expect(mail.subject).toBe(`[トレカカレンダー] 不具合: ${GOOD.message}`);
     expect(mail.text).toContain(`送信元ページ: ${ORIGIN}/pokemon/`);
     expect(mail.text).toContain('ログインユーザー: いいえ');
     expect(mail.text).toContain(GOOD.message);
