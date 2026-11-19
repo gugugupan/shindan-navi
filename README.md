@@ -109,8 +109,10 @@ Clicking a day (calendar cell, or 地図 on a list day heading) opens that singl
 extra URL parameter): a Google map of the venues on the left (on phones on top, collapsed behind 地図を表示), the
 day's cards on the right. The page pages through the whole day by itself (up to 12 `/events` pages, ~13 uncached
 requests incl. `/days`, under `API_LIMIT` 20/min), then shows さらに読み込む. One classic `google.maps.Marker` per place
-(coordinates rounded to 5 decimals), count badge for several events there; marker ↔ card highlight/pan. Events whose
-venue has no `geo` show 地図なし. The Maps JavaScript API is loaded only when a day's map opens
+(coordinates rounded to 5 decimals), count badge for several events there; marker ↔ card highlight/pan. Pins are SVG
+data-URI icons in the game colours (striped for a venue with several games, legend of that day's games next to the
+summary); hovering or focusing a card (fine pointers only) enlarges its pin without moving the map. Events whose venue
+has no `geo` show 地図なし, which explains in a popover why they are not on the map. The Maps JavaScript API is loaded only when a day's map opens
 (`language=ja&region=JP`, `loading=async`); classic markers need no Map ID (AdvancedMarkerElement would). Without a key,
 or on `gm_authFailure` / script error / ad blocker / 15 s timeout, the map is a short placeholder and the list works as
 before. The legend on the page says that opening the map sends the IP etc. to Google.

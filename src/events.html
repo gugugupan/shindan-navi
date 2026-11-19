@@ -122,7 +122,12 @@ button.cd:hover{background:var(--surface-2)}
 .mapph b{color:var(--ink);font-size:13.5px}
 .ev-pin{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 8px;font-size:11px;font-weight:700;color:var(--accent);line-height:1.6}
 .ev-pin:hover{border-color:var(--accent)}
-.nomapt{font-size:11px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 7px}
+.nomapt{font:inherit;font-size:11px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:999px;padding:0 7px;line-height:1.6;cursor:help}
+.nomapt:hover,.nomapt[aria-expanded="true"]{border-color:var(--muted);color:var(--ink)}
+.nomtip{position:absolute;z-index:5;max-width:min(260px,calc(100% - 16px));padding:7px 10px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:12px;line-height:1.5;box-shadow:var(--shadow)}
+.mleg{display:inline-flex;flex-wrap:wrap;gap:2px 8px;margin-left:4px}
+.mleg span{display:inline-flex;align-items:center;gap:3px}
+.mleg i{width:7px;height:7px;border-radius:50%;background:hsl(var(--h) 62% 46%)}
 .dayv .ev[data-mk]{cursor:pointer}
 .dayv.nomap .ev[data-mk]{cursor:auto}
 .dayv.nomap .ev-pin,.dayv.nomap .nomapt{display:none}
@@ -530,7 +535,7 @@ function venueText(e){
 function card(e, day){
   const g=GAME[e.game_code]||{name:e.game_code,h:0};
   const mk=day&&e.venue?geoKey(e.venue.geo):null;
-  const pin=!day||!e.venue ? '' : mk ? `<button type="button" class="ev-pin" aria-label="${esc(venueLabel(e.venue))}を地図で見る">地図</button>` : '<span class="nomapt">地図なし</span>';
+  const pin=!day||!e.venue ? '' : mk ? `<button type="button" class="ev-pin" aria-label="${esc(venueLabel(e.venue))}を地図で見る">地図</button>` : `<button type="button" class="nomapt" aria-expanded="false" data-why="${e.attendance_mode==='online'?'online':'geo'}">地図なし</button>`;
   const tags=(Array.isArray(e.game_codes)&&e.game_codes.length?e.game_codes:[e.game_code]).map(c=>{ const x=GAME[c]||{name:c,h:0}; return `<span class="tag" style="--h:${x.h}"><i></i>${esc(x.name)}</span>`; }).join('');
   const w=whenText(e), fee=feeText(e), reg=regText(e);
   const st = e.event_status==='cancelled' ? '<span class="st cancel">中止</span>' : e.event_status==='postponed' ? '<span class="st post">延期</span>' : '';
@@ -569,8 +574,9 @@ function groupVenues(evs){
   for(const e of evs){
     const k=geoKey(e.venue&&e.venue.geo); if(!k) continue;
     let x=out.get(k);
-    if(!x){ x={key:k, lat:e.venue.geo.lat, lng:e.venue.geo.lng, label:venueLabel(e.venue), ids:[]}; out.set(k,x); }
+    if(!x){ x={key:k, lat:e.venue.geo.lat, lng:e.venue.geo.lng, label:venueLabel(e.venue), ids:[], games:[]}; out.set(k,x); }
     if(!x.ids.includes(e.id)) x.ids.push(e.id);
+    if(!x.games.includes(e.game_code)) x.games.push(e.game_code);
   }
   return out;
 }
@@ -589,6 +595,17 @@ function mapView(groups, prefs){
   const [lat,lng]=PREF_LL[+p.slice(3)-1];
   return {center:{lat,lng}, zoom:p==='JP-01'?7:10};
 }
+// Pin SVG in the games' colours (light-theme chip colour, the map is always light): one game fills the pin, several
+// split it into vertical stripes. A white disc in the head carries the count label, or stays a dot for one event.
+const pinColor = c => `hsl(${(GAME[c]||{h:0}).h} 62% 46%)`;
+function pinSvg(games, n, hl){
+  const cs=(games.length?games:['']).map(pinColor), w=28/cs.length;
+  const shape='M14 37C14 37 2 22.6 2 14a12 12 0 0 1 24 0c0 8.6-12 23-12 23z';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38"><defs><clipPath id="p"><path d="${shape}"/></clipPath></defs>`
+    + `<g clip-path="url(#p)">${cs.map((c,i)=>`<rect x="${(i*w).toFixed(2)}" y="0" width="${(w+.3).toFixed(2)}" height="38" fill="${c}"/>`).join('')}</g>`
+    + `<path d="${shape}" fill="none" stroke="${hl?'#1b1f2e':'#fff'}" stroke-width="${hl?2.4:1.6}"/>`
+    + `<circle cx="14" cy="14" r="${n>1?7.5:3.6}" fill="#fff"/></svg>`;
+}
 // ---- map: end pure helpers
 
 // Maps JavaScript API, loaded only when a day view's map opens. Classic google.maps.Marker: AdvancedMarkerElement
@@ -596,7 +613,7 @@ function mapView(groups, prefs){
 const MAPS_KEY = /*MAPS_KEY*/'';
 const narrow = window.matchMedia('(max-width:760px)');
 const mapEls = {v:document.getElementById('mapv'), tog:document.getElementById('mapTog'), sum:document.getElementById('mapSum'), box:document.getElementById('mapbox'), gmap:document.getElementById('gmap'), ph:document.getElementById('mapph')};
-let mapsP=null, gm=null, gmap=null, mapFail=MAPS_KEY?null:'nokey', mapOpen=false, userMoved=false, selKey=null, fitted=null, progMove=null;
+let mapsP=null, gm=null, gmap=null, mapFail=MAPS_KEY?null:'nokey', mapOpen=false, userMoved=false, selKey=null, fitted=null, progMove=null, hoverKey=null, tipBtn=null;
 const markers=new Map();
 const isDay = () => state.view==='list' && state.range==='custom' && state.from===state.to;
 function loadMaps(){
@@ -608,8 +625,8 @@ function loadMaps(){
     window.gm_authFailure=()=>fail('auth');
     window.__snMapsReady=async()=>{
       try{
-        const [{Map},{Marker,Animation}]=await Promise.all([google.maps.importLibrary('maps'),google.maps.importLibrary('marker')]);
-        resolve({Map,Marker,Animation});
+        const [{Map},{Marker,Animation},{Size,Point}]=await Promise.all(['maps','marker','core'].map(n=>google.maps.importLibrary(n)));
+        resolve({Map,Marker,Animation,Size,Point});
       }catch(e){ fail('load'); }
     };
     const s=document.createElement('script');
@@ -654,7 +671,9 @@ function renderMapPane(){
     ? '<b>地図は準備中です</b><span>この日のイベントは一覧でご覧ください。</span>'
     : '<b>地図を読み込めませんでした</b><span>広告ブロックや通信状況により Google マップを表示できません。イベントは一覧でご覧ください。</span>';
   const groups=groupVenues(events), nogeo=events.filter(e=>e.venue&&!geoKey(e.venue.geo)).length;
-  mapEls.sum.innerHTML = events.length && !mapFail ? `会場 <b>${groups.size}</b> か所${nogeo?` · 地図なし ${nogeo}件`:''}${autoLoading()?' · 読み込み中':''}` : '';
+  const present=GAMES.filter(g=>[...groups.values()].some(x=>x.games.includes(g.code)));
+  const leg=present.length?`<span class="mleg" aria-label="ピンの色">${present.map(g=>`<span style="--h:${g.h}"><i></i>${esc(g.name)}</span>`).join('')}</span>`:'';
+  mapEls.sum.innerHTML = events.length && !mapFail ? `会場 <b>${groups.size}</b> か所${nogeo?` · 地図なし ${nogeo}件`:''}${autoLoading()?' · 読み込み中':''}${leg}` : '';
 }
 // Markers follow the loaded events: added as pages arrive, removed when the day or filters change.
 function syncMap(){
@@ -663,13 +682,14 @@ function syncMap(){
   const groups=groupVenues(events);
   for(const [k,m] of markers) if(!groups.has(k)){ m.setMap(null); markers.delete(k); }
   groups.forEach(g=>{
-    const n=g.ids.length, label=n>1?{text:String(n),color:'#fff',fontSize:'11px',fontWeight:'700'}:null, title=`${g.label}（${n}件）`;
+    const n=g.ids.length, label=n>1?{text:String(n),color:'#1b1f2e',fontSize:'11px',fontWeight:'700'}:null, title=`${g.label}（${n}件）`;
     let m=markers.get(g.key);
     if(!m){
       m=new gm.Marker({map:gmap, position:{lat:g.lat,lng:g.lng}, title, label});
       m.addListener('click',()=>selectVenue(g.key,'map'));
       markers.set(g.key,m);
     } else { m.setLabel(label); m.setTitle(title); }
+    m.sn={...m.sn, games:g.games, n}; setPin(g.key);
   });
   // The view is fitted to the first venues and once more when the day's auto-loading ends, never after the user moved it.
   if(userMoved || fitted==='final' || !mapOpen) return;
@@ -679,8 +699,29 @@ function syncMap(){
   moveMap(()=>{ if(v.bounds) gmap.fitBounds(v.bounds,48); else { gmap.setCenter(v.center); gmap.setZoom(v.zoom); } });
   fitted=end?'final':'first';
 }
+const PIN_ICONS=new Map();
+function pinIcon(games,n,hl){
+  const id=games.join(',')+'|'+(n>1)+'|'+!!hl;
+  if(!PIN_ICONS.has(id)){
+    const k=hl?1.3:1, w=Math.round(28*k), h=Math.round(38*k);
+    PIN_ICONS.set(id,{url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(pinSvg(games,n,hl)), scaledSize:new gm.Size(w,h), anchor:new gm.Point(w/2,h), labelOrigin:new gm.Point(w/2,14*k)});
+  }
+  return PIN_ICONS.get(id);
+}
+// Icon and stacking for one marker: hovered > selected > the rest. Only changes what differs from the last call.
+function setPin(key){
+  const m=markers.get(key); if(!m||!m.sn) return;
+  const hl=key===hoverKey, icon=pinIcon(m.sn.games,m.sn.n,hl), z=hl?2000:key===selKey?1000:null;
+  if(m.sn.icon!==icon){ m.sn.icon=icon; m.setIcon(icon); }
+  if(m.sn.z!==z){ m.sn.z=z; m.setZIndex(z); }
+}
+function hoverVenue(key){
+  if(key===hoverKey) return;
+  const old=hoverKey; hoverKey=key;
+  if(old) setPin(old); if(key) setPin(key);
+}
 function moveMap(fn){ clearTimeout(progMove); progMove=setTimeout(()=>{ progMove=null; },1000); fn(); }
-function resetMap(){ userMoved=false; selKey=null; fitted=null; for(const m of markers.values()) m.setMap(null); markers.clear(); }
+function resetMap(){ userMoved=false; selKey=null; hoverKey=null; fitted=null; for(const m of markers.values()) m.setMap(null); markers.clear(); }
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Scrolls the page so the card sits just below the sticky toolbar, unless it is already fully visible there.
 function revealCard(c){
@@ -697,7 +738,7 @@ function selectVenue(key, from){
   if(from==='map' && cards[0]) revealCard(cards[0]);
   const m=markers.get(key);
   if(!m||!gmap) return;
-  markers.forEach(x=>x.setZIndex(x===m?1000:null));
+  markers.forEach((x,k)=>setPin(k));
   if(from==='card'){ userMoved=true; moveMap(()=>{ gmap.panTo(m.getPosition()); if(gmap.getZoom()<14) gmap.setZoom(15); }); }
   if(!reducedMotion() && gm.Animation){ m.setAnimation(gm.Animation.BOUNCE); setTimeout(()=>m.setAnimation(null),1400); }
 }
@@ -840,9 +881,40 @@ function renderList(){
   });
   const rest = total!=null && segs.every(x=>x.count!=null) ? total-events.length : null;
   if(!done) h+=`<button class="loadmore" id="loadMore"${busy?' disabled':''}>${busy?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;
-  listEl.innerHTML=h;
+  tipBtn=null; listEl.innerHTML=h;
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
+  if(hoverKey && !listEl.querySelector(`.ev[data-mk="${CSS.escape(hoverKey)}"]:is(:hover,:focus-within)`)) hoverVenue(null);
 }
+// 地図なし explains itself in a small popover (click / Enter / Space toggle; outside click and Escape close).
+function closeTip(focus){
+  if(!tipBtn) return;
+  const b=tipBtn; tipBtn=null;
+  document.getElementById('nomTip')?.remove();
+  b.setAttribute('aria-expanded','false'); b.removeAttribute('aria-describedby');
+  if(focus) b.focus();
+}
+function toggleTip(b){
+  if(tipBtn===b){ closeTip(); return; }
+  closeTip();
+  const ev=b.closest('.ev'), t=document.createElement('div');
+  t.id='nomTip'; t.className='nomtip'; t.setAttribute('role','tooltip');
+  t.textContent=b.dataset.why==='online' ? 'オンライン開催のため地図には表示されません。' : 'この会場は位置情報が公開されていないため、地図に表示できません。';
+  ev.appendChild(t);
+  t.style.top=(b.offsetTop+b.offsetHeight+4)+'px';
+  t.style.left=Math.max(8,Math.min(b.offsetLeft,ev.clientWidth-t.offsetWidth-8))+'px';
+  b.setAttribute('aria-expanded','true'); b.setAttribute('aria-describedby','nomTip');
+  tipBtn=b;
+}
+document.addEventListener('click',e=>{ if(tipBtn && e.target.closest('button.nomapt')!==tipBtn && !e.target.closest('#nomTip')) closeTip(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && tipBtn) closeTip(true); });
+// Hovering (fine pointers only) or keyboard-focusing a day-view card highlights its marker; it never moves the map.
+const finePtr=window.matchMedia('(hover:hover) and (pointer:fine)');
+const cardKey=el=>{ const c=el&&el.closest&&el.closest('.ev[data-mk]'); return c&&listEl.contains(c)?c.dataset.mk:null; };
+const kbFocus=el=>{ try{ return !!el&&el.matches(':focus-visible'); }catch(e){ return false; } };
+listEl.addEventListener('mouseover',e=>{ if(finePtr.matches&&isDay()) hoverVenue(cardKey(e.target)); });
+listEl.addEventListener('mouseleave',()=>{ if(finePtr.matches) hoverVenue(kbFocus(document.activeElement)?cardKey(document.activeElement):null); });
+listEl.addEventListener('focusin',e=>{ if(finePtr.matches&&isDay()&&kbFocus(e.target)) hoverVenue(cardKey(e.target)); });
+listEl.addEventListener('focusout',e=>{ if(finePtr.matches) hoverVenue(cardKey(e.relatedTarget)); });
 function closeDay(){ if(history.state&&history.state.day) history.back(); else commit({view:'cal',range:'upcoming',month:monthOf(state.from)}); }
 document.getElementById('rhead').addEventListener('click',e=>{ if(e.target.closest('#dayBack')) closeDay(); });
 narrow.addEventListener('change',()=>{ renderControls(); });
@@ -854,6 +926,7 @@ document.getElementById('results').addEventListener('click',e=>{
   if(e.target.closest('#retry')){ if(!meta) loadMeta(); reload(); return; }
   if(e.target.closest('#resetAll2')){ commit({game:[],type:[],days:'',range:'upcoming'}); return; }
   if(e.target.closest('#pickPref')){ openPref(); return; }
+  const nm=e.target.closest('button.nomapt'); if(nm){ toggleTip(nm); return; }
   const a=e.target.closest('a.ev-link'); if(a){ track('click_event_source',{game:a.dataset.game}); return; }
   const d=e.target.closest('button.cd[data-day],button.daymap[data-open]');
   if(d){ const k=d.dataset.day||d.dataset.open; commit({view:'list',range:'custom',from:k,to:k},{day:true}); window.scrollTo({top:0}); track('events_map',{action:'day'}); return; }
