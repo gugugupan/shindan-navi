@@ -54,7 +54,8 @@ If the set of main-title pages or their lead images changed a lot, rerun `python
 
 - Have the Fable reviewer cross-check suspicious values against the official pages (dates that moved, prices on prerelease / promo items, box prices that look like case prices, near-identical names), not only the packet's numbers. That run found a duplicate, a wrong box price and two dates that the official site had moved.
 - `data/overrides.json` is the owner's file of hand decisions. Propose each fix (id, `_name`, the key and value, the official page as evidence) and apply it only after the owner's OK. Keys: `url`, `thumb`, `name`, `date`, `pack` / `box` (`""` = no price), `approx`, `hide`, plus `_name` / `note` for people.
-- Merged names are not stable between runs: when a source renames an item (e.g. adds ブースターパック), the merge can give it a new id next to the old one, so the same product shows twice. Hide the extra id with a `note` naming the kept id; don't rename to force a match, because ids follow the name.
+- The displayed name can flip between runs (open merge bug). A first run can save a new `official_name` but keep the old `name`; on a `--skip-collect` rerun the two no longer match, so the merge takes the aggregator name instead (2026-11-19: 「ポケモンカードゲーム MEGA 拡張パック「ハドウシーカー」」 → 「拡張パック「ハドウシーカー」」, another item lost 「ブースターパック 」). Ids stay stable. Compare names in the packet's field changes after every rerun, and pin a `name` override when the name matters.
+- A duplicate of an existing item (same product under two ids) is fixed with `hide: true` plus a `note` naming the id that stays.
 
 ## 4. Publish
 
