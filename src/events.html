@@ -131,15 +131,6 @@ button.cd:hover{background:var(--surface-2)}
 .dayv.nomap .ev-pin,.dayv.nomap .nomapt{display:none}
 .ev.hl{box-shadow:0 0 0 2px var(--accent);background:var(--accent-soft)}
 
-/* prefecture picker */
-.prefdlg{width:min(640px,calc(100vw - 32px))}
-.prefdlg fieldset{border:0;margin:0;padding:10px 0 0;border-top:1px solid var(--line);display:grid;gap:6px}
-.prefdlg legend{float:left;width:100%;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--muted);padding:0}
-.prefdlg .fc{clear:both}
-.prefdlg .chip em.z{opacity:.55}
-.prefdlg .note{margin:0;font-size:12px;color:var(--muted)}
-.prefdlg .foot{display:flex;justify-content:space-between;gap:8px;position:sticky;bottom:-20px;background:var(--surface);padding:10px 0 20px;margin-bottom:-20px;border-top:1px solid var(--line)}
-
 @media (max-width:760px){
   .evlabel{font-size:13px;padding:5px 10px;min-width:0;overflow:hidden;text-overflow:ellipsis}
   .evlabel small{display:none}
@@ -219,7 +210,8 @@ button.cd:hover{background:var(--surface-2)}
   <!--SITENAV-->
 </div>
 
-<dialog id="prefDlg" class="prefdlg" aria-labelledby="prefTitle"><div class="dlg"><button class="ib close" id="prefClose" aria-label="閉じる">×</button><h2 class="dl-day" id="prefTitle">都道府県を選ぶ</h2><div id="prefBody"></div></div></dialog>
+
+<!--LOCPICK-->
 
 <dialog id="fDlg" class="prefdlg" aria-labelledby="fTitle"><div class="dlg"><button class="ib close" id="fClose" aria-label="閉じる">×</button><h2 class="dl-day" id="fTitle"></h2><div id="fBody" class="fc"></div></div></dialog>
 
@@ -232,23 +224,10 @@ const GAMES = [
   {code:'PTCG', name:'ポケモンカード', h:44, bit:8}
 ];
 const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
-const REGIONS = [
-  ['北海道・東北',['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県']],
-  ['関東',['茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県']],
-  ['中部',['新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県']],
-  ['近畿',['三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県']],
-  ['中国',['鳥取県','島根県','岡山県','広島県','山口県']],
-  ['四国',['徳島県','香川県','愛媛県','高知県']],
-  ['九州・沖縄',['福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県']]
-];
-const PREF = {}; let pi=0;
-REGIONS.forEach(([r,ps])=>ps.forEach(p=>{ pi++; PREF['JP-'+String(pi).padStart(2,'0')]=p; }));
 // One location at a time (owner decision): a prefecture, or 'online' for events without a venue. Older links and
-// saved filters may list several; the first one is kept.
-const ONLINE='online', MAX_PREFS=1;
-const locName = c => c===ONLINE ? 'オンライン' : PREF[c];
-const PREF_REGION = {}; pi=0;
-REGIONS.forEach(([r,ps],ri)=>ps.forEach(()=>{ pi++; PREF_REGION['JP-'+String(pi).padStart(2,'0')]=ri; }));
+// saved filters may list several; the first one is kept. Tables and picker: src/locpick.html (shared with /).
+const {PREF, ONLINE, locName} = window.snLoc;
+const MAX_PREFS=1;
 const CATS = [['tournament','大会'],['casual','交流会'],['teaching','体験会'],['festival','フェス']];
 const CAT_LABEL = Object.fromEntries([...CATS,['other','その他'],['unknown','種類未分類']]);
 const REG_METHOD = {first_come:'先着',lottery:'抽選',walk_in:'当日参加OK',invitation:'招待制'};
@@ -397,7 +376,7 @@ function renderControls(){
     fb('days','曜日',(DAYS.find(d=>d[0]===state.days&&d[0])||[])[1]||'') +
     (activeFilterCount()||state.range==='custom'?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
   if(fDlg.open) renderF();
-  if(prefDlg.open) renderPref();
+  window.snLoc.refresh();
 
   document.getElementById('vList').setAttribute('aria-pressed',state.view==='list');
   document.getElementById('vCal').setAttribute('aria-pressed',state.view==='cal');
@@ -483,70 +462,24 @@ document.getElementById('filterBtn').onclick=e=>{
 document.getElementById('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'event_list'}); };
 document.getElementById('vCal').onclick=()=>{ commit({view:'cal',month:clampMonth(monthOf(rangeOf(state)[0])),...(isDay()?{range:'upcoming'}:{})}); track('switch_view',{view:'event_calendar'}); };
 
-// ---- prefecture dialog: picking a location applies it and closes the dialog
-const prefDlg=document.getElementById('prefDlg');
-// What picking each location would list under the current game / type / day filters, from meta.loc_counts (rows of
-// [game_mask, type index, month index, weekend, weekday]): the month on screen, or the months of the upcoming list.
-// Meta from an importer without loc_counts only has overall totals, shown while nothing is filtered.
+// ---- prefecture dialog (src/locpick.html): picking a location applies it and closes the dialog
+// The numbers are what picking each location would list under the current game / type / day filters: the month on
+// screen, or the months of the upcoming list.
 function prefCounts(){
-  if(!meta) return null;
-  const lc=meta.loc_counts;
-  if(!lc||!lc.rows){
-    if(state.game.length||state.type.length||state.days) return null;
-    const n=Object.fromEntries((meta.prefectures||[]).map(p=>[p.code,p.count]));
-    n[ONLINE]=meta.online?meta.online.count:0;
-    return {n, label:'掲載中のイベント数'};
-  }
   const ym=state.view==='cal'?state.month:isDayState(state)?monthOf(state.from):null;
   const months=ym?[ym]:[];
   if(!ym) for(let m=monthOf(TODAY), last=monthOf(addD(TODAY,MAX_DAYS-1)); m<=last; m=addM(m,1)) months.push(m);
-  const mi=new Set(months.map(m=>lc.months.indexOf(m)).filter(i=>i>=0));
-  const sel=state.game.reduce((b,c)=>b|GAME[c].bit,0);
-  const ti=new Set(state.type.map(t=>lc.types.indexOf(t)).filter(i=>i>=0));
-  const n={};
-  for(const [loc,r] of Object.entries(lc.rows)){
-    let t=0;
-    for(let i=0;i+4<r.length;i+=5){
-      if(sel&&!(r[i]&sel)) continue;
-      if(state.type.length&&!ti.has(r[i+1])) continue;
-      if(!mi.has(r[i+2])) continue;
-      t+=state.days==='weekend'?r[i+3]:state.days==='weekday'?r[i+4]:r[i+3]+r[i+4];
-    }
-    n[loc]=t;
-  }
-  return {n, all:true, label:ym?`${+ym.slice(5)}月のイベント数`:`${+months[0].slice(5)}月〜${+months[months.length-1].slice(5)}月のイベント数`};
-}
-let prefN=null;
-function prefChip(c){
-  const n=prefN?prefN.n[c]||0:null, on=state.pref.includes(c);
-  return `<button type="button" class="chip k" data-pref="${c}" aria-pressed="${on}">${esc(locName(c))}${n!=null?` <em${n?'':' class="z"'}>${n.toLocaleString('ja-JP')}</em>`:''}</button>`;
-}
-function renderPref(){
-  prefN=prefCounts();
-  const filtered=state.game.length||state.type.length||state.days;
-  const what=prefN?`数字は${filtered&&prefN.all?'いまの絞り込み条件での':''}${prefN.label}です。`:'';
-  document.getElementById('prefBody').innerHTML = `<p class="note">都道府県かオンラインを1つ選びます。選んだ地域は次回も使われます。${what}</p>` +
-    REGIONS.map(([r],ri)=>{
-      const codes=Object.keys(PREF_REGION).filter(c=>PREF_REGION[c]===ri);
-      return `<fieldset><legend><span>${esc(r)}</span></legend><div class="fc">${codes.map(prefChip).join('')}</div></fieldset>`;
-    }).join('') +
-    `<fieldset><legend><span>会場なし</span></legend><div class="fc">${prefChip(ONLINE)}</div></fieldset>`;
+  const r=window.snLoc.countsFromMeta(meta,{mask:state.game.reduce((b,c)=>b|GAME[c].bit,0), type:state.type, days:state.days, months});
+  if(!r) return null;
+  return {...r, filtered:!!(state.game.length||state.type.length||state.days),
+    label:!r.all?'掲載中のイベント数':ym?`${+ym.slice(5)}月のイベント数`:`${+months[0].slice(5)}月〜${+months[months.length-1].slice(5)}月のイベント数`};
 }
 function openPref(){
-  renderPref();
-  if(prefDlg.showModal) prefDlg.showModal(); else prefDlg.setAttribute('open','');
-  prefDlg.querySelector('[data-pref][aria-pressed="true"]')?.focus();
+  window.snLoc.open({current:state.pref[0], counts:prefCounts, onPick:c=>{
+    if(state.pref.length!==1||state.pref[0]!==c){ commit({pref:[c]}); track('events_filter',{key:'pref',value:c}); }
+    document.querySelector('[data-f="pref"]')?.focus();
+  }});
 }
-prefDlg.addEventListener('click',e=>{
-  if(e.target===prefDlg){ prefDlg.close(); return; }
-  const p=e.target.closest('[data-pref]');
-  if(!p) return;
-  const c=p.dataset.pref;
-  prefDlg.close();
-  if(state.pref.length!==1||state.pref[0]!==c){ commit({pref:[c]}); track('events_filter',{key:'pref',value:c}); }
-  document.querySelector('[data-f="pref"]')?.focus();
-});
-document.getElementById('prefClose').onclick=()=>prefDlg.close();
 
 // ---- formatting
 const timeFmt = tz => new Intl.DateTimeFormat('ja-JP',{timeZone:tz||'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false});

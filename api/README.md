@@ -303,11 +303,16 @@ prefecture (東京都, 178 events) ≈ `/days` + 4 pages ≈ 700 rows; 5 largest
 pages + meta, the cap) ≈ 7,100 rows. That is ~700 uncached worst-case day views per 5M reads (~350 if D1 counts
 every scanned row twice).
 
-**Today page** (`/`, `src/home.html`): only with a saved location, 2 requests per visit, both keys the `/events/`
-page uses too: `/events/days` for this month (calendar view) and `/events` from today to the 1st of next month with
-`limit=50` (first list page), with the saved `game`/`type` (not `days`). Uncached, one prefecture: ≤ ~290 + ~103
-rows (Tokyo, unfiltered; filtered ≤ ~290 + ~444). Usually both are cache hits. No `/geo`, no `/events/meta`; no
-request at all without a saved location. Days of the next month in its week strip link without a count.
+**Today page** (`/`, `src/home.html`): no request without a saved location. With one, 2-3 requests per visit, all
+keys the `/events/` page uses too, with the saved `game`/`type` (not `days`): `/events/days` for this month (calendar
+view; its `by_game` gives each game column's total and the week strip's per-game chips) and `/events` from today to
+the 1st of next month with `limit=50` (first list page). `limit` is fixed at 50 and the page runs in start order across
+all games, so on a busy day one game can fill it: then, and only then, the page asks for the next page with its
+`next_cursor` (the list's second page, same key) — at most one extra page; a column still short after it shows its
+total and a link. Uncached, one prefecture: ≤ ~290 + ~103 (+ ~103) rows (Tokyo, unfiltered; filtered ≤ ~290 + ~444
+(+ ~444)). On the data of 2026-11-19 Tokyo unfiltered needs the third request (PTCG 104 of 157 events), Osaka + PTCG
+and online do not. `/events/meta` (1 row, same key as `/events/`) only when the location picker is opened, for its
+counts; no `/geo`. Days of the next month in its week strip link without a count.
 
 **Worst case.** A miss costs at most ~2.3k rows (a filtered `/events` page on the 5 largest prefectures: the whole
 month's day_counts when matches are sparse, up to 200 rows per location, the ≤ 50 matches in full). ~2,200 distinct

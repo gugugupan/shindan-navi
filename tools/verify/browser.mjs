@@ -193,6 +193,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
 }
 // / is the today page: today (Asia/Tokyo) from the embedded releases, favourites first, the saved location's events
 // from at most 2 API requests (stubbed here; none without a location), and day deep links into /releases/.
+const WEEK1 = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
 for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const where = `${vp} /`;
   const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
@@ -203,13 +204,25 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
   page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
+  // Stub API. Default: 7 OPCG events today, /days without by_game (the page then groups the list itself).
+  // scenario 'busy': 50 OPCG events fill the first page; PTCG's 3 come only on the cursor page.
+  let scenario = 'plain';
+  const evt = (i, code, hh, day = TODAY) => ({ id: `${code}${i}`, name: `テスト大会 ${code} ${i + 1}`, game_code: code, game_codes: [code],
+    starts_on: day, time_precision: 'datetime', starts_at: `${day}T${String(hh).padStart(2, '0')}:00:00+09:00`, timezone: 'Asia/Tokyo',
+    attendance_mode: 'offline', venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
   await page.route('**/api/v1/**', route => {
     const u = new URL(route.request().url());
     api.push(u.pathname + u.search);
+    if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [],
+      loc_counts: { months: [TODAY.slice(0, 7)], types: ['x'], rows: { 'JP-13': [1, 0, 0, 3, 4], 'JP-27': [8, 0, 0, 1, 1] } } } });
+    if (scenario === 'busy') {
+      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 53, by_game: { OPCG: 50, PTCG: 3 } },
+        { date: WEEK1, count: 4, by_game: { UATCG: 1, CONAN: 3 } }] } });
+      return route.fulfill({ json: u.searchParams.get('cursor') ? { events: [0, 1, 2].map(i => evt(i, 'PTCG', 20)), next_cursor: null }
+        : { events: Array.from({ length: 50 }, (_, i) => evt(i, 'OPCG', 10 + (i % 9))), next_cursor: 'c1' } });
+    }
     const body = u.pathname.endsWith('/days') ? { days: [{ date: TODAY, count: 7 }] }
-      : { events: Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, name: `テスト大会 ${i + 1}`, game_code: 'OPCG', game_codes: ['OPCG'],
-        starts_on: TODAY, time_precision: 'datetime', starts_at: `${TODAY}T${String(10 + i).padStart(2, '0')}:00:00+09:00`, timezone: 'Asia/Tokyo',
-        attendance_mode: 'offline', venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' })) };
+      : { events: Array.from({ length: 7 }, (_, i) => evt(i, 'OPCG', 10 + i)) };
     route.fulfill({ json: body });
   });
   const res = await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
@@ -219,7 +232,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const hasEvents = await page.locator('#evBody').count() > 0;
   const st = await page.evaluate(() => ({ date: document.getElementById('hDate').textContent, cards: document.querySelectorAll('#relBody a.pk').length,
     none: !!document.querySelector('#relBody .none'), days: document.querySelectorAll('#wkBody .wd').length,
-    prompt: !!document.querySelector('#evBody .none a[href="/events/"]'), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+    prompt: !!document.querySelector('#evBody .none button#pickLoc'), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
   const [, m, d] = TODAY.split('-').map(Number);
   if (!st.date.startsWith(`${m}月${d}日`)) fail(where, `date ${st.date}`);
   if (st.cards !== todays.length || (!todays.length && !st.none)) fail(where, `today shows ${st.cards} releases, data has ${todays.length}`);
@@ -243,10 +256,38 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const want = [`/api/v1/events/days?from=${ym}-01&until=${next}&game=OPCG&pref=JP-13`, `/api/v1/events?from=${TODAY}&until=${next}&game=OPCG&pref=JP-13&limit=50`];
     if (JSON.stringify([...api].sort()) !== JSON.stringify(want.sort())) fail(where, `API requests ${api.join(' ')}`);
     const ev = await page.evaluate(() => ({ rows: document.querySelectorAll('#evBody .ev').length, more: document.querySelector('#evBody a.go')?.getAttribute('href'),
-      where: document.getElementById('evWhere').textContent }));
-    if (ev.rows !== 5) fail(where, `today's events show ${ev.rows} rows`);
+      cols: document.querySelectorAll('#evBody .gcol').length, where: document.getElementById('evWhere').textContent }));
+    if (ev.cols !== 1 || ev.rows !== 5) fail(where, `today's events show ${ev.cols} columns / ${ev.rows} rows`);
     if (ev.more !== `/events/?game=OPCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `day view link ${ev.more}`);
     if (!ev.where.startsWith('東京都')) fail(where, `location ${ev.where}`);
+
+    // the location picker (shared with /events/): the choice goes into the saved filters, the rest of them kept
+    api.length = 0;
+    await page.locator('#locBtn').click();
+    await page.locator('#prefDlg[open] [data-pref="JP-27"]').waitFor();
+    // counts from meta.loc_counts for the saved game filter (OPCG): Tokyo 3 + 4, Osaka's row is PTCG only
+    await page.waitForFunction(() => document.querySelector('#prefDlg [data-pref="JP-13"] em')?.textContent === '7');
+    if (await page.locator('#prefDlg [data-pref="JP-27"] em').textContent() !== '0') fail(where, 'picker counts ignore the game filter');
+    await page.locator('#prefDlg [data-pref="JP-27"]').click();
+    await page.waitForFunction(() => document.getElementById('evWhere').textContent.startsWith('大阪府') && document.querySelector('#evBody .gcol'));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tcg.ev.filters')));
+    if (saved.pref !== 'JP-27' || saved.game !== 'OPCG' || saved.days !== 'weekend') fail(where, `picker saved ${JSON.stringify(saved)}`);
+    const want2 = ['/api/v1/events/meta', `/api/v1/events/days?from=${ym}-01&until=${next}&game=OPCG&pref=JP-27`, `/api/v1/events?from=${TODAY}&until=${next}&game=OPCG&pref=JP-27&limit=50`];
+    if (JSON.stringify([...api].sort()) !== JSON.stringify(want2.sort())) fail(where, `API requests after the picker ${api.join(' ')}`);
+    if (await page.locator('#prefDlg').evaluate(d => d.open)) fail(where, 'picker still open');
+
+    // all games, one busy: per-game columns from /days by_game, one cursor page for the game the first page missed
+    scenario = 'busy'; api.length = 0;
+    await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })));
+    await page.reload({ waitUntil: 'networkidle' });
+    const busy = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelectorAll('.ev').length,
+      c.querySelector('a.go')?.textContent]), chips: [...document.querySelectorAll('#wkBody .wd')][0].querySelectorAll('a.gc').length,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+    if (JSON.stringify(busy.cols) !== JSON.stringify([['ONE PIECE', 5, 'ほか 45件 ›'], ['ポケモンカード', 3, '地図で見る ›']])) fail(where, `busy columns ${JSON.stringify(busy.cols)}`);
+    if (api.length !== 3 || !api.some(a => a.includes('cursor=c1'))) fail(where, `busy: API requests ${api.join(' ')}`);
+    if (busy.chips !== 2) fail(where, `tomorrow shows ${busy.chips} game chips`);
+    if (busy.overflow > 1) fail(where, `busy: page scrolls horizontally by ${busy.overflow}px`);
+    await page.screenshot({ path: path.join(OUT, `${vp}-home-busy.png`), fullPage: true });
   }
   await page.screenshot({ path: path.join(OUT, `${vp}-home.png`), fullPage: true });
   for (const b of [...new Set(bad)]) fail(where, b);

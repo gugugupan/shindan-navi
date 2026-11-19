@@ -190,6 +190,8 @@ def tooltabs(tool):
     return '<nav class="tooltabs" aria-label="ツール">'+''.join(
         f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}{b}</span></a>' for p,a,b,ic in TOOLS)+'</nav>'
 CORNER_SRC=open(os.path.join(ROOT,'src/corner.html')).read()
+# location picker of /events/ and / (src/locpick.html), inserted before the page script at the LOCPICK slot
+LOCPICK=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/locpick.html')).read(),count=1,flags=re.S).strip()
 def corner(tool):
     # logo-row controls of every page: product switch after the logo, settings and user on the right (src/corner.html)
     return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
@@ -198,7 +200,8 @@ def siterow(cur):
     fb=''
     if FEEDBACK_ENABLED:
         fb=f'<a href="/feedback/"{cur_("/feedback/")}>ご意見・ご要望</a>' if cur=='/feedback/' else f'<a href="/feedback/?from={urllib.parse.quote(cur)}">ご意見・ご要望</a>'
-    return f'<div><b>トレカカレンダー</b><a href="/"{cur_("/")}>トップ</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a>{fb}</div>'
+    brand='トレカカレンダー<small>（旧・新弾ナビ）</small>' if cur=='/' else 'トレカカレンダー'
+    return f'<div><b>{brand}</b><a href="/"{cur_("/")}>トップ</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a>{fb}</div>'
 def toolrow(cur):
     if len(TOOLS)<2: return ''
     return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{a}{b}</a>' for p,a,b,ic in TOOLS)+'</div>'
@@ -287,7 +290,7 @@ def render_events():
     src=flags(open(os.path.join(ROOT,'src/events.html')).read())
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY))):
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK)):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--CORNER-->',corner('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}{siterow("/events/")}</nav>')
@@ -405,24 +408,17 @@ HOME_BEFORE,HOME_AFTER=1,14
 def home_page():
     t=jd(TODAY)
     lo,hi=(t-datetime.timedelta(days=HOME_BEFORE)).isoformat(),(t+datetime.timedelta(days=HOME_AFTER)).isoformat()
-    soon=[d for d in data if TODAY<=d['date']<=hi]
     ev='・TCGイベント' if BUILD_EVENTS else ''
+    # 旧・新弾ナビ in the description and the footer brand (sitenav('/')) keeps the old name findable
     return dict(path='/',og='home',lo=lo,hi=hi,
         title=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}｜トレカカレンダー',
-        desc=(f'今日発売のTCG・トレカ新弾（ポケカ・ワンピカード・MTG・遊戯王・デュエマ・ヴァイスほか{len(used)}タイトル）'
-              +('と、選んだ都道府県で今日開催されるTCGイベント（店舗大会・交流会・体験会）' if BUILD_EVENTS else '')
-              +'をひと目でチェック。明日・今週の発売予定もまとめて確認できます。'),
-        keywords=['今日発売','今日 発売 トレカ','TCG 今日','トレカ 新弾 今日','今週 発売 トレカ']+(['TCG イベント 今日','店舗大会'] if BUILD_EVENTS else [])+COMMON_KW,
+        desc=(f'トレカカレンダー（旧・新弾ナビ）で、今日発売のTCG・トレカ新弾（ポケカ・ワンピカード・MTG・遊戯王・デュエマ・ヴァイスほか{len(used)}タイトル）'
+              +('と、選んだ都道府県で今日開催されるTCGイベント（店舗大会・交流会・体験会）をタイトル別に' if BUILD_EVENTS else 'を')
+              +'ひと目でチェック。明日・今週の発売予定'+('とイベント数' if BUILD_EVENTS else '')+'もまとめて確認できます。'),
+        keywords=['今日発売','今日 発売 トレカ','TCG 今日','トレカ 新弾 今日','今週 発売 トレカ','新弾ナビ']+(['TCG イベント 今日','店舗大会'] if BUILD_EVENTS else [])+COMMON_KW,
         h1=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}',
-        lead=f'{len(used)}タイトルの新弾{ev}を日本時間の今日で表示（{upd_label}更新）',
-        list=static_list(soon,'今後2週間の発売予定',f'{fmt(TODAY,True)}から{HOME_AFTER}日以内に発売されるTCG・トレカ新弾 {len(soon)}件。')
-            +about_block('トレカカレンダーについて',[
-              f'トレカカレンダーは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をまとめた<a href="/releases/">新弾カレンダー</a>'
-              +('と、店舗大会・交流会を都道府県で探せる<a href="/events/">イベントカレンダー</a>' if BUILD_EVENTS else '')
-              +'のサイトです。このページでは、今日発売の商品'+('と今日のイベント' if BUILD_EVENTS else '')+'、明日からの1週間の予定をまとめて表示します。',
-              '新弾カレンダーで ☆ を付けたお気に入りの商品は、このページでも先頭に表示されます。'
-              +('イベントは、イベントカレンダーで選んだ都道府県（またはオンライン）のものを表示します。' if BUILD_EVENTS else '')]),
-        ld_items=soon)
+        lead=f'{len(used)}タイトルの新弾{ev}を、日本時間の「今日」で表示しています（発売情報は{upd_label}更新）。'
+             +('イベントは選んだ都道府県（またはオンライン）のものを、タイトル別に表示します。' if BUILD_EVENTS else ''))
 HOME_PAGE=home_page()
 def render_home():
     pg=HOME_PAGE
@@ -433,19 +429,15 @@ def render_home():
     keep=['id','date','game','name','pack','thumb']
     home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
-    pagehead=f'<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p>{esc(pg["lead"])}</p></div>'
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
-                     ('<!--PAGEHEAD-->',pagehead),('<!--SEOLIST-->',pg['list']),
-                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE))):
+                     ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
+                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
     url=SITE+'/'
     og=f'{SITE}/og/{pg["og"]}.png'
     ld=[{'@context':'https://schema.org','@type':'WebSite','name':'トレカカレンダー','alternateName':'新弾ナビ','url':url,'inLanguage':'ja'}]
-    if pg['ld_items']:
-        ld.append({'@context':'https://schema.org','@type':'ItemList','name':'今後2週間の発売予定','numberOfItems':len(pg['ld_items']),
-            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],**({'url':d['url']} if d['url'] else {})} for i,d in enumerate(pg['ld_items'])]})
     ldjs=''.join(f'<script type="application/ld+json">{json.dumps(x,ensure_ascii=False).replace("</","<\\/")}</script>' for x in ld)
     head=f"""<!doctype html>
 <html lang="ja">

@@ -1,0 +1,99 @@
+<!--
+  Location picker shared by /events/ and / (build.py inserts it at the LOCPICK slot, before the page script).
+  One location at a time (owner decision): a prefecture, or 'online' for events without a venue. Both pages keep it as
+  `pref` in the /events/ saved filters (localStorage tcg.ev.filters, synced to the account by corner.html), so a
+  change on one page is what the other reads. window.snLoc: the prefecture tables, open({current, counts, onPick}),
+  refresh() while open, and countsFromMeta() for the per-location numbers of /events/meta.
+-->
+<style>
+.prefdlg{width:min(640px,calc(100vw - 32px))}
+.prefdlg fieldset{border:0;margin:0;padding:10px 0 0;border-top:1px solid var(--line);display:grid;gap:6px}
+.prefdlg legend{float:left;width:100%;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--muted);padding:0}
+.prefdlg .fc{clear:both;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.prefdlg .chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.prefdlg .chip.k[aria-pressed="true"] em{color:inherit;opacity:.7}
+.prefdlg .chip em.z{opacity:.55}
+.prefdlg .note{margin:0;font-size:12px;color:var(--muted)}
+.prefdlg .foot{display:flex;justify-content:space-between;gap:8px;position:sticky;bottom:-20px;background:var(--surface);padding:10px 0 20px;margin-bottom:-20px;border-top:1px solid var(--line)}
+</style>
+<dialog id="prefDlg" class="prefdlg" aria-labelledby="prefTitle"><div class="dlg"><button class="ib close" id="prefClose" aria-label="閉じる">×</button><h2 class="dl-day" id="prefTitle">都道府県を選ぶ</h2><div id="prefBody"></div></div></dialog>
+<script>
+window.snLoc=(function(){
+  const REGIONS=[
+    ['北海道・東北',['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県']],
+    ['関東',['茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県']],
+    ['中部',['新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県']],
+    ['近畿',['三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県']],
+    ['中国',['鳥取県','島根県','岡山県','広島県','山口県']],
+    ['四国',['徳島県','香川県','愛媛県','高知県']],
+    ['九州・沖縄',['福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県']]
+  ];
+  const PREF={}, PREF_REGION={}; let i=0;
+  REGIONS.forEach(([,ps],ri)=>ps.forEach(p=>{ i++; const c='JP-'+String(i).padStart(2,'0'); PREF[c]=p; PREF_REGION[c]=ri; }));
+  const ONLINE='online';
+  const locName=c=>c===ONLINE?'オンライン':PREF[c];
+  const isLoc=c=>c===ONLINE||!!PREF[c];
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // Events per location under a game mask (bits as in /events/meta), type codes, days ('' / weekend / weekday) and
+  // months, from meta.loc_counts (rows of [game_mask, type index, month index, weekend, weekday]). Meta from an
+  // importer without loc_counts only has overall totals, usable while nothing is filtered ({all:false}).
+  function countsFromMeta(meta,{mask=0,type=[],days='',months=[]}){
+    if(!meta) return null;
+    const lc=meta.loc_counts;
+    if(!lc||!lc.rows){
+      if(mask||type.length||days) return null;
+      const n=Object.fromEntries((meta.prefectures||[]).map(p=>[p.code,p.count]));
+      n[ONLINE]=meta.online?meta.online.count:0;
+      return {n, all:false};
+    }
+    const mi=new Set(months.map(m=>lc.months.indexOf(m)).filter(x=>x>=0));
+    const ti=new Set(type.map(t=>lc.types.indexOf(t)).filter(x=>x>=0));
+    const n={};
+    for(const [loc,r] of Object.entries(lc.rows)){
+      let t=0;
+      for(let j=0;j+4<r.length;j+=5){
+        if(mask&&!(r[j]&mask)) continue;
+        if(type.length&&!ti.has(r[j+1])) continue;
+        if(!mi.has(r[j+2])) continue;
+        t+=days==='weekend'?r[j+3]:days==='weekday'?r[j+4]:r[j+3]+r[j+4];
+      }
+      n[loc]=t;
+    }
+    return {n, all:true};
+  }
+
+  const dlg=document.getElementById('prefDlg'), body=document.getElementById('prefBody');
+  let opts=null;
+  function chip(c,cn){
+    const n=cn?cn.n[c]||0:null, on=opts.current===c;
+    return `<button type="button" class="chip k" data-pref="${c}" aria-pressed="${on}">${esc(locName(c))}${n!=null?` <em${n?'':' class="z"'}>${n.toLocaleString('ja-JP')}</em>`:''}</button>`;
+  }
+  // opts.counts() returns null or {n, label (what the numbers are), filtered}
+  function render(){
+    const cn=opts.counts?opts.counts():null;
+    const what=cn?`数字は${cn.filtered&&cn.all?'いまの絞り込み条件での':''}${cn.label}です。`:'';
+    body.innerHTML=`<p class="note">都道府県かオンラインを1つ選びます。選んだ地域は次回も使われます。${what}</p>`+
+      REGIONS.map(([r],ri)=>{
+        const codes=Object.keys(PREF_REGION).filter(c=>PREF_REGION[c]===ri);
+        return `<fieldset><legend><span>${esc(r)}</span></legend><div class="fc">${codes.map(c=>chip(c,cn)).join('')}</div></fieldset>`;
+      }).join('')+
+      `<fieldset><legend><span>会場なし</span></legend><div class="fc">${chip(ONLINE,cn)}</div></fieldset>`;
+  }
+  function open(o){
+    opts=o; render();
+    if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open','');
+    dlg.querySelector('[data-pref][aria-pressed="true"]')?.focus();
+  }
+  dlg.addEventListener('click',e=>{
+    if(e.target===dlg){ dlg.close(); return; }
+    const p=e.target.closest('[data-pref]');
+    if(!p) return;
+    dlg.close();
+    opts.onPick(p.dataset.pref);
+  });
+  document.getElementById('prefClose').onclick=()=>dlg.close();
+  return {REGIONS, PREF, PREF_REGION, ONLINE, locName, isLoc, countsFromMeta, open,
+    refresh(){ if(dlg.open&&opts) render(); }, get isOpen(){ return dlg.open; }};
+})();
+</script>

@@ -159,6 +159,19 @@ def check_home(today, head, ov):
     if any(k not in h.get('counts', {}) for k in {i.get('game') for i in h.get('items', [])}): fail('/: HOME counts lack a title')
     events = os.path.exists(os.path.join(DIST, 'events/index.html'))
     if events != ('id="evBody"' in src): fail(f'/: event block {"missing" if events else "present without /events/"}')
+    # no static release list or about block (owner decision 2026-11-19): the h1 heads the page, the old name stays findable
+    if 'class="seo' in src: fail('/: static release list / about block is back')
+    h1 = re.findall(r'<h1 class="hbar"><b id="hDate"></b><span>([^<]+)</span></h1>', src)
+    if len(h1) != 1 or len(re.findall(r'<h1[ >]', src)) != 1: fail(f'/: expected one h1 with the page heading, got {h1}')
+    desc = re.search(r'<meta name="description" content="([^"]+)"', src)
+    if not desc or '旧・新弾ナビ' not in desc[1]: fail('/: meta description lacks 旧・新弾ナビ')
+    if '<small>（旧・新弾ナビ）</small>' not in src: fail('/: footer brand lacks （旧・新弾ナビ）')
+    site = [json.loads(x) for x in re.findall(r'<script type="application/ld\+json">(.*?)</script>', src)]
+    if [(x.get('@type'), x.get('name'), x.get('alternateName')) for x in site] != [('WebSite', 'トレカカレンダー', '新弾ナビ')]:
+        fail(f'/: JSON-LD should be only WebSite トレカカレンダー / 新弾ナビ, got {[x.get("@type") for x in site]}')
+    # the location picker is one shared partial (src/locpick.html) on / and /events/
+    for f2, want in ((src, events), (open(os.path.join(DIST, 'events/index.html')).read() if events else '', events)):
+        if (f2.count('<dialog id="prefDlg"'), f2.count('window.snLoc=')) != ((1, 1) if want else (0, 0)): fail('location picker missing or duplicated on / or /events/')
     print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events}')
 
 
