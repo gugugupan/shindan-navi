@@ -145,7 +145,9 @@ def apply_overrides(items, overrides):
     return out
 
 
-def merge(existing, scraped, overrides, today, report, dry):
+def merge(existing, scraped, overrides, today, report, dry, keep_official=False):
+    """keep_official: the official step does not run this time, so what the last official run gave an item (its
+    "official" in sources, a name taken from the official site) is kept: not checked is not gone."""
     cutoff = (today - datetime.timedelta(days=KEEP_PAST_DAYS)).isoformat()
     for e in existing:
         if e['date'] < cutoff:
@@ -177,7 +179,8 @@ def merge(existing, scraped, overrides, today, report, dry):
                     if e.get(k) and not (yen_int(s[k]) and yen_int(s[k]) == yen_int(e.get(k))):
                         report['price'].append(f"[{s['game']}] {s['name']}  {k}: {e.get(k)} → {s[k]}")
                     item[k] = s[k]
-            item.update(date=s['date'], name=s['name'], game=s['game'])
+            official_name = keep_official and 'official' in (e.get('sources') or []) and e['name'] == e.get('official_name')
+            item.update(date=s['date'], name=e['name'] if official_name else s['name'], game=s['game'])
             if not item.get('url') and s['url']:
                 item['url'] = s['url']
             if (item.get('source') or {}).get('site') != 'official' and s['url'] and is_official(s['url']):
@@ -204,13 +207,15 @@ def merge(existing, scraped, overrides, today, report, dry):
                     item['thumb'] = thumb
             report['new'].append(f"{s['date']}  [{s['game']}] {s['name']}")
         item['sources'] = s['sources']
+        if e is not None and keep_official and 'official' in (e.get('sources') or []):
+            item['sources'] = sorted(set(s['sources']) | {'official'})
         out.append(item)
     for e in existing:
         if e['id'] in used:
             continue
         if e['date'] >= today.isoformat():
             report['missing'].append(f"{e['date']}  [{e['game']}] {e['name']}")
-        out.append(dict(e, sources=[]))
+        out.append(dict(e, sources=['official'] if keep_official and 'official' in (e.get('sources') or []) else []))
     out = apply_overrides(out, overrides)
     out.sort(key=lambda r: (r['date'], r['game'], r['name']))
     for i in out:
@@ -238,9 +243,6 @@ def apply_official(items, today, report, dry, log, records, run):
     Matching (identity first, then Jev / LLM) happens here because it needs items.json; each record keeps the
     `source` the collector computed."""
     from official import run as official
-    if not has_official_keys():
-        log.append('official: skipped (TYPESAFE_API_KEY / OPENROUTER_API_KEY not set in .env)')
-        return items
     log.extend(run['notes'])
     since = today.isoformat()
     by_id = {x['id']: x for x in items}
@@ -539,7 +541,9 @@ def update(args, dry, data):
     overrides = json.load(open(os.path.join(data, 'overrides.json')))
     report = {k: [] for k in ('new', 'official_new', 'official_review', 'moved', 'date_conflict', 'price', 'box', 'image', 'official_unconfirmed', 'official_undated',
                               'missing', 'dropped', 'noimage')}
-    items = merge(existing, scraped, overrides, today, report, dry)
+    if official is not None and not has_official_keys():
+        official, official_skip = None, 'official: skipped (TYPESAFE_API_KEY / OPENROUTER_API_KEY not set in .env)'
+    items = merge(existing, scraped, overrides, today, report, dry, keep_official=official is None)
     log = []
     if not args.no_official:
         if official is None:

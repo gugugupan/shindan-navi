@@ -198,7 +198,7 @@ class Guards(MergeCase):
         self.assertEqual(sorted(os.listdir(self.data)), sorted(self.before + ['update-report.md']))
 
 
-class Official(MergeCase):
+class OfficialCase(MergeCase):
     def setUp(self):
         super().setUp()
         self.write_source('cardlabo', CLABO)
@@ -216,6 +216,8 @@ class Official(MergeCase):
         with mock.patch.object(ud, 'has_official_keys', lambda: True):
             return {x['id']: x for x in self.run_merge('--dry-run')}
 
+
+class Official(OfficialCase):
     def test_fold_new_and_dedupe(self):
         items = self.merged()
         e1, e2, e3, e4 = (items[x['id']] for x in (E1, E2, E3, E4))
@@ -255,6 +257,55 @@ class Official(MergeCase):
             items = self.run_merge('--dry-run', '--no-enrich')
         self.assertIn('official: skipped (TYPESAFE_API_KEY / OPENROUTER_API_KEY not set in .env)', self.report())
         self.assertFalse(any('official' in x['sources'] for x in items))
+
+
+class OfficialNotRun(OfficialCase):
+    """What the last official run gave an item survives a run whose official step is skipped."""
+    OP19 = 'ブースターパック 応答せよ、世界【OP-19】'
+
+    def setUp(self):
+        super().setUp()
+        url = 'https://www.onepiece-cardgame.com/products/boosters/op19.php'
+        adopted = dict(item('2027-02-27', OP, self.OP19, source=make_source(url, self.OP19, 'official')),
+                       url=url, box='7,920円', per_box=24, sources=['official'], official_name=self.OP19)
+        renamed = dict(E2, sources=['clabo', 'official'], official_name='EXTRA BOOSTER MEMORIAL COLLECTION 2')
+        gone = dict(E3, sources=['clabo', 'official'], official_name=E3['name'])
+        self.existing = {x['id']: x for x in (E1, renamed, gone, adopted)}
+        self.write_data(list(self.existing.values()), {})
+        self.write_source('cardlabo', [agg(x['date'], OP, x['name'], 'clabo') for x in (E1, renamed)])
+        self.write_source('torecamap', [agg('2027-02-27', OP, '応答せよ、世界【OP-19】', 'torecamap', pack='330円')])
+
+    def check_kept(self, items):
+        op19 = items[ud.item_id(OP, self.OP19)]
+        self.assertEqual({k: op19[k] for k in ('name', 'source', 'url', 'box', 'per_box', 'official_name')},
+                         {k: self.existing[op19['id']][k] for k in ('name', 'source', 'url', 'box', 'per_box', 'official_name')})
+        self.assertEqual((op19['sources'], op19['pack']), (['official', 'torecamap'], '330円'))
+        self.assertEqual(items[E2['id']]['sources'], ['clabo', 'official'])
+        self.assertEqual(items[E2['id']]['name'], E2['name'])  # the aggregator's name, not official_name: unchanged
+        self.assertEqual(items[E3['id']]['sources'], ['official'])
+        self.assertEqual(set(items), set(self.existing))
+        self.assertEqual((self.section('発売日の変更'), self.section('価格の変更')), ([], []))
+
+    def test_without_keys(self):
+        with mock.patch.object(ud, 'has_official_keys', lambda: False):
+            self.check_kept({x['id']: x for x in self.run_merge('--dry-run', '--no-enrich')})
+
+    def test_no_official_flag(self):
+        self.check_kept({x['id']: x for x in self.run_merge('--dry-run', '--no-official')})
+
+    def test_stale_official_files(self):
+        self.write_official(today='2026-11-18')
+        with mock.patch.object(ud, 'has_official_keys', lambda: True):
+            self.check_kept({x['id']: x for x in self.run_merge('--dry-run', '--no-enrich')})
+
+    def test_official_ran(self):
+        # same as before this carry-over: sources come from this run's matches only, names from the aggregators
+        items = self.merged()
+        op19 = items[ud.item_id(OP, self.OP19)]
+        self.assertEqual((op19['name'], op19['sources']), ('応答せよ、世界【OP-19】', ['torecamap']))
+        self.assertEqual((op19['source'], op19['url'], op19['box']), (self.existing[op19['id']]['source'], self.existing[op19['id']]['url'], '7,920円'))
+        self.assertEqual(items[E2['id']]['sources'], ['clabo', 'official'])
+        self.assertEqual(items[E3['id']]['sources'], [])
 
 
 class Thumbs(MergeCase):

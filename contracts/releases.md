@@ -109,6 +109,10 @@ Merge (refuses to write anything):
   never lowered to get past it).
 - `official` is optional: missing or `today != TODAY` → skipped with a log line, as without keys today. An
   incomplete official run is used for the keys it has.
+- When the official step does not run (no keys, `--no-official`, missing or stale files), the merge keeps what an
+  item already has from the last official run: `official` in `sources` (also for items no aggregator lists any
+  more) and its name when that is the official name (`name == official_name`). `source`, `url`, box info and
+  `per_*` are kept by the merge anyway. When it runs, `sources` and names come from this run only, as before.
 - The report keeps `unknown_labels` from both aggregator runs (未対応のタイトル名) and the counts from `record_count`.
 
 Enrich (`fill_box_info`) runs after the merge's official step, may use network and the LLM, is skipped without

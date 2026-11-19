@@ -23,7 +23,7 @@ If a collector refuses (layout marker missing, no records) or the merge aborts (
 
 `out/refresh-<TODAY>/packet.md` (also printed at the end; step logs next to it): collector record counts and `complete` flags, the report's section counts, the data diff, items.json field changes vs HEAD, the verify RESULT lines, the screenshot folder (`.verify/`) and the verify base. Full report: `data/update-report.md`.
 
-A `WARNING: … lost "official" from sources` line means the official step did not run (no keys) or did not match: official names and prices fall back to aggregator values. Don't publish that over official data unless the owner agrees.
+A `WARNING: … lost "official" from sources` line means the official step ran and did not match those upcoming items: they may be gone from the official site, or the match was missed (check the official page; the item keeps the aggregator name and price). A run without the official step (no keys, `--no-official`) keeps each item's `official` membership and official name, so it shows no such warning; it just brings in nothing new from the official sites.
 
 ## 3. Fix what it asks for
 

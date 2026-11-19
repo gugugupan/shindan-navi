@@ -181,7 +181,7 @@ def diff_lines():
                                                     + (' …' if len(untracked) > 8 else '') if untracked else '')]
 
 
-def item_change_lines():
+def item_change_lines(today):
     """Per-field changes of items.json vs HEAD: the report lists only some of them (not sources, box, price writing)."""
     old = {i['id']: i for i in json.loads(subprocess.run(['git', '-C', ROOT, 'show', 'HEAD:data/items.json'],
                                                          capture_output=True, text=True).stdout)}
@@ -191,13 +191,14 @@ def item_change_lines():
         for f in set(old[k]) | set(new[k]):
             if old[k].get(f) != new[k].get(f):
                 fields[f] = fields.get(f, 0) + 1
-        if 'official' in old[k].get('sources', []) and 'official' not in new[k].get('sources', []):
+        if 'official' in old[k].get('sources', []) and 'official' not in new[k].get('sources', []) and new[k]['date'] >= today:
             lost_official += 1
     lines = [f'- items.json vs HEAD: {len(new.keys() - old.keys())} added, {len(old.keys() - new.keys())} removed; changed fields: '
              + (', '.join(f'{f} {n}' for f, n in sorted(fields.items(), key=lambda x: -x[1])) or 'none')]
     if lost_official:
-        lines.append(f'- WARNING: {lost_official} items lost "official" from sources (official step skipped or unmatched); '
-                     'their official names / prices may have reverted to aggregator values')
+        # a skipped official step keeps "official"; only a run that checked and did not match loses it
+        lines.append(f'- WARNING: {lost_official} upcoming items lost "official" from sources: the official step ran '
+                     'and did not match them (gone from the official site, or a missed match)')
     return lines
 
 
@@ -275,7 +276,7 @@ def main():
     elif stopped and stopped[0] == 'merge':
         packet += ['', '## Merge refused', '', '```', outputs['merge'].strip()[-1500:], '```']
     if not args.dry_run and 'merge' in outputs and (not stopped or stopped[0] != 'merge'):
-        packet += ['', '## Diff vs HEAD (data/, public/thumbs)', ''] + diff_lines() + item_change_lines()
+        packet += ['', '## Diff vs HEAD (data/, public/thumbs)', ''] + diff_lines() + item_change_lines(today)
     if 'verify-release' in outputs:
         vr = [l for l in outputs['verify-release'].splitlines() if l.startswith(('WARN', 'FAIL', 'RESULT'))]
         packet += ['', f'## Verify (base {BASE} {base_sha}, --today {today})', '', 'verify_release.py:'] + [f'  {l}' for l in vr]
