@@ -1,14 +1,28 @@
-# Official-site pilot
+# Official-site collector (and pilot)
 
-Reads release info straight from official TCG sites and compares it with `data/items.json`. Read-only: it never changes site data.
+Reads release info straight from official TCG sites. Moved here from `scripts/official/`; `scripts/official/run.py`,
+`common.py` and `sources.json` are thin compatibility shims (re-export / symlink) for `scripts/update_data.py` until the
+merge reads `data/releases/official/` instead.
 
 ```bash
 .venv/bin/pip install beautifulsoup4            # once (plus fonttools brotli pillow for the rest of the repo)
 cp .env.example .env                           # TYPESAFE_API_KEY, OPENROUTER_API_KEY
-.venv/bin/python -I scripts/official/run.py [--games pokemon,onepiece,mtg]
+.venv/bin/python -I tools/release-collectors/official/collect.py [--games pokemon,onepiece] [--today YYYY-MM-DD] [--root DIR]
+.venv/bin/python -I tools/release-collectors/official/run.py [--games pokemon,onepiece,mtg] [--adopt-sources]   # pilot report
+.venv/bin/python -I tools/release-collectors/official/test/test_collect.py   # no network, no keys
 ```
 
-Writes `out/report-YYYY-MM-DD.md` (recall vs existing data, date/price agreement, items only the official site has, cost) and `out/candidates-YYYY-MM-DD.json`. Pages are cached in `cache/` for 6 hours.
+**`collect.py`** writes `data/releases/official/latest.json` + `_run.json` (`contracts/releases.md` › Official records):
+per `sources.json` key in file order, fetch/extract → `dedupe` → `split_editions` → keep undated or `>= today` →
+`classify` (Jev; `NOT_A_PRODUCT` dropped). It does not match against `items.json`; `source` is computed here with
+`final_url`, which only knows redirects followed in this process. A failed page (or a failed classify of a title) is
+recorded in `pages` / `errors` and the run is written with `complete: false`; zero records refuses and leaves the last
+files alone (exit 1). Without both API keys it writes nothing and exits 0. `notes` carry the fetch log, `usage` the
+provider ledger. bs4 is only needed for `listing` / `news` pages.
+
+**`run.py`** is the original pilot: same extraction plus matching, writes `out/report-YYYY-MM-DD.md` and
+`out/candidates-YYYY-MM-DD.json` here; `--adopt-sources` writes matched official sources into `data/items.json`.
+Pages are cached in `cache/` for 6 hours (both scripts).
 
 Division of work:
 - **Jev** (TypeSafe `choice` questions): is a news title about a new product; what kind of item is this (booster / deck / set / supply / not a product); is an official entry the SAME product as an existing item.

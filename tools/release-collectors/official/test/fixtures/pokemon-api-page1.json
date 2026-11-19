@@ -1,0 +1,8 @@
+{"products": [
+ {"productTitle": "拡張パック「テストの星」", "releaseDate": "2026年12月05日", "priceTxt": "1パック 180円（税込）", "productType": "拡張パック",
+  "link_detailPage": "/products/2026/test-star.html", "tumbsImg": "/assets/images/products/test-star.png"},
+ {"productTitle": "スタートデッキ テスト", "releaseDate": "2026年11月19日", "priceTxt": "1,650円（税込）", "productType": "デッキ",
+  "link_detailPage": "/products/2026/test-deck.html", "tumbsImg": ""},
+ {"productTitle": "過去の拡張パック", "releaseDate": "2026年10月03日", "priceTxt": "180円", "productType": "拡張パック",
+  "link_detailPage": "/products/2026/old.html", "tumbsImg": "/assets/images/products/old.png"}
+]}
