@@ -13,13 +13,13 @@ Publishing happens on push to `main`, so the owner reviews the data before it is
 .venv/bin/python -I scripts/update_data.py --dry-run
 ```
 
-It prints `data/update-report.md`. If it aborts ("empty source" / "only N releases scraped"), a source page probably changed layout — open it in the browser pane, compare with the regexes in `parse_clabo` / `parse_torecamap`, fix the parser, rerun. Do not lower `MIN_RATIO` to get past it.
+It prints `data/update-report.md`. If it aborts ("empty source" / "only N releases scraped"), a source page probably changed layout — open it in the browser pane, compare with the regexes in `parse_clabo` / `parse_torecamap` (`tools/release-collectors/cardlabo/parse.py`, `tools/release-collectors/torecamap/parse.py`), fix the parser, rerun. Do not lower `MIN_RATIO` to get past it.
 
 ## 2. Read the report and fix what it asks for
 
 | Section | What to do |
 |---|---|
-| 未対応のタイトル名 | A source used a title label `GAME` doesn't know. Add it to `GAME` in `scripts/update_data.py`, mapped to the existing display name (check `data/items.json` for spelling), so one title doesn't split into two chips. |
+| 未対応のタイトル名 | A source used a title label `GAME` doesn't know. Add it to `GAME` in `tools/release-collectors/lib/common.py`, mapped to the existing display name (check `data/items.json` for spelling), so one title doesn't split into two chips. |
 | 新規 | Sanity-check names and dates. |
 | 発売日の変更 / 価格の変更 | Usually real (延期, price announced). If a match looks wrong (two different products merged), pin the right values with `date` / `name` in `data/overrides.json`. |
 | ソースから消えた今後の商品 | Check the official site. If cancelled, add `"hide": true` for that id in `data/overrides.json`; if still on sale, leave it. |

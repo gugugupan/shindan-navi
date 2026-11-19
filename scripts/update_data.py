@@ -8,7 +8,6 @@ Run locally with the project venv, review data/update-report.md and `git diff`, 
 """
 import datetime
 import hashlib
-import html
 import io
 import json
 import os
@@ -17,13 +16,16 @@ import sys
 import time
 import unicodedata
 import urllib.error
-import urllib.parse
-import urllib.request
 
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sourcekey import canonical_url, is_official, make_source, product_code  # noqa: E402
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools', 'release-collectors'))
+from cardlabo.parse import parse_clabo  # noqa: E402
+from lib.common import fetch  # noqa: E402
+from torecamap.parse import parse_torecamap  # noqa: E402
 
 OFFICIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'official')
 # official-only entries of these kinds are added to the calendar; supplies are only counted
@@ -33,30 +35,8 @@ PLACEHOLDER_IMG = re.compile(r'now[_-]?(printing|designing)|noimage|no[_-]image|
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'data')
 THUMBS = os.path.join(ROOT, 'public/thumbs')
-UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
-CLABO_URL = 'https://www.c-labo.jp/special/2028/'
-TORECAMAP_URL = 'https://torecamap.co.jp/release-schedule?year={y}&month={m}'
-TORECAMAP_MONTHS = 6
 KEEP_PAST_DAYS = 30
 MIN_RATIO = 0.7
-
-# Source labels → one display name per title (both sites abbreviate differently).
-GAME = {'MTG': 'MTG', 'ヴァイス': 'ヴァイスシュヴァルツ', 'D-CROSS': 'DIVINE CROSS', 'ポケモン': 'ポケモンカード', 'ヴァンガ': 'ヴァンガード',
-        'ヴァンガード': 'ヴァンガード', 'バトスピ': 'バトルスピリッツ', 'ユニアリ': 'UNION ARENA', 'ラブカ': 'ラブライブ！OCG', '遊戯王': '遊戯王OCG',
-        '遊戯王OCG': '遊戯王OCG', '遊戯王RD': '遊戯王ラッシュデュエル', 'ラッシュデュエル': '遊戯王ラッシュデュエル', 'パルワールド TCG': 'パルワールド',
-        'デジモン': 'デジモン', 'X Stars': 'Xross Stars', 'クロスタ': 'Xross Stars', 'ウルトラマン': 'ウルトラマン', 'ビルディバイド': 'ビルディバイド',
-        '神椿TCG': 'KAMITSUBAKI', 'ゴジラ': 'ゴジラ', 'ホロビートカードゲーム': 'ホロビート', 'ホロライブ': 'ホロライブ', 'DBS FW': 'DBフュージョンワールド',
-        'DBFW': 'DBフュージョンワールド', 'シャドバ': 'Shadowverse EVOLVE', 'FF': 'FFTCG', 'Z/X': 'Z/X', 'バボカ': 'バボカ!!', 'ワンピース': 'ONE PIECE',
-        'OSICA': 'OSICA', 'ファンスターズ': 'ファンスターズリーグ', 'その他': 'その他', 'Reバース': 'Reバース', 'WSブラウ': 'ヴァイスシュヴァルツブラウ',
-        'ロルカナ': 'ロルカナ', 'デュエマ': 'デュエル・マスターズ', 'ACG': 'アニマルカードゲーム', 'Harry Potter': 'Harry Potter', 'Lycee': 'リセ',
-        '五等分の花嫁': '五等分の花嫁', 'WIXOSS': 'WIXOSS', 'コナン': '名探偵コナン', '名探偵コナン': '名探偵コナン', 'ガンダム': 'ガンダム',
-        'FaB': 'Flesh and Blood'}
-
-
-def fetch(url):
-    req = urllib.request.Request(url, headers={'User-Agent': UA})
-    with urllib.request.urlopen(req, timeout=40) as r:
-        return r.read()
 
 
 def norm(name):
@@ -72,78 +52,6 @@ def sim(a, b):
 
 def item_id(game, name):
     return 'i' + hashlib.sha1(f'{game}|{norm(name)}'.encode()).hexdigest()[:10]
-
-
-def game_name(label, unknown):
-    if label not in GAME:
-        unknown.add(label)
-    return GAME.get(label, label)
-
-
-def parse_clabo(today, unknown):
-    s = fetch(CLABO_URL).decode('utf-8')
-    a, b = s.find('id="hatsubai_daily"'), s.find('id="hatsubai_cate"')
-    if a < 0 or b < 0:
-        raise RuntimeError('カードラボ: daily section not found (page layout changed?)')
-    out = []
-    for blk in re.split(r'<h3>', s[a:b])[1:]:
-        m = re.match(r'(\d+)月(\d+)日\((.)\)', blk)
-        if not m:
-            continue
-        mo, dy, dow = int(m.group(1)), int(m.group(2)), m.group(3)
-        # headings carry no year; pick the one (this year or next) whose weekday matches
-        year = next((y for y in (today.year, today.year + 1, today.year - 1)
-                     if _valid(y, mo, dy) and '月火水木金土日'[datetime.date(y, mo, dy).weekday()] == dow), None)
-        if year is None:
-            continue
-        date = datetime.date(year, mo, dy).isoformat()
-        for tr in re.findall(r'<tr>(.*?)</tr>', blk, re.S):
-            tds = [html.unescape(re.sub(r'<[^>]+>', '', x)).strip() for x in re.findall(r'<td[^>]*>(.*?)</td>', tr, re.S)]
-            if len(tds) < 2 or not tds[1]:
-                continue
-            out.append(dict(date=date, game=game_name(tds[0], unknown), name=tds[1], pack=tds[2] if len(tds) > 2 else '',
-                            box='', url='', img='', src='clabo'))
-    return out
-
-
-def _valid(y, m, d):
-    try:
-        datetime.date(y, m, d)
-        return True
-    except ValueError:
-        return False
-
-
-def parse_torecamap(today, unknown):
-    out, seen = [], set()
-    y, m = today.year, today.month
-    for _ in range(TORECAMAP_MONTHS):
-        s = fetch(TORECAMAP_URL.format(y=y, m=m)).decode('utf-8')
-        for g in re.split(r'class="ReleaseScheduleDayGroup_release-schedule-day-group', s)[1:]:
-            dm = re.search(r'ReleaseScheduleDayGroup_text__\w+">(\d+)/(\d+)/(\d+)', g)
-            if not dm:
-                continue
-            date = '%04d-%02d-%02d' % tuple(map(int, dm.groups()))
-            for it in re.split(r'ReleaseScheduleDayGroup_item__', g)[1:]:
-                name = re.search(r'ProductInfo_name__\w+">(.*?)</div>', it, re.S)
-                if not name:
-                    continue  # RSC payload duplicate, not rendered HTML
-                name = html.unescape(re.sub(r'<[^>]+>', '', name.group(1))).replace('​', '').strip()
-                if (date, name) in seen:
-                    continue
-                seen.add((date, name))
-                tag = re.search(r'Tag_tag__[^"]*">([^<]*)', it)
-                href = re.search(r'<a href="([^"]*)"', it)
-                img = re.search(r'src="/_next/image\?url=([^&"]*)', it)
-                img = urllib.parse.unquote(img.group(1)) if img else ''
-                prices = dict(re.findall(r'ProductInfo_label__\w+">([^<]*)</p><span class="ProductInfo_price__\w+">([^<]*)', it))
-                out.append(dict(date=date, game=game_name(html.unescape(tag.group(1)) if tag else '', unknown), name=name,
-                                pack=prices.get('1パック：', ''), box=prices.get('1BOX：', '').replace('値段設定なし', ''),
-                                url=html.unescape(href.group(1)) if href else '', img='' if 'no-image' in img else img, src='torecamap'))
-        m += 1
-        if m > 12:
-            y, m = y + 1, 1
-    return out
 
 
 def combine(clabo, tm):
