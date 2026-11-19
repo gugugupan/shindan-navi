@@ -28,12 +28,12 @@ python3 -I ../scripts/build.py      # optional: builds ../dist so the page is se
 | `npm run import:remote` | Needs `D1_DATABASE_ID`. Validate and estimate a first import (no remote call); `-- --plan` reads D1 and prints the review summary and plan; `-- --yes` migrates, plans and applies to the production D1. See "Remote import". |
 | `npm run db:migrate` | Apply `migrations/` to the local D1. |
 | `npm run db:reset` | Delete the local D1 and SQLite file; the next import rebuilds them from `../data/events/`. Needed once for databases created before `0001_events.sql`. |
-| `npm test` | Vitest: filters, pagination, validation, meta, importer. `PERF=1 npx vitest run tests/perf.test.ts` runs a 20k-event benchmark. |
+| `npm test` | Vitest: filters, pagination, validation, meta, importer, accounts (Google stubbed). `PERF=1 npx vitest run tests/perf.test.ts` runs a 20k-event benchmark. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run bundle` | `wrangler deploy --dry-run` with the root config into `.local/bundle`: checks config, assets and bundling; uploads nothing. Build `../dist` first to check the assets. |
 
 Importer options: `node scripts/import-events.mjs [--data DIR] [--games OPCG,PTCG] [--target sqlite|wrangler|remote] [--sqlite FILE] [--out FILE] [--dry-run] [--plan] [--yes] [--max-writes N] [--allow-incomplete GAME,...] [--allow-shrink]`.
-`dev-node.mjs` takes `--port`, `--sqlite` and `--dist`.
+`dev-node.mjs` takes `--port`, `--sqlite`, `--dist` and `--dev-login` (see "Accounts").
 The generated SQL is kept at `.local/import.sql`.
 
 ### workerd needs macOS 13.5+
@@ -88,6 +88,55 @@ starts_sort)`. `starts_sort` = Unix seconds of `starts_at`, or 253402300799 for 
 location, day, game mask and type (`''` for none), maintained by the importer (diffed like the events, repaired when
 stale). `/events/days` reads only this table.
 
+`migrations/0003_users.sql`: `users`, `user_identities` (`(provider, subject)` key, the only place with an email),
+`sessions` (sha256 of the session id, `expires_at` Unix seconds, index on `user_id`), `user_prefs` (`(user_id, key)`,
+keys `stars` / `event_filters` / `ask_calendar`), and the unused billing placeholders `entitlements`,
+`billing_customers`. Apply it remotely before pushing the code that uses it (see Migrations).
+
+## Accounts (Google login, synced preferences)
+
+Contract: [`../contracts/README.md`](../contracts/README.md) › Accounts API. Code: `src/auth.ts` (OAuth, sessions,
+routes), `src/prefs.ts` (validation, merge). Dark until enabled: all `/api/v1/auth|me|billing` routes answer 404 unless
+`SITE_ORIGIN` (wrangler.jsonc `vars`) equals the request origin and all three secrets are set.
+
+Secrets (the lead sets them; never in git, never printed):
+
+```bash
+cd api && node scripts/remote-config.mjs        # with D1_DATABASE_ID, writes ../wrangler.remote.json
+npx wrangler secret put GOOGLE_OAUTH_CLIENT_ID     --config ../wrangler.remote.json
+npx wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET --config ../wrangler.remote.json
+openssl rand -base64 48 | npx wrangler secret put SESSION_SECRET --config ../wrangler.remote.json
+```
+
+Google Cloud OAuth client (Web application): authorized redirect URIs `https://shindan-navi.app/api/v1/auth/google/callback`
+and, for local tests, `http://localhost:8787/api/v1/auth/google/callback`; scopes `openid email profile` only.
+Rotating `SESSION_SECRET` logs everyone out (all session cookies fail the HMAC).
+
+How it works:
+
+- Login: `/auth/google/start` puts state, PKCE verifier, nonce and the return path in a signed (HMAC, not encrypted)
+  HttpOnly cookie `__Host-sn_oauth` (10 min) and redirects to Google. The callback checks the state, exchanges the
+  code with the client secret and PKCE verifier, and validates the id_token claims (`iss`, `aud`, `azp`, `exp`, `iat`,
+  `nonce`, `email_verified`). The signature is not checked: the token comes directly from Google's token endpoint
+  over TLS, authenticated with the client secret (OIDC Core 3.1.3.7), so no JWKS fetch. Google access/refresh tokens
+  are discarded (no `access_type=offline`).
+- Accounts are keyed by `(google, sub)`; an email match never links accounts. Login deletes the user's expired
+  sessions. Sessions are 180 days absolute; D1 keeps sha256 of the id, the cookie holds the id + HMAC.
+- Session check: the HMAC is verified first (a forged cookie costs no D1 read), then one query (session ⋈ user).
+- CSRF: every non-GET needs `Origin: SITE_ORIGIN` and `Content-Type: application/json`; no CORS headers.
+- Account routes are dispatched before the events routes and never touch the Cache API; every answer (redirects and
+  errors too) is `Cache-Control: private, no-store`.
+- Rate limit `AUTH_LIMIT` (30/min per location): login start and callback per client IP, PUT/merge/DELETE per user.
+  GET `/me` and `/me/prefs` are not limited (HMAC first, then D1).
+- `requireEntitlement(db, userId, feature)` exists for paid features; nothing calls it yet. `POST /billing/webhook` is 501.
+
+Local: `npm run dev:node` reads the three secrets from `../.env` (`node --env-file-if-exists`; only those keys reach
+the Worker env) and sets `SITE_ORIGIN=http://localhost:<port>`, so the Google redirect URI above works on port 8787.
+`npm run dev:node -- --dev-login` also serves `GET /__dev/login?name=alice&return=/` (signs in a local test user
+without Google; fills missing secrets with throwaway values). That route lives only in `scripts/dev-node.mjs`; a test
+checks the Worker bundle has no trace of it. `__Host-` cookies with `Secure` work on `http://localhost` in Chrome, not
+in Safari. `wrangler dev` keeps the account routes off (its origin is not `SITE_ORIGIN`).
+
 ## D1 budget (Free plan: 100,000 rows written, 5,000,000 rows read per UTC day)
 
 Numbers below are on the data of 2026-11-18 (32,980 events, 9,743 day_counts rows).
@@ -118,6 +167,20 @@ warns about expired ones so CONAN is re-geocoded first.
 
 Reads per import: the state read (every event, import, site_meta and
 day_counts row, ~43k) plus one primary-key lookup per written row.
+
+**Accounts.** Per request (rows read / written; D1 may count index entries too):
+
+| Request | Reads | Writes |
+| --- | ---: | ---: |
+| `GET /me` (valid cookie; forged cookie: 0) | 2 (session + user) | 0 |
+| `GET /me/prefs` | 2 + ≤ 3 prefs | 0 |
+| `PUT /me/prefs`, `POST /me/prefs/merge` | 2 + ≤ 3 prefs | 1 per changed key (unchanged keys are not written) |
+| Login callback | 1 identity lookup + expired sessions | session 2 (row + index); new user +3; changed name/avatar/email +1-2 |
+| Logout / `DELETE /me` | 0-2 / 2 | 1-2 / every row of the user |
+
+Writes are what matter: the importer's `--max-writes` default of 90,000 leaves ~10,000 rows/day for accounts on a
+day with a full import (the Free limit is 100,000 for everything). A star toggle is one write, so the page batches
+toggles. When D1 refuses writes (quota), the API answers 500 and the page keeps its local state.
 
 Reads per uncached request, measured with SQLite on the current data (rows stepped; D1 may count index entries too,
 so up to ~2× for the events scans). "5 largest" = JP-13/27/23/28/11. Every events query is an index seek on

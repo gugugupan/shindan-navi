@@ -1,10 +1,14 @@
 import {
   BadRequest, canonicalEventQuery, canonicalFilters, listDays, listEvents, parseEventQuery, parseFilters, type DataWindow,
 } from './events';
+import { handleAccount, isAccountPath, type AuthEnv } from './auth';
 import { guessRegion } from './geo';
+
+// Used by scripts/dev-node.mjs (--dev-login) on the bundled Worker.
+export { issueSession, safeReturn } from './auth';
 import { getMeta, readState, type DataState } from './meta';
 
-export interface Env {
+export interface Env extends AuthEnv {
   DB: D1Database;
   ASSETS?: Fetcher;
   /** Workers Rate Limiting bindings (uncached requests only); absent locally, where nothing is limited. */
@@ -158,6 +162,8 @@ function failure(e: unknown): Response {
 }
 
 async function handleApi(request: Request, env: Env, url: URL, ctx?: ExecutionContext): Promise<Response> {
+  // Before ROUTES (GET-only) and before any Cache API use: account answers are per user and never cached.
+  if (isAccountPath(url.pathname)) return handleAccount(request, env, url, clientKey(request.headers.get('cf-connecting-ip')));
   if (url.pathname === '/api/v1/geo' && request.method === 'GET') return json(guessRegion(request), 200, { 'cache-control': 'private, no-store' });
   const route = ROUTES[url.pathname];
   if (!route) return json({ error: 'not found' }, 404);

@@ -32,7 +32,13 @@
   // (IPv4 address / IPv6 /64), API_BREAKER for everyone together. namespace_id only has to be unique in the account.
   "ratelimits": [
     { "name": "API_LIMIT", "namespace_id": "71101", "simple": { "limit": 20, "period": 60 } },
-    { "name": "API_BREAKER", "namespace_id": "71102", "simple": { "limit": 300, "period": 60 } }
+    { "name": "API_BREAKER", "namespace_id": "71102", "simple": { "limit": 300, "period": 60 } },
+    // Accounts: login start/callback per client, prefs writes and account deletion per user.
+    { "name": "AUTH_LIMIT", "namespace_id": "71103", "simple": { "limit": 30, "period": 60 } }
   ],
+  // Login, cookies and CSRF checks derive from SITE_ORIGIN, never from Host; on any other origin (workers.dev
+  // previews, wrangler dev) the account routes answer 404. Secrets (wrangler secret put): GOOGLE_OAUTH_CLIENT_ID,
+  // GOOGLE_OAUTH_CLIENT_SECRET, SESSION_SECRET; without all three the account routes answer 404 as well.
+  "vars": { "SITE_ORIGIN": "https://shindan-navi.app" },
   "dev": { "port": 8787 }
 }

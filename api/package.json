@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "mkdir -p ../dist && node scripts/import-events.mjs && wrangler dev --local --config ../wrangler.jsonc",
-    "dev:node": "mkdir -p ../dist && node scripts/import-events.mjs --target sqlite && node scripts/dev-node.mjs",
+    "dev:node": "mkdir -p ../dist && node scripts/import-events.mjs --target sqlite && node --env-file-if-exists=../.env scripts/dev-node.mjs",
     "import": "node scripts/import-events.mjs",
     "import:sqlite": "node scripts/import-events.mjs --target sqlite",
     "import:remote": "node scripts/import-events.mjs --target remote",
