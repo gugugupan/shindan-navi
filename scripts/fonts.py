@@ -8,9 +8,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, 'dist')
 SRC = os.path.join(ROOT, 'brand/fonts')
 
-EVENTS = os.path.join(DIST, 'events/index.html')
-# /events/ is left out of the shared subsets so adding it doesn't grow the fonts every other page downloads
-text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f != EVENTS)
+# page, slot for its extra faces, font file prefix. These pages are left out of the shared subsets so they don't grow
+# the fonts every other page downloads; each gets its own small faces for the glyphs the shared subsets lack.
+OWN = [(os.path.join(DIST, 'events/index.html'), '/*EVENT_FONTS*/', 'events'),
+       (os.path.join(DIST, 'privacy/index.html'), '/*PAGE_FONTS*/', 'privacy')]
+text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f not in [o[0] for o in OWN])
 # kana, ASCII and common punctuation are always kept so text that arrives with a data refresh still renders in the same face
 always = ''.join(chr(c) for c in range(0x20, 0x7f)) + ''.join(chr(c) for c in range(0x3000, 0x3100)) + \
     ''.join(chr(c) for c in range(0x30a0, 0x3100)) + ''.join(chr(c) for c in range(0xff01, 0xff5f)) + '・〜ー円年月日曜件'
@@ -42,18 +44,19 @@ def write_subset(src, out, keep):
 for src, out, keep in FONTS:
     write_subset(src, out, keep)
 
-# the events page gets a small extra face per family holding only the glyphs the shared subsets lack
-if os.path.exists(EVENTS):
-    page = open(EVENTS, encoding='utf-8').read()
+for path, slot, prefix in OWN:
+    if not os.path.exists(path):
+        continue
+    page = open(path, encoding='utf-8').read()
     extra = sorted(c for c in set(page) - set(chars) if ord(c) > 0x7f)
     faces = []
     if extra:
         rng = ','.join(f'U+{ord(c):X}' for c in extra)
-        for src, out, family, weight in [('DelaGothicOne-Regular.ttf', 'events-dela-gothic-one.woff2', 'Dela Gothic One', 400),
-                                         ('ZenKakuGothicNew-Regular.ttf', 'events-zen-kaku-400.woff2', 'Zen Kaku Gothic New', 400),
-                                         ('ZenKakuGothicNew-Bold.ttf', 'events-zen-kaku-700.woff2', 'Zen Kaku Gothic New', 700)]:
+        for src, out, family, weight in [('DelaGothicOne-Regular.ttf', f'{prefix}-dela-gothic-one.woff2', 'Dela Gothic One', 400),
+                                         ('ZenKakuGothicNew-Regular.ttf', f'{prefix}-zen-kaku-400.woff2', 'Zen Kaku Gothic New', 400),
+                                         ('ZenKakuGothicNew-Bold.ttf', f'{prefix}-zen-kaku-700.woff2', 'Zen Kaku Gothic New', 700)]:
             write_subset(src, out, ''.join(extra))
             faces.append(f'@font-face{{font-family:"{family}";src:url("/fonts/{out}") format("woff2");font-weight:{weight};font-display:swap;unicode-range:{rng}}}')
-    assert page.count('/*EVENT_FONTS*/') == 1
-    open(EVENTS, 'w', encoding='utf-8').write(page.replace('/*EVENT_FONTS*/', ''.join(faces)))
-    print('events extra glyphs', len(extra))
+    assert page.count(slot) == 1
+    open(path, 'w', encoding='utf-8').write(page.replace(slot, ''.join(faces)))
+    print(prefix, 'extra glyphs', len(extra))

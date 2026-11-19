@@ -309,6 +309,58 @@ def render_events():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
+# Privacy policy (/privacy/). PRIVACY_EFFECTIVE is set by hand when a revision goes live; the page lists it as 制定日.
+PRIVACY_EFFECTIVE='2026-11-20'
+LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
+PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
+    desc='新弾ナビのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
+def render_privacy():
+    src=open(os.path.join(ROOT,'src/privacy.html')).read()
+    if LOGIN_ENABLED and 'data-owner-fill' in src:
+        sys.exit('src/privacy.html still has owner placeholders (data-owner-fill): fill them before building with LOGIN_ENABLED=1')
+    src=re.sub(r'\A<!--.*?-->\n','',src,count=1,flags=re.S)
+    for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED)):
+        src=re.sub(rf'<!--{tag}-->(.*?)<!--/{tag}-->\n?',(lambda m:m.group(1)) if keep else '',src,flags=re.S)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    e=jd(PRIVACY_EFFECTIVE); eff=f'<time datetime="{PRIVACY_EFFECTIVE}">{e.year}年{e.month}月{e.day}日</time>'
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--NAV_TOOLBAR-->',tooltabs(None)),('<!--SITENAV-->',sitenav(None))):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    src=src.replace('<!--EFFECTIVE-->',eff)
+    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
+    title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    pg=PRIVACY_PAGE
+    url=SITE+pg['path']
+    og=f'{SITE}/og/{pg["og"]}.png'
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="新弾ナビ">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+<meta name="twitter:card" content="summary_large_image">
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
 shutil.copytree(os.path.join(ROOT,'public'),dist)
@@ -320,9 +372,12 @@ for pg in pages:
 if BUILD_EVENTS:
     os.makedirs(os.path.join(dist,'events'),exist_ok=True)
     open(os.path.join(dist,'events/index.html'),'w').write(render_events())
+os.makedirs(os.path.join(dist,'privacy'),exist_ok=True)
+open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
+sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_EFFECTIVE}</lastmod></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
 open(os.path.join(dist,'robots.txt'),'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n')
