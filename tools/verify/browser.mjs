@@ -34,6 +34,67 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const fails = [];
 const fail = (where, msg) => fails.push(`${where}: ${msg}`);
+// /feedback/ is built only with FEEDBACK_ENABLED=1; Turnstile and the API are stubbed.
+const HAS_FEEDBACK = fs.existsSync(path.join(DIST, 'feedback/index.html'));
+const TURNSTILE_STUB = `window.turnstile={_o:null,_n:0,
+  render(el,o){this._o=o;setTimeout(()=>o.callback('tok-'+(++this._n)),0);return 'w1';},
+  reset(){window.__tsResets=(window.__tsResets||0)+1;setTimeout(()=>this._o.callback('tok-'+(++this._n)),0);}};
+window.snTurnstileReady&&window.snTurnstileReady();`;
+
+async function checkFeedback(ctx, vp) {
+  const where = `${vp} /feedback/`;
+  const page = await ctx.newPage();
+  const bad = [];
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  page.on('console', m => { if (m.type() === 'error' && !m.text().includes('500')) bad.push(`console: ${m.text()}`); });
+  await page.route('https://challenges.cloudflare.com/**', r => r.fulfill({ contentType: 'text/javascript', body: TURNSTILE_STUB }));
+  const posts = [];
+  let answer = 500;
+  await page.route('**/api/v1/feedback', async r => {
+    posts.push(JSON.parse(r.request().postData()));
+    await r.fulfill({ status: answer, contentType: 'application/json', body: answer === 202 ? '{"ok":true,"id":"x"}' : '{"error":"internal error"}' });
+  });
+  try {
+    await page.goto(`${BASE}/pokemon/`, { waitUntil: 'load' });
+    const gear = await page.locator('#setPop a[data-feedback]').getAttribute('href');
+    if (gear !== '/feedback/?from=/pokemon/') fail(where, `gear menu link ${gear}`);
+    const res = await page.goto(`${BASE}/feedback/?from=/pokemon/`, { waitUntil: 'load' });
+    if (!res || res.status() !== 200) fail(where, `status ${res && res.status()}`);
+    if (await page.locator('#fbFrom').textContent() !== '/pokemon/') fail(where, '送信元ページ not shown');
+    await page.locator('#fbSend').click();
+    if (!(await page.locator('#fbKindErr').textContent())) fail(where, 'no error for a missing 種類');
+    if (await page.evaluate(() => document.activeElement?.name) !== 'kind') fail(where, 'focus did not move to 種類');
+    if (await page.locator('input[name="kind"][aria-invalid="true"]').count() !== 4) fail(where, '種類 radios not marked aria-invalid');
+    await page.locator('input[name="kind"][value="data"]').check();
+    const text = '発売日が間違っています\n2行目';
+    await page.locator('#fbMessage').fill(text);
+    await page.locator('#fbEmail').fill('not-an-address');
+    await page.locator('#fbSend').click();
+    if (!(await page.locator('#fbEmailErr').textContent())) fail(where, 'no error for a malformed address');
+    await page.locator('#fbEmail').fill('me@example.com');
+    await page.waitForFunction(() => window.turnstile && window.turnstile._n > 0);
+    await page.locator('#fbSend').click();
+    await page.locator('#fbStatus:not(:empty)').waitFor();
+    if (!(await page.locator('#fbStatus').textContent()).includes('そのまま残っています')) fail(where, 'error message missing');
+    if (await page.locator('#fbMessage').inputValue() !== text) fail(where, 'text lost after an error');
+    if (!(await page.evaluate(() => window.__tsResets))) fail(where, 'Turnstile not reset after an error');
+    answer = 202;
+    await page.waitForFunction(() => window.turnstile._n > 1);
+    await page.locator('#fbSend').click();
+    await page.locator('#fbDone').waitFor({ state: 'visible' });
+    const last = posts.at(-1);
+    const want = { kind: 'data', message: text, reply_to: 'me@example.com', page: '/pokemon/' };
+    for (const [k, v] of Object.entries(want)) if (last?.[k] !== v) fail(where, `posted ${k}=${JSON.stringify(last?.[k])}`);
+    if (!/^tok-\d+$/.test(last?.turnstile ?? '') || last.turnstile === posts[0].turnstile) fail(where, 'Turnstile token not fresh');
+    if (await page.locator('#fbBack').getAttribute('href') !== '/pokemon/') fail(where, 'back link does not return to ?from');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    if (overflow > 1) fail(where, `page scrolls horizontally by ${overflow}px`);
+    await page.screenshot({ path: path.join(OUT, `${vp}-feedback.png`), fullPage: true });
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} posts=${posts.length}`);
+  await page.close();
+}
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 
 for (const [vp, opt] of Object.entries(VIEWPORTS)) {
@@ -100,6 +161,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     console.log(`  ${where.padEnd(22)} month=${st.month} cards=${st.visibleCards}`);
     await page.close();
   }
+  if (HAS_FEEDBACK) await checkFeedback(ctx, vp);
   await ctx.close();
 }
 // / is the today page: today (Asia/Tokyo) from the embedded releases, favourites first, the saved location's events

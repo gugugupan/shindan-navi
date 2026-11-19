@@ -26,7 +26,8 @@ footer a{font-weight:400}
 <h1>ページが見つかりません</h1>
 <p>URL が変わったか、削除された可能性があります。</p>
 <a href="/releases/">新弾カレンダーへ</a>　<a href="/">トレカカレンダーのトップへ</a>
-<footer><a href="/privacy/">プライバシーポリシー</a></footer>
+<footer><a href="/privacy/">プライバシーポリシー</a><!--FEEDBACK--> ・ <a href="/feedback/" id="fb">ご意見・ご要望</a>
+<script>document.getElementById('fb').href='/feedback/?from='+encodeURIComponent(location.pathname).replace(/%2F/g,'/');</script><!--/FEEDBACK--></footer>
 </main>
 </body>
 </html>

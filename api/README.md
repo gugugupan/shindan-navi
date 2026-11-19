@@ -94,6 +94,10 @@ stale). `/events/days` reads only this table.
 keys `stars` / `event_filters` / `ask_calendar`), and the unused billing placeholders `entitlements`,
 `billing_customers`. Apply it remotely before pushing the code that uses it (see Migrations).
 
+`migrations/0004_feedback.sql`: `feedback` (one row per form submission: `kind`, `message`, optional `reply_to` /
+`page` / `user_id`, `email_status` `pending`/`sent`/`failed` + `email_error`), indexes on `created_at` (retention
+purge) and `user_id` (account deletion). No IP address or user agent. See Feedback.
+
 ## Accounts (Google login, synced preferences)
 
 Contract: [`../contracts/README.md`](../contracts/README.md) › Accounts API. Code: `src/auth.ts` (OAuth, sessions,
@@ -140,6 +144,81 @@ without Google; fills missing secrets with throwaway values). That route lives o
 checks the Worker bundle has no trace of it. `__Host-` cookies with `Secure` work on `http://localhost` in Chrome, not
 in Safari. `wrangler dev` keeps the account routes off (its origin is not `SITE_ORIGIN`).
 
+## Feedback (`/feedback/`, `POST /api/v1/feedback`)
+
+Contract: [`../contracts/README.md`](../contracts/README.md) › Feedback API. Code: `src/feedback.ts`; page
+`../src/feedback.html`. Dark until enabled on both sides:
+
+- **Page:** `/feedback/` and every link to it (footer, gear menu, avatar menu, 404) are built only with
+  `FEEDBACK_ENABLED=1` (repo variable; Worker build only, like `LOGIN_ENABLED`). The build also needs
+  `TURNSTILE_SITE_KEY` (repo variable) and `PRIVACY_EFFECTIVE_FEEDBACK` in `scripts/build.py` (the day it goes live;
+  it dates the FEEDBACK revision of `/privacy/`), and refuses to run without them. The page is `noindex` and not in
+  the sitemap: it is a form with nothing to find in search, and it only works on the Worker.
+- **Worker:** the route answers 404 `{"error":"feedback disabled"}` unless `SITE_ORIGIN` equals the request origin
+  and `TURNSTILE_SECRET_KEY`, `FEEDBACK_TO` (a valid address) and the `FEEDBACK_EMAIL` send_email binding all exist.
+  The binding is not in `wrangler.jsonc`: `scripts/remote-config.mjs` adds it only when `FEEDBACK_ENABLED=1` is in
+  its environment (the workflow passes the repo variable), so deploys keep working before Email Routing is set up.
+
+How a submission goes: same-origin `Origin` + JSON content type → `FEEDBACK_LIMIT` (5/min per client IP, IPv6 by /64)
+and `FEEDBACK_BREAKER` (30/min for everyone per location, key `all`), both 429 and before anything costs → strict
+validation (`Content-Length` and body ≤ 16 KB, exact fields, `kind` in bug/request/data/other, message 1-2,000
+characters without control characters, plain address ≤ 254 with the same pattern as the page, `page` a same-origin
+path ≤ 512) → Turnstile siteverify (`success`,
+hostname `shindan-navi.app`, action `feedback`; a siteverify outage is 503) → logged-in user id from the session cookie
+if login is on → one D1 batch (insert + delete rows older than 365 days) → mail → `email_status` update → 202. A D1
+failure is 500 and sends nothing (the page keeps the text). A mail failure is logged and recorded in `email_status` /
+`email_error`; the answer is still 202 because the feedback is stored. Deleting an account sets `user_id` to NULL on
+its feedback rows.
+
+The mail is a hand-built RFC 5322 message (UTF-8 base64 body, RFC 2047 encoded words folded so every header line is
+≤ 78 characters, `Message-ID`, `Date`, `Reply-To` when an address was given). The body has the kind, page, reply
+address, receipt id/time, ログインユーザー はい/いいえ (never the account id; that stays in D1) and the text. It is
+sent as `EmailMessage` from `cloudflare:email`: From `feedback-form@shindan-navi.app` (pinned by the binding's `allowed_sender_addresses`), To the `FEEDBACK_TO` secret. Email Routing only delivers to **verified
+destination addresses**, so `FEEDBACK_TO` must be one. Tests alias `cloudflare:email` to `tests/stubs/`; `dev:node`
+has no binding, so the route answers 404 there and the page shows its 「現在、このフォームはご利用いただけません」 state.
+
+To read submissions: `npx wrangler d1 execute shindan-navi-events --remote --config ../wrangler.remote.json --command
+"SELECT created_at, kind, email_status, page, reply_to, message FROM feedback ORDER BY created_at DESC LIMIT 20"`
+(rows contain personal data: don't paste them into issues or logs). Failed mails: `WHERE email_status != 'sent'`.
+Deleting one submission on request (find its id by the receipt id in the mail, or by time / reply address):
+`npx wrangler d1 execute shindan-navi-events --remote --config ../wrangler.remote.json --command "DELETE FROM feedback
+WHERE id = '<id>'"`, and delete the notification mail too.
+
+### Owner setup (in this order; nothing is live until step 7)
+
+1. **Email Routing:** Cloudflare dashboard → zone `shindan-navi.app` → Email → Email Routing → enable it (Cloudflare adds
+   its MX/SPF/DKIM records; check nothing else on the zone receives mail first). No routing rule is needed for
+   sending.
+2. **Destination address:** Email Routing → Destination addresses → add the mailbox that should receive feedback and
+   click the link in the verification mail. Only verified addresses can receive from the Worker.
+3. **Turnstile:** dashboard → Turnstile → Add widget: name `shindan-navi feedback`, hostnames `shindan-navi.app`
+   (add `localhost` only if you want to test locally), mode Managed, no pre-clearance. Copy the site key (public) and
+   the secret key.
+4. **D1 migration** (from `api/`, with `D1_DATABASE_ID` exported):
+   `node scripts/remote-config.mjs && ./node_modules/.bin/wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json`
+   (applies `0004_feedback.sql`; additive, safe for the code already deployed).
+5. **Worker secrets** (from `api/`, logged in with `./node_modules/.bin/wrangler login`; each prompts for the value,
+   nothing is echoed):
+   ```bash
+   ./node_modules/.bin/wrangler secret put TURNSTILE_SECRET_KEY --name shindan-navi
+   ./node_modules/.bin/wrangler secret put FEEDBACK_TO --name shindan-navi     # the verified address from step 2
+   ```
+6. **Privacy date:** set `PRIVACY_EFFECTIVE_FEEDBACK = 'YYYY-MM-DD'` (the go-live day) in `scripts/build.py` and
+   review the FEEDBACK parts of `src/privacy.html` (retention: 1 year, notification mails deleted within that year).
+   Commit it.
+7. **Repo variables** (GitHub → Settings → Secrets and variables → Actions → Variables): `TURNSTILE_SITE_KEY` = the
+   site key, then `FEEDBACK_ENABLED` = `1`. For the first enable, run Deploy by hand (Actions → Deploy → Run workflow,
+   i.e. `workflow_dispatch`) and watch it: the build step must show `feedback True` and the Worker config step
+   `feedback mail binding`. If the deploy or the page misbehaves, roll back by deleting `FEEDBACK_ENABLED` and running
+   Deploy again (links, page and binding go away; secrets and stored rows can stay).
+8. **Check:** send one test from `https://shindan-navi.app/feedback/`, confirm the mail arrives (send_email mails show
+   as "dropped" in the Email Routing summary even when delivered; look under Email → sending logs), and that the row
+   has `email_status = 'sent'`.
+
+Turning it off: delete the `FEEDBACK_ENABLED` variable (or set it to anything but `1`) and redeploy; the links and the
+page disappear and the route answers 404 without the binding. Stored feedback stays until the 1-year purge (or delete
+it by hand).
+
 ## D1 budget (Free plan: 100,000 rows written, 5,000,000 rows read per UTC day)
 
 Numbers below are on the data of 2026-11-18 (32,980 events, 9,743 day_counts rows).
@@ -179,7 +258,11 @@ day_counts row, ~43k) plus one primary-key lookup per written row.
 | `GET /me/prefs` | 2 + ≤ 3 prefs | 0 |
 | `PUT /me/prefs`, `POST /me/prefs/merge` | 2 + ≤ 3 prefs | 1 per changed key (unchanged keys are not written) |
 | Login callback | 1 identity lookup + the user's sessions | session 2 (row + index); 2 per expired or over-cap session deleted; new user +3; changed name/avatar/email +1-2 |
-| Logout / `DELETE /me` | 0-2 / 2 | 1-2 / every row of the user |
+| Logout / `DELETE /me` | 0-2 / 2 | 1-2 / every row of the user (+ its feedback rows' `user_id`) |
+| `POST /feedback` | 0 (2 with a session cookie) + rows older than 1 year | ~4 (row + 2-3 index entries), status update ~2, purged rows |
+
+Feedback writes are bounded by `FEEDBACK_LIMIT` (5/min per client IP), `FEEDBACK_BREAKER` (30/min per location for
+everyone) and a Turnstile solve per submission.
 
 Writes are what matter: the importer's `--max-writes` default of 90,000 leaves ~10,000 rows/day for accounts on a
 day with a full import (the Free limit is 100,000 for everything). A star toggle is one write, so the page batches

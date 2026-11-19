@@ -2,9 +2,10 @@
   DRAFT: the owner must review this policy before it goes live. It is written from what the code does
   (GA4, Cloudflare, localStorage, /events/ Google Maps, Google login), not checked by a lawyer.
   Owner placeholders are span.todo elements carrying the owner-fill data attribute; build.py refuses
-  LOGIN_ENABLED=1 while one is left. Dates: PRIVACY_EFFECTIVE_BASE (制定, EFFECTIVE) and PRIVACY_EFFECTIVE_LOGIN
-  (login revision, REVISED) in build.py.
-  Parts wrapped in the EVENTS / LOGIN marker comments are kept only with BUILD_EVENTS on / LOGIN_ENABLED=1.
+  LOGIN_ENABLED=1 while one is left. Dates: PRIVACY_EFFECTIVE_BASE (制定, EFFECTIVE), PRIVACY_EFFECTIVE_LOGIN and
+  PRIVACY_EFFECTIVE_FEEDBACK (revisions, REVISED_*) in build.py; REVISED is the latest enabled revision.
+  Parts wrapped in the EVENTS / LOGIN / FEEDBACK marker comments are kept only with BUILD_EVENTS on / LOGIN_ENABLED=1 /
+  FEEDBACK_ENABLED=1; STORE / NOSTORE parts depend on whether either of the last two keeps data on the server.
   Section numbers are CSS counters, so they stay in order when a LOGIN part is left out.
 -->
 <title>プライバシーポリシー｜トレカカレンダー</title>
@@ -48,7 +49,7 @@
 
   <main class="doc">
     <h1>プライバシーポリシー</h1>
-    <p class="meta">制定日：<!--EFFECTIVE--><!--LOGIN-->（最終改定日：<!--REVISED-->）<!--/LOGIN--></p>
+    <p class="meta">制定日：<!--EFFECTIVE--><!--REVISED--></p>
 
     <section class="seo about">
       <p>トレカカレンダー（https://shindan-navi.app/、以下「本サイト」）は、利用者の情報を、個人情報の保護に関する法律（個人情報保護法）その他の法令に沿って取り扱います。このページでは、本サイトがどのような情報を、何のために、どこへ送信・保存しているかを説明します。</p>
@@ -104,6 +105,20 @@
       <p>これらの情報は、Cloudflare が提供するデータベース（Cloudflare D1）に保存します。データは米国その他の国にある Cloudflare のデータセンターで保管される場合があります。</p>
       <p>プロフィール画像は、表示するときに利用者のブラウザが Google のサーバーから直接読み込みます（リファラーは送信しません）。</p>
 <!--/LOGIN-->
+<!--FEEDBACK-->
+      <h3>ご意見・ご要望フォーム</h3>
+      <p>ご意見・ご要望フォーム（/feedback/）から送信すると、次の情報を受け取り、保存します。</p>
+      <ul>
+        <li>種類（不具合・要望・データの誤り・その他）と、入力された内容</li>
+        <li>返信先メールアドレス（入力した場合のみ）</li>
+        <li>フォームを開く前に見ていたページの URL（送信元ページ）</li>
+        <!--LOGIN--><li>ログイン中に送信した場合は、アカウントの ID</li><!--/LOGIN-->
+        <li>受付日時と、運営者への通知メールを送信できたかどうか</li>
+      </ul>
+      <p>利用目的は、ご意見への対応と本サイトの改善、不具合やデータの誤りの修正、メールアドレスを入力した場合の返信です。メールアドレスを返信以外の目的（お知らせの送信など）に使うことはありません。</p>
+      <p>スパムなどの不正な送信を防ぐため、Cloudflare, Inc.（米国）の Cloudflare Turnstile を使っています。フォームを開くと、Turnstile が端末・ブラウザの情報や IP アドレスなどを Cloudflare に送信し、人による操作かどうかを確認します。送信時の IP アドレスは、この確認と短時間の送信回数の制限のためにその場で利用するだけで、本サイトでは保存しません。</p>
+      <p>送信された内容は Cloudflare D1 に保存し、あわせて Cloudflare のメール配信機能（Email Routing）で運営者のメールアドレスに通知します。</p>
+<!--/FEEDBACK-->
       <h3>Cookie</h3>
       <div class="tw"><table>
         <thead><tr><th scope="col">名前</th><th scope="col">用途</th><th scope="col">有効期間</th></tr></thead>
@@ -126,6 +141,7 @@
         <tbody>
           <tr><td>Google アナリティクス（Google LLC）</td><td>shindan-navi.app のページを表示・操作したとき</td><td>Cookie の識別子、閲覧ページ、参照元、端末・ブラウザ情報、IP アドレス、操作の内容</td></tr>
           <!--EVENTS--><tr><td>Google マップ（Google LLC）</td><td>イベントカレンダーで日付ごとの会場地図を開いたとき</td><td>IP アドレス、端末・ブラウザ情報、表示した地図の範囲</td></tr><!--/EVENTS-->
+          <!--FEEDBACK--><tr><td>Cloudflare Turnstile（Cloudflare, Inc.）</td><td>ご意見・ご要望フォームを開いたとき</td><td>IP アドレス、端末・ブラウザの情報、フォームでの操作に関する情報</td></tr><!--/FEEDBACK-->
           <!--LOGIN--><tr><td>Google ログイン（Google LLC）</td><td>「ログイン」を押して Google アカウントでログインするとき</td><td>Google の画面で行う認証の情報（本サイトはパスワードを受け取りません）</td></tr>
           <tr><td>Google のプロフィール画像配信（Google LLC）</td><td>ログイン中、アカウントのアイコンを表示したとき</td><td>IP アドレス、端末・ブラウザ情報</td></tr><!--/LOGIN-->
           <tr><td>Google カレンダー（Google LLC）</td><td>「Google カレンダーに追加」を押したとき</td><td>商品名・発売日（リンクに含まれる内容）</td></tr>
@@ -137,19 +153,20 @@
     <section class="seo about" aria-labelledby="p4">
       <h2 id="p4">第三者への提供と委託</h2>
       <p>取得した個人情報を販売したり、法令に基づく場合を除いて本人の同意なく第三者に提供したりすることはありません。</p>
-      <p>本サイトの運営に必要な範囲で、配信・データ保存を Cloudflare, Inc.（米国）に<!--LOGIN-->、ログイン認証を Google LLC（米国）に<!--/LOGIN-->、アクセス解析を Google LLC（米国）に委ねています。米国には日本の個人情報保護法に相当する連邦レベルの包括的な個人情報保護法はなく、州法（カリフォルニア州消費者プライバシー法など）や分野ごとの法律によって保護されています。各国の制度については <a href="https://www.ppc.go.jp/personalinfo/legal/kaiseihogohou/#gaikoku" target="_blank" rel="noopener">個人情報保護委員会の調査結果</a> をご覧ください。各社は個人情報の保護に関する方針を公表し、セキュリティ対策を行っています。</p>
+      <p>本サイトの運営に必要な範囲で、配信・データ保存<!--FEEDBACK-->・フォームのスパム防止・通知メールの配信<!--/FEEDBACK-->を Cloudflare, Inc.（米国）に<!--LOGIN-->、ログイン認証を Google LLC（米国）に<!--/LOGIN-->、アクセス解析を Google LLC（米国）に委ねています。米国には日本の個人情報保護法に相当する連邦レベルの包括的な個人情報保護法はなく、州法（カリフォルニア州消費者プライバシー法など）や分野ごとの法律によって保護されています。各国の制度については <a href="https://www.ppc.go.jp/personalinfo/legal/kaiseihogohou/#gaikoku" target="_blank" rel="noopener">個人情報保護委員会の調査結果</a> をご覧ください。各社は個人情報の保護に関する方針を公表し、セキュリティ対策を行っています。</p>
     </section>
-<!--LOGIN-->
+<!--STORE-->
     <section class="seo about" aria-labelledby="p5">
       <h2 id="p5">保存期間と削除</h2>
       <ul>
-        <li>アカウントの情報（2-4）は、アカウントを削除するまで保存します。</li>
+        <!--LOGIN--><li>アカウントの情報（2-4）は、アカウントを削除するまで保存します。</li>
         <li>セッション情報は、ログアウトしたときに削除します。有効期限（180 日）を過ぎたものと、同じアカウントで新しい順に 10 件を超えたものは、次にログインしたときに削除します。</li>
-        <li>設定画面の「アカウントを削除」から、いつでもアカウントを削除できます。削除すると、アカウント・連携した Google アカウントの情報・同期したお気に入りと設定・セッションをデータベースからすぐに完全に削除します（ブラウザの localStorage に残っているお気に入り等は消えません）。</li>
+        <li>設定画面の「アカウントを削除」から、いつでもアカウントを削除できます。削除すると、アカウント・連携した Google アカウントの情報・同期したお気に入りと設定・セッションをデータベースからすぐに完全に削除します（ブラウザの localStorage に残っているお気に入り等は消えません）。<!--FEEDBACK-->フォームから送信したご意見は残り、アカウントとの紐付け（アカウントの ID）だけを削除します。<!--/FEEDBACK--></li><!--/LOGIN-->
+        <!--FEEDBACK--><li>ご意見・ご要望フォームから送信された内容は、受付から 1 年間保存し、1 年を過ぎたものは順次削除します。期間内でも、1 のお問い合わせ先にご連絡いただければ削除します。運営者に届いた通知メールは、ご意見への対応に必要な間だけ保管し、不要になったものは削除します。</li><!--/FEEDBACK-->
         <li>Cloudflare D1 の障害復旧機能（Time Travel）により、削除後も一定期間（Cloudflare の契約プランに応じて 7 日間または 30 日間、最大 30 日間）、復元用のデータが Cloudflare のシステム内に残る場合があります。運営者がこれを通常の業務で利用することはありません。</li>
       </ul>
     </section>
-<!--/LOGIN-->
+<!--/STORE-->
     <section class="seo about" aria-labelledby="p6">
       <h2 id="p6">安全管理のための措置</h2>
       <ul>
@@ -163,7 +180,7 @@
 
     <section class="seo about" aria-labelledby="p7">
       <h2 id="p7">開示・訂正・利用停止等のご請求</h2>
-      <p><!--LOGIN-->本サイトが保存している個人情報（保有個人データ）について、<!--/LOGIN--><!--NOLOGIN-->本サイトが保有する個人情報について、<!--/NOLOGIN-->利用目的の通知、開示、訂正・追加・削除、利用停止・消去、第三者提供の停止のご請求は、1 のお問い合わせ先までご連絡ください。ご本人であることを確認したうえで、法令に従って遅滞なく対応します。<!--LOGIN-->確認のため、ログインに使っている Google アカウントのメールアドレスからのご連絡をお願いすることがあります。<!--/LOGIN-->手数料はいただきません。</p>
+      <p><!--STORE-->本サイトが保存している個人情報（保有個人データ）について、<!--/STORE--><!--NOSTORE-->本サイトが保有する個人情報について、<!--/NOSTORE-->利用目的の通知、開示、訂正・追加・削除、利用停止・消去、第三者提供の停止のご請求は、1 のお問い合わせ先までご連絡ください。ご本人であることを確認したうえで、法令に従って遅滞なく対応します。<!--LOGIN-->確認のため、ログインに使っている Google アカウントのメールアドレスからのご連絡をお願いすることがあります。<!--/LOGIN-->手数料はいただきません。</p>
       <p>お問い合わせへの回答のために受け取ったメールアドレス等は、その対応のためにのみ利用します。</p>
     </section>
 
@@ -178,7 +195,8 @@
       <h3 class="nn">改定履歴</h3>
       <ul>
         <li><!--EFFECTIVE-->：制定</li>
-        <!--LOGIN--><li><!--REVISED-->：Google アカウントでのログインとお気に入り等の同期の開始にあわせて改定</li><!--/LOGIN-->
+        <!--LOGIN--><li><!--REVISED_LOGIN-->：Google アカウントでのログインとお気に入り等の同期の開始にあわせて改定</li><!--/LOGIN-->
+        <!--FEEDBACK--><li><!--REVISED_FEEDBACK-->：ご意見・ご要望フォームの開始にあわせて改定</li><!--/FEEDBACK-->
       </ul>
     </section>
   </main>

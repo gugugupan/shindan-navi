@@ -208,6 +208,13 @@ async function currentUser(request: Request, env: AuthEnv, cfg: Config, readLimi
   return user ? { user, sessionId } : null;
 }
 
+/** The logged-in user's id, or null (login off on this origin, no or invalid session). For routes outside /auth|me. */
+export async function sessionUserId(request: Request, env: AuthEnv, url: URL): Promise<string | null> {
+  const cfg = config(env, url);
+  if (!cfg) return null;
+  return (await currentUser(request, env, cfg))?.user.id ?? null;
+}
+
 async function requireUser(request: Request, env: AuthEnv, cfg: Config, readLimit?: RateLimit) {
   const s = await currentUser(request, env, cfg, readLimit);
   if (!s) throw new HttpError(401, 'unauthenticated');
@@ -387,6 +394,12 @@ async function deleteAccount(request: Request, env: AuthEnv, cfg: Config): Promi
   const { user } = await requireUser(request, env, cfg);
   await limit(env.AUTH_WRITE_LIMIT, `user:${user.id}`);
   const db = env.DB;
+  // Feedback stays (kept 1 year) but loses the link to the account. Separate from the batch: the table may not exist.
+  try {
+    await db.prepare('UPDATE feedback SET user_id = NULL WHERE user_id = ?').bind(user.id).run();
+  } catch (e) {
+    if (!/no such table/i.test(String((e as Error).message))) throw e;
+  }
   await db.batch(['user_prefs', 'sessions', 'user_identities', 'entitlements', 'billing_customers', 'users'].map((t) =>
     db.prepare(`DELETE FROM ${t} WHERE ${t === 'users' ? 'id' : 'user_id'} = ?`).bind(user.id)));
   return json(null, 204, CLEAR_SESSION);

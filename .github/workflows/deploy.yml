@@ -23,6 +23,10 @@ jobs:
       # cutover in README.md › Deploy) or "worker". Pages keeps receiving every push until then.
       LIVE_HOST: ${{ vars.LIVE_HOST || 'pages' }}
       HAS_D1_ID: ${{ secrets.D1_DATABASE_ID != '' }}
+      # Feedback form (api/README.md › Feedback): "1" builds /feedback/ and its links (Worker build only) and adds the
+      # send_email binding in remote-config.mjs. Set it only after Email Routing, Turnstile, the secrets and the
+      # migration are in place. TURNSTILE_SITE_KEY is the widget's public site key.
+      FEEDBACK_ENABLED: ${{ vars.FEEDBACK_ENABLED }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,6 +58,7 @@ jobs:
         env:
           MAPS_BROWSER_KEY: ${{ vars.MAPS_BROWSER_KEY }}
           LOGIN_ENABLED: ${{ vars.LOGIN_ENABLED }}
+          TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
         run: python -I scripts/build.py
 
       - uses: actions/setup-node@v4
