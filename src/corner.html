@@ -190,8 +190,8 @@
     function schedule(ms){
       if(!ready) return;
       clearTimeout(timer);
-      // PUT is limited to 30/min per user: at most one write every 2.5 s
-      timer=setTimeout(flush, Math.max(ms, lastWrite+2500-Date.now(), holdUntil-Date.now(), 0));
+      // writes are limited to 5/min per user (AUTH_WRITE_LIMIT): at most one every 12 s
+      timer=setTimeout(flush, Math.max(ms, lastWrite+12e3-Date.now(), holdUntil-Date.now(), 0));
     }
     async function flush(keepalive){
       clearTimeout(timer); timer=0;

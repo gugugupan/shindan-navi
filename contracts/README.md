@@ -218,8 +218,10 @@ Client rules:
 - Every non-GET request must send `Origin` equal to the site origin (browsers do for `fetch`) and
   `Content-Type: application/json` (also for bodiless logout / DELETE), else 403 `{ "error": "forbidden" }` /
   415 `{ "error": "unsupported media type" }`.
-- 429 `{ "error": "too many requests" }` (Retry-After: 60): login start/callback per client IP, PUT/merge/DELETE
-  per user, 30 per minute each (`AUTH_LIMIT`). Batch star toggles (debounce) rather than one PUT per click.
+- 429 `{ "error": "too many requests" }` (Retry-After: 60): login start/callback 30/min per client IP (`AUTH_LIMIT`),
+  PUT/merge/DELETE 5/min per user (`AUTH_WRITE_LIMIT`), GET `/me` and `/me/prefs` 60/min per session
+  (`AUTH_READ_LIMIT`). Batch star toggles (debounce, at most one write every 12 s) rather than one PUT per click.
+- A user keeps at most 10 sessions: each login deletes the oldest beyond that (they answer 401).
 - On 5xx or a failed write keep local state and fall back to localStorage silently; never log out on 5xx.
 - `__Host-` + `Secure` cookies work on `http://localhost` in Chrome, not in Safari.
 

@@ -6,8 +6,12 @@ export interface AuthEnv {
   GOOGLE_OAUTH_CLIENT_ID?: string;
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
   SESSION_SECRET?: string;
-  /** Login start/callback per client IP; PUT/merge/DELETE per user. Absent locally. */
+  /** Workers Rate Limiting bindings; absent locally. Login start/callback per client IP. */
   AUTH_LIMIT?: RateLimit;
+  /** PUT/merge prefs and DELETE /me per user: bounds one user's D1 writes (api/README.md › D1 budget). */
+  AUTH_WRITE_LIMIT?: RateLimit;
+  /** GET /me and /me/prefs per session, checked before the session's D1 read. */
+  AUTH_READ_LIMIT?: RateLimit;
 }
 
 export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -21,6 +25,8 @@ export const OAUTH_COOKIE = '__Host-sn_oauth';
 export const SESSION_TTL_S = 180 * 86_400;
 export const OAUTH_TTL_S = 600;
 export const MAX_BODY_BYTES = 64 * 1024;
+/** A login keeps the user's newest sessions up to this many (the new one included) and deletes the rest. */
+export const MAX_SESSIONS = 10;
 // Allowed clock difference for id_token iat (Google's clock vs the Worker's).
 const CLOCK_SKEW_S = 300;
 
@@ -152,8 +158,8 @@ function checkCsrf(request: Request, cfg: Config): void {
   if (type !== 'application/json') throw new HttpError(415, 'unsupported media type');
 }
 
-async function limit(env: AuthEnv, key: string): Promise<void> {
-  if (env.AUTH_LIMIT && !(await env.AUTH_LIMIT.limit({ key })).success) throw new HttpError(429, 'too many requests', { 'retry-after': '60' });
+async function limit(binding: RateLimit | undefined, key: string): Promise<void> {
+  if (binding && !(await binding.limit({ key })).success) throw new HttpError(429, 'too many requests', { 'retry-after': '60' });
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -190,30 +196,42 @@ export interface SessionUser {
   plan: string;
 }
 
-/** HMAC first (no D1 read for a forged cookie), then one query. */
-async function currentUser(request: Request, env: AuthEnv, cfg: Config): Promise<{ user: SessionUser; sessionId: string } | null> {
+/** HMAC first (no D1 read for a forged cookie), then the read limit if given, then one query. */
+async function currentUser(request: Request, env: AuthEnv, cfg: Config, readLimit?: RateLimit): Promise<{ user: SessionUser; sessionId: string } | null> {
   const sid = await unsign(cfg.secret, 'session', readCookie(request, SESSION_COOKIE));
   if (!sid) return null;
   const sessionId = await sessionHash(sid);
+  await limit(readLimit, `session:${sessionId}`);
   const user = await env.DB.prepare(
     'SELECT u.id, u.display_name, u.avatar_url, u.plan FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND s.expires_at > ?',
   ).bind(sessionId, Math.floor(Date.now() / 1000)).first<SessionUser>();
   return user ? { user, sessionId } : null;
 }
 
-async function requireUser(request: Request, env: AuthEnv, cfg: Config) {
-  const s = await currentUser(request, env, cfg);
+async function requireUser(request: Request, env: AuthEnv, cfg: Config, readLimit?: RateLimit) {
+  const s = await currentUser(request, env, cfg, readLimit);
   if (!s) throw new HttpError(401, 'unauthenticated');
   return s;
 }
 
-/** Statements that create a session for the user, and its two cookies. */
+/**
+ * Statements (run them in one batch, in order) that create a session for the user and delete the user's expired
+ * sessions and those beyond the newest MAX_SESSIONS; and the session's two cookies.
+ */
 export async function issueSession(db: D1Database, secret: string, userId: string, now = Date.now()) {
   const sid = randomToken();
-  const statement = db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
-    .bind(await sessionHash(sid), userId, new Date(now).toISOString(), Math.floor(now / 1000) + SESSION_TTL_S);
+  const id = await sessionHash(sid);
+  const nowS = Math.floor(now / 1000);
+  const statements = [
+    db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+      .bind(id, userId, new Date(now).toISOString(), nowS + SESSION_TTL_S),
+    db.prepare(
+      'DELETE FROM sessions WHERE user_id = ?1 AND id != ?2 AND (expires_at <= ?3 OR id NOT IN ' +
+      '(SELECT id FROM sessions WHERE user_id = ?1 AND id != ?2 AND expires_at > ?3 ORDER BY created_at DESC, id LIMIT ?4))',
+    ).bind(userId, id, nowS, MAX_SESSIONS - 1),
+  ];
   const cookies = [cookie(SESSION_COOKIE, await sign(secret, 'session', sid), SESSION_TTL_S), cookie(USER_COOKIE, '1', SESSION_TTL_S, false)];
-  return { statement, cookies };
+  return { statements, cookies };
 }
 
 /** Feature gate for paid features (none yet). */
@@ -236,7 +254,7 @@ interface OAuthState {
 }
 
 async function start(request: Request, env: AuthEnv, cfg: Config, url: URL, ip: string): Promise<Response> {
-  await limit(env, `ip:${ip}`);
+  await limit(env.AUTH_LIMIT, `ip:${ip}`);
   const st: OAuthState = { s: randomToken(), v: randomToken(), n: randomToken(), r: safeReturn(url.searchParams.get('return'), cfg.origin), e: Math.floor(Date.now() / 1000) + OAUTH_TTL_S };
   const q = new URLSearchParams({
     client_id: cfg.clientId,
@@ -285,7 +303,7 @@ const shortText = (v: unknown, max: number) => (typeof v === 'string' && v.trim(
 const avatar = (v: unknown) => (typeof v === 'string' && v.startsWith('https://') && v.length <= 2048 ? v : null);
 
 async function callback(request: Request, env: AuthEnv, cfg: Config, url: URL, ip: string): Promise<Response> {
-  await limit(env, `ip:${ip}`);
+  await limit(env.AUTH_LIMIT, `ip:${ip}`);
   const clearOauth = clearCookie(OAUTH_COOKIE);
   const raw = await unsign(cfg.secret, 'oauth', readCookie(request, OAUTH_COOKIE));
   let st: OAuthState | null = null;
@@ -315,10 +333,7 @@ async function callback(request: Request, env: AuthEnv, cfg: Config, url: URL, i
     const claims = validateIdToken(tokens.id_token, cfg.clientId, st.n, nowS);
     const userId = await upsertUser(env.DB, claims);
     const session = await issueSession(env.DB, cfg.secret, userId);
-    await env.DB.batch([
-      env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at <= ?').bind(userId, nowS),
-      session.statement,
-    ]);
+    await env.DB.batch(session.statements);
     return redirect(back, [clearOauth, ...session.cookies]);
   } catch (e) {
     console.error(`login failed: ${(e as Error).message}`);
@@ -357,7 +372,7 @@ async function readPrefRows(db: D1Database, userId: string): Promise<PrefRow[]> 
 async function changePrefs(request: Request, env: AuthEnv, cfg: Config, mode: 'put' | 'merge'): Promise<Response> {
   checkCsrf(request, cfg);
   const { user } = await requireUser(request, env, cfg);
-  await limit(env, `user:${user.id}`);
+  await limit(env.AUTH_WRITE_LIMIT, `user:${user.id}`);
   const body = await readJson(request);
   const rows = await readPrefRows(env.DB, user.id);
   const current = prefsBody(rows).prefs;
@@ -370,7 +385,7 @@ async function changePrefs(request: Request, env: AuthEnv, cfg: Config, mode: 'p
 async function deleteAccount(request: Request, env: AuthEnv, cfg: Config): Promise<Response> {
   checkCsrf(request, cfg);
   const { user } = await requireUser(request, env, cfg);
-  await limit(env, `user:${user.id}`);
+  await limit(env.AUTH_WRITE_LIMIT, `user:${user.id}`);
   const db = env.DB;
   await db.batch(['user_prefs', 'sessions', 'user_identities', 'entitlements', 'billing_customers', 'users'].map((t) =>
     db.prepare(`DELETE FROM ${t} WHERE ${t === 'users' ? 'id' : 'user_id'} = ?`).bind(user.id)));
@@ -393,11 +408,11 @@ const ACCOUNT_ROUTES: Record<string, Partial<Record<string, Handler>>> = {
   '/api/v1/auth/google/callback': { GET: callback },
   '/api/v1/auth/logout': { POST: (r, e, c) => logout(r, e, c) },
   '/api/v1/me': {
-    GET: async (r, e, c) => json({ user: (await requireUser(r, e, c)).user }),
+    GET: async (r, e, c) => json({ user: (await requireUser(r, e, c, e.AUTH_READ_LIMIT)).user }),
     DELETE: (r, e, c) => deleteAccount(r, e, c),
   },
   '/api/v1/me/prefs': {
-    GET: async (r, e, c) => json(prefsBody(await readPrefRows(e.DB, (await requireUser(r, e, c)).user.id))),
+    GET: async (r, e, c) => json(prefsBody(await readPrefRows(e.DB, (await requireUser(r, e, c, e.AUTH_READ_LIMIT)).user.id))),
     PUT: (r, e, c) => changePrefs(r, e, c, 'put'),
   },
   '/api/v1/me/prefs/merge': { POST: (r, e, c) => changePrefs(r, e, c, 'merge') },

@@ -121,13 +121,15 @@ How it works:
   over TLS, authenticated with the client secret (OIDC Core 3.1.3.7), so no JWKS fetch. Google access/refresh tokens
   are discarded (no `access_type=offline`).
 - Accounts are keyed by `(google, sub)`; an email match never links accounts. Login deletes the user's expired
-  sessions. Sessions are 180 days absolute; D1 keeps sha256 of the id, the cookie holds the id + HMAC.
+  sessions and keeps at most the newest `MAX_SESSIONS` (10, the new one included). Sessions are 180 days absolute; D1 keeps sha256 of the id, the cookie holds the id + HMAC.
 - Session check: the HMAC is verified first (a forged cookie costs no D1 read), then one query (session ⋈ user).
 - CSRF: every non-GET needs `Origin: SITE_ORIGIN` and `Content-Type: application/json`; no CORS headers.
 - Account routes are dispatched before the events routes and never touch the Cache API; every answer (redirects and
   errors too) is `Cache-Control: private, no-store`.
-- Rate limit `AUTH_LIMIT` (30/min per location): login start and callback per client IP, PUT/merge/DELETE per user.
-  GET `/me` and `/me/prefs` are not limited (HMAC first, then D1).
+- Rate limits (per Cloudflare location, 429 with `Retry-After: 60`): `AUTH_LIMIT` 30/min for login start and
+  callback per client IP; `AUTH_WRITE_LIMIT` 5/min for PUT/merge/DELETE per user; `AUTH_READ_LIMIT` 60/min for GET
+  `/me` and `/me/prefs` per session, checked after the HMAC and before the D1 read (a limited GET reads nothing).
+  Keyed by session rather than user so the check costs no D1 read; with the session cap that is ≤ 600 GETs/min per user.
 - `requireEntitlement(db, userId, feature)` exists for paid features; nothing calls it yet. `POST /billing/webhook` is 501.
 
 Local: `npm run dev:node` reads the three secrets from `../.env` (`node --env-file-if-exists`; only those keys reach
@@ -175,12 +177,19 @@ day_counts row, ~43k) plus one primary-key lookup per written row.
 | `GET /me` (valid cookie; forged cookie: 0) | 2 (session + user) | 0 |
 | `GET /me/prefs` | 2 + ≤ 3 prefs | 0 |
 | `PUT /me/prefs`, `POST /me/prefs/merge` | 2 + ≤ 3 prefs | 1 per changed key (unchanged keys are not written) |
-| Login callback | 1 identity lookup + expired sessions | session 2 (row + index); new user +3; changed name/avatar/email +1-2 |
+| Login callback | 1 identity lookup + the user's sessions | session 2 (row + index); 2 per expired or over-cap session deleted; new user +3; changed name/avatar/email +1-2 |
 | Logout / `DELETE /me` | 0-2 / 2 | 1-2 / every row of the user |
 
 Writes are what matter: the importer's `--max-writes` default of 90,000 leaves ~10,000 rows/day for accounts on a
 day with a full import (the Free limit is 100,000 for everything). A star toggle is one write, so the page batches
 toggles. When D1 refuses writes (quota), the API answers 500 and the page keeps its local state.
+
+Per-user bound: a PUT or merge writes at most 3 rows (one per pref key), and `AUTH_WRITE_LIMIT` allows 5 per minute
+per user, so one user writes at most 3 × 5 × 1,440 = 21,600 rows/day through one Cloudflare location (counters are
+per location, so a user spread over several locations could exceed it). `DELETE /me` shares the limit and ends the
+account. Logins are limited per client IP (30/min) and need a Google round trip each. The page writes at most once
+every 12 s and pauses 60 s after a 429 (`src/corner.html`); a write refused by the limit stays in the local diff and
+is sent later. Reads: ≤ 60 GETs/min per session at ≤ 5 rows each.
 
 Reads per uncached request, measured with SQLite on the current data (rows stepped; D1 may count index entries too,
 so up to ~2× for the events scans). "5 largest" = JP-13/27/23/28/11. Every events query is an index seek on

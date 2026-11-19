@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { build } from 'esbuild';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from '../src/index';
-import { b64url, b64urlDecode, safeReturn, sessionHash, validateIdToken } from '../src/auth';
+import { b64url, b64urlDecode, MAX_SESSIONS, safeReturn, sessionHash, validateIdToken } from '../src/auth';
 import { readBaseConfig, remoteConfig } from '../scripts/remote-config.mjs';
 import { newDb } from './helpers';
 import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
@@ -116,10 +116,15 @@ describe('dark until enabled', () => {
     expect(res.status).toBe(404);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
   });
-  it('the committed config sets SITE_ORIGIN and AUTH_LIMIT, and remote-config keeps them', () => {
+  it('the committed config sets SITE_ORIGIN and the AUTH_* limits, and remote-config keeps them', () => {
     const c = remoteConfig('12345678-90ab-4cde-8f01-23456789abcd', { base: readBaseConfig() });
     expect(c.vars).toEqual({ SITE_ORIGIN: ORIGIN });
-    expect(c.ratelimits.find((r: any) => r.name === 'AUTH_LIMIT')).toMatchObject({ simple: { limit: 30, period: 60 } });
+    const limitOf = (name: string) => c.ratelimits.find((r: any) => r.name === name)?.simple;
+    expect(limitOf('AUTH_LIMIT')).toEqual({ limit: 30, period: 60 });
+    expect(limitOf('AUTH_WRITE_LIMIT')).toEqual({ limit: 5, period: 60 });
+    expect(limitOf('AUTH_READ_LIMIT')).toEqual({ limit: 60, period: 60 });
+    // ≤ 3 rows written per request (one per pref key): one user stays far below the 100,000/day Free write budget
+    expect(3 * limitOf('AUTH_WRITE_LIMIT').limit * 24 * 60).toBeLessThanOrEqual(25_000);
     expect(new Set(c.ratelimits.map((r: any) => r.namespace_id)).size).toBe(c.ratelimits.length);
   });
 });
@@ -178,6 +183,19 @@ describe('login callback', () => {
     expect(raw.db.prepare('SELECT display_name FROM users').get()).toEqual({ display_name: 'Renamed' });
     await loggedIn({ sub: 'google-sub-2' });
     expect(count('SELECT COUNT(*) AS n FROM users')).toBe(2);
+  });
+  it(`keeps a user's newest ${MAX_SESSIONS} sessions`, async () => {
+    const jars: string[] = [];
+    for (let i = 0; i < MAX_SESSIONS + 2; i++) {
+      vi.setSystemTime(Date.UTC(2026, 10, 19, 0, i));
+      jars.push(await loggedIn());
+    }
+    vi.useRealTimers();
+    await loggedIn({ sub: 'google-sub-2' });
+    expect(count('SELECT COUNT(*) AS n FROM sessions')).toBe(MAX_SESSIONS + 1);
+    expect((await call('/api/v1/me', { cookies: jars[0] })).status).toBe(401);
+    expect((await call('/api/v1/me', { cookies: jars[1] })).status).toBe(401);
+    for (const j of jars.slice(2)) expect((await call('/api/v1/me', { cookies: j })).status).toBe(200);
   });
   it('refuses a wrong, missing, forged or expired state without calling Google', async () => {
     const start = await call('/api/v1/auth/google/start?return=/pokemon/');
@@ -368,20 +386,34 @@ describe('account deletion', () => {
 });
 
 describe('limits and misc', () => {
-  it('rate-limits login by client IP and writes by user, not GET /me', async () => {
+  it('rate-limits login by client IP, writes by user and reads by session before D1', async () => {
     const keys: string[] = [];
-    let allow = true;
-    env.AUTH_LIMIT = { limit: async ({ key }: { key: string }) => { keys.push(key); return { success: allow }; } };
+    const allow: Record<string, boolean> = { AUTH_LIMIT: true, AUTH_WRITE_LIMIT: true, AUTH_READ_LIMIT: true };
+    for (const name of Object.keys(allow)) {
+      env[name] = { limit: async ({ key }: { key: string }) => { keys.push(`${name} ${key.split(':')[0]}`); return { success: allow[name] }; } };
+    }
     const cookies = await loggedIn();
     await send('/api/v1/me/prefs', 'PUT', { ask_calendar: true }, cookies);
+    await send('/api/v1/me/prefs/merge', 'POST', {}, cookies);
     await call('/api/v1/me', { cookies });
-    expect(keys.map((k) => k.split(':')[0])).toEqual(['ip', 'ip', 'user']);
-    allow = false;
+    await call('/api/v1/me/prefs', { cookies });
+    expect(keys).toEqual(['AUTH_LIMIT ip', 'AUTH_LIMIT ip', 'AUTH_WRITE_LIMIT user', 'AUTH_WRITE_LIMIT user', 'AUTH_READ_LIMIT session', 'AUTH_READ_LIMIT session']);
+    allow.AUTH_LIMIT = false;
     const res = await call('/api/v1/auth/google/start', { headers: { 'cf-connecting-ip': '2001:db8:1:2:3:4:5:6' } });
     expect([res.status, res.headers.get('retry-after')]).toEqual([429, '60']);
-    expect(keys.at(-1)).toBe('ip:2001:db8:1:2::/64');
+    expect((await send('/api/v1/me/prefs', 'PUT', { ask_calendar: false }, cookies)).status).toBe(200);
+    allow.AUTH_WRITE_LIMIT = false;
     expect((await send('/api/v1/me/prefs', 'PUT', { ask_calendar: false }, cookies)).status).toBe(429);
+    expect((await call('/api/v1/me', { method: 'DELETE', headers: { origin: ORIGIN, 'content-type': 'application/json' }, cookies })).status).toBe(429);
     expect((await call('/api/v1/me', { cookies })).status).toBe(200);
+    allow.AUTH_READ_LIMIT = false;
+    const before = queries;
+    for (const path of ['/api/v1/me', '/api/v1/me/prefs']) {
+      const r = await call(path, { cookies });
+      expect([r.status, r.headers.get('retry-after')]).toEqual([429, '60']);
+    }
+    expect(queries).toBe(before);
+    expect((await call('/api/v1/me')).status).toBe(401);
   });
   it('billing webhook is a 501 placeholder; unknown routes 404, wrong methods 405', async () => {
     expect((await call('/api/v1/billing/webhook', { method: 'POST' })).status).toBe(501);

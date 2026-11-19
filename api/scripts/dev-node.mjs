@@ -57,7 +57,7 @@ async function devLogin(url) {
     ]);
   }
   const session = await mod.issueSession(db, env.SESSION_SECRET, userId);
-  await session.statement.run();
+  await db.batch(session.statements);
   const res = new Response(null, { status: 302, headers: { location: mod.safeReturn(url.searchParams.get('return'), env.SITE_ORIGIN), 'cache-control': 'no-store' } });
   for (const c of session.cookies) res.headers.append('set-cookie', c);
   return res;
