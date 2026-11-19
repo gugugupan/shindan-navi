@@ -8,6 +8,7 @@ a required source is missing, stale, incomplete or looks broken.
   .venv/bin/python -I scripts/update_data.py              # merge + enrich, write data + report
   .venv/bin/python -I scripts/update_data.py --dry-run    # report only
   options: --no-official (skip the official files and enrich)  --no-enrich  --releases DIR  --data DIR  --thumbs DIR
+  (--data other than data/ needs --thumbs unless --dry-run: the run prunes unreferenced thumbnails)
 
 No network for カードラボ / トレカの地図. The official step may call Jev / the LLM to match; enrich (fill_box_info)
 opens product pages with the LLM; thumbnails are downloaded unless --dry-run (to --thumbs DIR, default public/thumbs).
@@ -145,9 +146,9 @@ def apply_overrides(items, overrides):
     return out
 
 
-def merge(existing, scraped, overrides, today, report, dry, keep_official=False):
-    """keep_official: the official step does not run this time, so what the last official run gave an item (its
-    "official" in sources, a name taken from the official site) is kept: not checked is not gone."""
+def merge(existing, scraped, overrides, today, report, dry, checked=frozenset()):
+    """checked: titles the official step checks this run (official_checked). For every other title what the last
+    official run gave an item ("official" in sources) is kept: not checked is not gone."""
     cutoff = (today - datetime.timedelta(days=KEEP_PAST_DAYS)).isoformat()
     for e in existing:
         if e['date'] < cutoff:
@@ -179,7 +180,8 @@ def merge(existing, scraped, overrides, today, report, dry, keep_official=False)
                     if e.get(k) and not (yen_int(s[k]) and yen_int(s[k]) == yen_int(e.get(k))):
                         report['price'].append(f"[{s['game']}] {s['name']}  {k}: {e.get(k)} → {s[k]}")
                     item[k] = s[k]
-            official_name = keep_official and 'official' in (e.get('sources') or []) and e['name'] == e.get('official_name')
+            # the official name wins over the aggregator's, whether or not the official step runs
+            official_name = 'official' in (e.get('sources') or []) and e['name'] == e.get('official_name')
             item.update(date=s['date'], name=e['name'] if official_name else s['name'], game=s['game'])
             if not item.get('url') and s['url']:
                 item['url'] = s['url']
@@ -207,7 +209,7 @@ def merge(existing, scraped, overrides, today, report, dry, keep_official=False)
                     item['thumb'] = thumb
             report['new'].append(f"{s['date']}  [{s['game']}] {s['name']}")
         item['sources'] = s['sources']
-        if e is not None and keep_official and 'official' in (e.get('sources') or []):
+        if e is not None and e['game'] not in checked and 'official' in (e.get('sources') or []):
             item['sources'] = sorted(set(s['sources']) | {'official'})
         out.append(item)
     for e in existing:
@@ -215,7 +217,7 @@ def merge(existing, scraped, overrides, today, report, dry, keep_official=False)
             continue
         if e['date'] >= today.isoformat():
             report['missing'].append(f"{e['date']}  [{e['game']}] {e['name']}")
-        out.append(dict(e, sources=['official'] if keep_official and 'official' in (e.get('sources') or []) else []))
+        out.append(dict(e, sources=['official'] if e['game'] not in checked and 'official' in (e.get('sources') or []) else []))
     out = apply_overrides(out, overrides)
     out.sort(key=lambda r: (r['date'], r['game'], r['name']))
     for i in out:
@@ -238,6 +240,15 @@ def has_official_keys():
     return bool(os.environ.get('TYPESAFE_API_KEY') and os.environ.get('OPENROUTER_API_KEY'))
 
 
+def official_checked(run):
+    """Titles the official run checked: in its scope (`games`) and every page of the title read without error."""
+    pages = {}
+    for p in run.get('pages') or []:
+        if p.get('game'):
+            pages.setdefault(p['game'], []).append(p)
+    return {g for g in run.get('games') or [] if pages.get(g) and all(p.get('error') is None for p in pages[g])}
+
+
 def apply_official(items, today, report, dry, log, records, run):
     """Fold the official collector's records (data/releases/official) into the merged items (official wins).
     Matching (identity first, then Jev / LLM) happens here because it needs items.json; each record keeps the
@@ -247,7 +258,7 @@ def apply_official(items, today, report, dry, log, records, run):
     since = today.isoformat()
     by_id = {x['id']: x for x in items}
     matched = set()
-    covered = {p['game'] for p in run['pages'] if p.get('game')} | {r['game'] for r in records}
+    covered = official_checked(run)
     groups = {}
     for r in records:
         groups.setdefault(r['source_key'], []).append(dict(r))
@@ -508,8 +519,11 @@ def main(argv=None):
     ap.add_argument('--no-enrich', action='store_true', help='skip fill_box_info')
     ap.add_argument('--releases', default=RELEASES, help='collector output root (default: data/releases)')
     ap.add_argument('--data', default=DATA, help='directory with items.json / overrides.json, where the outputs go (default: data)')
-    ap.add_argument('--thumbs', help='thumbnail directory (default: public/thumbs)')
+    ap.add_argument('--thumbs', help='thumbnail directory (default: public/thumbs; required with --data DIR unless --dry-run)')
     args = ap.parse_args(argv)
+    if not args.thumbs and not args.dry_run and os.path.realpath(args.data) != os.path.realpath(DATA):
+        # the run deletes every public/thumbs/*.jpg the other items.json does not reference
+        ap.error('--data DIR needs --thumbs DIR (or --dry-run): refusing to download into and prune public/thumbs')
     global THUMBS
     if args.thumbs:
         THUMBS = args.thumbs
@@ -543,7 +557,7 @@ def update(args, dry, data):
                               'missing', 'dropped', 'noimage')}
     if official is not None and not has_official_keys():
         official, official_skip = None, 'official: skipped (TYPESAFE_API_KEY / OPENROUTER_API_KEY not set in .env)'
-    items = merge(existing, scraped, overrides, today, report, dry, keep_official=official is None)
+    items = merge(existing, scraped, overrides, today, report, dry, checked=official_checked(official_run) if official else set())
     log = []
     if not args.no_official:
         if official is None:
@@ -566,7 +580,10 @@ def update(args, dry, data):
             json.dump(items, f, ensure_ascii=False, indent=1)
         os.replace(tmp, os.path.join(data, 'items.json'))
         del NEW_THUMBS[:]
-        json.dump({'updated': today.isoformat()}, open(os.path.join(data, 'meta.json'), 'w'), indent=2)
+        tmp = os.path.join(data, 'meta.json.part')
+        with open(tmp, 'w') as f:
+            json.dump({'updated': today.isoformat()}, f, indent=2)
+        os.replace(tmp, os.path.join(data, 'meta.json'))
         referenced = {i['thumb'].split('/')[-1] for i in items if i.get('thumb')}
         for f in os.listdir(THUMBS):
             if f.endswith('.jpg') and f not in referenced:

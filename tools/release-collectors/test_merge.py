@@ -113,17 +113,18 @@ class MergeCase(unittest.TestCase):
         pages = [{'key': source, 'game': None, 'url': 'u', 'records': len(records), 'error': None}]
         output.write_release_files(source, records, today=today, pages=pages, root=self.releases)
 
-    def write_official(self, records=OFFICIAL, today=TODAY):
-        pages = [{'key': k, 'game': g, 'url': f'https://example.test/{k}/products/', 'records': 1, 'error': None}
-                 for k, g in (('onepiece', OP), ('pokemon', 'ポケモンカード'))]
-        output.write_release_files('official', [dict(r) for r in records], today=today, pages=pages,
+    def write_official(self, records=OFFICIAL, today=TODAY, games=(OP, 'ポケモンカード'), errors=None):
+        pages = [{'key': k, 'game': g, 'url': f'https://example.test/{k}/products/', 'records': 1, 'error': (errors or {}).get(g)}
+                 for k, g in (('onepiece', OP), ('pokemon', 'ポケモンカード')) if g in games]
+        output.write_release_files('official', [dict(r) for r in records if r['game'] in games], today=today, pages=pages,
+                                   games=games,
                                    notes=['onepiece listing https://example.test/onepiece/products/: 7 entries'],
                                    usage={'jev': {'calls': 3, 'prompt_tokens': 0, 'completion_tokens': 0, 'cost': 0.001, 'seconds': 1.0}},
                                    root=self.releases)
 
     def run_merge(self, *args):
         with contextlib.redirect_stdout(io.StringIO()):
-            return ud.main(['--releases', self.releases, '--data', self.data, *args])
+            return ud.main(['--releases', self.releases, '--data', self.data, '--thumbs', self.thumbs, *args])
 
     def report(self):
         with open(os.path.join(self.data, 'update-report.md')) as f:
@@ -275,7 +276,7 @@ class OfficialNotRun(OfficialCase):
         self.write_source('cardlabo', [agg(x['date'], OP, x['name'], 'clabo') for x in (E1, renamed)])
         self.write_source('torecamap', [agg('2027-02-27', OP, '応答せよ、世界【OP-19】', 'torecamap', pack='330円')])
 
-    def check_kept(self, items):
+    def check_kept(self, items, added=()):
         op19 = items[ud.item_id(OP, self.OP19)]
         self.assertEqual({k: op19[k] for k in ('name', 'source', 'url', 'box', 'per_box', 'official_name')},
                          {k: self.existing[op19['id']][k] for k in ('name', 'source', 'url', 'box', 'per_box', 'official_name')})
@@ -283,7 +284,7 @@ class OfficialNotRun(OfficialCase):
         self.assertEqual(items[E2['id']]['sources'], ['clabo', 'official'])
         self.assertEqual(items[E2['id']]['name'], E2['name'])  # the aggregator's name, not official_name: unchanged
         self.assertEqual(items[E3['id']]['sources'], ['official'])
-        self.assertEqual(set(items), set(self.existing))
+        self.assertEqual(set(items), set(self.existing) | set(added))
         self.assertEqual((self.section('発売日の変更'), self.section('価格の変更')), ([], []))
 
     def test_without_keys(self):
@@ -299,13 +300,29 @@ class OfficialNotRun(OfficialCase):
             self.check_kept({x['id']: x for x in self.run_merge('--dry-run', '--no-enrich')})
 
     def test_official_ran(self):
-        # same as before this carry-over: sources come from this run's matches only, names from the aggregators
+        # sources come from this run's matches only; the official name stays, as without the official step
         items = self.merged()
         op19 = items[ud.item_id(OP, self.OP19)]
-        self.assertEqual((op19['name'], op19['sources']), ('応答せよ、世界【OP-19】', ['torecamap']))
+        self.assertEqual((op19['name'], op19['sources']), (self.OP19, ['torecamap']))
         self.assertEqual((op19['source'], op19['url'], op19['box']), (self.existing[op19['id']]['source'], self.existing[op19['id']]['url'], '7,920円'))
         self.assertEqual(items[E2['id']]['sources'], ['clabo', 'official'])
         self.assertEqual(items[E3['id']]['sources'], [])
+
+    def test_partial_official_run_keeps_unchecked_titles(self):
+        # a --games pokemon run (or a failed ONE PIECE page) did not check ONE PIECE: keep what it had
+        pokemon = [r for r in OFFICIAL if r['source_key'] == 'pokemon']
+        for kw in ({'games': ('ポケモンカード',)}, {'errors': {OP: 'HTTP 503'}}):
+            with self.subTest(**kw):
+                self.write_official(records=pokemon, **kw)
+                self.check_kept(self.merged(), added=[ud.item_id('ポケモンカード', '拡張パック テスト')])
+                self.assertEqual(self.section('公式サイトで確認できなかった今後の商品'), [])
+
+    def test_official_checked(self):
+        page = {'key': 'k', 'url': 'u', 'records': 1}
+        run = {'games': ['A', 'B', 'C'], 'pages': [dict(page, game='A', error=None), dict(page, game='B', error=None),
+                                                  dict(page, game='B', error='HTTP 503'), dict(page, game='D', error=None)]}
+        self.assertEqual(ud.official_checked(run), {'A'})  # B: a page failed; C: no page; D: not in scope
+        self.assertEqual(ud.official_checked({'pages': run['pages']}), set())  # a run file without scope checks nothing
 
 
 class Thumbs(MergeCase):
@@ -332,6 +349,7 @@ class Thumbs(MergeCase):
             self.assertEqual(len(json.load(f)), len(items))
         with open(os.path.join(self.data, 'meta.json')) as f:
             self.assertEqual(json.load(f), {'updated': TODAY})
+        self.assertEqual(sorted(os.listdir(self.data)), ['items.json', 'meta.json', 'overrides.json', 'update-report.md'])
 
     def test_dry_run_writes_no_thumbs_or_data(self):
         open(os.path.join(self.thumbs, 'stale.jpg'), 'w').close()
@@ -373,6 +391,16 @@ class Thumbs(MergeCase):
                 self.run_merge('--no-official')
         self.assertEqual(os.listdir(self.thumbs), [])
         self.assertEqual(sorted(os.listdir(self.data)), before)
+
+    def test_data_without_thumbs_is_refused(self):
+        self.write_source('cardlabo', CLABO)
+        self.write_source('torecamap', TORECAMAP)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()) as err:
+            ud.main(['--releases', self.releases, '--data', self.data, '--no-official'])
+        self.assertIn('--data DIR needs --thumbs DIR', err.getvalue())
+        self.assertEqual(sorted(os.listdir(self.data)), ['items.json', 'overrides.json'])
+        with contextlib.redirect_stdout(io.StringIO()):
+            ud.main(['--releases', self.releases, '--data', self.data, '--no-official', '--dry-run'])
 
     def test_thumbs_flag(self):
         other = os.path.join(self.tmp, 'other-thumbs')

@@ -86,7 +86,9 @@ def collect(today, *, keys=None, sources=None, root=output.RELEASES):
                 records.append(r)
         pages += mine
     usage = {p: dict(v) for p, v in common.LEDGER.rows.items()}
-    return output.write_release_files(SOURCE, records, today=today, pages=pages, notes=log, usage=usage,
+    # the run's scope: titles all of whose sources.json keys were read (a --games run checks only these)
+    games = {v['game'] for v in sources.values()} - {v['game'] for k, v in sources.items() if k not in keys}
+    return output.write_release_files(SOURCE, records, today=today, pages=pages, notes=log, usage=usage, games=games,
                                       collector_version=VERSION, root=root)
 
 

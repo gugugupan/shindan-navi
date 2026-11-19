@@ -19,7 +19,7 @@ def today_iso():
     return os.environ.get('TODAY') or datetime.date.today().isoformat()
 
 
-def write_release_files(source, records, *, today, pages, unknown_labels=(), notes=(), usage=None,
+def write_release_files(source, records, *, today, pages, unknown_labels=(), notes=(), usage=None, games=None,
                         collector_version='1', root=RELEASES):
     """Validate and write one source's files; raises Refused (writing nothing) on an empty or incomplete run.
 
@@ -39,7 +39,7 @@ def write_release_files(source, records, *, today, pages, unknown_labels=(), not
            'fetched_at': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
            'record_count': len(records), 'complete': not errors, 'errors': errors, 'pages': list(pages),
            'unknown_labels': sorted(unknown_labels), 'notes': list(notes), 'usage': usage,
-           'collector_version': collector_version}
+           'games': sorted(games) if games is not None else None, 'collector_version': collector_version}
     out = os.path.join(root, source)
     os.makedirs(out, exist_ok=True)
     # latest.json first, _run.json last: a _run.json always describes the latest.json next to it

@@ -4,7 +4,7 @@
   "title": "Release collection run (data/releases/<source>/_run.json; see releases.md)",
   "type": "object",
   "additionalProperties": false,
-  "required": ["source", "today", "fetched_at", "record_count", "complete", "errors", "pages", "unknown_labels", "notes", "usage", "collector_version"],
+  "required": ["source", "today", "fetched_at", "record_count", "complete", "errors", "pages", "unknown_labels", "notes", "usage", "games", "collector_version"],
   "properties": {
     "source": { "enum": ["cardlabo", "torecamap", "official"] },
     "today": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Date the run parsed for (TODAY env, else local date). The merge refuses a required source whose today differs from its own TODAY." },
@@ -30,6 +30,7 @@
     "unknown_labels": { "type": "array", "items": { "type": "string" }, "description": "Source title labels missing from GAME (report: 未対応のタイトル名)." },
     "notes": { "type": "array", "items": { "type": "string" }, "description": "Official: the 公式サイト取得ログ lines." },
     "usage": { "type": ["object", "null"], "description": "Official: provider ledger (calls, tokens, cost) per provider." },
+    "games": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Official: display titles in this run's scope (every sources.json key of the title was read; a --games run lists only its own). The merge treats a title as checked only when it is listed here and all its pages have error null. null for aggregators." },
     "collector_version": { "type": "string" }
   }
 }

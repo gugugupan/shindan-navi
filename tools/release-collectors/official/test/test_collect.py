@@ -210,6 +210,15 @@ class Collect(Base):
                          [('pokemon', 2, None), ('yugioh', 3, None), ('listing', 5, None)])
         self.assertTrue(any('listing listing https://example.test/products/: 5 entries' in n for n in saved['notes']))
 
+    def test_games_records_the_scope(self):
+        all_titles = {v['game'] for v in sources().values()}
+        self.assertEqual(collect.collect(TODAY, sources=sources(), root=self.root)['games'], sorted(all_titles))
+        # a --games run: only its titles; a title with a key left out (yugioh-2 shares 遊戯王OCG) is not in scope
+        two = {**sources('pokemon', 'yugioh'), 'yugioh-2': {**REAL['yugioh'], 'pages': []}}
+        result = collect.collect(TODAY, keys=['pokemon', 'yugioh'], sources=two, root=self.root)
+        self.assertEqual(result['games'], [REAL['pokemon']['game']])
+        self.assertEqual(self.load('_run.json')['games'], [REAL['pokemon']['game']])
+
     def test_failed_page_gives_partial_run(self):
         result = collect.collect(TODAY, sources=sources('broken', 'yugioh', broken=True), root=self.root)
         self.assertFalse(result['complete'])

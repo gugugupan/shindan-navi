@@ -55,7 +55,9 @@ The merge treats a price that differs only in writing (same yen amount, e.g. `66
 change: it takes the new text without a 価格の変更 line. A thumbnail that cannot be saved (not http(s), fetch or
 decode fails) is skipped and listed under 画像を取得/差し替え as 画像の取得に失敗; the run goes on.
 `save_thumb` writes via a temp file, and files it created are removed again if the run dies before `items.json`
-is written. `--thumbs DIR` redirects thumbnails (default `public/thumbs`).
+is written. `--thumbs DIR` redirects thumbnails (default `public/thumbs`). A non-dry run with `--data DIR` other than
+`data/` must also pass `--thumbs`: the run deletes every thumbnail its items.json does not reference, so another
+items.json must never prune `public/thumbs`. `meta.json` is written via temp file + rename like `items.json`.
 
 ## Official records (`official`)
 
@@ -84,10 +86,12 @@ because they need `items.json`. Records (`release.schema.json` › `official`):
 
 ## `_run.json`
 
-`{source, today, fetched_at, record_count, complete, errors, pages, unknown_labels, notes, usage, collector_version}`
+`{source, today, fetched_at, record_count, complete, errors, pages, unknown_labels, notes, usage, games, collector_version}`
 (`release-run.schema.json`). `today` is the date the run parsed for (`TODAY` env, else the local date);
 `fetched_at` is UTC. `pages` lists every fetch: `{key, game, url, records, error}`. Official `notes` carry today's
-「公式サイト取得ログ」 lines and `usage` the provider ledger (`LEDGER.rows`).
+「公式サイト取得ログ」 lines and `usage` the provider ledger (`LEDGER.rows`). Official `games` is the run's scope: the
+display titles all of whose sources.json keys were read (a `collect.py --games …` run lists only those); `null` for
+aggregators.
 
 ## Guards
 
@@ -109,10 +113,14 @@ Merge (refuses to write anything):
   never lowered to get past it).
 - `official` is optional: missing or `today != TODAY` → skipped with a log line, as without keys today. An
   incomplete official run is used for the keys it has.
-- When the official step does not run (no keys, `--no-official`, missing or stale files), the merge keeps what an
-  item already has from the last official run: `official` in `sources` (also for items no aggregator lists any
-  more) and its name when that is the official name (`name == official_name`). `source`, `url`, box info and
-  `per_*` are kept by the merge anyway. When it runs, `sources` and names come from this run only, as before.
+- A title counts as checked by the official step only when today's official run has it in `games` and every page of
+  that title has `error: null`. For every other title — all of them when the step does not run (no keys,
+  `--no-official`, missing or stale files), titles outside a `--games` run, titles with a failed page — the merge
+  keeps what an item already has from the last official run: `official` in `sources` (also for items no aggregator
+  lists any more). `source`, `url`, box info and `per_*` are kept by the merge anyway. For checked titles `sources`
+  come from this run's matches only, and only checked titles are listed under 公式サイトで確認できなかった今後の商品.
+- The official name wins: an item with `official` in `sources` whose name equals its `official_name` keeps that name
+  whatever the aggregators call it, whether or not the official step runs. Other items take the aggregator name.
 - The report keeps `unknown_labels` from both aggregator runs (未対応のタイトル名) and the counts from `record_count`.
 
 Enrich (`fill_box_info`) runs after the merge's official step, may use network and the LLM, is skipped without
@@ -143,6 +151,12 @@ does). Python, not Node, because the parsers, `sourcekey.py`, the official colle
 
 ## Known issues
 
-None open. Fixed (reviewed behaviour change, golden rebased): トレカの地図 images from the current
+- When the official step is skipped for a title, aggregator date / pack values replace official-backed ones (the
+  change is reported under 発売日の変更 / 価格の変更). Planned: hold the official values and report the aggregator
+  difference instead.
+- No per-source shrink guard: `MIN_RATIO` checks カードラボ + トレカの地図 combined, so one aggregator losing most of
+  its rows passes as long as the other makes up the count.
+
+Fixed (reviewed behaviour change, golden rebased): トレカの地図 images from the current
 `<img src="https://…cloudfront.net/…">` markup without picking up the page-tail `/images/section-title-small.png`,
 and トレカの地図 prices without `(税込)` / `値段設定なし`.
