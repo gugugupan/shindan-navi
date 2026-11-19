@@ -9,6 +9,9 @@ export const GAMES = [
   { code: 'DCG', name: 'デジモンカードゲーム', slug: 'digimon', bit: 128 },
 ] as const;
 export const GAME_CODES = GAMES.map((g) => g.code);
+// events.game_mask allows bits 2^0..2^29 (migrations/0005): masks stay positive 32-bit integers in JS bit operations.
+export const MAX_GAMES = 30;
+export const ALL_GAME_BITS = GAMES.reduce((m, g) => m | g.bit, 0);
 export const MAX_PREFS = 5;
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'] as const;
 

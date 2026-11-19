@@ -1,4 +1,4 @@
-import { GAMES, GAME_CODES, MAX_PREFS } from './constants';
+import { ALL_GAME_BITS, GAMES, GAME_CODES, MAX_PREFS } from './constants';
 
 // The page's page size is the only one accepted: every other value would be a new cache key.
 export const PAGE_LIMIT = 50;
@@ -341,7 +341,7 @@ export async function listDays(db: D1Database, q: Filters) {
   const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
   // A shared event counts once in count and once per member game in by_game; with a game filter, by_game
   // reports only the selected games.
-  const shown = q.games.length ? gameBits(q.games) : 0xff;
+  const shown = q.games.length ? gameBits(q.games) : ALL_GAME_BITS;
   const byDate = new Map<string, { date: string; count: number; by_game: Record<string, number> }>();
   for (const r of rows) {
     const date = r.date as string;

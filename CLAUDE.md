@@ -68,6 +68,39 @@ Local preview: `api/` `npm run dev:node` (site + API), or serve `dist/` alone (l
 - Only the 10 main titles get landing pages for now. Weekly auto-refresh of data is deliberately not automated (`scripts/refresh.py` is run by hand).
 - Official sources win: when the official site lists variants separately (e.g. four commander decks) the calendar should list them separately too, each with its own source.
 
+## Event game palette
+
+Each `/events/` game has a fixed colour pair (`c` light, `cd` dark) in `GAMES` (`src/events.html`) and `EV_GAMES`
+(`src/home.html`); the pages set them inline as `--gl` / `--gd` and `src/template.html` turns them into `--g` (marks),
+`--gt` (text) and `--gtint` (pressed chips, chips on /) per theme. Map pins always use the light colour (the basemap is
+light). Release titles keep their computed hue (`--h`). Colour is never the only cue: chips, columns, tags and the map
+legend carry the name, calendar-cell dots a tooltip.
+
+Picked greedily (2026-11-19) to keep the four original colours and maximise the worst pair over all colours, in both
+themes, under normal vision and simulated protan/deutan (OKLab ΔE×100; dataviz `validate_palette.js`). Every colour has
+≥3:1 contrast on white (light) and on `#181b27` (dark), except PTCG's original gold (2.7:1 on white). Take new games' colours from the next free slot in order:
+
+| # | Game | Light | Dark |
+| --- | --- | --- | --- |
+| 1 | OPCG | `#be362d` | `#de837c` |
+| 2 | UATCG | `#7a2dbe` | `#b17cde` |
+| 3 | CONAN | `#2d81be` | `#7cb6de` |
+| 4 | PTCG | `#be972d` | `#dec47c` |
+| 5 | GCG | `#1d357c` | `#3b60ce` |
+| 6 | BS | `#7c1d4d` | `#ce3b85` |
+| 7 | DCG | `#12a581` | `#40e7be` |
+| 8 | DBFW | `#8a2e0f` | `#e45525` |
+| 9 | (next) | `#d31785` | `#ed6eb8` |
+| 10 | | `#808a0f` | `#d4e425` |
+| 11 | | `#4d6f2a` | `#85b950` |
+| 12 | | `#a96660` | `#cfadaa` |
+| 13 | | `#366063` | `#62a1a7` |
+| 14 | | `#534077` | `#8a76b2` |
+
+Worst pair, normal vision / protan-deutan: all 8 current games 10.4 / 7.9 (the old hue-only eight: 7.6 / 4.5); all 14
+9.2 / 4.6. Fourteen categories cannot reach the dataviz targets (15 / 8; the validator FAILs them and the darkest /
+palest slots sit outside its lightness band on purpose), so the names stay mandatory.
+
 ## Gotchas
 
 - Right after a deploy, brand-new asset URLs can answer 404 / HTML for a few seconds; wait ~15 s before checking live. `public/_headers` deliberately sets no long-lived cache rules; it applies to static assets only, not to Worker (`/api/*`) responses.

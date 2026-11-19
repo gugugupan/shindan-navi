@@ -1,5 +1,6 @@
 -- Four more TCG+ games (Bandai): game bits 16-128. SQLite cannot change a CHECK constraint in place, so events and
--- day_counts are rebuilt with game_mask up to 255. On D1 this copies every row (~2 rows written per event for the
+-- day_counts are rebuilt once with room for 30 games (bits 2^0..2^29; JS bit operations are 32-bit signed, so 2^30 and
+-- up are left out). On D1 this copies every row (~2 rows written per event for the
 -- row and its idx_events_loc entry, plus 1 per day_counts row): apply it on a day without an event import, see
 -- api/README.md › D1 budget.
 
@@ -11,7 +12,7 @@ INSERT INTO games (code, name, slug, sort_order, bit) VALUES
 
 CREATE TABLE events_new (
   id TEXT PRIMARY KEY CHECK (id GLOB 'tcgp:?*' OR id GLOB 'ptcg:?*' OR id GLOB 'conan:?*'),
-  game_mask INTEGER NOT NULL CHECK (game_mask BETWEEN 0 AND 255),
+  game_mask INTEGER NOT NULL CHECK (game_mask BETWEEN 0 AND 1073741823),
   loc TEXT CHECK (loc IS NULL OR loc = 'online' OR loc GLOB 'JP-[0-4][0-9]'),
   source_code TEXT NOT NULL CHECK (source_code IN ('bandai_tcg_plus', 'pokemon_players', 'conan_official')),
   external_id TEXT NOT NULL CHECK (length(external_id) > 0),
@@ -59,7 +60,7 @@ CREATE INDEX idx_events_loc ON events(loc, starts_on, starts_sort);
 CREATE TABLE day_counts_new (
   loc TEXT NOT NULL,
   starts_on TEXT NOT NULL,
-  game_mask INTEGER NOT NULL CHECK (game_mask BETWEEN 1 AND 255),
+  game_mask INTEGER NOT NULL CHECK (game_mask BETWEEN 1 AND 1073741823),
   event_type_code TEXT NOT NULL,
   n INTEGER NOT NULL CHECK (n > 0),
   PRIMARY KEY (loc, starts_on, game_mask, event_type_code)

@@ -100,7 +100,8 @@ keys `stars` / `event_filters` / `ask_calendar`), and the unused billing placeho
 purge) and `user_id` (account deletion). No IP address or user agent. See Feedback.
 
 `migrations/0005_more_games.sql`: the TCG+ games GCG, DBFW, BS, DCG (`games` bits 16-128) and `events` / `day_counts`
-rebuilt with `game_mask` up to 255 (SQLite cannot change a CHECK in place). The rebuild copies every row, so on D1 it
+rebuilt with `game_mask` up to 2^30-1, room for 30 games so no later game needs another rebuild (SQLite cannot change a
+CHECK in place; bits stop at 2^29 because JS bit operations are 32-bit signed). The rebuild copies every row, so on D1 it
 writes about as much as a first import of the current data; see D1 budget › Adding games. The code works before the
 migration as long as no new-game data is imported (the four games' masks still fit the old CHECK).
 

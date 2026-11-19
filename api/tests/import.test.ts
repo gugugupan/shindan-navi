@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALL_PREFS, api, apiAll, importDir, newDb, run, sampleEvents, SOURCE, synthetic, writeDataDir, type Ev } from './helpers';
-import { emptyState, estimateCost, loadAll, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
+import { emptyState, estimateCost, GAME_BITS, GAME_CODES, loadAll, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
+import { GAMES, MAX_GAMES } from '../src/constants';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 const snapshot = (db: SqliteD1) => ({
@@ -274,6 +275,25 @@ describe('games with bits above 8', () => {
     expect(meta.games.find((g: Ev) => g.code === 'BS').record_count).toBe(6);
     const rows: number[] = Object.values(meta.loc_counts.rows).flat() as number[];
     expect(rows.filter((_, i) => i % 5 === 0)).toContain(145);
+  });
+
+  it('game bits: one power of two per game below 2^30, the same in the importer, Worker and schema', () => {
+    expect(GAMES.length).toBeLessThanOrEqual(MAX_GAMES);
+    expect(GAME_CODES).toEqual(GAMES.map((g) => g.code));
+    expect(GAME_BITS).toEqual(Object.fromEntries(GAMES.map((g) => [g.code, g.bit])));
+    const bits = GAMES.map((g) => g.bit);
+    expect(new Set(bits).size).toBe(bits.length);
+    for (const b of bits) expect(b > 0 && b <= 2 ** 29 && (b & (b - 1)) === 0).toBe(true);
+    // The highest allowed bit survives the page's and importer's 32-bit operations.
+    const top = 2 ** 29;
+    expect((top | 1) & top).toBe(top);
+    expect(((top | 1) & ~top)).toBe(1);
+    const db = newDb();
+    const games = db.db.prepare('SELECT code, bit FROM games ORDER BY sort_order').all();
+    expect(games).toEqual(GAMES.map((g) => ({ code: g.code, bit: g.bit })));
+    const ins = (m: number) => db.db.exec(`INSERT INTO day_counts (loc, starts_on, game_mask, event_type_code, n) VALUES ('JP-13', '2026-12-01', ${m}, '', 1)`);
+    expect(() => ins(2 ** 30 - 1)).not.toThrow();
+    expect(() => ins(2 ** 30)).toThrow(/CHECK/);
   });
 
   it('0005 keeps the rows of a database migrated before it', async () => {

@@ -37,10 +37,10 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .pk .sm{color:var(--foil);margin-right:4px}
 /* today's events: one column per game */
 .gcols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px;align-items:start}
-.gcol{border:1px solid var(--line);border-top:3px solid hsl(var(--h) var(--chip-s) var(--chip-l));border-radius:10px;background:var(--surface-2);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.gcol{border:1px solid var(--line);border-top:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:10px;background:var(--surface-2);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .gcol h3{margin:0 2px;display:flex;align-items:baseline;gap:8px;font-size:13.5px;line-height:1.35}
-.gcol h3 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%))}
-.gcol h3 i{width:9px;height:9px;border-radius:50%;flex:none;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
+.gcol h3 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)))}
+.gcol h3 i{width:9px;height:9px;border-radius:50%;flex:none;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
 .gcol h3 .c{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
 .gcol h3 .c b{font-family:var(--mono);color:var(--ink);font-size:13px}
 .gcol .more{align-self:flex-start;font-size:12.5px;padding:3px 10px}
@@ -52,7 +52,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .ev a{font-size:13px;font-weight:700;line-height:1.4;color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
 .ev a:hover{color:var(--accent);text-decoration:underline}
 .ev p{margin:0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
-.ev .tag{font-size:11px;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%));margin-right:6px}
+.ev .tag{font-size:11px;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)));margin-right:6px}
 .ev .st{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:6px;background:var(--sun);color:#fff}
 .ev.off a{text-decoration:line-through;color:var(--muted)}
 .ev.done .tm{color:var(--muted)}
@@ -70,8 +70,8 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .wd li{font-size:12px;line-height:1.35;min-width:0}
 .wd li a{color:var(--ink);text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
 .wd li a:hover{color:var(--accent)}
-.wd li .gl{font-size:10.5px;font-weight:700;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%));margin-right:4px}
-.wd li i{display:inline-block;width:7px;height:7px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l));margin-right:4px;vertical-align:1px}
+.wd li .gl{font-size:10.5px;font-weight:700;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)));margin-right:4px}
+.wd li i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));margin-right:4px;vertical-align:1px}
 .wd li.st a::before{content:"★ ";color:var(--foil)}
 .wd li.st a{font-weight:700}
 .wd li.e a{display:block;white-space:nowrap;text-overflow:ellipsis;color:var(--muted)}
@@ -83,11 +83,11 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .gcs{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
 .gcs.gmore{align-items:center;margin-top:8px}
 .gmore .lab{font-size:12px;color:var(--muted);margin-right:2px}
-.gc{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid hsl(var(--h) var(--chip-s) var(--chip-l));background:hsl(var(--h) 70% var(--tint-l));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
+.gc{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
 .gc span{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.gc i{width:7px;height:7px;border-radius:50%;flex:none;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
+.gc i{width:7px;height:7px;border-radius:50%;flex:none;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
 .gc b{font-family:var(--mono)}
-.gc:hover{box-shadow:0 0 0 1px hsl(var(--h) var(--chip-s) var(--chip-l))}
+.gc:hover{box-shadow:0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
 .gc.any{border-color:var(--line);background:var(--surface);color:var(--accent)}
 /* a day without releases: the events take the space (one row per game) */
 .wd.norel .gcs{flex-direction:column;align-items:stretch;margin-top:0}
@@ -211,18 +211,20 @@ function renderRel(){
 // ---- events (BUILD_EVENTS)
 const EVENTS = !!$('evBody');
 const LOC = window.snLoc;
-// the /events/ games in its order (columns and chips keep it every day); h = its colour hue, bit = meta's game mask
+// the /events/ games in its order (columns and chips keep it every day); c / cd = light / dark colour (palette in
+// CLAUDE.md), bit = meta's game mask
 const EV_GAMES = [
-  {code:'OPCG', name:'ONE PIECE', short:'ワンピ', h:4, bit:1},
-  {code:'UATCG', name:'UNION ARENA', short:'ユニアリ', h:272, bit:2},
-  {code:'CONAN', name:'名探偵コナン', short:'コナン', h:205, bit:4},
-  {code:'PTCG', name:'ポケモンカード', short:'ポケカ', h:44, bit:8},
-  {code:'GCG', name:'ガンダム', short:'ガンダム', h:325, bit:16},
-  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', h:26, bit:32},
-  {code:'BS', name:'バトルスピリッツ', short:'バトスピ', h:140, bit:64},
-  {code:'DCG', name:'デジモン', short:'デジカ', h:178, bit:128}
+  {code:'OPCG', name:'ONE PIECE', short:'ワンピ', c:'#be362d', cd:'#de837c', bit:1},
+  {code:'UATCG', name:'UNION ARENA', short:'ユニアリ', c:'#7a2dbe', cd:'#b17cde', bit:2},
+  {code:'CONAN', name:'名探偵コナン', short:'コナン', c:'#2d81be', cd:'#7cb6de', bit:4},
+  {code:'PTCG', name:'ポケモンカード', short:'ポケカ', c:'#be972d', cd:'#dec47c', bit:8},
+  {code:'GCG', name:'ガンダム', short:'ガンダム', c:'#1d357c', cd:'#3b60ce', bit:16},
+  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', c:'#8a2e0f', cd:'#e45525', bit:32},
+  {code:'BS', name:'バトルスピリッツ', short:'バトスピ', c:'#7c1d4d', cd:'#ce3b85', bit:64},
+  {code:'DCG', name:'デジモン', short:'デジカ', c:'#12a581', cd:'#40e7be', bit:128}
 ];
 const EVG = Object.fromEntries(EV_GAMES.map(g=>[g.code,g]));
+const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
 const SAVED_KEY = 'tcg.ev.filters';
 // the /events/ saved filters (one location; older saves with several keep the first). days is left out: today is today.
 function evFilters(){
@@ -312,7 +314,7 @@ function evRow(e,col){
   const tm = t ? `<span class="tm">${t}</span>` : '<span class="tm tbd">時刻未定</span>';
   const where = e.attendance_mode==='online' ? 'オンライン開催' : venueLabel(e.venue) || '会場は公式で確認';
   const st = e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st">延期</span>' : '';
-  const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,h:0}; return `<span class="tag" style="--h:${x.h}">${esc(x.name)}</span>`; }).join('');
+  const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="${gvars(x)}">${esc(x.name)}</span>`; }).join('');
   return `<li class="ev${e.event_status==='cancelled'?' off':started(e)?' done':''}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
 }
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
@@ -341,13 +343,13 @@ function renderEv(){
     return;
   }
   const cols=todayCols(), k=SHOW(cols.length), hidden=todayGames().filter(c=>!cols.some(x=>x.g===c.g));
-  const others = hidden.length ? `<div class="gcs gmore"><span class="lab">ほかのタイトル</span>${hidden.map(({g,n})=>`<a class="gc" style="--h:${g.h}" href="${esc(dayLink(f,TODAY,g.code))}" title="${esc(g.name)}・${n}件"><span><i aria-hidden="true"></i>${esc(g.name)}</span><b>${n}</b></a>`).join('')}</div>` : '';
+  const others = hidden.length ? `<div class="gcs gmore"><span class="lab">ほかのタイトル</span>${hidden.map(({g,n})=>`<a class="gc" style="${gvars(g)}" href="${esc(dayLink(f,TODAY,g.code))}" title="${esc(g.name)}・${n}件"><span><i aria-hidden="true"></i>${esc(g.name)}</span><b>${n}</b></a>`).join('')}</div>` : '';
   body.innerHTML = `<div class="gcols" style="--n:${Math.max(cols.length,1)}">${cols.map(({g,n})=>{
     const rows=rowsFor(g.code,TODAY).slice(0,k), rest=n-rows.length, href=esc(dayLink(f,TODAY,g.code));
     const list = rows.length ? `<ul class="evs">${rows.map(e=>evRow(e,g.code)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件 ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="--h:${g.h}" aria-label="${esc(g.name)}"><h3><span class="gn"><i aria-hidden="true"></i>${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${list}${more}</section>`;
+    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn"><i aria-hidden="true"></i>${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${list}${more}</section>`;
   }).join('')}</div>${others}`;
 }
 
@@ -364,7 +366,7 @@ function renderWeek(){
     let chips='';
     if(f&&f.pref&&known){
       const gs=EV_GAMES.filter(g=>bg[g.code]>0);
-      chips = gs.length ? gs.map(g=>`<a class="gc" style="--h:${g.h}" href="${esc(dayLink(f,d,g.code))}" title="${esc(g.name)}・${bg[g.code]}件"><span><i aria-hidden="true"></i>${esc(rel?g.short:g.name)}</span><b>${bg[g.code]}</b></a>`).join('')
+      chips = gs.length ? gs.map(g=>`<a class="gc" style="${gvars(g)}" href="${esc(dayLink(f,d,g.code))}" title="${esc(g.name)}・${bg[g.code]}件"><span><i aria-hidden="true"></i>${esc(rel?g.short:g.name)}</span><b>${bg[g.code]}</b></a>`).join('')
         : total ? `<a class="gc any" href="${esc(dayLink(f,d))}">イベント <b>${total}</b></a>` : '';
     } else if(f&&f.pref&&!(ev&&ev.loading)) chips=`<a class="gc any" href="${esc(dayLink(f,d))}">イベント ›</a>`;
     let top;
@@ -373,7 +375,7 @@ function renderWeek(){
     else {
       // no releases: a few of the day's events when the loaded pages reach it (start order), else just the counts
       const evs = known ? ev.list.filter(e=>e.starts_on===d).sort((a,b)=>dayRank(a)-dayRank(b)).slice(0,2) : [];
-      top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e)[0]]||{h:0}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="--h:${g.h}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>`
+      top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e)[0]]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>`
         : chips ? '' : `<p class="q">${f&&f.pref&&known?'発売・イベントなし':'発売なし'}</p>`;
     }
     return `<div class="wd${its&&!rel&&chips?' norel':''}"><h3>${+d.slice(5,7)}/${+d.slice(8)}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${i===0?'<span class="lb">明日</span>':''}</h3>${top}${chips?`<div class="gcs">${chips}</div>`:''}</div>`;

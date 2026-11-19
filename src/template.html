@@ -58,11 +58,15 @@ h1 .y{font-family:var(--mono);font-size:.42em;color:var(--muted);vertical-align:
 .count{color:var(--muted);font-size:13px;margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
 .count b{font-family:var(--mono);color:var(--ink)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;max-height:40vh;overflow-y:auto;padding-top:10px;border-top:1px solid var(--line)}
+/* Event games carry a fixed light/dark colour pair inline (--gl/--gd, palette in CLAUDE.md); release titles only a hue (--h). */
+[style*="--gl"]{--g:var(--gl);--gt:color-mix(in oklab,var(--gl) 80%,#000);--gtint:color-mix(in oklab,var(--gl) 12%,var(--surface))}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) [style*="--gl"]{--g:var(--gd);--gt:var(--gd);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}}
+:root[data-theme="dark"] [style*="--gl"]{--g:var(--gd);--gt:var(--gd);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px 3px 8px;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.chip i{width:9px;height:9px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
 .chip em{font-style:normal;color:var(--faint);font-family:var(--mono);font-size:11px}
 .chip:hover{border-color:var(--faint)}
-.chip[aria-pressed="true"]{border-color:hsl(var(--h) var(--chip-s) var(--chip-l));background:hsl(var(--h) 70% var(--tint-l));font-weight:700}
+.chip[aria-pressed="true"]{border-color:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));font-weight:700}
 .chip[aria-pressed="true"] em{color:var(--muted)}
 .chip.all[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .chip.all[aria-pressed="true"] em{color:inherit;opacity:.7}
