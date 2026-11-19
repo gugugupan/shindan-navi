@@ -80,7 +80,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
     for (const b of [...new Set(bad)]) fail(where, b);
 
-    if (p === '/') try {
+    if (p === '/releases/') try {
       if (await page.locator('#filterBtn').isVisible()) await page.locator('#filterBtn').click();
       const chip = page.locator('#chips .chip:not(.all):not(.toggle):not(.starchip)').first();
       await chip.click();
@@ -96,11 +96,20 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         if (dlg) await page.locator('#dlgClose').click();
       } else fail(where, 'no visible star button');
     } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
-    await page.screenshot({ path: path.join(OUT, `${vp}-${p.replace(/\//g, '') || 'home'}.png`), fullPage: false });
+    await page.screenshot({ path: path.join(OUT, `${vp}-${p.replace(/\//g, '')}.png`), fullPage: false });
     console.log(`  ${where.padEnd(22)} month=${st.month} cards=${st.visibleCards}`);
     await page.close();
   }
   await ctx.close();
+}
+{
+  // / stands in for the today page and forwards to the release calendar with the query and hash intact
+  const page = await browser.newPage();
+  await page.goto(`${BASE}/?utm_source=x#top`);
+  await page.waitForURL(u => u.pathname === '/releases/', { timeout: 5000 }).catch(() => {});
+  const u = new URL(page.url());
+  if (u.pathname + u.search + u.hash !== '/releases/?utm_source=x#top') fail('/', `forwards to ${u.pathname + u.search + u.hash}`);
+  await page.close();
 }
 await browser.close();
 server.close();

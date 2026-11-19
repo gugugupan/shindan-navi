@@ -98,13 +98,13 @@ def page_def():
     up=[d for d in data if d['date']>=TODAY]
     soon=[d for d in up if d['date']<=(jd(TODAY)+datetime.timedelta(days=30)).isoformat()]
     gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if k in used)
-    pages.append(dict(path='/',slug='home',og='home',
+    pages.append(dict(path='/releases/',slug='releases',og='home',
         title='新弾ナビ｜TCG・トレカ新弾 発売日カレンダー（ポケカ・ワンピ・MTGほか）',
         desc=f'TCG・トレカ新弾の発売日カレンダー。ポケカ（ポケモンカード）・ワンピカード・MTG・遊戯王・デュエマ・ヴァイス・ユニアリなど{len(used)}タイトルの拡張パック・スターターデッキの発売日と価格を一覧でチェック。お気に入り登録・Googleカレンダー追加にも対応。',
         keywords=COMMON_KW+['ポケカ','ワンピカード','MTG','遊戯王','デュエマ','ヴァイス','ユニアリ'],
         h1='TCG・トレカ新弾 発売日カレンダー',
         lead=f'{len(used)}タイトル・{len(data)}件の新弾／新商品を掲載（{upd_label}更新）',
-        crumbs=None, js=None,
+        crumbs=[('トップ','/'),('新弾カレンダー',None)], js=None,
         list=static_list(soon,'直近30日の発売予定',f'{fmt(TODAY,True)}から30日以内に発売されるTCG・トレカ新弾 {len(soon)}件。')
             +about_block('新弾ナビについて',[
               f'新弾ナビは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をひとつのカレンダーにまとめたサイトです。ポケモンカード、ONE PIECEカードゲーム、マジック：ザ・ギャザリング、遊戯王OCG、デュエル・マスターズ、ヴァイスシュヴァルツ、UNION ARENA など{len(used)}タイトルの拡張パック・ブースターパック・スターターデッキの発売日と価格（税込）を掲載しています。',
@@ -137,7 +137,7 @@ def page_def():
             keywords=names+[f'{short} 新弾',f'{short} 発売日']+COMMON_KW,
             h1=f'{name} 新弾 発売日カレンダー' if short in name else f'{name}（{short}）新弾 発売日カレンダー',
             lead=lead,
-            crumbs=[('トップ','/'),(f'{short} 新弾',None)], js={'game':key},
+            crumbs=[('トップ','/'),('新弾カレンダー','/releases/'),(f'{short} 新弾',None)], js={'game':key},
             list=static_list(lst,list_head,list_note,show_game=False)
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
@@ -155,7 +155,7 @@ def page_def():
             keywords=[f'{mlabel(ym)} 新弾',f'{int(ym[5:])}月 トレカ 発売',f'{int(ym[5:])}月 TCG 新弾']+COMMON_KW,
             h1=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧',
             lead=f'{len(its)}件・{len(cnt)}タイトル（{upd_label}更新）',
-            crumbs=[('トップ','/'),(mlabel(ym),None)], js={'month':ym},
+            crumbs=[('トップ','/'),('新弾カレンダー','/releases/'),(mlabel(ym),None)], js={'month':ym},
             list=static_list(its,f'{mlabel(ym)}の発売日一覧',f'{mlabel(ym)}に発売されるTCG・トレカ新弾・新商品 {len(its)}件。価格は税込。')
                 +about_block(f'{mlabel(ym)}のTCG新弾について',[
                   f'{mlabel(ym)}は{len(cnt)}タイトル・{len(its)}件の新弾・新商品が発売予定です（{fmt(days[0])}〜{fmt(days[-1])}）。発売件数が多いのは {main_links} です。',
@@ -167,7 +167,7 @@ ICO=lambda d:f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 # path, name (prefix + suffix the toolbar drops between 761 and 1100px), icon
 # BUILD_EVENTS=0 leaves /events/ out entirely (page, sitemap, tool tabs): hosts without the /api/ Worker (the Pages site before cutover).
 BUILD_EVENTS=os.environ.get('BUILD_EVENTS','1')!='0'
-TOOLS=[('/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
+TOOLS=[('/releases/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
        ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>'))]
 if not BUILD_EVENTS: TOOLS=[t for t in TOOLS if t[0]!='/events/']
 # Login UI (user control in the corner, sync wording in the legends, LOGIN parts of /privacy/): LOGIN_ENABLED=1, a repo
@@ -187,7 +187,7 @@ def corner(tool):
     return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
 def siterow(cur):
     cur_=lambda p:' aria-current="page"' if cur==p else ''
-    return f'<div><b>新弾ナビ</b><a href="/"{cur_("/")}>トップ（全タイトル）</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a></div>'
+    return f'<div><b>新弾ナビ</b><a href="/"{cur_("/")}>トップ</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a></div>'
 def toolrow(cur):
     if len(TOOLS)<2: return ''
     return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{a}{b}</a>' for p,a,b,ic in TOOLS)+'</div>'
@@ -212,8 +212,6 @@ def render(pg):
     url=SITE+pg['path']
     og=f'{SITE}/og/{pg["og"]}.png'
     ld=[]
-    if pg['path']=='/':
-        ld.append({'@context':'https://schema.org','@type':'WebSite','name':'新弾ナビ','url':SITE+'/','inLanguage':'ja'})
     if pg['crumbs']:
         ld.append({'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
             {'@type':'ListItem','position':i+1,'name':n,**({'item':SITE+h} if h else {'item':url})} for i,(n,h) in enumerate(pg['crumbs'])]})
@@ -262,7 +260,7 @@ def render(pg):
         crumbs='<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in pg['crumbs'])+'</nav>'
     page=page.replace('<!--PAGEHEAD-->',f'{crumbs}<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p>{esc(pg["lead"])}</p></div>')
     page=page.replace('<!--SEOLIST-->',pg['list']).replace('<!--SITENAV-->',sitenav(pg['path']))
-    page=page.replace('<!--CORNER-->',corner('/'))
+    page=page.replace('<!--CORNER-->',corner('/releases/'))
     page=re.sub(r'<title>.*?</title>\n?','',page,count=1)
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
@@ -382,6 +380,28 @@ def render_privacy():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
+# / until the today page exists: a stand-in that forwards to the release calendar, keeping ?query and #hash
+# (UTM tags, old shares). Not 301: / stays a page of its own. Not in the sitemap, noindex.
+def render_home():
+    to='/releases/'
+    return f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>新弾ナビ</title>
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script>location.replace('{to}'+location.search+location.hash)</script>
+<noscript><meta http-equiv="refresh" content="0; url={to}"></noscript>
+</head>
+<body>
+<p><a href="{to}">新弾カレンダーへ</a></p>
+</body>
+</html>
+"""
+
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
 shutil.copytree(os.path.join(ROOT,'public'),dist)
@@ -393,6 +413,7 @@ for pg in pages:
 if BUILD_EVENTS:
     os.makedirs(os.path.join(dist,'events'),exist_ok=True)
     open(os.path.join(dist,'events/index.html'),'w').write(render_events())
+open(os.path.join(dist,'index.html'),'w').write(render_home())
 os.makedirs(os.path.join(dist,'privacy'),exist_ok=True)
 open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']

@@ -142,9 +142,14 @@ def check_dist(today, head, ov):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
     paths = [p['path'] for p in pages]
-    titles = [p for p in paths if re.fullmatch(r'/[a-z]+/', p) and p not in TOOL_PAGES]
+    titles = [p for p in paths if re.fullmatch(r'/[a-z]+/', p) and p not in TOOL_PAGES and p != '/releases/']
     months = [p for p in paths if re.fullmatch(r'/\d{4}-\d{2}/', p)]
-    if '/' not in paths: fail('dist: home page missing')
+    if '/releases/' not in paths: fail('dist: release calendar /releases/ missing')
+    if '/' in paths: fail('dist: / is built as a release calendar page')
+    home = os.path.join(DIST, 'index.html')
+    if not os.path.exists(home): fail('dist: /index.html missing')
+    elif "location.replace('/releases/'+location.search+location.hash)" not in open(home).read():
+        fail('/: does not forward to /releases/ with query and hash')
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
     if not months: fail('dist: no month pages')
 
@@ -174,8 +179,7 @@ def check_dist(today, head, ov):
         for i, blk in enumerate(blocks): walk(blk, f'ld[{i}]', bad)
         if bad: fail(f'{p}: forbidden structured data in {len(bad)} objects, e.g. {bad[0]}')
         types = [blk.get('@type') for blk in blocks]
-        if p == '/' and 'WebSite' not in types: fail('/: WebSite missing')
-        if p != '/' and p not in TOOL_PAGES:
+        if p not in TOOL_PAGES:
             bc = [blk for blk in blocks if blk.get('@type') == 'BreadcrumbList']
             if not bc: fail(f'{p}: BreadcrumbList missing')
             elif bc[0]['itemListElement'][-1].get('item') != SITE + p: fail(f'{p}: last breadcrumb is not the page itself')
@@ -200,7 +204,7 @@ def check_dist(today, head, ov):
         if none_upcoming:
             if any(d >= today for d in pp.list_dates): fail(f'{p}: says nothing is upcoming but lists {max(pp.list_dates)}')
             if '次の発売は' in src: fail(f'{p}: says nothing is upcoming but still has 次の発売 text')
-        elif p == '/' or p in titles:
+        elif p == '/releases/' or p in titles:
             past = [d for d in pp.list_dates if d < today]
             if past: fail(f'{p}: upcoming list shows past dates {sorted(set(past))[:3]}')
         if p in titles and not none_upcoming:

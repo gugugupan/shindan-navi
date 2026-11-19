@@ -222,7 +222,7 @@ Cookies (all `Path=/; Secure; SameSite=Lax`, `__Host-` so no `Domain`):
 
 Client rules:
 
-- Call `/api/v1/me` only when `__Host-sn_user` is present; logged-out visitors make no `/api` calls on `/`.
+- Call `/api/v1/me` only when `__Host-sn_user` is present; logged-out visitors make no `/api` calls on `/releases/`.
 - Every non-GET request must send `Origin` equal to the site origin (browsers do for `fetch`) and
   `Content-Type: application/json` (also for bodiless logout / DELETE), else 403 `{ "error": "forbidden" }` /
   415 `{ "error": "unsupported media type" }`.

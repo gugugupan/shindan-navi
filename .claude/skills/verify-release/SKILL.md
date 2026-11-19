@@ -26,9 +26,9 @@ uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0
 
 - Rebuilds `dist/` with `BUILD_TODAY` set, so results are reproducible; use today's date unless checking how the site will look on a later day.
 - Data: ids unique and unchanged for the same title + name, new ids match `item_id`, no override removed (changed / new overrides are WARN to read), no visible duplicates by name or source key, recent / upcoming items that disappeared are WARN — check they were really cancelled.
-- Pages: home, all 10 title pages and month pages exist and are in the sitemap with `lastmod` = `meta.json`; canonical is the page itself; hidden items are not in page data.
+- Pages: `/releases/`, all 10 title pages and month pages exist and are in the sitemap with `lastmod` = `meta.json`; canonical is the page itself; hidden items are not in page data.
 - JSON-LD: parses; only `WebSite`, `BreadcrumbList`, `ItemList`, `ListItem`; no `Product` / `Offer` / price / availability / rating / review / shipping / return policy; `ItemList` names and order equal the visible static list; breadcrumbs end at the page.
-- Next release: home and title-page lists show no past dates, and each title page's 次の発売 is the first upcoming date. A FAIL here usually means a main title has no upcoming items — fix the data, not the check.
+- Next release: `/releases/` and title-page lists show no past dates, and each title page's 次の発売 is the first upcoming date. A FAIL here usually means a main title has no upcoming items — fix the data, not the check.
 
 ## 2. Real browser
 
@@ -36,7 +36,7 @@ uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0
 node tools/verify/browser.mjs --today YYYY-MM-DD    # same date as step 1
 ```
 
-Serves `dist/` locally with the browser clock pinned to that date, opens every page at 1280px and 390px, and fails on console errors, failed or 4xx/5xx local requests, broken images, horizontal scroll, a calendar that does not open on the current month (month pages: their month), or no visible release cards while the page has upcoming items (a title with nothing this month passes if 次月 reaches its items within 3 months). On `/` it also toggles a title chip and stars a card. Screenshots go to `.verify/` (git-ignored) — look at a few, at least home and one title page per width.
+Serves `dist/` locally with the browser clock pinned to that date, opens every page at 1280px and 390px, and fails on console errors, failed or 4xx/5xx local requests, broken images, horizontal scroll, a calendar that does not open on the current month (month pages: their month), or no visible release cards while the page has upcoming items (a title with nothing this month passes if 次月 reaches its items within 3 months). On `/releases/` it also toggles a title chip and stars a card; it also checks that `/` forwards to `/releases/` with query and hash kept. Screenshots go to `.verify/` (git-ignored) — look at a few, at least `releases` and one title page per width.
 
 ## 3. Report to the owner
 

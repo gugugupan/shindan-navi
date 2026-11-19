@@ -58,6 +58,8 @@ async function get(path, { retries = 12 } = {}) {
 
 const home = await get('/');
 if (home.error) fail(home.error);
+const releases = await get('/releases/');
+if (releases.error) fail(releases.error);
 const page = await get('/events/');
 if (page.error) fail(page.error);
 if (!(await page.text()).includes('/api/v1')) fail('/events/ does not look like the events page');
