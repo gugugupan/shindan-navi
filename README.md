@@ -102,6 +102,9 @@ Limits: the Worker limits uncached API requests itself (`API_LIMIT` 20/min per c
 
 ## Event map (`/events/` day view)
 
+`/events/` opens in the month calendar; the list is `view=list` (kept in the viewer's saved filters). A
+single-day range without `view` is the day view, so day links from before the calendar default still open it.
+
 Clicking a day (calendar cell, or 地図 on a list day heading) opens that single day (`range=custom&from=D&to=D`, no
 extra URL parameter): a Google map of the venues on the left (on phones on top, collapsed behind 地図を表示), the
 day's cards on the right. The page pages through the whole day by itself (up to 12 `/events` pages, ~13 uncached
