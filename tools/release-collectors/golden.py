@@ -1,7 +1,8 @@
 """Golden snapshot of the aggregator path of the release update (カードラボ + トレカの地図, no official).
 
   .venv/bin/python -I tools/release-collectors/golden.py capture [--today YYYY-MM-DD]   # fetch pages, write expected output
-  .venv/bin/python -I tools/release-collectors/golden.py replay                         # rerun on the snapshot, compare
+  .venv/bin/python -I tools/release-collectors/golden.py replay                         # rerun on the snapshot, print the diff
+  .venv/bin/python -I tools/release-collectors/golden.py capture --rebase                # keep raw/ + input/, rewrite expected/
 
 Everything goes to tools/release-collectors/.golden/ (git-ignored: full source pages, the repo is public):
 raw/ pages by URL, input/ the items.json + overrides.json the run started from, expected/ items.json + report.md.
@@ -15,6 +16,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -82,6 +84,53 @@ def capture(today):
     print(f'captured {len(pages)} pages for {today} → {GOLDEN}')
 
 
+def rebase():
+    """After a reviewed behaviour change: print the diff, then rewrite expected/ from the snapshot (no fetch)."""
+    if not os.path.exists(MANIFEST):
+        sys.exit('no golden snapshot (run capture first)')
+    items, report = run()
+    print('\n'.join(diff(items, report)) or 'identical')
+    for name, text in (('items.json', items), ('report.md', report)):
+        with open(os.path.join(EXPECTED, name), 'w') as f:
+            f.write(text)
+    print(f'rebased expected/ ({len(json.loads(items))} items) → {EXPECTED}')
+
+
+def _sections(report):
+    out, key = {}, ''
+    for line in report.split('\n'):
+        if line.startswith('#'):
+            key = re.sub(r'（\d+）$', '', line)
+            out.setdefault(key, [line, []])[0] = line
+        elif line.strip():
+            out.setdefault(key, [key, []])[1].append(line)
+    return out
+
+
+def diff(items, report):
+    """Readable differences from expected/: items by id and field, report lines by section."""
+    lines = []
+    old = {x['id']: x for x in _read(os.path.join(EXPECTED, 'items.json'), json=True)}
+    new = {x['id']: x for x in json.loads(items)}
+    for i in sorted(old.keys() | new.keys()):
+        a, b = old.get(i), new.get(i)
+        if a is None or b is None:
+            x = a or b
+            lines.append(f"{'-' if b is None else '+'} item {i} {x['date']} [{x['game']}] {x['name']}")
+            continue
+        for k in sorted(a.keys() | b.keys()):
+            if a.get(k) != b.get(k):
+                lines.append(f"~ item {i} [{b['game']}] {b['name']}  {k}: {a.get(k)!r} → {b.get(k)!r}")
+    olds, news = _sections(_read(os.path.join(EXPECTED, 'report.md'))), _sections(report)
+    for key in list(olds) + [k for k in news if k not in olds]:
+        (ha, la), (hb, lb) = olds.get(key, (key, [])), news.get(key, (key, []))
+        removed, added = [x for x in la if x not in lb], [x for x in lb if x not in la]
+        if ha != hb or removed or added:
+            lines.append(f'report {ha} → {hb}' if ha != hb else f'report {ha}')
+            lines += [f'  - {x}' for x in removed] + [f'  + {x}' for x in added]
+    return lines
+
+
 def strip_report(text):
     """Drop the dated title and the 公式サイト取得ログ section (neither belongs to the aggregator merge)."""
     out, skip = [], False
@@ -138,11 +187,15 @@ def replay():
     items, report = run()
     ok = items == _read(os.path.join(EXPECTED, 'items.json')) and report == _read(os.path.join(EXPECTED, 'report.md'))
     print(('identical' if ok else 'DIFFERENT') + f" ({len(json.loads(items))} items)")
+    if not ok:
+        print('\n'.join(diff(items, report)) or '(only order or formatting differs)')
     return ok
 
 
 if __name__ == '__main__':
-    if sys.argv[1:2] == ['capture']:
+    if sys.argv[1:3] == ['capture', '--rebase']:
+        rebase()
+    elif sys.argv[1:2] == ['capture']:
         capture(sys.argv[sys.argv.index('--today') + 1] if '--today' in sys.argv else output.today_iso())
     elif sys.argv[1:2] == ['replay']:
         sys.exit(0 if replay() else 1)

@@ -26,7 +26,7 @@ def month_urls(today):
 
 
 def _parse_served(today, served):
-    """parse_torecamap with fetch answered from `served` (url → bytes); unchanged parser, no network."""
+    """parse_torecamap with fetch answered from `served` (url → bytes); no network."""
     def fake(url):
         return served[url]
     saved, parse.fetch = parse.fetch, fake

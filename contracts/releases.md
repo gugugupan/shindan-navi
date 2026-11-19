@@ -37,18 +37,25 @@ unchanged on them (`release.schema.json` › `aggregator`):
 | `date` | `YYYY-MM-DD`. カードラボ headings carry no year: the year (TODAY's, next, previous) whose weekday matches. |
 | `game` | display title via `GAME` (`lib/common.py`); an unknown label is kept as-is and listed in `_run.json` `unknown_labels`. |
 | `name` | product name, HTML-unescaped, tags stripped, trimmed (トレカの地図 also drops U+200B). |
-| `pack` | price text as the source writes it (`440円`, `418円(税込)`, even `値段設定なし`), `""` if none. Not normalized. |
-| `box` | トレカの地図 `1BOX：` text with `値段設定なし` removed; `""` for カードラボ. |
+| `pack` | price text, `""` if none. カードラボ as written (`440円`, `1,650円`); トレカの地図 normalized to the same form (`418円(税込)` → `418円`, `6688円` → `6,688円`, `値段設定なし` → `""`). |
+| `box` | トレカの地図 `1BOX：` text, normalized like `pack`; `""` for カードラボ. |
 | `url` | トレカの地図 product link (often official), `""` if none / カードラボ. |
-| `img` | トレカの地図 image URL, `""` if none, a no-image placeholder, or カードラボ. |
+| `img` | トレカの地図: the item's own `<img>` (rendered before its name; plain `src` or the `/_next/image?url=` form), absolute http(s) only; `""` if none, a no-image placeholder, relative, or カードラボ. |
 | `src` | `"clabo"` (directory `cardlabo`) or `"torecamap"`. Keep these strings: they end up in `items.json` `sources`. |
 
 Scope: カードラボ = every row of the 日付別 (`#hatsubai_daily`) tables on `/special/2028/`; トレカの地図 = TODAY's
 month and the next 5 (`?year=&month=`), deduped by `(date, name)`, rendered items only (`ProductInfo_name`). No date
 filter in the collector: the merge drops releases older than `KEEP_PAST_DAYS` (30).
 
-Behaviour changes to a parser (e.g. the known issues below) are separate, reviewed changes: the golden replay
-(`tools/release-collectors/test_golden.py`) is expected to differ and is recaptured on purpose.
+Behaviour changes to a parser are separate, reviewed changes: the golden replay
+(`tools/release-collectors/test_golden.py`) is expected to differ; `golden.py replay` prints the difference by item
+field and report section, and `golden.py capture --rebase` rewrites `expected/` from the kept snapshot.
+
+The merge treats a price that differs only in writing (same yen amount, e.g. `6688円(税込)` vs `6,688円`) as no
+change: it takes the new text without a 価格の変更 line. A thumbnail that cannot be saved (not http(s), fetch or
+decode fails) is skipped and listed under 画像を取得/差し替え as 画像の取得に失敗; the run goes on.
+`save_thumb` writes via a temp file, and files it created are removed again if the run dies before `items.json`
+is written. `--thumbs DIR` redirects thumbnails (default `public/thumbs`).
 
 ## Official records (`official`)
 
@@ -130,10 +137,8 @@ scripts/update_data.py                      merge (+ enrich): --dry-run --no-off
 `tools/release-collectors` itself and imports `lib.common`, `cardlabo.parse`, … as packages (as `update_data.py`
 does). Python, not Node, because the parsers, `sourcekey.py`, the official collector and PIL are Python already.
 
-## Known issues in today's parsers (kept by the move; fix as reviewed behaviour changes)
+## Known issues
 
-- トレカの地図 now serves product images as plain `<img src="https://…cloudfront.net/master-packs/…">`; the parser only
-  looks for `/_next/image?url=`, so real images are missed, and the last item of each month page picks up a site
-  chrome image (`/images/section-title-small.png`, relative) from the page tail. In a non-dry run `save_thumb` would
-  fail on that relative URL. The trimmed fixture reproduces both.
-- トレカの地図 prices keep `(税込)` and `値段設定なし` can land in `pack` (only `box` strips it).
+None open. Fixed (reviewed behaviour change, golden rebased): トレカの地図 images from the current
+`<img src="https://…cloudfront.net/…">` markup without picking up the page-tail `/images/section-title-small.png`,
+and トレカの地図 prices without `(税込)` / `値段設定なし`.

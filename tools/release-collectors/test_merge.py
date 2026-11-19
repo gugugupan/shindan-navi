@@ -290,6 +290,62 @@ class Thumbs(MergeCase):
         self.assertEqual(os.listdir(self.thumbs), ['stale.jpg'])
         self.assertEqual(sorted(os.listdir(self.data)), ['items.json', 'overrides.json', 'update-report.md'])
 
+    def test_bad_image_is_skipped_and_reported(self):
+        self.write_source('cardlabo', CLABO)
+        self.write_source('torecamap', [agg('2026-12-02', 'MTG', '相対パス画像', 'torecamap', img='/images/section-title-small.png'),
+                                        agg('2026-12-03', 'MTG', '取得失敗画像', 'torecamap', img='https://img.test/gone.png'),
+                                        agg('2026-12-04', 'MTG', '壊れた画像', 'torecamap', img='https://img.test/broken.png')])
+        bodies = {'https://img.test/gone.png': OSError('HTTP Error 404'), 'https://img.test/broken.png': b'not an image'}
+
+        def fetch(url):
+            body = bodies[url]
+            if isinstance(body, Exception):
+                raise body
+            return body
+        with mock.patch.object(ud, 'fetch', fetch):
+            items = {x['name']: x for x in self.run_merge('--no-official')}
+        self.assertEqual([items[n]['thumb'] for n in ('相対パス画像', '取得失敗画像', '壊れた画像')], ['', '', ''])
+        self.assertEqual(os.listdir(self.thumbs), [])
+        failed = [x for x in self.section('画像を取得/差し替え') if '画像の取得に失敗' in x]
+        self.assertEqual(len(failed), 3)
+        self.assertIn('not an http(s) URL', failed[0])
+        self.run_merge('--dry-run', '--no-official')
+        self.assertEqual(len([x for x in self.section('画像を取得/差し替え') if 'not an http(s) URL' in x]), 1)
+
+    def test_crash_after_download_leaves_no_orphan_thumbs(self):
+        self.write_source('cardlabo', CLABO)
+        self.write_source('torecamap', [agg('2026-12-02', 'MTG', '画像つき新商品', 'torecamap', img='https://img.test/new.png')])
+        before = sorted(os.listdir(self.data))
+        with mock.patch.object(ud, 'fetch', lambda url: png()), \
+                mock.patch.object(ud, 'write_report', mock.Mock(side_effect=KeyboardInterrupt)):
+            with self.assertRaises(KeyboardInterrupt):
+                self.run_merge('--no-official')
+        self.assertEqual(os.listdir(self.thumbs), [])
+        self.assertEqual(sorted(os.listdir(self.data)), before)
+
+    def test_thumbs_flag(self):
+        other = os.path.join(self.tmp, 'other-thumbs')
+        os.makedirs(other)
+        self.write_source('cardlabo', CLABO)
+        self.write_source('torecamap', [agg('2026-12-02', 'MTG', '画像つき新商品', 'torecamap', img='https://img.test/new.png')])
+        with mock.patch.object(ud, 'fetch', lambda url: png()):
+            items = {x['name']: x for x in self.run_merge('--no-official', '--thumbs', other)}
+        self.assertEqual(os.listdir(other), [items['画像つき新商品']['thumb'].split('/')[-1]])
+        self.assertEqual(os.listdir(self.thumbs), [])
+
+
+class Prices(MergeCase):
+    def test_same_amount_written_differently_is_not_a_price_change(self):
+        a = dict(item('2026-12-05', 'MTG', '税込表記の商品', pack='440円(税込)'), box='6688円(税込)')
+        b = dict(item('2026-12-06', 'MTG', '値上げの商品', pack='440円'), box='')
+        self.write_data([a, b], {})
+        self.write_source('cardlabo', [agg(a['date'], 'MTG', a['name'], 'clabo', pack='440円')])
+        self.write_source('torecamap', [dict(agg(a['date'], 'MTG', a['name'], 'torecamap', pack='440円'), box='6,688円'),
+                                        agg(b['date'], 'MTG', b['name'], 'torecamap', pack='495円')])
+        items = {x['name']: x for x in self.run_merge('--dry-run', '--no-official')}
+        self.assertEqual((items[a['name']]['pack'], items[a['name']]['box']), ('440円', '6,688円'))
+        self.assertEqual(self.section('価格の変更'), ['[MTG] 値上げの商品  pack: 440円 → 495円'])
+
 
 if __name__ == '__main__':
     unittest.main()

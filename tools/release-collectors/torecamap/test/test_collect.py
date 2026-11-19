@@ -141,24 +141,36 @@ class Collect(unittest.TestCase):
         self.assertEqual(_contents(out), before)
 
 
-class KnownIssues(unittest.TestCase):
-    """contracts/releases.md › Known issues: kept on purpose until the reviewed parser fix (golden recapture)."""
+class Parse(unittest.TestCase):
+    """Images and prices as the merge wants them (contracts/releases.md › Aggregator records)."""
 
     def setUp(self):
         urls = collect.month_urls(TODAY)
         self.records, _ = collect._parse_served(TODAY, {u: PAGE for u in urls})
+        self.by_name = {r['name']: r for r in self.records}
 
-    @unittest.expectedFailure
-    def test_cloudfront_images_are_picked_up(self):
-        self.assertTrue(any('cloudfront.net/master-packs/' in r['img'] for r in self.records))
+    def test_images(self):
+        self.assertEqual([r['img'] for r in self.records], [
+            '',  # no-image placeholder
+            'https://d26vgo7frmwa7l.cloudfront.net/master-packs/1793765571168-a0cd7e7b.webp',
+            'https://d26vgo7frmwa7l.cloudfront.net/master-packs/5/1792573249745-63e5f6e8-yugioh-rushduel-jounetsu-no-jointech.webp',
+            '',
+            '',  # last item of the month: the page-tail section-title-small.png is not its image
+        ])
 
-    @unittest.expectedFailure
-    def test_no_site_chrome_image(self):
-        self.assertFalse(any(r['img'].startswith('/images/') for r in self.records))
+    def test_old_next_image_form_and_relative_urls(self):
+        enc = '/_next/image?url=https%3A%2F%2Fd.cloudfront.net%2Fmaster-packs%2Fa.webp&amp;w=256&amp;q=75'
+        self.assertEqual(parse.product_image(f'<img alt="" src="{enc}"/><div class="ProductInfo_name__x">a</div>'),
+                         'https://d.cloudfront.net/master-packs/a.webp')
+        for src in ('/_next/image?url=%2Fimages%2Fsection-title-small.png&amp;w=3840&amp;q=75', '/images/a.png'):
+            self.assertEqual(parse.product_image(f'<img src="{src}"/><div class="ProductInfo_name__x">a</div>'), '')
+        self.assertEqual(parse.product_image('<div class="ProductInfo_name__x">a</div><img src="https://x.test/a.png"/>'), '')
 
-    @unittest.expectedFailure
-    def test_prices_without_tax_suffix_or_placeholder(self):
-        self.assertFalse(any('(税込)' in r['pack'] or '値段設定なし' in r['pack'] for r in self.records))
+    def test_prices(self):
+        self.assertEqual([(r['pack'], r['box']) for r in self.records], [
+            ('418円', '6,688円'), ('385円', '6,160円'), ('198円', '5,940円'), ('', '2,530円'), ('440円', '')])
+        for text, want in (('1,100円', '1,100円'), ('12345円（税込）', '12,345円'), ('値段設定なし', ''), ('オープン価格', 'オープン価格')):
+            self.assertEqual(parse.price(text), want)
 
 
 if __name__ == '__main__':

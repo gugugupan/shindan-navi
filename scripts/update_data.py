@@ -7,10 +7,10 @@ required source is missing, stale, incomplete or looks broken.
 
   .venv/bin/python -I scripts/update_data.py              # merge + enrich, write data + report
   .venv/bin/python -I scripts/update_data.py --dry-run    # report only
-  options: --no-official (skip the official files and enrich)  --no-enrich  --releases DIR  --data DIR
+  options: --no-official (skip the official files and enrich)  --no-enrich  --releases DIR  --data DIR  --thumbs DIR
 
 No network for カードラボ / トレカの地図. The official step may call Jev / the LLM to match; enrich (fill_box_info)
-opens product pages with the LLM; thumbnails are downloaded unless --dry-run.
+opens product pages with the LLM; thumbnails are downloaded unless --dry-run (to --thumbs DIR, default public/thumbs).
 """
 import argparse
 import datetime
@@ -74,7 +74,12 @@ def combine(clabo, tm):
     return rows
 
 
+NEW_THUMBS = []  # files save_thumb created this run; removed again if the run dies before items.json is written
+
+
 def save_thumb(url):
+    if not re.match(r'https?://', url or ''):
+        raise ValueError(f'not an http(s) URL: {url!r}')
     name = hashlib.md5(url.encode()).hexdigest()[:12] + '.jpg'
     path = os.path.join(THUMBS, name)
     if not os.path.exists(path):
@@ -86,8 +91,27 @@ def save_thumb(url):
             im = bg
         im = im.convert('RGB')
         im.thumbnail((280, 280))
-        im.save(path, 'JPEG', quality=78)
+        part = path + '.part'
+        try:
+            im.save(part, 'JPEG', quality=78)
+            os.replace(part, path)
+        finally:
+            if os.path.exists(part):
+                os.remove(part)
+        NEW_THUMBS.append(path)
     return 'thumbs/' + name
+
+
+def try_thumb(url, dry):
+    """(thumb path, None) or (None, why not). A dry run only checks the URL; nothing is fetched."""
+    try:
+        if dry:
+            if not re.match(r'https?://', url):
+                raise ValueError(f'not an http(s) URL: {url!r}')
+            return '', None
+        return save_thumb(url), None
+    except Exception as ex:  # noqa: BLE001 — one bad image must not stop the update
+        return None, f'{type(ex).__name__}: {ex}'
 
 
 def find_by_source(s, existing, used):
@@ -150,7 +174,7 @@ def merge(existing, scraped, overrides, today, report, dry):
                 report['moved'].append(f"{e['date']} → {s['date']}  [{s['game']}] {s['name']}")
             for k in ('pack', 'box'):
                 if s[k] and s[k] != e.get(k):
-                    if e.get(k):
+                    if e.get(k) and not (yen_int(s[k]) and yen_int(s[k]) == yen_int(e.get(k))):
                         report['price'].append(f"[{s['game']}] {s['name']}  {k}: {e.get(k)} → {s[k]}")
                     item[k] = s[k]
             item.update(date=s['date'], name=s['name'], game=s['game'])
@@ -159,17 +183,25 @@ def merge(existing, scraped, overrides, today, report, dry):
             if (item.get('source') or {}).get('site') != 'official' and s['url'] and is_official(s['url']):
                 item['source'] = make_source(s['url'], s['name'], 'official')
             if s['img'] and (not item.get('thumb') or item.get('approx')):
-                if not dry:
-                    item['thumb'] = save_thumb(s['img'])
-                item['approx'] = False
-                report['image'].append(f"[{s['game']}] {s['name']}")
+                thumb, err = try_thumb(s['img'], dry)
+                if err:
+                    report['image'].append(f"[{s['game']}] {s['name']} 画像の取得に失敗: {err}")
+                else:
+                    if thumb:
+                        item['thumb'] = thumb
+                    item['approx'] = False
+                    report['image'].append(f"[{s['game']}] {s['name']}")
         else:
             item = dict(id=sid, date=s['date'], game=s['game'], name=s['name'], pack=s['pack'], box=s['box'],
                         url=s['url'], thumb='', approx=False,
                         source=make_source(s['url'], s['name']) if s['url'] and is_official(s['url']) else
                         {'url': '', 'key': make_source('', s['name'])['key'], 'site': 'aggregator'})
-            if s['img'] and not dry:
-                item['thumb'] = save_thumb(s['img'])
+            if s['img']:
+                thumb, err = try_thumb(s['img'], dry)
+                if err:
+                    report['image'].append(f"[{s['game']}] {s['name']} 画像の取得に失敗: {err}")
+                elif thumb:
+                    item['thumb'] = thumb
             report['new'].append(f"{s['date']}  [{s['game']}] {s['name']}")
         item['sources'] = s['sources']
         out.append(item)
@@ -474,8 +506,23 @@ def main(argv=None):
     ap.add_argument('--no-enrich', action='store_true', help='skip fill_box_info')
     ap.add_argument('--releases', default=RELEASES, help='collector output root (default: data/releases)')
     ap.add_argument('--data', default=DATA, help='directory with items.json / overrides.json, where the outputs go (default: data)')
+    ap.add_argument('--thumbs', help='thumbnail directory (default: public/thumbs)')
     args = ap.parse_args(argv)
+    global THUMBS
+    if args.thumbs:
+        THUMBS = args.thumbs
     dry, data = args.dry_run, args.data
+    del NEW_THUMBS[:]
+    try:
+        return update(args, dry, data)
+    except BaseException:
+        for path in NEW_THUMBS:
+            if os.path.exists(path):
+                os.remove(path)
+        raise
+
+
+def update(args, dry, data):
     today = datetime.date.fromisoformat(os.environ['TODAY']) if os.environ.get('TODAY') else datetime.date.today()
     try:
         clabo, clabo_run = load_required(args.releases, 'cardlabo', today.isoformat())
@@ -510,7 +557,11 @@ def main(argv=None):
     report_path = os.path.join(data, 'update-report.md')
     write_report(report_path, report, counts, unknown, today, log)
     if not dry:
-        json.dump(items, open(os.path.join(data, 'items.json'), 'w'), ensure_ascii=False, indent=1)
+        tmp = os.path.join(data, 'items.json.part')
+        with open(tmp, 'w') as f:
+            json.dump(items, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, os.path.join(data, 'items.json'))
+        del NEW_THUMBS[:]
         json.dump({'updated': today.isoformat()}, open(os.path.join(data, 'meta.json'), 'w'), indent=2)
         referenced = {i['thumb'].split('/')[-1] for i in items if i.get('thumb')}
         for f in os.listdir(THUMBS):
