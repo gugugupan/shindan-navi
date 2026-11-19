@@ -1056,27 +1056,6 @@
   "per_pack": 100
  },
  {
-  "id": "i0664b4b5f6",
-  "date": "2026-11-13",
-  "game": "MTG",
-  "name": "MTG Star Trek™ Beam Me Up Bundle EN",
-  "pack": "15,180円",
-  "box": "",
-  "url": "https://magic.wizards.com/en/products/star-trek",
-  "thumb": "thumbs/4fb1d18ffe85.jpg",
-  "approx": false,
-  "sources": [
-   "clabo",
-   "official"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000312",
-   "key": "マジック:ザ・ギャザリング|スター・トレックbeammeupbundle",
-   "site": "official"
-  },
-  "official_name": "マジック：ザ・ギャザリング | スター・トレック Beam Me Up Bundle"
- },
- {
   "id": "i4650ed04ab",
   "date": "2026-11-13",
   "game": "MTG",
@@ -1116,25 +1095,6 @@
   },
   "official_name": "マジック：ザ・ギャザリング | スター・トレック Collector's Edition Commander deck（全4種）",
   "per_pack": 100
- },
- {
-  "id": "iced9705939",
-  "date": "2026-11-13",
-  "game": "MTG",
-  "name": "MTG Star Trek™ Draft Night EN",
-  "pack": "18,128円",
-  "box": "",
-  "url": "https://magic.wizards.com/en/products/star-trek",
-  "thumb": "thumbs/c7581b5b5ced.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://magic.wizards.com/en/products/star-trek",
-   "key": "mtgstartrektmdraftnighten",
-   "site": "official"
-  }
  },
  {
   "id": "i9d9e1d5f63",
@@ -2023,7 +1983,7 @@
   "id": "i536c3dfaaf",
   "date": "2026-11-27",
   "game": "ポケモンカード",
-  "name": "ポケモンカードゲーム MEGA 拡張パック「ハドウシーカー」",
+  "name": "拡張パック「ハドウシーカー」",
   "pack": "200円",
   "box": "4,000円",
   "url": "https://www.pokemon-card.com/ex/m7/",
@@ -2149,6 +2109,46 @@
   },
   "official_name": "ブースターパックvol.7「鳴動の因果」",
   "per_pack": 7
+ },
+ {
+  "id": "i0664b4b5f6",
+  "date": "2026-12-04",
+  "game": "MTG",
+  "name": "MTG Star Trek™ Beam Me Up Bundle EN",
+  "pack": "15,180円",
+  "box": "",
+  "url": "https://magic.wizards.com/en/products/star-trek",
+  "thumb": "thumbs/4fb1d18ffe85.jpg",
+  "approx": false,
+  "sources": [
+   "clabo",
+   "official"
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000312",
+   "key": "マジック:ザ・ギャザリング|スター・トレックbeammeupbundle",
+   "site": "official"
+  },
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック Beam Me Up Bundle"
+ },
+ {
+  "id": "iced9705939",
+  "date": "2026-12-04",
+  "game": "MTG",
+  "name": "MTG Star Trek™ Draft Night EN",
+  "pack": "18,128円",
+  "box": "",
+  "url": "https://magic.wizards.com/en/products/star-trek",
+  "thumb": "thumbs/c7581b5b5ced.jpg",
+  "approx": false,
+  "sources": [
+   "clabo"
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgstartrektmdraftnighten",
+   "site": "official"
+  }
  },
  {
   "id": "i1466e59a49",
@@ -2342,7 +2342,8 @@
    "key": "スタートデッキウマ娘プリティーダービー",
    "site": "official"
   },
-  "official_name": "スタートデッキ ウマ娘 プリティーダービー"
+  "official_name": "スタートデッキ ウマ娘 プリティーダービー",
+  "per_pack": 50
  },
  {
   "id": "i95d50f07ba",
@@ -3371,7 +3372,7 @@
   "game": "遊戯王OCG",
   "name": "PRIDE AND SOUL",
   "pack": "198円",
-  "box": "990円",
+  "box": "",
   "url": "",
   "thumb": "",
   "approx": false,
@@ -3407,26 +3408,6 @@
   "official_name": "MEMORIES PACK「反律」",
   "per_box": 10,
   "per_pack": 10
- },
- {
-  "id": "ib3e955f71b",
-  "date": "2027-01-29",
-  "game": "MTG",
-  "name": "『ノークティス：深淵の水府』プレリリース・パック",
-  "pack": "",
-  "box": "",
-  "url": "",
-  "thumb": "thumbs/c1dfe7426d36.jpg",
-  "approx": false,
-  "sources": [
-   "official"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "『ノークティス:深淵の水府』プレリリース・パック",
-   "site": "official"
-  },
-  "official_name": "『ノークティス：深淵の水府』プレリリース・パック"
  },
  {
   "id": "ic552b32330",
@@ -3918,28 +3899,6 @@
   "per_box": 10
  },
  {
-  "id": "i02fc1a6222",
-  "date": "2027-02-12",
-  "game": "Flesh and Blood",
-  "name": "疫禍襲来",
-  "pack": "",
-  "box": "5,760円",
-  "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/obk/",
-  "thumb": "thumbs/b8e04084747e.jpg",
-  "approx": false,
-  "sources": [
-   "official"
-  ],
-  "source": {
-   "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/obk",
-   "key": "疫禍襲来",
-   "site": "official"
-  },
-  "official_name": "疫禍襲来",
-  "per_pack": 9,
-  "per_box": 24
- },
- {
   "id": "id799a8a6eb",
   "date": "2027-02-12",
   "game": "Flesh and Blood",
@@ -4313,7 +4272,7 @@
   "id": "i67a22c2de1",
   "date": "2027-03-12",
   "game": "UNION ARENA",
-  "name": "ブースターパック 涼宮ハルヒの憂鬱【UA63BT】",
+  "name": "涼宮ハルヒの憂鬱【UA63BT】",
   "pack": "385円",
   "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/shs-1.php",

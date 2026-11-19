@@ -25,7 +25,8 @@
  },
  "i0664b4b5f6": {
   "_name": "MTG Star Trek™ Beam Me Up Bundle EN",
-  "url": "https://magic.wizards.com/en/products/star-trek"
+  "url": "https://magic.wizards.com/en/products/star-trek",
+  "date": "2026-12-04"
  },
  "i4650ed04ab": {
   "_name": "MTG Star Trek™ Bundle EN",
@@ -37,7 +38,8 @@
  },
  "iced9705939": {
   "_name": "MTG Star Trek™ Draft Night EN",
-  "url": "https://magic.wizards.com/en/products/star-trek"
+  "url": "https://magic.wizards.com/en/products/star-trek",
+  "date": "2026-12-04"
  },
  "i9d9e1d5f63": {
   "_name": "MTG Star Trek™ Scene Box EN",
@@ -201,5 +203,18 @@
   "_name": "ブースターパック第3弾「果てなき飛翔」",
   "date": "2027-01-30",
   "note": "Official delay announcement 2026-11-06: 2027-01-29 -> 2027-01-30. https://palworld-official-cardgame.com/news/post-bp03postponing"
+ },
+ "icc24693566": {
+  "_name": "PRIDE AND SOUL",
+  "box": ""
+ },
+ "ib3e955f71b": {
+  "_name": "『ノークティス：深淵の水府』プレリリース・パック",
+  "hide": true
+ },
+ "i02fc1a6222": {
+  "_name": "疫禍襲来",
+  "hide": true,
+  "note": "Duplicate of id799a8a6eb (疫禍襲来 ブースターパック)."
  }
 }

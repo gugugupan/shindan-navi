@@ -1,17 +1,16 @@
 # データ更新レポート 2026-11-19
 
 - カードラボ 146件 / トレカの地図 44件 → 統合 172件
-- items.json: 207件 → 210件
+- items.json: 210件 → 208件
 
 ## 新規（0）
 
 - なし
 
-## 公式サイトから追加（3）
+## 公式サイトから追加（2）
 
 - 2027-01-29  [MTG] 『ノークティス：深淵の水府』プレリリース・パック
-- 2027-01-29  [KAMITSUBAKI] MEMORIES PACK「反律」 700円
-- 2027-04-02  [Flesh and Blood] マスタリーパック：野人 ブースターボックス
+- 2027-02-12  [Flesh and Blood] 疫禍襲来
 
 ## 公式にあるが既存と似ている（未追加・要確認：別商品なら手動で追加、同じなら対応不要）（0）
 
@@ -21,47 +20,21 @@
 
 - なし
 
-## 公式と既存で発売日が大きく違う（未適用・要確認）（1）
+## 公式と既存で発売日が大きく違う（未適用・要確認）（0）
 
-- [MTG] MTG Star Trek™ Beam Me Up Bundle EN  既存 2026-11-13 / 公式 2026-12-04  https://mtg-jp.com/products/0000312/
+- なし
 
-## 価格の変更（1）
+## 価格の変更（0）
 
-- [Flesh and Blood] フレッシュ＆ブラッド 日本語版 アーモリーデッキ 「モーティマー博士」  pack: 3,500円 → 3,850円
+- なし
 
-## BOX情報の追加（5）
+## BOX情報の追加（2）
 
-- 2026-12-19  [デュエル・マスターズ] DM26-RP4 デュエル・マスターズTCG 逆札篇 第４弾 邪神vs邪神Ⅲ ～ピース・オブ・ジ・アビス～: 5枚入り / 30パック入り
-- 2027-01-29  [リセ] リセ オーバーチュア Ver.シルキーズプラス1.0 ブースターパック: BOX 7,260円（363円×20）
-- 2027-02-27  [ラブライブ！OCG] Anniversaryデッキ vol.2 Deep Flowers: 3枚入り
-- 2027-03-27  [バトルスピリッツ] [26RSD14]ドリームスターター 3人の馬神: 60枚入り
-- 2027-01-29  [KAMITSUBAKI] MEMORIES PACK「反律」: BOX 7,000円（700円×10）
+- 2026-12-11  [UNION ARENA] UNION ARENA スタートデッキ ウマ娘 プリティーダービー【UA59ST】: 50枚入り
+- 2027-02-12  [Flesh and Blood] 疫禍襲来: 9枚入り / 24パック入り / BOX 5,760円
 
-## 画像を取得/差し替え（35）
+## 画像を取得/差し替え（10）
 
-- [ポケモンカード] 拡張パック「ハドウシーカー」
-- [ONE PIECE] EAST BLUE【EB-06】
-- [ONE PIECE] ブースターパック 応答せよ、世界【OP-19】（公式）
-- [MTG] ノークティス：深淵の水府 ブースターパック（公式）
-- [MTG] ノークティス：深淵の水府 コレクター・ブースター（公式）
-- [MTG] ノークティス：深淵の水府 コマンダー・デッキ「マーフォーク連隊」（公式）
-- [MTG] ノークティス：深淵の水府 コマンダー・デッキ「深海底の恐怖」（公式）
-- [MTG] ノークティス：深淵の水府 コマンダー・デッキ「海に漂う血」（公式）
-- [MTG] ノークティス：深淵の水府 コマンダー・デッキ「取引上手なアザラシ」（公式）
-- [MTG] ノークティス：深淵の水府 Premium Edition Commander Deck「Merfolk Regiment」（公式）
-- [MTG] ノークティス：深淵の水府 Premium Edition Commander Deck「Terrors of the Abyss」（公式）
-- [MTG] ノークティス：深淵の水府 Premium Edition Commander Deck「Blood in the Water」（公式）
-- [MTG] ノークティス：深淵の水府 Premium Edition Commander Deck「Seal the Deal」（公式）
-- [MTG] ノークティス：深淵の水府 Bundle（公式）
-- [MTG] ノークティス：深淵の水府 Secret Lair Bundle（公式）
-- [デュエル・マスターズ] DM26-RP4 デュエル・マスターズTCG 逆札篇 第４弾 邪神vs邪神Ⅲ ～ピース・オブ・ジ・アビス～（公式）
-- [ヴァイスシュヴァルツ] ブースターパック MyGO!!!!! × Ave Mujica Vol.2（公式）
-- [ヴァイスシュヴァルツ] WSR ブースターパック ゆずソフト Vol.2（公式）
-- [バトルスピリッツ] バトルスピリッツ コラボスターター アイカツ！ スタンダードステージ！【26RSD12】（公式）
-- [バトルスピリッツ] バトルスピリッツ コラボブースター アイカツ！ 新たなる煌めき【26RCB02】（公式）
-- [バトルスピリッツ] バトルスピリッツ アニメスターター 蒼風の剣豪【26RSD11】（公式）
-- [UNION ARENA] ブースターパック 涼宮ハルヒの憂鬱【UA63BT】（公式）
-- [デジモン] デジモンカードゲーム エクストラブースター MALEVOLENT VII【EX-14】（公式）
 - [DIVINE CROSS] 麻雀一番街 Vol.1 ブースターパック 公式画像の取得に失敗: 'ascii' codec can't encode characters in position 35-39: ordinal not in range(128)
 - [DIVINE CROSS] さわらないで小手指くん Vol.1 ブースターパック 公式画像の取得に失敗: 'ascii' codec can't encode characters in position 35-45: ordinal not in range(128)
 - [DIVINE CROSS] 悶えてよ、アダムくん Vol.1ブースターパック 公式画像の取得に失敗: 'ascii' codec can't encode characters in position 35-43: ordinal not in range(128)
@@ -70,17 +43,16 @@
 - [DIVINE CROSS] ファンタジスタ明日翔 Vol.1 ブースターパック 公式画像の取得に失敗: 'ascii' codec can't encode characters in position 35-44: ordinal not in range(128)
 - [DIVINE CROSS] 諦観のイヴ・ベセル Vol.1 ブースターパック 公式画像の取得に失敗: 'ascii' codec can't encode characters in position 35-42: ordinal not in range(128)
 - [DIVINE CROSS] 機動警察パトレイバー 劇場版 ブースターパック 公式画像の取得に失敗: 'ascii' codec can't encode characters in position 35-44: ordinal not in range(128)
-- [FFTCG] アニバーサリーコレクションセット2027（公式）
 - [ファンスターズリーグ] プロ野球 ファンスターズリーグ ブースターパック パ・リーグ 2026 Vol.4（公式）
 - [ファンスターズリーグ] プロ野球 ファンスターズリーグ ブースターパック セ・リーグ 2026 Vol.4（公式）
-- [リセ] リセ オーバーチュア Ver.シルキーズプラス1.0 ブースターパック（公式）
 
-## 公式サイトで確認できなかった今後の商品（公式を設定済みのタイトルのみ）（9）
+## 公式サイトで確認できなかった今後の商品（公式を設定済みのタイトルのみ）（10）
 
 - 2026-11-25  [DIVINE CROSS] DIVINE CROSS スペシャルセット 2026年 夏 りっく☆じあ〜す
 - 2026-11-25  [DIVINE CROSS] DIVINE CROSS スペシャルセット 2026年 夏 刹那にかける恋はなび
 - 2026-11-25  [DIVINE CROSS] DIVINE CROSS ワナクリ２
 - 2026-12-04  [KAMITSUBAKI] KAMITSUBAKI CARD GAME スターターデッキ デラックスセット
+- 2026-12-04  [MTG] MTG Star Trek™ Draft Night EN
 - 2026-12-11  [UNION ARENA] UNION ARENA NEW CARD SELECTION 僕のヒーローアカデミア
 - 2027-01-15  [ウルトラマン] ウルトラマン カードゲーム ブースターパック10「進め銀河の果てまでも」【BP10】
 - 2027-02-05  [MTG] ノークティス：深淵の水府 Draft Night
@@ -107,7 +79,7 @@
 - [デジモン] デジモンカードゲーム PREMIUM BATTLE SET Ver. Royal Knights【PB-27】 — 2027年3月  https://digimoncard.com/products/
 - [デジモン] デジモンカードゲーム TAMER’S SELECTION BOX Ver.X Antibody【PB-26】 — 2027年1月発送予定  https://digimoncard.com/products/
 
-## ソースから消えた今後の商品（残しています。不要なら overrides で hide）（56）
+## ソースから消えた今後の商品（残しています。不要なら overrides で hide）（59）
 
 - 2026-11-20  [ヴァンガード] スペシャルシリーズ「Stride Deckset Ahsha PREMIUM(ストライド デッキセット アーシャ プレミアム)」
 - 2026-11-20  [ヴァンガード] スペシャルシリーズ「Stride Deckset Altmile PREMIUM(ストライド デッキセット アルトマイル プレミアム)」
@@ -132,6 +104,8 @@
 - 2027-01-15  [ヴァイスシュヴァルツ] トライアルデッキ AEW：Forbidden Door
 - 2027-01-15  [ヴァイスシュヴァルツ] トライアルデッキ 新日本プロレス：Forbidden Door
 - 2027-01-22  [FFTCG] アニバーサリーコレクションセット2027
+- 2027-01-29  [KAMITSUBAKI] MEMORIES PACK「反律」
+- 2027-01-29  [MTG] 『ノークティス：深淵の水府』プレリリース・パック
 - 2027-01-29  [Shadowverse EVOLVE] ブースターパック「舞い踊る六華」
 - 2027-01-29  [リセ] リセ オーバーチュア Ver.シルキーズプラス1.0 ブースターパック
 - 2027-01-30  [パルワールド] ブースターパック第3弾「果てなき飛翔」
@@ -164,6 +138,7 @@
 - 2027-03-26  [FFTCG] 英雄の交響曲（Symphony of Heroes） ブースターパック 日本語版
 - 2027-03-26  [FFTCG] 英雄の交響曲（Symphony of Heroes） ブースターパック 英語版
 - 2027-03-27  [バトルスピリッツ] [26RSD14]ドリームスターター 3人の馬神
+- 2027-04-02  [Flesh and Blood] マスタリーパック：野人 ブースターボックス
 - 2027-04-17  [ガンダム] Unicorn Awakening [ST15]
 
 ## 発売から30日を過ぎて削除（0）
@@ -256,7 +231,6 @@
 - listing https://lycee-tcg.com/product/: 1 entries, opening 1 set pages: Ver.シルキーズプラス1.0
 - lycee listing https://lycee-tcg.com/product/: 2 entries
 - official onepiece: 5 supplies/accessories not added
-- official mtg: 「マジック：ザ・ギャザリング | スター・トレック Beam Me Up Bundle」 = 「MTG Star Trek™ Beam Me Up Bundle EN」 (2026-11-13) by source identity
 - official yugioh: 2 supplies/accessories not added
 - official vanguard: 17 supplies/accessories not added
 - official gundam: 4 supplies/accessories not added
@@ -267,13 +241,14 @@
 - official palworld: skipped duplicate 「ブースターパック第3弾「果てなき飛翔」 1ボックス」 = 「ブースターパック第3弾「果てなき飛翔」」
 - official palworld: 1 supplies/accessories not added
 - official fab: skipped duplicate 「シルバーエイジ：疫禍襲来」 = 「シルバーエイジ：疫禍襲来 構築済みデッキ」
+- official fab: skipped duplicate 「マスタリーパック：野人」 = 「マスタリーパック：野人 ブースターボックス」
 - official lycee: skipped duplicate 「Ver.シルキーズプラス1.0」 = 「リセ オーバーチュア Ver.シルキーズプラス1.0 ブースターパック」
 - official cost (collect): jev 34 calls 77357+17918 tok $0.0000, openrouter 74 calls 374716+57513 tok $0.1799
-- official cost (match): jev 16 calls 50749+6960 tok $0.0000, openrouter 2 calls 833+210 tok $0.0005
+- official cost (match): jev 1 calls 498+37 tok $0.0000
 - box info: VG-DZ-SS20 スペシャルシリーズ Stride Deckset Altmile https://cf-vanguard.com/products/booster/dz-ss20/ FAILED <HTTPError 404: 'Not Found'>
 - box info: VG-DZ-SS21 スペシャルシリーズ Stride Deckset Ahsha https://cf-vanguard.com/products/booster/dz-ss21/ FAILED <HTTPError 404: 'Not Found'>
 - box info: VG-DZ-SS22 ランダムマスターデッキ 26人の先導者 https://cf-vanguard.com/products/booster/dz-ss22/ FAILED <HTTPError 404: 'Not Found'>
 - box info: 遊戯王 THE CHRONICLES DECK DX マギストス https://yu-gi-oh.jp/news/oid-2588/ FAILED <HTTPError 403: 'Forbidden'>
 - box info: Yu-GI-Oh! THE DARK SIDE OF DIMENSIONS 10th ANNIVERSARY MOVIE BOX https://yu-gi-oh.jp/news/3gvviz282ko/ FAILED <HTTPError 403: 'Forbidden'>
 - box info: プレミアムエクストラブースター 夢の一枚【PEB-01】 https://www.onepiece-cardgame.com/products/per01.html FAILED <HTTPError 404: 'Not Found'>
-- box info: 57 product pages read, 5 items filled, 6 failed
+- box info: 55 product pages read, 2 items filled, 6 failed
