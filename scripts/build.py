@@ -170,10 +170,24 @@ BUILD_EVENTS=os.environ.get('BUILD_EVENTS','1')!='0'
 TOOLS=[('/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
        ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>'))]
 if not BUILD_EVENTS: TOOLS=[t for t in TOOLS if t[0]!='/events/']
+# Login UI (user control in the corner, sync wording in the legends, LOGIN parts of /privacy/): LOGIN_ENABLED=1, a repo
+# variable passed to the Worker build only; always off with BUILD_EVENTS=0 (no Worker behind that build).
+LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
+def flags(src):
+    for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED)):
+        src=re.sub(rf'<!--{tag}-->(.*?)<!--/{tag}-->\n?',(lambda m:m.group(1)) if keep else '',src,flags=re.S)
+    return src
 def tooltabs(tool):
     if len(TOOLS)<2: return ''
     return '<nav class="tooltabs" aria-label="ツール">'+''.join(
         f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}<span class="tl">{b}</span></span></a>' for p,a,b,ic in TOOLS)+'</nav>'
+CORNER_SRC=open(os.path.join(ROOT,'src/corner.html')).read()
+def corner(tool):
+    # top-right corner of every page: product switch, settings, user (src/corner.html)
+    return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
+def siterow(cur):
+    cur_=lambda p:' aria-current="page"' if cur==p else ''
+    return f'<div><b>新弾ナビ</b><a href="/"{cur_("/")}>トップ（全タイトル）</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a></div>'
 def toolrow(cur):
     if len(TOOLS)<2: return ''
     return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{a}{b}</a>' for p,a,b,ic in TOOLS)+'</div>'
@@ -181,7 +195,7 @@ def toolrow(cur):
 def sitenav(cur):
     g=''.join(f'<a href="/{s}/"{" aria-current=\"page\"" if cur==f"/{s}/" else ""}>{esc(short)}</a>' for s,k,n,short in GAMES if k in used)
     m=''.join(f'<a href="/{ym}/"{" aria-current=\"page\"" if cur==f"/{ym}/" else ""}>{mlabel(ym)}</a>' for ym in months)
-    return f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(cur)}<div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div><div><b>新弾ナビ</b><a href="/"{" aria-current=\"page\"" if cur=="/" else ""}>トップ（全タイトル）</a></div></nav>'
+    return f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(cur)}<div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div>{siterow(cur)}</nav>'
 
 GA=''
 if GA_ID:
@@ -242,13 +256,13 @@ def render(pg):
 {GA}
 <style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
 """
-    page=template.replace('/*PAGE*/null',json.dumps(pg['js'],ensure_ascii=False) if pg['js'] else 'null')
+    page=flags(template).replace('/*PAGE*/null',json.dumps(pg['js'],ensure_ascii=False) if pg['js'] else 'null')
     crumbs=''
     if pg['crumbs']:
         crumbs='<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in pg['crumbs'])+'</nav>'
     page=page.replace('<!--PAGEHEAD-->',f'{crumbs}<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p>{esc(pg["lead"])}</p></div>')
     page=page.replace('<!--SEOLIST-->',pg['list']).replace('<!--SITENAV-->',sitenav(pg['path']))
-    page=page.replace('<!--NAV_TOOLBAR-->',tooltabs('/'))
+    page=page.replace('<!--CORNER-->',corner('/'))
     page=re.sub(r'<title>.*?</title>\n?','',page,count=1)
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
@@ -261,13 +275,13 @@ EVENTS_PAGE=dict(path='/events/',og='events',
     keywords=['TCG イベント','トレカ 大会','店舗大会','ジムバトル','交流会','体験会','ワンピカード 大会','ユニアリ 大会','コナンカード 大会','ポケカ 大会','イベントカレンダー'],
     h1='TCG イベントカレンダー',lead='店舗大会・交流会・体験会を開催日・都道府県・イベント形式で探せます。',js=None)
 def render_events():
-    src=open(os.path.join(ROOT,'src/events.html')).read()
+    src=flags(open(os.path.join(ROOT,'src/events.html')).read())
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY))):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
-    src=src.replace('<!--NAV_TOOLBAR-->',tooltabs('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}</nav>')
+    src=src.replace('<!--CORNER-->',corner('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}{siterow("/events/")}</nav>')
     title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
     pg=EVENTS_PAGE
@@ -311,7 +325,6 @@ def render_events():
 
 # Privacy policy (/privacy/). PRIVACY_EFFECTIVE is set by hand when a revision goes live; the page lists it as 制定日.
 PRIVACY_EFFECTIVE='2026-11-20'
-LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
 PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
     desc='新弾ナビのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
 def render_privacy():
@@ -319,12 +332,11 @@ def render_privacy():
     if LOGIN_ENABLED and 'data-owner-fill' in src:
         sys.exit('src/privacy.html still has owner placeholders (data-owner-fill): fill them before building with LOGIN_ENABLED=1')
     src=re.sub(r'\A<!--.*?-->\n','',src,count=1,flags=re.S)
-    for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED)):
-        src=re.sub(rf'<!--{tag}-->(.*?)<!--/{tag}-->\n?',(lambda m:m.group(1)) if keep else '',src,flags=re.S)
+    src=flags(src)
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
     e=jd(PRIVACY_EFFECTIVE); eff=f'<time datetime="{PRIVACY_EFFECTIVE}">{e.year}年{e.month}月{e.day}日</time>'
-    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--NAV_TOOLBAR-->',tooltabs(None)),('<!--SITENAV-->',sitenav(None))):
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/privacy/'))):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--EFFECTIVE-->',eff)
@@ -387,4 +399,4 @@ if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
-print('pages',len(pages),'| events page',BUILD_EVENTS,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+print('pages',len(pages),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)

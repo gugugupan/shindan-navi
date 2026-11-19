@@ -200,10 +200,42 @@ dialog::backdrop{background:rgb(10 12 20 / .5)}
 .daytoggle .lbl{flex:1;min-width:0}
 .pastbtn{width:100%;border:1px dashed var(--line);background:none;border-radius:10px;padding:10px;color:var(--muted);font-weight:700;font-size:13px}
 
+/* corner (src/corner.html): product switch, settings, user; the right end of the logo row */
+.next{margin-right:auto}
+.corner{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
+.cmenu{position:relative;display:flex}
+.cbtn{flex:none;display:inline-grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--line);background:var(--surface);border-radius:8px;color:var(--muted)}
+.cbtn:hover,.cbtn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent)}
+.cpop{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:230px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgb(0 0 0 / .18);padding:8px;display:grid;gap:2px}
+.cpop-h{margin:2px 6px 6px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.cpop-user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);letter-spacing:0;padding-bottom:8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.mi{display:block;width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700}
+.mi:hover{background:var(--surface-2)}
+.mi.danger{color:var(--sun)}
+.themeseg{display:flex}
+.themeseg button{flex:1;justify-content:center}
+.themeseg button[aria-checked="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0 / .12)}
+.loginbtn{flex:none;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:13px;text-decoration:none;white-space:nowrap}
+.loginbtn:hover{filter:brightness(1.1)}
+.cbtn.avatar{border-radius:50%;overflow:hidden}
+.av{width:100%;height:100%;object-fit:cover;display:grid;place-items:center;border-radius:50%}
+.av.ini{background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:14px}
+.av.sm{width:26px;height:26px;flex:none;font-size:12px}
+.acctdlg{width:min(440px,calc(100vw - 32px))}
+.acct-sec{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.acct-sec h3{margin:0;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.acct-sec>div{display:flex}
+.acct-who{align-items:center;gap:10px}
+.acct-who .av{width:40px;height:40px;flex:none}
+.acct-who b{display:block;font-size:14px}
+.acct-who small{display:block;font-size:11.5px;color:var(--muted)}
+.acct-note{margin:0;font-size:12px;color:var(--muted)}
+.acct-note a{color:var(--accent)}
+.acct-msg{margin:0;font-size:12.5px;color:var(--sun);font-weight:700}
+.acct-msg:empty{display:none}
+.sbtn:disabled{opacity:.4;cursor:default}
+
 /* star / favourites */
-.hright{display:flex;align-items:center;gap:8px;min-width:0}
-.themebtn{flex:none;display:inline-grid;place-items:center;width:34px;height:34px;padding:0;margin-left:auto;border:1px solid var(--line);background:var(--surface);border-radius:8px;color:var(--muted)}
-.themebtn:hover{border-color:var(--accent);color:var(--accent)}
 .pkw{position:relative}
 .pkw .pk{width:100%}
 .pkw{border:1px solid transparent;border-radius:9px}
@@ -280,12 +312,11 @@ tbody tr.starred td.nm{font-weight:700}
 .sitenav a[aria-current]{color:var(--ink);font-weight:700}
 
 /* tool tabs: in the toolbar on desktop, a bar fixed to the bottom of the screen on phones */
-.tooltabs{display:inline-flex;flex:none;gap:2px;margin-left:auto;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:9px}
+.tooltabs{display:inline-flex;flex:none;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:9px}
 .tooltabs a{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;border-radius:7px;font-weight:700;font-size:13px;color:var(--muted);text-decoration:none;white-space:nowrap}
 .tooltabs a:hover{color:var(--accent);background:var(--surface-2)}
 .tooltabs a[aria-current]{background:var(--accent);color:var(--accent-ink)}
 .tooltabs svg{width:16px;height:16px;flex:none}
-.tooltabs+.themebtn{margin-left:0}
 .panel>.row{flex-wrap:nowrap}
 @media (max-width:1100px){.tooltabs a{padding:0 10px}.tooltabs .tl{display:none}}
 @media (max-width:900px){.seg button{padding:0 9px}.seg button span{display:none}}
@@ -304,7 +335,10 @@ tbody tr.starred td.nm{font-weight:700}
   .next .lbl{font-size:10px;letter-spacing:.04em}
   .next .main{font-size:12.5px}
   .next .gs,.next .dots{display:none}
-  .themebtn{height:32px;width:32px}
+  .cbtn{height:32px;width:32px}
+  .corner{gap:6px}
+  .loginbtn{height:32px;width:32px;padding:0;justify-content:center}
+  .loginbtn span{display:none}
   .starbtn{display:inline-grid}
   .panel>.row{gap:4px}
   .seg button{padding:0 6px}
@@ -314,7 +348,7 @@ tbody tr.starred td.nm{font-weight:700}
   .seg button{padding:0;width:30px;height:30px;justify-content:center;color:var(--ink)}
   .seg button[aria-pressed="true"]{display:none}
   .month b{min-width:0}
-  .filterbtn,.starbtn,.themebtn{width:30px;flex:none}
+  .filterbtn,.starbtn{width:30px;flex:none}
   .filterbtn{padding:0;justify-content:center}
   .starbar{padding:10px 12px;border-radius:12px}
   .sb-act{width:100%;flex-wrap:wrap}
@@ -402,8 +436,9 @@ tbody tr.starred td.nm{font-weight:700}
   .tooltabs a[aria-current]{background:none;color:var(--accent)}
   .tooltabs svg{width:20px;height:20px}
   .tooltabs .tl{display:inline}
-  .tooltabs+.themebtn{margin-left:auto}
 }
+/* too narrow for logo, next-release card and corner in one row: the card takes its own row */
+@media (max-width:359px){header.top:has(>.next){flex-wrap:wrap;row-gap:8px}.next{order:3;flex:1 1 100%;margin-right:0}}
 @media (prefers-reduced-motion:no-preference){.pk,.chip,.ib{transition:border-color .12s,opacity .12s}}
 </style>
 
@@ -411,6 +446,7 @@ tbody tr.starred td.nm{font-weight:700}
   <header class="top">
     <a class="brand" href="/" aria-label="新弾ナビ トップへ"><svg viewBox="0 0 288.6 84" aria-hidden="true" focusable="false"><g transform="scale(1.3125)"><g transform="translate(5 -1) rotate(13 32 32)"><rect x="17" y="10" width="30" height="44" rx="3.5" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2.2"/></g><g transform="translate(-3 1) rotate(-8 32 32)"><path d="M16 11l2.67-3 2.67 3 2.67-3 2.66 3 2.67-3 2.67 3 2.66-3 2.67 3 2.67-3 2.66 3 2.67-3 2.67 3v44l-2.67 3-2.67-3-2.66 3-2.67-3-2.67 3-2.66-3-2.67 3-2.67-3-2.66 3-2.67-3-2.67 3-2.67-3z" fill="var(--accent)"/><path d="M16 16h32M16 50h32" stroke="var(--surface)" stroke-opacity=".4" stroke-width="1.4" stroke-dasharray="2 2.4"/><path d="M32 18.5L35.6 29.4 46 33 35.6 36.6 32 47.5 28.4 36.6 18 33 28.4 29.4z" fill="var(--foil)"/><path d="M32 18.5L35.6 29.4 32 33z M46 33L35.6 36.6 32 33z M32 47.5L28.4 36.6 32 33z M18 33L28.4 29.4 32 33z" fill="var(--foil-hi)"/><circle cx="32" cy="33" r="1.9" fill="var(--accent)"/></g></g><path d="M140.95 37.675V46.724999999999994H139.6V63.575H130.35V46.724999999999994H128.4Q128.25 51.775 127.6 56.125Q126.95 60.475 125.55000000000001 64.175Q123.05 63.175 120.375 62.45Q117.7 61.725 115.4 61.425Q117.2 58.575 118.025 55.825Q118.85 53.075 119.07499999999999 49.9Q119.3 46.724999999999994 119.3 41.125Q119.3 32.625 119.05 26.525H120.9Q128.0 26.475 132.175 26.3Q136.35 26.125 140.9 25.474999999999994Q140.5 28.725 140.5 36.075Q136.4 36.325 133.3 36.325Q132.05 36.325 128.45 36.224999999999994V37.675ZM114.5 59.875Q114.0 59.325 113.1 58.225L111.3 56.075V63.875H100.9V57.775Q100.3 59.375 99.19999999999999 61.4Q98.1 63.425 97.85 63.875Q96.9 61.225 95.9 59.475Q94.9 57.725 92.8 54.825Q95.8 53.175 98.55 50.325H93.4V43.925H100.9V42.825H94.3V35.925H96.85Q96.7 35.275 96.5 34.775H94.3V27.324999999999996H101.3V25.574999999999996H111.85V27.324999999999996H118.1V34.775H116.95Q116.75 35.275 116.6 35.925H118.1V42.825H111.3V43.925H117.9V50.325H113.8Q115.05 50.775 118.4 51.875ZM105.0 34.775 105.15 35.925H108.25L108.45 34.775Z M178.55 52.425H189.0V60.575H178.55V63.775H169.3V60.575H159.55V52.425H169.3V51.375H159.95V29.324999999999996H162.8L162.2 26.074999999999996L169.15 25.224999999999994L169.85 29.324999999999996H171.0L170.2 25.574999999999996L177.1 24.724999999999994L177.9 29.324999999999996H178.45L179.2 25.224999999999994L186.1 26.074999999999996L185.45 29.324999999999996H187.85V51.375H178.55ZM141.5 34.224999999999994V26.225H158.7V42.425H151.65L151.55 43.675H158.7V52.675Q158.7 57.375 158.075 59.725Q157.45 62.075 156.225 62.875Q155.0 63.675 152.75 63.675Q149.1 63.675 142.9 63.325Q142.55 60.425 142.2 58.224999999999994Q141.85 56.025 141.15 53.225Q143.75 53.575 145.65 53.75Q147.55 53.925 149.3 53.925Q149.75 53.925 149.85 53.65Q149.95 53.375 149.95 52.275H141.9L142.75 35.425H149.85V34.224999999999994ZM170.65 35.974999999999994H168.5V37.825H170.65ZM179.3 35.974999999999994H177.15V37.825H179.3ZM170.65 42.974999999999994H168.5V44.825H170.65ZM177.15 42.974999999999994V44.825H179.3V42.974999999999994Z" fill="var(--ink)"/><path d="M236.9 28.775V40.425H227.05Q226.4 47.125 223.65 51.275Q220.1 56.525 213.45 60.0Q206.8 63.475 196.7 64.375Q195.55 61.325 193.95 58.425Q192.35 55.525 189.7 52.175Q198.65 51.975 203.425 50.6Q208.2 49.225 210.8 46.175Q212.75 43.825 213.3 40.425H191.6V28.775H212.75L212.25 25.875H227.05L227.2 28.775Z M282.25 29.174999999999997Q281.2 24.974999999999994 279.15 20.974999999999994L283.5 19.625Q285.6 23.724999999999994 286.65 27.824999999999996ZM276.6 30.924999999999997Q275.35 26.475 273.45 22.724999999999994L277.8 21.375Q279.9 25.474999999999994 280.95 29.574999999999996ZM254.5 50.025Q254.5 51.175 256.175 51.7Q257.85 52.225 261.55 52.225Q265.0 52.225 270.6 51.775000000000006Q276.2 51.325 285.85 50.375Q285.0 52.425 284.525 54.849999999999994Q284.05 57.275 283.65 60.325L283.3 62.525Q277.25 63.175 271.6 63.45Q265.95 63.725 257.95 63.725Q251.55 63.725 248.075 62.7Q244.6 61.675 243.0 58.9Q241.4 56.125 241.4 50.725V27.625H254.5V35.575Q261.95 34.974999999999994 268.2 34.025Q274.45 33.075 280.65 31.424999999999997Q281.45 34.675 282.475 37.4Q283.5 40.125 284.8 43.025Q276.8 44.224999999999994 269.70000000000005 44.925Q262.6 45.625 254.5 46.075Z" fill="var(--accent)"/></svg></a>
     <button class="next" id="next" hidden></button>
+    <!--CORNER-->
   </header>
 
   <div class="bar"><div class="panel">
@@ -427,7 +463,6 @@ tbody tr.starred td.nm{font-weight:700}
       </div>
       <button class="filterbtn" id="filterBtn" aria-expanded="false" aria-controls="filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span>絞り込み</span><em id="filterBadge" hidden></em></button>
       <button class="starbtn" id="starBtn" aria-pressed="false" aria-label="お気に入りだけ表示"><span class="ic">☆</span><em id="starBadge" hidden></em></button>
-      <!--NAV_TOOLBAR--><button class="themebtn" id="themeBtn" aria-label="テーマ切替"></button>
     </div>
     <div class="filters" id="filters">
       <div class="row">
@@ -467,7 +502,7 @@ tbody tr.starred td.nm{font-weight:700}
   <div class="pageinfo"><!--PAGEHEAD--></div>
   <!--SEOLIST-->
   <p class="legend">価格は税込。画像はトレカの地図・公式サイト・通販サイトの商品画像で、「参考画像」はシリーズのキービジュアル等のため実際のパッケージと異なる場合があります。発売日・価格は変更されることがあるので、購入前に公式情報をご確認ください。</p>
-  <p class="legend">お気に入り・表示設定はお使いのブラウザ（localStorage）にのみ保存され、外部には送信されません。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener">Google のポリシー</a> をご覧ください。</p>
+  <p class="legend"><!--NOLOGIN-->お気に入り・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->お気に入り・表示設定はお使いのブラウザ（localStorage）に保存されます。ログインすると、お気に入りなどの設定をアカウントに保存し、ほかの端末と同期します。<!--/LOGIN-->本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
 </div>
 
@@ -885,25 +920,6 @@ function copyStars(btn){
     ta.remove(); done(ok);
   }
 }
-
-const root=document.documentElement;
-const hostTheme=root.getAttribute('data-theme');
-const THEMES=[['auto','自動'],['light','ライト'],['dark','ダーク']];
-let theme=store.get('tcg.theme','auto'); if(!THEMES.some(t=>t[0]===theme)) theme='auto';
-const ICON={auto:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
-  light:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-  dark:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>'};
-function applyTheme(){
-  if(theme==='auto'){ hostTheme?root.setAttribute('data-theme',hostTheme):root.removeAttribute('data-theme'); }
-  else root.setAttribute('data-theme',theme);
-  const b=document.getElementById('themeBtn'), label=THEMES.find(t=>t[0]===theme)[1];
-  b.innerHTML=ICON[theme]; b.setAttribute('aria-label',`テーマ: ${label}`); b.title=`テーマ: ${label}（クリックで切替）`;
-}
-document.getElementById('themeBtn').onclick=()=>{
-  const i=THEMES.findIndex(t=>t[0]===theme); theme=THEMES[(i+1)%THEMES.length][0];
-  store.set('tcg.theme',theme); track('change_theme',{theme}); applyTheme();
-};
-applyTheme();
 
 render();
 </script>

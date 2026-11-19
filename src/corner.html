@@ -1,0 +1,160 @@
+<!--
+  Top-right corner of every page, inserted by build.py at the CORNER slot (styles: "corner" in template.html).
+  Product switch (TOOLS; a bottom tab bar on phones), settings (theme), and with LOGIN_ENABLED the user control.
+  The user control calls /api/v1/me only while the __Host-sn_user cookie is set, so logged-out visitors make no
+  /api calls. It publishes the user as window.snUser (undefined = not known yet, null = logged out) and a
+  "sn:user" event on document whenever that changes.
+-->
+<div class="corner">
+  <!--TOOLTABS-->
+  <div class="cmenu">
+    <button class="cbtn" id="setBtn" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" aria-label="設定" title="設定"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    <div class="cpop" id="setPop" hidden>
+      <p class="cpop-h" id="setThemeH">テーマ</p>
+      <div class="seg themeseg" role="radiogroup" aria-labelledby="setThemeH"><button role="radio" data-theme-v="auto">自動</button><button role="radio" data-theme-v="light">ライト</button><button role="radio" data-theme-v="dark">ダーク</button></div>
+    </div>
+  </div>
+<!--LOGIN-->
+  <div class="cmenu" id="userBox">
+    <a class="loginbtn" id="loginBtn" href="/api/v1/auth/google/start" rel="nofollow" aria-label="ログイン"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>ログイン</span></a>
+    <button class="cbtn avatar" id="userBtn" hidden aria-haspopup="true" aria-expanded="false" aria-controls="userPop" aria-label="アカウント"></button>
+    <div class="cpop" id="userPop" hidden>
+      <p class="cpop-h cpop-user" id="userName"></p>
+      <button class="mi" data-acct="settings">設定</button>
+      <button class="mi" data-acct="logout">ログアウト</button>
+      <button class="mi danger" data-acct="delete">アカウント削除</button>
+    </div>
+  </div>
+  <dialog id="acctDlg" class="acctdlg" aria-labelledby="acctTitle"><div class="dlg">
+    <button class="ib close" id="acctClose" aria-label="閉じる">×</button>
+    <h2 class="dl-day" id="acctTitle">設定</h2>
+    <section class="acct-sec"><h3 id="acctThemeH">テーマ</h3>
+      <div class="seg themeseg" role="radiogroup" aria-labelledby="acctThemeH"><button role="radio" data-theme-v="auto">自動</button><button role="radio" data-theme-v="light">ライト</button><button role="radio" data-theme-v="dark">ダーク</button></div></section>
+    <section class="acct-sec"><h3>アカウント</h3>
+      <div class="acct-who" id="acctWho"></div>
+      <p class="acct-note">お気に入りと絞り込み条件はアカウントに保存され、ログインしたほかの端末と同期します。</p>
+      <div><button class="sbtn ghost" data-acct="logout">ログアウト</button></div></section>
+    <section class="acct-sec acct-del" id="acctDel"><h3>アカウント削除</h3>
+      <p class="acct-note">アカウントと、同期したお気に入り・設定をサーバーからすぐに完全に削除します。元に戻すことはできません。このブラウザに保存されているお気に入りは残ります。</p>
+      <label class="cal-off"><input type="checkbox" id="acctDelOk"> 削除することを確認しました</label>
+      <div><button class="sbtn warn" data-acct="delete-confirm" disabled>アカウントを削除</button></div></section>
+    <p class="acct-msg" id="acctMsg" role="status"></p>
+    <p class="acct-note"><a href="/privacy/">プライバシーポリシー</a></p>
+  </div></dialog>
+<!--/LOGIN-->
+</div>
+<script>
+(function(){
+  const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+  const track=(name,params)=>{ try{ if(window.gtag) window.gtag('event',name,params||{}); }catch(e){} };
+  const $=id=>document.getElementById(id);
+
+  // ---- theme: 自動 follows the system (or the host's data-theme, e.g. OG renders)
+  const root=document.documentElement, hostTheme=root.getAttribute('data-theme');
+  const THEMES=['auto','light','dark'];
+  let theme=ls.get('tcg.theme','auto'); if(!THEMES.includes(theme)) theme='auto';
+  function applyTheme(){
+    if(theme==='auto'){ hostTheme?root.setAttribute('data-theme',hostTheme):root.removeAttribute('data-theme'); }
+    else root.setAttribute('data-theme',theme);
+    document.querySelectorAll('[data-theme-v]').forEach(b=>b.setAttribute('aria-checked',b.dataset.themeV===theme));
+  }
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('[data-theme-v]'); if(!b||b.dataset.themeV===theme) return;
+    theme=b.dataset.themeV; ls.set('tcg.theme',theme); track('change_theme',{theme}); applyTheme();
+  });
+  applyTheme();
+
+  // ---- popover menus (one open at a time; outside click / Escape closes)
+  const menus=[...document.querySelectorAll('.corner [aria-controls][aria-haspopup]')];
+  function closeMenus(except){ menus.forEach(b=>{ if(b!==except){ b.setAttribute('aria-expanded','false'); $(b.getAttribute('aria-controls')).hidden=true; } }); }
+  menus.forEach(b=>b.addEventListener('click',()=>{
+    const open=b.getAttribute('aria-expanded')!=='true'; closeMenus(b);
+    b.setAttribute('aria-expanded',open); $(b.getAttribute('aria-controls')).hidden=!open;
+    if(open){ const f=$(b.getAttribute('aria-controls')).querySelector('[aria-checked="true"],button'); if(f) f.focus(); }
+  }));
+  document.addEventListener('click',e=>{ if(!e.target.closest('.cmenu')) closeMenus(); });
+  document.addEventListener('keydown',e=>{
+    if(e.key!=='Escape') return;
+    const b=menus.find(x=>x.getAttribute('aria-expanded')==='true'); if(b){ closeMenus(); b.focus(); }
+  });
+
+  // ---- user (LOGIN_ENABLED builds only)
+  const box=$('userBox'); if(!box) return;
+  const API='/api/v1', loginBtn=$('loginBtn'), userBtn=$('userBtn'), dlg=$('acctDlg'), msg=$('acctMsg');
+  const hasMark=()=>/(?:^|;\s*)__Host-sn_user=/.test(document.cookie);
+  const clearMark=()=>{ document.cookie='__Host-sn_user=; Max-Age=0; Path=/; Secure; SameSite=Lax'; };
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const face=(u,cls)=>{
+    const ini=esc(((u&&u.display_name)||'?').trim().slice(0,1).toUpperCase());
+    return u&&u.avatar_url ? `<img class="${cls}" src="${esc(u.avatar_url)}" alt="" referrerpolicy="no-referrer" data-ini="${ini}">`
+      : `<span class="${cls} ini">${ini}</span>`;
+  };
+  // a broken avatar URL falls back to the initial
+  box.parentNode.addEventListener('error',e=>{
+    const img=e.target; if(!(img instanceof HTMLImageElement)||!img.dataset.ini) return;
+    const s=document.createElement('span'); s.className=img.className+' ini'; s.textContent=img.dataset.ini; img.replaceWith(s);
+  },true);
+  function show(u){
+    loginBtn.hidden=!!u; userBtn.hidden=!u;
+    if(u===undefined){ userBtn.hidden=false; loginBtn.hidden=true; userBtn.innerHTML='<span class="av ini"></span>'; return; }
+    if(!u){ closeMenus(); if(dlg.open) dlg.close(); return; }
+    userBtn.innerHTML=face(u,'av'); userBtn.setAttribute('aria-label',`アカウント: ${u.display_name||''}`);
+    $('userName').innerHTML=`${face(u,'av sm')}<span>${esc(u.display_name||'')}</span>`;
+    $('acctWho').innerHTML=`${face(u,'av')}<span><b>${esc(u.display_name||'')}</b><small>Google アカウントでログイン中</small></span>`;
+  }
+  function setUser(u){
+    window.snUser=u; show(u);
+    if(u!==undefined) document.dispatchEvent(new CustomEvent('sn:user',{detail:{user:u}}));
+  }
+  const send=(method,path)=>fetch(API+path,{method,credentials:'same-origin',headers:{'content-type':'application/json',accept:'application/json'}});
+
+  loginBtn.addEventListener('click',()=>{
+    loginBtn.href=`${API}/auth/google/start?return=${encodeURIComponent(location.pathname+location.search)}`;
+    track('login');
+  });
+  async function logout(){
+    msg.textContent='';
+    try{
+      const r=await send('POST','/auth/logout');
+      if(!r.ok && r.status!==401) throw new Error(r.status);
+      clearMark(); setUser(null); track('logout');
+    }catch(e){ msg.textContent='ログアウトできませんでした。時間をおいてもう一度お試しください。'; if(!dlg.open) openDlg(); }
+  }
+  async function del(){
+    msg.textContent='';
+    try{
+      const r=await send('DELETE','/me');
+      if(r.status===429) throw new Error('busy');
+      if(!r.ok && r.status!==401) throw new Error(r.status);
+      clearMark(); setUser(null); track('delete_account');
+    }catch(e){ msg.textContent=e.message==='busy'?'混み合っています。1 分ほどおいてもう一度お試しください。':'アカウントを削除できませんでした。時間をおいてもう一度お試しください。'; }
+  }
+  function openDlg(focusDel){
+    closeMenus(); $('acctDelOk').checked=false; dlg.querySelector('[data-acct="delete-confirm"]').disabled=true;
+    if(!dlg.open){ if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open',''); }
+    if(focusDel){ $('acctDel').scrollIntoView({block:'nearest'}); $('acctDelOk').focus(); }
+  }
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('[data-acct]'); if(!b) return;
+    const a=b.dataset.acct;
+    if(a==='settings') openDlg(false);
+    else if(a==='delete') openDlg(true);
+    else if(a==='logout'){ closeMenus(); logout(); }
+    else if(a==='delete-confirm' && $('acctDelOk').checked) del();
+  });
+  $('acctDelOk').addEventListener('change',e=>{ dlg.querySelector('[data-acct="delete-confirm"]').disabled=!e.target.checked; });
+  $('acctClose').onclick=()=>dlg.close();
+  dlg.addEventListener('click',e=>{ if(e.target===dlg) dlg.close(); });
+  dlg.addEventListener('close',()=>{ msg.textContent=''; });
+
+  if(!hasMark()){ setUser(null); return; }
+  setUser(undefined);
+  fetch(API+'/me',{credentials:'same-origin',headers:{accept:'application/json'}}).then(async r=>{
+    if(r.ok){ const j=await r.json(); setUser(j.user); return; }
+    if(r.status===401){ clearMark(); setUser(null); return; }
+    // 404: login is off on this host; 5xx: keep the session, try again on the next page
+    if(r.status===404) clearMark();
+    box.hidden=true; window.snUser=null;
+  }).catch(()=>{ box.hidden=true; window.snUser=null; });
+})();
+</script>
