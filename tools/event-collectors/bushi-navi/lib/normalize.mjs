@@ -156,6 +156,20 @@ export function splitPlace(place, prefName) {
   return { address, postal_code: m ? `${m[1]}-${m[2]}` : null, label };
 }
 
+// The street number ends the address part: 3-11-1, 3番40号, 1丁目20−10, 193番地. What follows is the building.
+const STREET_NUMBER = /^.*?\d+(?:丁目\d+)?(?:(?:[-−‐‑ー]|番地?|号)\d+)*(?:番地|番|号)?\s*/;
+const FLOORS = /B?\d+(?:[,，~〜-]\d+)*\s*(?:F|階)?/gi;
+/** The building / hall part of an address (「東京ビッグサイト 南4ホール」), or null when there is none or only a floor. */
+export function buildingOf(address) {
+  const s = text(address?.normalize('NFKC'));
+  if (s === null) return null;
+  const m = STREET_NUMBER.exec(s);
+  if (!m) return null;
+  const rest = text(s.slice(m[0].length));
+  if (rest === null || text(rest.replace(FLOORS, '')) === null) return null;
+  return rest;
+}
+
 export function sourceUrl(row) {
   return `${SITE_ORIGIN}/series/${row.group.event_series_id}/organizer/${row.group.organizer_id}`;
 }
@@ -175,8 +189,11 @@ export function normalizeEvent(row, gameCode, seenAt) {
   const reg = region(row.pref_code);
   const place = splitPlace(row.place, reg.region_name);
   const official = g.organizer_type === 2;
-  // Official organizers ("ヴァンガード公式") and shops holding an event elsewhere are named by the place.
-  const byPlace = (official || isOffsite(row)) && place.label !== null;
+  // Official organizers ("ヴァンガード公式") are named by the building only (owner decision 2026-11-19), else by the
+  // organizer; shops holding an event elsewhere by the building, else by the address.
+  const building = buildingOf(place.label);
+  const placeName = official ? building : isOffsite(row) ? building ?? place.label : null;
+  const byPlace = placeName !== null;
   const advance = row.is_no_advance_application !== true;
   const url = sourceUrl(row);
   const cap = Number(row.max_join_count);
@@ -196,8 +213,8 @@ export function normalizeEvent(row, gameCode, seenAt) {
     name: seriesTitle ?? series?.label ?? 'イベント',
     attendance_mode: 'in_person',
     venue: organizer === null && place.label === null ? null : {
-      name: byPlace ? place.label : organizer ?? place.label,
-      source_id: byPlace || g.organizer_id == null ? null : String(g.organizer_id),
+      name: byPlace ? placeName : organizer ?? place.label,
+      source_id: byPlace || official || g.organizer_id == null ? null : String(g.organizer_id),
       country_code: 'JP',
       ...reg,
       city: null,

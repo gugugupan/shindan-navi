@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { flattenGroups } from '../lib/collect.mjs';
-import { classify, containsContact, geoFrom, isOffsite, normalizeEvent, parseFee, sortEvents, splitPlace, toJst } from '../lib/normalize.mjs';
+import { buildingOf, classify, containsContact, geoFrom, isOffsite, normalizeEvent, parseFee, sortEvents, splitPlace, toJst } from '../lib/normalize.mjs';
 import { buildOutputs, makeValidators } from '../lib/output.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -97,19 +97,39 @@ test('classify: title rules first, then series_type', () => {
   assert.deepEqual(classify(null, 9), { category: 'tournament', event_type_code: null });
 });
 
-test('official organizers are named by the place, without a shop id', () => {
+test('official organizers are named by the building only, else by the organizer, without a shop id', () => {
   const base = byId(1808563);
-  const e = normalizeEvent({ ...base, group: { ...base.group, organizer_type: 2, organizer_name: 'ヴァイスシュヴァルツ公式' } }, 'WS', SEEN);
-  assert.deepEqual([e.venue.name, e.venue.source_id], ['大館市常盤木町12-24', null]);
+  const official = { ...base, group: { ...base.group, organizer_type: 2, organizer_name: 'ヴァンガード公式' } };
+  const e = normalizeEvent({ ...official, pref_code: 13, place: ' 江東区有明3-11-1\u3000東京ビッグサイト 南4ホール' }, 'VG', SEEN);
+  assert.deepEqual([e.venue.name, e.venue.source_id, e.venue.address], ['東京ビッグサイト 南4ホール', null, '江東区有明3-11-1 東京ビッグサイト 南4ホール']);
+  const plain = normalizeEvent(official, 'VG', SEEN);
+  assert.deepEqual([plain.venue.name, plain.venue.source_id, plain.venue.address], ['ヴァンガード公式', null, '大館市常盤木町12-24']);
 });
 
-test('a shop event held elsewhere is named by the place; postcode and prefecture split off', () => {
+test('buildingOf keeps what follows the street number, not a bare floor', () => {
+  const cases = [
+    ['中野区中野2-9-7\u3000なかのZERO 西館\u30003F', 'なかのZERO 西館 3F'],
+    ['熊本市中央区桜町3番40号 熊本城ホール３F大会議室', '熊本城ホール3F大会議室'],
+    ['大阪市浪速区日本橋3丁目8-16安田ビル2F', '安田ビル2F'],
+    ['名古屋市中村区 椿町11-1\u3000Vプラザ7-10階', 'Vプラザ7-10階'],
+    ['金沢市袋畠町南193番地', null],
+    ['福岡市博多区 博多駅中央街9-1 7階', null],
+    ['金沢市 此花町3-2\u3000B1F', null],
+    ['長野市川中島町 御厨字堂野946-3', null],
+    [null, null],
+  ];
+  for (const [address, building] of cases) assert.equal(buildingOf(address), building, address);
+});
+
+test('a shop event held elsewhere is named by its building, else the address; postcode and prefecture split off', () => {
   const base = byId(1808563);
   const row = { ...base, pref_code: 13, place: '〒170-0013 東京都豊島区東池袋１丁目２０−１０　としま区民センター 504', place_geo: { x: 35.7303, y: 139.7174 } };
   assert.ok(isOffsite(row));
   const e = normalizeEvent(row, 'WS', SEEN);
   assert.deepEqual([e.venue.name, e.venue.source_id, e.venue.address, e.venue.postal_code],
-    ['豊島区東池袋1丁目20−10 としま区民センター 504', null, '東京都豊島区東池袋1丁目20−10 としま区民センター 504', '170-0013']);
+    ['としま区民センター 504', null, '東京都豊島区東池袋1丁目20−10 としま区民センター 504', '170-0013']);
+  const bare = normalizeEvent({ ...row, place: '習志野市津田沼1-3-11 8F' }, 'WS', SEEN);
+  assert.deepEqual([bare.venue.name, bare.venue.source_id], ['習志野市津田沼1-3-11 8F', null]);
   assert.equal(e.venue.geo.lat, 35.7303);
   // 100 m away is the same shop.
   assert.ok(!isOffsite({ ...base, place_geo: { x: base.place_geo.x + 0.0009, y: base.place_geo.y } }));

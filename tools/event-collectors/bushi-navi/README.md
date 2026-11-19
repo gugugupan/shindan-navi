@@ -77,9 +77,12 @@ venue is the shop name. `buildOutputs` refuses contact-like text (mail, TEL, pho
   ブルームカップ `bloom_cup`, 限定構築 `limited_format`, 公認店サポート `shop_support`, ショップ大会 / ショップファイト
   `shop_tournament`; else `tournament` with the `series_type` code: 1 公認イベント `shop_event`, 2 公式イベント
   `official_event`, 3 CS大会 `cs`.
-- `venue`: `name` = `organizer_name`, `source_id` = `organizer_id`. Official organizers (`ヴァンガード公式` …) and
-  shop events whose `place_geo` is 300 m or more from the organizer's own `place_geo` (rented halls, another shop; 21
-  events on 2026-11-19) are named by the place instead (address without postcode and prefecture), `source_id` null.
+- `venue`: `name` = `organizer_name`, `source_id` = `organizer_id`. Official organizers (`ヴァンガード公式` …) are
+  named by the building only, i.e. what follows the street number (「東京ビッグサイト 南4ホール」; owner decision
+  2026-11-19: never the street address), else by the organizer when the place has none or only a floor
+  (`buildingOf`); `source_id` null. Shop events whose `place_geo` is 300 m or more from the organizer's own
+  `place_geo` (rented halls, another shop; 21 events on 2026-11-19) are named by the building too, else by the
+  address without postcode and prefecture; `source_id` null.
   `address` = `place` (usually without prefecture; a leading 〒 code goes to `postal_code`), `region_*` from
   `pref_code`, `geo` = the event's `place_geo` (`source: "bushinavi"`).
 - Times: `start_datetime` is UTC and converted to `+09:00`. `is_start_datetime_hidden` / `is_event_info_hidden` →
