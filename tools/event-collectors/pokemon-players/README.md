@@ -83,7 +83,14 @@ observed, but the site never states the two share one id space. If a collision e
 - `attendance_mode`: `in_person`, except リモートポケカ (attr 4) → `unknown`.
 - `fee_amount`: `無料` / `0円` → 0; plain `N円` / `¥N` → N; anything else (パック購入, conditional prices) → null with `fee_text` kept.
 - `capacity` = list `capacity` (定員). `eligibility_text` = `<オープン|ジュニア|シニア|マスター>リーグ` from `leagueName`, else null.
-- `venue.name` = `venue` when set (then `source_id` null, since `shop_id` is the organizer), else the organizer shop. `city` is null (not a separate source field; not parsed from the address).
+- `venue.name`: the list's `venue` is the organizer's free text (会場), often an address, directions, seat counts or house
+  rules rather than a name. `shop_term` 1 (a shop organizes): the shop name. Otherwise (`shop_term` 2 = a person, whose
+  `shop_name` is a nickname; 大型大会 have none): the first `venue` line that reads as a place (`placeLabel`: no address,
+  directions, notes, floor-only or generic-space lines; `…にて開催` / `様` trailers cut), else `address` without its
+  prefecture (the page shows the prefecture next to the name), else `会場は公式で確認`. Directions and notes are dropped
+  (the detail page has them). `source_id` is null whenever the first `venue` line is usable text (it may describe a place
+  other than the shop), else the `shop_id`; this keeps the geo cache keys. `city` is null (not a separate source field;
+  not parsed from the address).
 - `event_status`: `discontinuance_flg` 1 → `cancelled` (the site shows these as canceled), 0 → `scheduled`.
 - `registration_*`: `unknown`/null. The list has no application state; the site computes 受付中 etc. client-side
   from per-event detail data (entry dates, lottery flags, counts). Fetching ~14k detail pages is out of scope.
@@ -96,5 +103,10 @@ observed, but the site never states the two share one id space. If a collision e
 - Only Japan (the players site is Japan-only).
 - 大型大会 rows (`trainers_flg=0`) have `entry_fee: null` in the list although the detail page can state 無料; they stay `fee_amount: null`.
 - オーガナイザーイベント: the list `event_title` is the organizer's own title (`orgEventTitle`), which is what the detail page shows.
+
+`node renormalize-venues.mjs --data <data/events> --raw out/run-<ts>/raw.json [--write]` re-derives `venue.name` in
+written files from the raw rows of the run that wrote them (no network; refuses a raw file from another run). It keeps
+every other field, geo included, adds a `_run.json` note and copies venue cache entries to the renamed venues' keys.
+Without `--write` it only reports.
 
 `node spotcheck.mjs ptcg:<id> ...` opens detail pages and compares title/date/time/address/zip/fee/capacity/type/cancel flags.

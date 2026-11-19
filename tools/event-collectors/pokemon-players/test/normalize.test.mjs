@@ -146,3 +146,73 @@ test('output refuses contact-like text', () => {
   const e = { ...normalizeEvent(rows[0], SEEN), fee_text: '問合せ someone@example.com' };
   assert.throws(() => buildOutputs([e], {}, validators), /contact-like/);
 });
+
+// Real list rows (2026-11-19 run) whose free-text 会場 was shown as the venue name.
+const shopRow = (over) => ({ ...byId(1169952), shop_term: 1, ...over });
+const REPORTED = [
+  [{ shop_id: 10914, shop_name: 'シゲヤ', venue: '市バス平野宮町2丁目降りて進行方向に歩いて2－3分', address: '大阪府大阪市平野区平野市町3丁目5-14', prefecture_name: '大阪府' }, 'シゲヤ'],
+  [{ shop_id: 10893, shop_name: 'トイコンプ　大阪駅前第3ビル店', venue: '大阪駅前第3ビルの2階！\n毎日ジムバトルやってます！', address: '大阪府大阪市北区梅田1-1-3　2F-21', prefecture_name: '大阪府' }, 'トイコンプ　大阪駅前第3ビル店'],
+  [{ shop_id: 18397, shop_name: 'カードショップJoe', venue: '守口市大枝西町17-15', address: '大阪府守口市大枝西町17-15', prefecture_name: '大阪府' }, 'カードショップJoe'],
+];
+
+test('shop events are named after the shop, not the free-text 会場', () => {
+  for (const [over, name] of REPORTED) {
+    const e = normalizeEvent(shopRow(over), SEEN);
+    assert.equal(e.venue.name, name);
+    assert.equal(e.venue.address, over.address);
+    assert.equal(e.venue.source_id, null); // own free text keeps the fp cache key, as before
+  }
+  const seats = normalizeEvent(byId(1186915), SEEN);
+  assert.equal(seats.venue.name, byId(1186915).shop_name);
+});
+
+test('organizer events: a place line from 会場, else the address, else a pointer to the detail page', async () => {
+  const { VENUE_UNKNOWN } = await import('../lib/normalize.mjs');
+  const org = (over) => ({ ...byId(1168984), shop_term: 2, shop_name: 'ニックネーム', ...over });
+  const name = (over) => normalizeEvent(org(over), SEEN).venue.name;
+  assert.equal(name({ venue: '豊島区巣鴨3-28-7 大木ビル3F\nボードゲームカフェ ASOBAKO', address: '東京都豊島区巣鴨3-28-7 大木ビル3F', prefecture_name: '東京都' }), 'ボードゲームカフェ ASOBAKO');
+  assert.equal(name({ venue: '篠路コミュニティーセンターにて行います。' }), '篠路コミュニティーセンター');
+  assert.equal(name({ venue: '開催会場：ONEポケ\n伊勢崎から店舗移転していますのでご注意ください。' }), 'ONEポケ');
+  assert.equal(name({ venue: 'ホビーステーション 町田店様' }), 'ホビーステーション 町田店');
+  assert.equal(name({ venue: '', address: '茨城県土浦市中神立町18-2', prefecture_name: '茨城県' }), '土浦市中神立町18-2');
+  assert.equal(name({ venue: 'JR茨木駅　東出口より徒歩約２分', address: '大阪府茨木市駅前１丁目３番９号　生田ビル３０１号', prefecture_name: '大阪府' }), '茨木市駅前１丁目３番９号　生田ビル３０１号');
+  assert.equal(name({ venue: 'レンタルスペースなど\nご参加確定後、DMにて公開致しますが、神田駅近辺が多いです。', address: '東京都', prefecture_name: '東京都' }), VENUE_UNKNOWN);
+  assert.equal(normalizeEvent(org({ venue: '' }), SEEN).venue.source_id, String(byId(1168984).shop_id));
+});
+
+test('major tournaments without a shop term use the 会場 text', () => {
+  const row = { ...byId(1169952), shop_term: null, shop_name: null, shop_id: null, venue: '幕張メッセ　展示ホール4・5・6', address: '千葉県千葉市美浜区中瀬2丁目1', prefecture_name: '千葉県' };
+  assert.equal(normalizeEvent(row, SEEN).venue.name, '幕張メッセ　展示ホール4・5・6');
+});
+
+test('placeLabel skips addresses, directions, notes, floors and generic spaces', async () => {
+  const { placeLabel } = await import('../lib/normalize.mjs');
+  for (const s of [
+    '市バス平野宮町2丁目降りて進行方向に歩いて2－3分', '大阪駅前第3ビルの2階！', '守口市大枝西町17-15',
+    '〒652-0897 兵庫県神戸市兵庫区駅南通5丁目4－55', 'さいたま市中央区大字下落合1712', '南海電鉄 難波駅南改札口より徒歩8分',
+    'デュエルスペース（プレイスペース）は3Fとなります。', '対戦スペース 32席', 'デュエルスペース', '2F トレカコーナー',
+    '■注意事項', '無料駐輪場あり（約15台）', '部屋の開場13:00 対戦開始13:30', 'TEL 0000-00-0000',
+  ]) assert.equal(placeLabel(s), null, s);
+  assert.equal(placeLabel('長崎市民会館　6F 第七会議室＋第八会議室'), '長崎市民会館　6F 第七会議室＋第八会議室');
+  assert.equal(placeLabel('東京都豊島区東池袋1-20-10', '東京都豊島区東池袋1-20-10'), null);
+});
+
+test('renameVenues keeps geo and carries the cache entry to the renamed key', async () => {
+  const { renameVenues } = await import('../lib/renormalize.mjs');
+  const { venueKey } = await import('../../lib/venue-cache.mjs');
+  const [[over]] = REPORTED;
+  const row = shopRow(over);
+  const geo = { lat: 34.6, lng: 135.5, source: 'ptcg', precision: null, place_id: null, geocoded_at: null };
+  const old = normalizeEvent(row, SEEN);
+  old.venue.name = over.venue;
+  old.venue.geo = geo;
+  const oldKey = venueKey(old.venue);
+  const cache = { entries: { [oldKey]: { name: over.venue, address: over.address, geo, checked_at: '2026-11-19' } } };
+  const { changes, missing } = renameVenues([old], new Map([[String(row.event_holding_id), row]]), cache);
+  assert.equal(missing, 0);
+  assert.deepEqual(changes.map((c) => c.to), ['シゲヤ']);
+  assert.deepEqual(old.venue.geo, geo);
+  assert.deepEqual(cache.entries[venueKey(old.venue)].geo, geo);
+  assert.equal(cache.entries[venueKey(old.venue)].name, 'シゲヤ');
+  assert.equal(renameVenues([old], new Map([[String(row.event_holding_id), row]]), cache).changes.length, 0);
+});

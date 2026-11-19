@@ -40,9 +40,61 @@ export function containsContact(s) {
   return CONTACT.test(s);
 }
 
+/** First line of the free-text `venue`, unless it carries contact details. Decides `source_id` only. */
 export function venueLabel(raw) {
   const first = (text(raw) ?? '').split(/\r?\n/)[0].trim();
   return first === '' || CONTACT.test(first) ? null : first;
+}
+
+// `shop_term` 1 = the organizer is a shop (shop_name is its name), 2 = a person (shop_name is a nickname);
+// 大型大会 rows have none. The free-text `venue` is whatever the organizer typed in 会場: a place name, but just as
+// often the address, directions, seat counts or house rules.
+const SHOP = 1;
+const DIRECTIONS = /徒歩|歩いて|降りて|下車|改札|出口|駅(?:から|より)|[口駅]から\d|バス|direction/i;
+const SENTENCE = /[。、]|ます|ません|ください|下さい|です|でした|お願い|ご注意|ご確認|ご利用|予定|受付|参加|駐車|定員|席数|\d+席|開店|閉店|毎日|毎週|毎月|詳細|未定|調整中|公開|注意|車で|お越し|お借り|ほど|など|対応|駐輪|場合|販売|あり|完備|\d:\d\d|^[(（]|close/i;
+const FLOOR_ONLY = /^.{0,24}の\d+[階f][!！]*$|^(?:地下)?\d+(?:階|f)/i;
+const ADDRESS = /^〒|^\d{3}-?\d{4}|^(?:北海道|東京都|京都府|大阪府|.{2,3}県)|[市区町村郡].{0,15}?\d+(?:丁目|番地?|号|-\d)|[市区町村郡].{0,15}?字.{0,10}\d+$/;
+const GENERIC = /^(?:店内|店舗内?|当店|自店|デュエルスペース|対戦スペース|対戦席|プレイスペース|フリースペース|イベントスペース|トレカコーナー|カードコーナー|会場|未定|tba)\d*席?$/i;
+// "<place>様にて実施" / "<place>にて開催します。" → "<place>"
+const TRAILER = /\s*(?:様)?(?:の(?:店内|店舗|デュエルスペース|対戦スペース)(?:内)?)?(?:にて|で)(?:行います|行っています|開催(?:します|いたします|致します|予定)?|実施(?:します|いたします|致します)?)[。！!]*$|\s*様$/;
+const fold = (s) => s.normalize('NFKC').replace(/\s+/g, '');
+
+/**
+ * A place name from the organizer's free-text `venue`: the first line that is neither contact details, an address,
+ * directions nor a note. null when no line qualifies.
+ */
+export function placeLabel(raw, address = null) {
+  const addr = fold(address ?? '');
+  for (const line of (text(raw) ?? '').split(/\r?\n/)) {
+    const s = line.trim().replace(/^[■□◆◇●○・◾️※*＊-]+\s*/u, '').replace(/^(?:開催)?会場\s*[:：]\s*/, '').replace(TRAILER, '').replace(/[!！]+$/, '').trim();
+    if (s === '' || CONTACT.test(s)) continue;
+    const f = fold(s);
+    if (f.length > 40 || DIRECTIONS.test(f) || SENTENCE.test(f) || FLOOR_ONLY.test(f) || GENERIC.test(f) || ADDRESS.test(f)) continue;
+    if (f === addr) continue;
+    return s;
+  }
+  return null;
+}
+
+// Shown when an organizer gave neither a usable place name nor an address (the detail page is the reference).
+export const VENUE_UNKNOWN = '会場は公式で確認';
+
+/**
+ * venue.name: the shop for shop-organized events (their free text is notes about the shop), else the place the
+ * organizer named, else the address without its prefecture (the page shows the prefecture next to the name).
+ */
+export function venueName(row) {
+  const shop = text(row.shop_name);
+  const address = text(row.address);
+  if (row.shop_term === SHOP && shop) return shop;
+  const label = placeLabel(row.venue, address);
+  if (label) return label;
+  if (address) {
+    const pref = text(row.prefecture_name);
+    const rest = (pref && address.startsWith(pref) ? address.slice(pref.length) : address).trim();
+    if (rest !== '' && !CONTACT.test(rest)) return rest;
+  }
+  return VENUE_UNKNOWN;
 }
 
 export function eventKey(row) {
@@ -104,7 +156,6 @@ export function normalizeEvent(row, seenAt) {
   const regulation = text(row.regulation);
   const deck = text(row.deck_count);
   const ownVenue = venueLabel(row.venue);
-  const venueName = ownVenue ?? text(row.shop_name);
   const league = text(row.leagueName);
   const external = eventKey(row);
 
@@ -122,8 +173,8 @@ export function normalizeEvent(row, seenAt) {
     },
     name: text(row.event_title) ?? type?.name ?? 'イベント',
     attendance_mode: attr === 4 ? 'unknown' : 'in_person',
-    venue: venueName === null ? null : {
-      name: venueName,
+    venue: ownVenue === null && text(row.shop_name) === null ? null : {
+      name: venueName(row),
       source_id: ownVenue ? null : text(row.shop_id),
       country_code: 'JP',
       region_code: PREF_CODE[prefName] ?? null,

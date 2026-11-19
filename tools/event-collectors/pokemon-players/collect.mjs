@@ -10,7 +10,7 @@ import { openBrowserTransport } from './lib/transport.mjs';
 import { applyGeo, geoPass, tokyoDate, venueLookups } from './lib/geo.mjs';
 import { loadCache, saveCache } from '../lib/venue-cache.mjs';
 
-export const COLLECTOR_VERSION = 'pokemon-players/0.2.0';
+export const COLLECTOR_VERSION = 'pokemon-players/0.3.0';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..', '..');
