@@ -8,7 +8,7 @@ Working notes for people and coding agents: `CLAUDE.md` (architecture, owner dec
 
 - `src/template.html` — page markup, styles and script; `/*DATA*/` and `/*OFFICIAL*/` are filled at build time
 - `data/items.json` — releases merged from カードラボ and トレカの地図; ids are stable (`i` + hash of title + normalised name)
-- `data/overrides.json` — hand-made fixes by item id (`url`, `thumb`, `name`, `date`, `approx`, `hide: true`); `_name` and `note` are labels for people. Applied by both the updater and the build, never overwritten
+- `data/overrides.json` — hand-made fixes by item id (`url`, `thumb`, `name`, `date`, `pack`, `box`, `approx`, `hide: true`); `_name` and `note` are labels for people. Applied by both the updater and the build, never overwritten
 - `data/meta.json` — date of the last data update (shown as 更新日, used as sitemap lastmod)
 - `data/update-report.md` — what the last update changed
 - `public/` — copied as-is into `dist/` (`thumbs/`, `favicon.svg`, `_headers`)

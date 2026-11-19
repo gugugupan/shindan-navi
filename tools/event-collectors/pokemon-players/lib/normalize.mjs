@@ -40,9 +40,105 @@ export function containsContact(s) {
   return CONTACT.test(s);
 }
 
+/** First line of the free-text `venue`, unless it carries contact details. Decides `source_id` only. */
 export function venueLabel(raw) {
   const first = (text(raw) ?? '').split(/\r?\n/)[0].trim();
   return first === '' || CONTACT.test(first) ? null : first;
+}
+
+// `shop_term` 1 = the organizer is a shop (shop_name is its name), 2 = a person (shop_name is a nickname);
+// 大型大会 rows have none. The free-text `venue` is whatever the organizer typed in 会場: a place name, but just as
+// often the address, directions, seat counts, opening hours or house rules.
+const SHOP = 1;
+const PERSON = 2;
+// Tested on NFKC-folded text without spaces (full-width digits are ASCII by then).
+const DIRECTIONS = /徒歩|歩いて|降りて|下車|改札|出口|駅(?:から|より)|[口駅]から\d|バス|交通|direction/i;
+const SENTENCE = /[。、]|ます|ません|ください|下さい|です|でした|お願い|ご注意|ご確認|ご利用|予定|受付|参加|駐車|定員|席数|\d+席|開店|閉店|毎日|毎週|毎月|詳細|未定|調整中|公開|注意|車で|お越し|お借り|ほど|など|対応|駐輪|場合|販売|あり|完備|無休|トイレ|お手洗い|\d:\d\d|\d+時|平日|土日|祝日|\d+年|\d+月\d+日|禁止|協力|アカウント|常備|aed|→|有$|での$|^[(（]|close/i;
+const FLOOR_ONLY = /^.{0,24}の\d+[階f][!！]*$|^(?:地下)?\d+(?:階|f)/i;
+// A prefecture followed by 立 (山梨県立…, 東京都立…) is a facility, not an address.
+const ADDRESS = /^〒|^\d{3}-?\d{4}|^(?:北海道|東京都|京都府|大阪府|.{2,3}県)(?!立)|[市区町村郡].{0,15}?\d+(?:丁目|番地?|号|-\d)|[市区町村郡].{0,15}?字.{0,10}\d+$/;
+const GENERIC = /^(?:店内|店舗内?|当店|自店|デュエルスペース|対戦スペース|対戦席|プレイスペース|フリースペース|イベントスペース|トレカコーナー|カードコーナー|会場|未定|tba)\d*席?$/i;
+// A room without the facility it is in (研修室4, 本堂2F, レンタルの会議室, 施設内集会室).
+const ROOM_ONLY = /^(?:施設内|館内|店内|レンタル(?:の)?|大|中|小|第[0-9一二三四五六七八九十]+)?(?:研修室|会議室|集会室|多目的室|講習室|学習室|講義室|和室|洋室|ホール|本堂|対戦スペース|スペース)(?:第?[0-9a-z一二三四五六七八九十]+)*(?:\d+(?:f|階))?$/i;
+const PREFIX = /^(?:開催)?(?:会場|店舗|場所)名?\s*(?:[:：]\s*|\s+)/;
+// "<place>様にて実施" / "<place>にて開催中" / "<place>開催" / "<place>にて受け付け" → "<place>"
+const TRAILER = /\s*(?:様)?(?:の(?:店内|店舗|デュエルスペース|対戦スペース)(?:内)?)?(?:にて|で)?(?:行います|行っています|開催(?:中|します|いたします|致します|予定)?|実施(?:中|します|いたします|致します)?|受け付け|受付)[。！!]*$/;
+const HANDLE = /\s*[(（【]\s*[@＠][^)）】]*[)）】]|(?:^|\s+)[@＠][A-Za-z0-9_.]+/g;
+const fold = (s) => s.normalize('NFKC').replace(/\s+/g, '');
+
+const cleanLine = (line) => {
+  let s = line.trim().replace(/^[■□◆◇●○・◾️※*＊-]+\s*/u, '').replace(PREFIX, '');
+  for (let i = 0; i < 2; i += 1) s = s.replace(TRAILER, '').replace(/\s*様$/, '').replace(/[\s!！／/]+$/, '');
+  return s.replace(HANDLE, '').trim();
+};
+
+/**
+ * A place name from the organizer's free-text `venue`: the first line that is neither contact details, an address,
+ * directions, a note nor a bare room. null when no line qualifies.
+ */
+export function placeLabel(raw, address = null) {
+  const addr = fold(address ?? '');
+  for (const line of (text(raw) ?? '').split(/\r?\n/)) {
+    if (CONTACT.test(line)) continue;
+    const s = cleanLine(line);
+    if (s === '') continue;
+    const f = fold(s);
+    if (f.length > 40 || DIRECTIONS.test(f) || SENTENCE.test(f) || FLOOR_ONLY.test(f) || GENERIC.test(f) || ROOM_ONLY.test(f) || ADDRESS.test(f)) continue;
+    if (f === addr) continue;
+    return s;
+  }
+  return null;
+}
+
+// Shown when an organizer gave neither a usable place name nor an address (the detail page is the reference).
+export const VENUE_UNKNOWN = '会場は公式で確認';
+
+const foldAddress = (s) => fold(s).replace(/[‐‑‒–—―−－ー]/g, '-');
+
+/**
+ * shop_id → its usual address (the most frequent one among the run's rows, ties unresolved), so a shop's event at
+ * another address can be told apart.
+ */
+export function shopHomes(rows) {
+  const counts = new Map();
+  for (const r of rows) {
+    const address = text(r.address);
+    if (r.shop_term !== SHOP || !address || r.shop_id === null || r.shop_id === undefined) continue;
+    const byAddr = counts.get(r.shop_id) ?? counts.set(r.shop_id, new Map()).get(r.shop_id);
+    const k = foldAddress(address);
+    byAddr.set(k, (byAddr.get(k) ?? 0) + 1);
+  }
+  const homes = new Map();
+  for (const [shop, byAddr] of counts) {
+    const [[top, n], second] = [...byAddr].sort((a, b) => b[1] - a[1]);
+    if (!second || second[1] < n) homes.set(shop, top);
+  }
+  return homes;
+}
+
+/**
+ * venue.name: the shop for shop-organized events at the shop's usual address (their free text is notes about the
+ * shop), else the place the free text names, else (not for a person's event) the address without its prefecture and
+ * postcode (the page shows the prefecture next to the name), else VENUE_UNKNOWN.
+ */
+export function venueName(row, homes = new Map()) {
+  const shop = text(row.shop_name);
+  const address = text(row.address);
+  const home = homes.get(row.shop_id);
+  const elsewhere = home !== undefined && address !== null && foldAddress(address) !== home;
+  if (row.shop_term === SHOP && shop && !elsewhere) return shop;
+  const label = placeLabel(row.venue, address);
+  if (label) return label;
+  // Owner decision: a person's event without a named place shows no address as its name.
+  if (row.shop_term === PERSON) return VENUE_UNKNOWN;
+  if (address) {
+    const pref = text(row.prefecture_name);
+    const rest = (pref && address.startsWith(pref) ? address.slice(pref.length) : address)
+      .trim().replace(/^日本[、,]?\s*/, '').replace(/^〒?\s*[0-9０-９]{3}[-－ー‐]?[0-9０-９]{4}\s*/, '').trim();
+    if (rest !== '' && !CONTACT.test(rest)) return rest;
+  }
+  if (row.shop_term === SHOP && shop) return shop;
+  return VENUE_UNKNOWN;
 }
 
 export function eventKey(row) {
@@ -93,7 +189,8 @@ function category(type, attr) {
   return 'unknown';
 }
 
-export function normalizeEvent(row, seenAt) {
+/** `homes` = shopHomes(all rows of the run); without it every shop event is named after the shop. */
+export function normalizeEvent(row, seenAt, homes = new Map()) {
   const startsOn = isoDate(row.event_date_params);
   if (!startsOn) throw new Error(`event ${row.event_holding_id}: bad event_date_params ${row.event_date_params}`);
   const start = hhmm(row.event_started_at);
@@ -104,7 +201,6 @@ export function normalizeEvent(row, seenAt) {
   const regulation = text(row.regulation);
   const deck = text(row.deck_count);
   const ownVenue = venueLabel(row.venue);
-  const venueName = ownVenue ?? text(row.shop_name);
   const league = text(row.leagueName);
   const external = eventKey(row);
 
@@ -122,8 +218,8 @@ export function normalizeEvent(row, seenAt) {
     },
     name: text(row.event_title) ?? type?.name ?? 'イベント',
     attendance_mode: attr === 4 ? 'unknown' : 'in_person',
-    venue: venueName === null ? null : {
-      name: venueName,
+    venue: ownVenue === null && text(row.shop_name) === null ? null : {
+      name: venueName(row, homes),
       source_id: ownVenue ? null : text(row.shop_id),
       country_code: 'JP',
       region_code: PREF_CODE[prefName] ?? null,

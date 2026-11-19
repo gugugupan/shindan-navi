@@ -797,8 +797,7 @@
   "thumb": "thumbs/18d2c2401c76.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://godzilla-cardgame.com/products/sd05",
@@ -819,8 +818,7 @@
   "thumb": "thumbs/72f6c28677bd.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://godzilla-cardgame.com/products/sd03",
@@ -841,8 +839,7 @@
   "thumb": "thumbs/c9f7915db5f1.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://godzilla-cardgame.com/products/sd04",
@@ -858,7 +855,7 @@
   "game": "ヴァンガード",
   "name": "VG-DZ-LBT03 リリカルブースター リリカルモナステリオ 伝説のアイドル！",
   "pack": "418円",
-  "box": "6688円(税込)",
+  "box": "6,688円",
   "url": "https://cf-vanguard.com/products/booster/dz-lbt03/",
   "thumb": "thumbs/9403b4435bae.jpg",
   "approx": false,
@@ -880,13 +877,12 @@
   "date": "2026-11-07",
   "game": "デュエル・マスターズ",
   "name": "DM26-EX5 デュエマプレイス・コラボパック 「電脳対戦 -WAR OF PLAY'S-」",
-  "pack": "385円(税込)",
+  "pack": "385円",
   "box": "6,160円",
   "url": "https://dm.takaratomy.co.jp/product/dm26ex5/",
   "thumb": "thumbs/9a71f354e738.jpg",
   "approx": false,
   "sources": [
-   "official",
    "torecamap"
   ],
   "source": {
@@ -904,13 +900,12 @@
   "game": "遊戯王ラッシュデュエル",
   "name": "遊戯王RD 情熱のジョインテック",
   "pack": "198円",
-  "box": "",
+  "box": "5,940円",
   "url": "https://www.konami.com/yugioh/rushduel/products/#cg2148",
   "thumb": "thumbs/acfd202e87ed.jpg",
   "approx": false,
   "sources": [
    "clabo",
-   "official",
    "torecamap"
   ],
   "source": {
@@ -931,8 +926,7 @@
   "thumb": "thumbs/803854428760.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://square-enix-shop.com/jp/ff-tcg/news/fftcg_2026_schedule.html",
@@ -953,9 +947,7 @@
   "url": "",
   "thumb": "thumbs/67dcf96915a9.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/%e3%83%9e%e3%82%b9%e3%82%bf%e3%83%aa%e3%83%bc%e3%83%91%e3%83%83%e3%82%af%e6%9a%97%e6%ae%ba%e8%80%85",
    "key": "masterypack:assassinboosterbox",
@@ -970,14 +962,13 @@
   "date": "2026-11-13",
   "game": "Flesh and Blood",
   "name": "フレッシュ＆ブラッド 日本語版 アーモリーデッキ 「モーティマー博士」",
-  "pack": "3,500円",
+  "pack": "3,850円",
   "box": "",
   "url": "https://fabtcg.com/ja/products/%e3%82%a2%e3%83%bc%e3%83%a2%e3%83%aa%e3%83%bc%e3%83%87%e3%83%83%e3%82%ad/%e3%82%a2%e3%83%bc%e3%83%a2%e3%83%aa%e3%83%bc%e3%83%87%e3%83%83%e3%82%ad-%e3%83%a2%e3%83%bc%e3%83%86%e3%82%a3%e3%83%9e%e3%83%bc%e5%8d%9a%e5%a3%ab/",
   "thumb": "thumbs/05c0d58faed4.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://fabtcg.com/ja/products/%e3%82%a2%e3%83%bc%e3%83%a2%e3%83%aa%e3%83%bc%e3%83%87%e3%83%83%e3%82%ad/%e3%82%a2%e3%83%bc%e3%83%a2%e3%83%aa%e3%83%bc%e3%83%87%e3%83%83%e3%82%ad-%e3%83%a2%e3%83%bc%e3%83%86%e3%82%a3%e3%83%9e%e3%83%bc%e5%8d%9a%e5%a3%ab",
@@ -997,9 +988,7 @@
   "url": "",
   "thumb": "thumbs/67dcf96915a9.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/%e3%83%9e%e3%82%b9%e3%82%bf%e3%83%aa%e3%83%bc%e3%83%91%e3%83%83%e3%82%af%e6%9a%97%e6%ae%ba%e8%80%85",
    "key": "マスタリーパック:暗殺者ブースターボックス",
@@ -1019,9 +1008,7 @@
   "url": "",
   "thumb": "thumbs/80f056df1ace.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://mtg-jp.com/products",
    "key": "collector'seditioncommanderdeck",
@@ -1069,27 +1056,6 @@
   "per_pack": 100
  },
  {
-  "id": "i0664b4b5f6",
-  "date": "2026-11-13",
-  "game": "MTG",
-  "name": "MTG Star Trek™ Beam Me Up Bundle EN",
-  "pack": "15,180円",
-  "box": "",
-  "url": "https://magic.wizards.com/en/products/star-trek",
-  "thumb": "thumbs/4fb1d18ffe85.jpg",
-  "approx": false,
-  "sources": [
-   "clabo",
-   "official"
-  ],
-  "source": {
-   "url": "https://mtg-jp.com/products/0000312",
-   "key": "マジック:ザ・ギャザリング|スター・トレックbeammeupbundle",
-   "site": "official"
-  },
-  "official_name": "マジック：ザ・ギャザリング | スター・トレック Beam Me Up Bundle"
- },
- {
   "id": "i4650ed04ab",
   "date": "2026-11-13",
   "game": "MTG",
@@ -1100,8 +1066,7 @@
   "thumb": "thumbs/48fd77637905.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
@@ -1121,8 +1086,7 @@
   "thumb": "thumbs/6661a60180d7.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
@@ -1131,25 +1095,6 @@
   },
   "official_name": "マジック：ザ・ギャザリング | スター・トレック Collector's Edition Commander deck（全4種）",
   "per_pack": 100
- },
- {
-  "id": "iced9705939",
-  "date": "2026-11-13",
-  "game": "MTG",
-  "name": "MTG Star Trek™ Draft Night EN",
-  "pack": "18,128円",
-  "box": "",
-  "url": "https://magic.wizards.com/en/products/star-trek",
-  "thumb": "thumbs/c7581b5b5ced.jpg",
-  "approx": false,
-  "sources": [
-   "clabo"
-  ],
-  "source": {
-   "url": "https://magic.wizards.com/en/products/star-trek",
-   "key": "mtgstartrektmdraftnighten",
-   "site": "official"
-  }
  },
  {
   "id": "i9d9e1d5f63",
@@ -1162,8 +1107,7 @@
   "thumb": "thumbs/085d1bc0f50f.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
@@ -1183,8 +1127,7 @@
   "thumb": "thumbs/8fbf731bb359.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products",
@@ -1206,8 +1149,7 @@
   "thumb": "thumbs/25300abc3cf2.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
@@ -1248,8 +1190,7 @@
   "thumb": "thumbs/a2a174742a50.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products",
@@ -1271,8 +1212,7 @@
   "thumb": "thumbs/b996b42dcb22.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
@@ -1294,8 +1234,7 @@
   "thumb": "thumbs/af7681bf1a40.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products",
@@ -1316,8 +1255,7 @@
   "thumb": "thumbs/9cb013a96a7c.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
@@ -1337,9 +1275,7 @@
   "url": "",
   "thumb": "thumbs/f4b2cfbcbefb.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://mtg-jp.com/products",
    "key": "scenebox",
@@ -1395,9 +1331,7 @@
   "url": "",
   "thumb": "thumbs/b30a2909d83e.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://mtg-jp.com/products/0000312",
    "key": "マジック:ザ・ギャザリング|スター・トレック統率者デッキ(全4種)日本語版",
@@ -1416,9 +1350,7 @@
   "url": "https://www.pokemon-card.com/products/mega/mg.html",
   "thumb": "thumbs/9a81cef36a31.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://pokemon-card.com/products/mega/mg.html",
    "key": "ポケモンカードゲームmegaスペシャルデッキセットmegaメガオーダイル・メガカイリュー・メガゲンガー",
@@ -1433,13 +1365,12 @@
   "game": "ヴァイスシュヴァルツ",
   "name": "WS ブースターパック BanG Dream! [夢限大みゅーたいぷ]",
   "pack": "440円",
-  "box": "4400円(税込)",
+  "box": "4,400円",
   "url": "https://ws-tcg.com/products/bdy_bp/",
   "thumb": "thumbs/cc2a13995d2e.jpg",
   "approx": false,
   "sources": [
    "clabo",
-   "official",
    "torecamap"
   ],
   "source": {
@@ -1529,8 +1460,7 @@
   "thumb": "thumbs/f12ad2f75191.jpg",
   "approx": false,
   "sources": [
-   "clabo",
-   "official"
+   "clabo"
   ],
   "source": {
    "url": "https://llofficial-cardgame.com/products/bp08_mt",
@@ -1547,7 +1477,7 @@
   "game": "Z/X",
   "name": "Z/X ギャンブリングフォース[IG17]",
   "pack": "660円",
-  "box": "6600円(税込)",
+  "box": "6,600円",
   "url": "https://www.zxtcg.com/product/ig_17.html",
   "thumb": "thumbs/66a3e001cc40.jpg",
   "approx": false,
@@ -1572,14 +1502,15 @@
   "thumb": "thumbs/10814d52f614.jpg",
   "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss20",
-   "key": "VG-DZ-SS20",
+   "key": "スペシャルシリーズ「stridedecksetaltmile(ストライドデッキセットアルトマイル)」",
    "site": "official"
   },
-  "official_name": "構築済みデッキ 【VG-DZ-SS20】 スペシャルシリーズ「Stride Deckset Altmile(ストライド デッキセット アルトマイル)」"
+  "official_name": "スペシャルシリーズ「Stride Deckset Altmile(ストライド デッキセット アルトマイル)」"
  },
  {
   "id": "i74178d8e02",
@@ -1592,14 +1523,15 @@
   "thumb": "thumbs/815860687780.jpg",
   "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss21",
-   "key": "VG-DZ-SS21",
+   "key": "スペシャルシリーズ「stridedecksetahsha(ストライドデッキセットアーシャ)」",
    "site": "official"
   },
-  "official_name": "構築済みデッキ 【VG-DZ-SS21】 スペシャルシリーズ「Stride Deckset Ahsha(ストライド デッキセット アーシャ)」"
+  "official_name": "スペシャルシリーズ「Stride Deckset Ahsha(ストライド デッキセット アーシャ)」"
  },
  {
   "id": "i08d012eae9",
@@ -1611,13 +1543,15 @@
   "url": "https://cf-vanguard.com/products/trial/dz-ss21p/",
   "thumb": "thumbs/c203af3c826f.jpg",
   "approx": false,
-  "sources": [],
+  "sources": [
+   "official"
+  ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss21p",
-   "key": "VG-DZ-SS21P",
+   "key": "スペシャルシリーズ「stridedecksetahshapremium(ストライドデッキセットアーシャプレミアム)」",
    "site": "official"
   },
-  "official_name": "構築済みデッキ 【VG-DZ-SS21P】 スペシャルシリーズ「Stride Deckset Ahsha PREMIUM(ストライド デッキセット アーシャ プレミアム)」",
+  "official_name": "スペシャルシリーズ「Stride Deckset Ahsha PREMIUM(ストライド デッキセット アーシャ プレミアム)」",
   "per_pack": 65
  },
  {
@@ -1630,13 +1564,15 @@
   "url": "https://cf-vanguard.com/products/trial/dz-ss20p/",
   "thumb": "thumbs/666eff19f019.jpg",
   "approx": false,
-  "sources": [],
+  "sources": [
+   "official"
+  ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss20p",
-   "key": "VG-DZ-SS20P",
+   "key": "スペシャルシリーズ「stridedecksetaltmilepremium(ストライドデッキセットアルトマイルプレミアム)」",
    "site": "official"
   },
-  "official_name": "構築済みデッキ 【VG-DZ-SS20P】 スペシャルシリーズ「Stride Deckset Altmile PREMIUM(ストライド デッキセット アルトマイル プレミアム)」",
+  "official_name": "スペシャルシリーズ「Stride Deckset Altmile PREMIUM(ストライド デッキセット アルトマイル プレミアム)」",
   "per_pack": 65
  },
  {
@@ -1645,7 +1581,7 @@
   "game": "ONE PIECE",
   "name": "ONE PIECEカードゲーム ブースターパック 神の支配【OP-18】",
   "pack": "240円",
-  "box": "5760円(税込)",
+  "box": "5,760円",
   "url": "https://www.onepiece-cardgame.com/products/op18.html",
   "thumb": "thumbs/a87647c9ffb5.jpg",
   "approx": false,
@@ -1689,7 +1625,7 @@
   "game": "バトルスピリッツ",
   "name": "バトルスピリッツ エターナルブースター 契約編:証 第2章 戦神の轟臨【BS77】",
   "pack": "350円",
-  "box": "6300円(税込)",
+  "box": "6,300円",
   "url": "https://www.battlespirits.com/product/booster/booster-77.php",
   "thumb": "thumbs/5a5db127218c.jpg",
   "approx": false,
@@ -1712,7 +1648,7 @@
   "game": "遊戯王OCG",
   "name": "遊戯王 REVOLUTION BOOSTER -方界・マリンセス・ゴーストリック-",
   "pack": "264円",
-  "box": "3960円(税込)",
+  "box": "3,960円",
   "url": "https://www.yugioh-card.com/japan/products/rv02/",
   "thumb": "thumbs/3e5666f09480.jpg",
   "approx": false,
@@ -1915,7 +1851,7 @@
   "game": "UNION ARENA",
   "name": "UNION ARENA ブースターパック D.Gray-man【UA58BT】",
   "pack": "385円",
-  "box": "6160円(税込)",
+  "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/dgm-1.php",
   "thumb": "thumbs/73ea0a0a7c6b.jpg",
   "approx": false,
@@ -1939,7 +1875,7 @@
   "game": "UNION ARENA",
   "name": "UNION ARENA ブースターパック 〈物語〉シリーズ Vol.2【EX18BT】",
   "pack": "385円",
-  "box": "6160円(税込)",
+  "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/ex_mgs.php",
   "thumb": "thumbs/f7daf9c8092b.jpg",
   "approx": false,
@@ -2047,21 +1983,22 @@
   "id": "i536c3dfaaf",
   "date": "2026-11-27",
   "game": "ポケモンカード",
-  "name": "ポケモンカードゲーム MEGA 拡張パック「ハドウシーカー」",
+  "name": "拡張パック「ハドウシーカー」",
   "pack": "200円",
-  "box": "",
+  "box": "4,000円",
   "url": "https://www.pokemon-card.com/ex/m7/",
-  "thumb": "",
+  "thumb": "thumbs/c4eb184c0192.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://pokemon-card.com/ex/m7",
-   "key": "ポケモンカードゲームmega拡張パック「ハドウシーカー」",
+   "key": "拡張パック「ハドウシーカー」",
    "site": "official"
   },
-  "official_name": "ポケモンカードゲーム MEGA 拡張パック「ハドウシーカー」",
+  "official_name": "拡張パック「ハドウシーカー」",
   "per_pack": 5
  },
  {
@@ -2070,7 +2007,7 @@
   "game": "ヴァイスシュヴァルツ",
   "name": "WS ブースターパック Persona 30th Anniversary",
   "pack": "440円",
-  "box": "4400円(税込)",
+  "box": "4,400円",
   "url": "https://ws-tcg.com/products/p30_wsbp/",
   "thumb": "thumbs/f622c5663f1e.jpg",
   "approx": false,
@@ -2174,6 +2111,46 @@
   "per_pack": 7
  },
  {
+  "id": "i0664b4b5f6",
+  "date": "2026-12-04",
+  "game": "MTG",
+  "name": "MTG Star Trek™ Beam Me Up Bundle EN",
+  "pack": "15,180円",
+  "box": "",
+  "url": "https://magic.wizards.com/en/products/star-trek",
+  "thumb": "thumbs/4fb1d18ffe85.jpg",
+  "approx": false,
+  "sources": [
+   "clabo",
+   "official"
+  ],
+  "source": {
+   "url": "https://mtg-jp.com/products/0000312",
+   "key": "マジック:ザ・ギャザリング|スター・トレックbeammeupbundle",
+   "site": "official"
+  },
+  "official_name": "マジック：ザ・ギャザリング | スター・トレック Beam Me Up Bundle"
+ },
+ {
+  "id": "iced9705939",
+  "date": "2026-12-04",
+  "game": "MTG",
+  "name": "MTG Star Trek™ Draft Night EN",
+  "pack": "18,128円",
+  "box": "",
+  "url": "https://magic.wizards.com/en/products/star-trek",
+  "thumb": "thumbs/c7581b5b5ced.jpg",
+  "approx": false,
+  "sources": [
+   "clabo"
+  ],
+  "source": {
+   "url": "https://magic.wizards.com/en/products/star-trek",
+   "key": "mtgstartrektmdraftnighten",
+   "site": "official"
+  }
+ },
+ {
   "id": "i1466e59a49",
   "date": "2026-12-04",
   "game": "ウルトラマン",
@@ -2228,14 +2205,15 @@
   "thumb": "thumbs/ddf736056f41.jpg",
   "approx": false,
   "sources": [
-   "clabo"
+   "clabo",
+   "official"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/trial/dz-ss22",
-   "key": "VG-DZ-SS22",
+   "key": "スペシャルシリーズ「ランダムマスターデッキ26人の先導者(せんどうしゃ)」",
    "site": "official"
   },
-  "official_name": "構築済みデッキ 【VG-DZ-SS22】 スペシャルシリーズ「ランダムマスターデッキ 26人の先導者(せんどうしゃ)」"
+  "official_name": "スペシャルシリーズ「ランダムマスターデッキ 26人の先導者(せんどうしゃ)」"
  },
  {
   "id": "i256d6698e9",
@@ -2252,7 +2230,7 @@
    "official"
   ],
   "source": {
-   "url": "https://digimoncard.com/products/deck/st-26",
+   "url": "https://digimoncard.com/products",
    "key": "ST-26",
    "site": "official"
   },
@@ -2274,7 +2252,7 @@
    "official"
   ],
   "source": {
-   "url": "https://digimoncard.com/products/deck/st-25",
+   "url": "https://digimoncard.com/products",
    "key": "ST-25",
    "site": "official"
   },
@@ -2287,7 +2265,7 @@
   "game": "デジモン",
   "name": "デジモンカードゲーム ブースターパック IGNITION OF X【BT‐27】",
   "pack": "240円",
-  "box": "5760円(税込)",
+  "box": "5,760円",
   "url": "https://digimoncard.com/products/pack/ver27/",
   "thumb": "thumbs/af9f516ff067.jpg",
   "approx": false,
@@ -2297,7 +2275,7 @@
    "torecamap"
   ],
   "source": {
-   "url": "https://digimoncard.com/products/pack/ver27",
+   "url": "https://digimoncard.com/products",
    "key": "BT-27",
    "site": "official"
   },
@@ -2364,7 +2342,8 @@
    "key": "スタートデッキウマ娘プリティーダービー",
    "site": "official"
   },
-  "official_name": "スタートデッキ ウマ娘 プリティーダービー"
+  "official_name": "スタートデッキ ウマ娘 プリティーダービー",
+  "per_pack": 50
  },
  {
   "id": "i95d50f07ba",
@@ -2372,7 +2351,7 @@
   "game": "UNION ARENA",
   "name": "UNION ARENA ブースターパック ウマ娘 プリティーダービー【UA59BT】",
   "pack": "385円",
-  "box": "6160円(税込)",
+  "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/upd-1.php",
   "thumb": "thumbs/3631befe0209.jpg",
   "approx": false,
@@ -2463,7 +2442,7 @@
   "game": "DBフュージョンワールド",
   "name": "ドラゴンボールスーパーカードゲーム フュージョンワールド REACH THE GOD [FB12]",
   "pack": "240円",
-  "box": "5760円(税込)",
+  "box": "5,760円",
   "url": "https://www.dbs-cardgame.com/fw/jp/products/01_477.html",
   "thumb": "thumbs/155b514c5a1a.jpg",
   "approx": false,
@@ -2583,7 +2562,7 @@
    "official"
   ],
   "source": {
-   "url": "https://palworld-official-cardgame.com/products/td03",
+   "url": "https://palworld-official-cardgame.com/products/td04",
    "key": "トライアルデッキ「果てなき飛翔ブルー・パープル」",
    "site": "official"
   },
@@ -2642,7 +2621,7 @@
   "date": "2026-12-18",
   "game": "ホロライブ",
   "name": "グローリー・エコー",
-  "pack": "440円(税込)",
+  "pack": "440円",
   "box": "5,280円",
   "url": "https://hololive-official-cardgame.com/products/post/glory-echo/",
   "thumb": "",
@@ -2664,7 +2643,7 @@
   "game": "ヴァイスシュヴァルツ",
   "name": "WS プレミアムブースター 超かぐや姫！",
   "pack": "660円",
-  "box": "3960円(税込)",
+  "box": "3,960円",
   "url": "https://ws-tcg.com/products/cpk_pb/",
   "thumb": "thumbs/fa77235b8e7d.jpg",
   "approx": false,
@@ -2711,20 +2690,21 @@
   "game": "ヴァンガード",
   "name": "VG-DZ-SS23 トリプルドライブブースター Dクライマックス",
   "pack": "550円",
-  "box": "6600円(税込)",
+  "box": "6,600円",
   "url": "https://cf-vanguard.com/products/booster/dz-ss23/",
   "thumb": "thumbs/9c7332ffdd89.jpg",
   "approx": false,
   "sources": [
    "clabo",
+   "official",
    "torecamap"
   ],
   "source": {
    "url": "https://cf-vanguard.com/products/booster/dz-ss23",
-   "key": "VG-DZ-SS23",
+   "key": "スペシャルシリーズ「トリプルドライブブースターdクライマックス」",
    "site": "official"
   },
-  "official_name": "ブースターパック 【VG-DZ-SS23】 スペシャルシリーズ「トリプルドライブブースター Dクライマックス」",
+  "official_name": "スペシャルシリーズ「トリプルドライブブースター Dクライマックス」",
   "per_box": 12,
   "per_pack": 3
  },
@@ -2778,7 +2758,7 @@
   "pack": "200円",
   "box": "6,000円",
   "url": "https://dm.takaratomy.co.jp/product/dm26rp4/",
-  "thumb": "",
+  "thumb": "thumbs/de254d697b51.jpg",
   "approx": false,
   "sources": [
    "official"
@@ -2788,7 +2768,9 @@
    "key": "DM26-RP4",
    "site": "official"
   },
-  "official_name": "DM26-RP4 デュエル・マスターズTCG 逆札篇 第４弾 邪神vs邪神Ⅲ ～ピース・オブ・ジ・アビス～"
+  "official_name": "DM26-RP4 デュエル・マスターズTCG 逆札篇 第４弾 邪神vs邪神Ⅲ ～ピース・オブ・ジ・アビス～",
+  "per_pack": 5,
+  "per_box": 30
  },
  {
   "id": "i20e3cd2cb2",
@@ -2798,7 +2780,7 @@
   "pack": "1,650円",
   "box": "",
   "url": "https://www.battlespirits.com/product/starter/starter-26rsd11.php",
-  "thumb": "",
+  "thumb": "thumbs/6c25b8996996.jpg",
   "approx": false,
   "sources": [
    "clabo",
@@ -2885,7 +2867,7 @@
   "game": "遊戯王OCG",
   "name": "PREMIUM PACK 2027",
   "pack": "2,530円",
-  "box": "",
+  "box": "2,530円",
   "url": "",
   "thumb": "thumbs/e29258169009.jpg",
   "approx": false,
@@ -3104,7 +3086,7 @@
   "game": "ヴァイスシュヴァルツ",
   "name": "WS ブースターパック 「アズールレーン」Vol.3",
   "pack": "440円",
-  "box": "4400円(税込)",
+  "box": "4,400円",
   "url": "https://ws-tcg.com/products/azl_vol3_bp/",
   "thumb": "thumbs/159f4ac5b911.jpg",
   "approx": false,
@@ -3130,8 +3112,8 @@
   "pack": "1,980円",
   "box": "",
   "url": "https://www.battlespirits.com/product/starter/starter-26rsd12.php",
-  "thumb": "thumbs/e9dd10038fc1.jpg",
-  "approx": true,
+  "thumb": "thumbs/304c7ebb69d8.jpg",
+  "approx": false,
   "sources": [
    "clabo",
    "official"
@@ -3150,10 +3132,10 @@
   "game": "バトルスピリッツ",
   "name": "バトルスピリッツ コラボブースター アイカツ！ 新たなる煌めき【26RCB02】",
   "pack": "363円",
-  "box": "5808円(税込)",
+  "box": "5,808円",
   "url": "https://www.battlespirits.com/product/booster/booster-26rcb02.php",
-  "thumb": "thumbs/e9dd10038fc1.jpg",
-  "approx": true,
+  "thumb": "thumbs/992ad539d17c.jpg",
+  "approx": false,
   "sources": [
    "clabo",
    "official",
@@ -3172,8 +3154,8 @@
   "date": "2027-01-15",
   "game": "UNION ARENA",
   "name": "いちご100%【UA60BT】",
-  "pack": "385円(税込)",
-  "box": "6160円(税込)",
+  "pack": "385円",
+  "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/icg-1.php",
   "thumb": "thumbs/1162054f720a.jpg",
   "approx": false,
@@ -3200,9 +3182,7 @@
   "url": "https://ultraman-cardgame.com/page/jp/news/news-detail/328",
   "thumb": "",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://ultraman-cardgame.com/page/jp/news/news-detail/328",
    "key": "BP10",
@@ -3281,8 +3261,8 @@
   "date": "2027-01-15",
   "game": "ヴァイスシュヴァルツ",
   "name": "ブースターパック 新日本プロレス×AEW：Forbidden Door",
-  "pack": "440円(税込)",
-  "box": "4400円(税込)",
+  "pack": "440円",
+  "box": "4,400円",
   "url": "https://ws-tcg.com/products/bpfd/",
   "thumb": "thumbs/c11577971747.jpg",
   "approx": false,
@@ -3307,7 +3287,7 @@
   "pack": "",
   "box": "",
   "url": "https://www.square-enix-shop.com/jp/ff-tcg/news/fftcg_2027_schedule.html",
-  "thumb": "",
+  "thumb": "thumbs/d60d2e41fc9e.jpg",
   "approx": false,
   "sources": [
    "official"
@@ -3325,7 +3305,7 @@
   "date": "2027-01-22",
   "game": "ヴァイスシュヴァルツ",
   "name": "プレミアムブースター お兄ちゃんはおしまい！",
-  "pack": "660円(税込)",
+  "pack": "660円",
   "box": "3,960円",
   "url": "https://ws-tcg.com/products/ono_pb/",
   "thumb": "thumbs/71af9c48b355.jpg",
@@ -3349,15 +3329,16 @@
   "game": "デジモン",
   "name": "デジモンカードゲーム エクストラブースター MALEVOLENT VII【EX-14】",
   "pack": "240円",
-  "box": "",
+  "box": "5,760円",
   "url": "https://digimoncard.com/products/",
-  "thumb": "",
+  "thumb": "thumbs/c68be8273bd7.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
-   "url": "https://digimoncard.com/products",
+   "url": "https://digimoncard.com/products/pack/ex-14",
    "key": "EX-14",
    "site": "official"
   },
@@ -3368,8 +3349,8 @@
   "date": "2027-01-23",
   "game": "バトルスピリッツ",
   "name": "[26RBS04]炎空の騎帝",
-  "pack": "350円(税込)",
-  "box": "6300円(税込)",
+  "pack": "350円",
+  "box": "6,300円",
   "url": "https://www.battlespirits.com/product/booster/booster-26rbs04.php",
   "thumb": "thumbs/ed878bb2bf97.jpg",
   "approx": false,
@@ -3390,7 +3371,7 @@
   "date": "2027-01-23",
   "game": "遊戯王OCG",
   "name": "PRIDE AND SOUL",
-  "pack": "198円(税込)",
+  "pack": "198円",
   "box": "",
   "url": "",
   "thumb": "",
@@ -3405,6 +3386,28 @@
    "site": "official"
   },
   "official_name": "PRIDE AND SOUL"
+ },
+ {
+  "id": "i75a1042e03",
+  "date": "2027-01-29",
+  "game": "KAMITSUBAKI",
+  "name": "MEMORIES PACK「反律」",
+  "pack": "700円",
+  "box": "7,000円",
+  "url": "",
+  "thumb": "thumbs/25c968070c2c.jpg",
+  "approx": false,
+  "sources": [
+   "official"
+  ],
+  "source": {
+   "url": "https://tcg.kamitsubaki.jp/products",
+   "key": "memoriespack「反律」",
+   "site": "official"
+  },
+  "official_name": "MEMORIES PACK「反律」",
+  "per_box": 10,
+  "per_pack": 10
  },
  {
   "id": "ic552b32330",
@@ -3431,7 +3434,7 @@
   "date": "2027-01-29",
   "game": "UNION ARENA",
   "name": "魔法科高校の劣等生 【UA61BT】",
-  "pack": "385円(税込)",
+  "pack": "385円",
   "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/mkr-1.php",
   "thumb": "thumbs/36689574d3e5.jpg",
@@ -3455,19 +3458,19 @@
   "game": "リセ",
   "name": "リセ オーバーチュア Ver.シルキーズプラス1.0 ブースターパック",
   "pack": "363円",
-  "box": "",
+  "box": "7,260円",
   "url": "https://lycee-tcg.com/product/vol50_silkysplus/",
-  "thumb": "",
+  "thumb": "thumbs/c69d62a99c62.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://lycee-tcg.com/product/vol50_silkysplus",
-   "key": "リセオーバーチュアver.シルキーズプラス1.0ブースターパック",
+   "key": "lyceeoverturever.シルキーズプラス1.0ブースターパック",
    "site": "official"
   },
-  "official_name": "リセ オーバーチュア Ver.シルキーズプラス1.0 ブースターパック",
+  "official_name": "Lycee Overture Ver.シルキーズプラス1.0 ブースターパック",
   "per_pack": 8,
   "per_box": 20
  },
@@ -3476,7 +3479,7 @@
   "date": "2027-01-29",
   "game": "ヴァイスシュヴァルツ",
   "name": "ブースターパック 魔法少女リリカルなのは EXCEEDS Gun Blaze Vengeance",
-  "pack": "440円(税込)",
+  "pack": "440円",
   "box": "4,400円",
   "url": "https://ws-tcg.com/products/ngb_bp/",
   "thumb": "thumbs/0304c9bd8671.jpg",
@@ -3500,12 +3503,13 @@
   "game": "ONE PIECE",
   "name": "エクストラブースター EAST BLUE【EB-06】",
   "pack": "240円",
-  "box": "",
+  "box": "5,760円",
   "url": "https://www.onepiece-cardgame.com/products/eb06.html",
-  "thumb": "",
+  "thumb": "thumbs/f9d3cff5534d.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://onepiece-cardgame.com/products/eb06.html",
@@ -3521,7 +3525,7 @@
   "game": "ガンダム",
   "name": "Blazing Fist [GD07]",
   "pack": "値段設定なし",
-  "box": "",
+  "box": "6,000円",
   "url": "https://www.gundam-gcg.com/jp/products/gd07.html",
   "thumb": "thumbs/517489ee2ca5.jpg",
   "approx": false,
@@ -3610,17 +3614,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/864e754650ff.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府bundle",
+   "key": "『ノークティス:深淵の水府』bundle",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 Bundle"
+  "official_name": "『ノークティス：深淵の水府』Bundle"
  },
  {
   "id": "i545530cc52",
@@ -3632,9 +3636,7 @@
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
   "thumb": "",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
    "key": "ノークティス:深淵の水府draftnight",
@@ -3650,17 +3652,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/a08d7895a74f.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府premiumeditioncommanderdeck「bloodinthewater」",
+   "key": "『ノークティス:深淵の水府』premiumeditioncommanderdecks(bloodinthewater)",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 Premium Edition Commander Deck「Blood in the Water」",
+  "official_name": "『ノークティス：深淵の水府』Premium Edition Commander Decks (Blood in the Water)",
   "per_pack": 100
  },
  {
@@ -3671,17 +3673,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/c37ebc14488e.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府premiumeditioncommanderdeck「merfolkregiment」",
+   "key": "『ノークティス:深淵の水府』premiumeditioncommanderdecks(merfolkregiment)",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 Premium Edition Commander Deck「Merfolk Regiment」",
+  "official_name": "『ノークティス：深淵の水府』Premium Edition Commander Decks (Merfolk Regiment)",
   "per_pack": 100
  },
  {
@@ -3692,17 +3694,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/0fe06adc2515.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府premiumeditioncommanderdeck「sealthedeal」",
+   "key": "『ノークティス:深淵の水府』premiumeditioncommanderdecks(sealthedeal)",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 Premium Edition Commander Deck「Seal the Deal」",
+  "official_name": "『ノークティス：深淵の水府』Premium Edition Commander Decks (Seal the Deal)",
   "per_pack": 100
  },
  {
@@ -3713,17 +3715,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/1f46ebc737f6.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府premiumeditioncommanderdeck「terrorsoftheabyss」",
+   "key": "『ノークティス:深淵の水府』premiumeditioncommanderdecks(terrorsoftheabyss)",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 Premium Edition Commander Deck「Terrors of the Abyss」",
+  "official_name": "『ノークティス：深淵の水府』Premium Edition Commander Decks (Terrors of the Abyss)",
   "per_pack": 100
  },
  {
@@ -3734,17 +3736,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/81e2c0d4dba2.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府secretlairbundle",
+   "key": "『ノークティス:深淵の水府』secretlairbundle",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 Secret Lair Bundle"
+  "official_name": "『ノークティス：深淵の水府』Secret Lair Bundle"
  },
  {
   "id": "i71ae523427",
@@ -3754,17 +3756,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/3bcb43be09f7.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府コマンダー・デッキ「マーフォーク連隊」",
+   "key": "『ノークティス:深淵の水府』コマンダー・デッキ「マーフォーク連隊」",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 コマンダー・デッキ「マーフォーク連隊」",
+  "official_name": "『ノークティス：深淵の水府』コマンダー・デッキ「マーフォーク連隊」",
   "per_pack": 100
  },
  {
@@ -3775,17 +3777,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/5aaa44038031.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府コマンダー・デッキ「取引上手なアザラシ」",
+   "key": "『ノークティス:深淵の水府』コマンダー・デッキ「取引上手なアザラシ」",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 コマンダー・デッキ「取引上手なアザラシ」",
+  "official_name": "『ノークティス：深淵の水府』コマンダー・デッキ「取引上手なアザラシ」",
   "per_pack": 100
  },
  {
@@ -3796,17 +3798,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/3b56b9e52a19.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府コマンダー・デッキ「海に漂う血」",
+   "key": "『ノークティス:深淵の水府』コマンダー・デッキ「海に漂う血」",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 コマンダー・デッキ「海に漂う血」",
+  "official_name": "『ノークティス：深淵の水府』コマンダー・デッキ「海に漂う血」",
   "per_pack": 100
  },
  {
@@ -3817,17 +3819,17 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/ef902fa9a110.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府コマンダー・デッキ「深海底の恐怖」",
+   "key": "『ノークティス:深淵の水府』コマンダー・デッキ「深海底の恐怖」",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 コマンダー・デッキ「深海底の恐怖」",
+  "official_name": "『ノークティス：深淵の水府』コマンダー・デッキ「深海底の恐怖」",
   "per_pack": 100
  },
  {
@@ -3838,17 +3840,19 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/e2115aa7042b.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府コレクター・ブースター",
+   "key": "『ノークティス:深淵の水府』コレクター・ブースターボックス",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 コレクター・ブースター"
+  "official_name": "『ノークティス：深淵の水府』コレクター・ブースターボックス",
+  "per_box": 12,
+  "per_pack": 12
  },
  {
   "id": "i4348c7f58b",
@@ -3858,17 +3862,19 @@
   "pack": "",
   "box": "",
   "url": "https://mtg-jp.com/reading/publicity/0039869/",
-  "thumb": "",
+  "thumb": "thumbs/4bdddf76f945.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://mtg-jp.com/reading/publicity/0039869",
-   "key": "ノークティス:深淵の水府ブースターパック",
+   "key": "『ノークティス:深淵の水府』ブースターボックス",
    "site": "official"
   },
-  "official_name": "ノークティス：深淵の水府 ブースターパック"
+  "official_name": "『ノークティス：深淵の水府』ブースターボックス",
+  "per_box": 30,
+  "per_pack": 14
  },
  {
   "id": "i078f56860b",
@@ -3891,28 +3897,6 @@
   "official_name": "ブースターパック ネコぱら セカイコネクト/ラブプロジェクト",
   "per_pack": 6,
   "per_box": 10
- },
- {
-  "id": "i02fc1a6222",
-  "date": "2027-02-12",
-  "game": "Flesh and Blood",
-  "name": "疫禍襲来",
-  "pack": "",
-  "box": "5,760円",
-  "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/obk/",
-  "thumb": "thumbs/b8e04084747e.jpg",
-  "approx": false,
-  "sources": [
-   "official"
-  ],
-  "source": {
-   "url": "https://fabtcg.com/ja/products/%e3%83%96%e3%83%bc%e3%82%b9%e3%82%bf%e3%83%bc%e3%82%bb%e3%83%83%e3%83%88/obk",
-   "key": "疫禍襲来",
-   "site": "official"
-  },
-  "official_name": "疫禍襲来",
-  "per_pack": 9,
-  "per_box": 24
  },
  {
   "id": "id799a8a6eb",
@@ -3941,7 +3925,7 @@
   "date": "2027-02-12",
   "game": "UNION ARENA",
   "name": "『ジョジョの奇妙な冒険』シリーズ【UA62BT】",
-  "pack": "385円(税込)",
+  "pack": "385円",
   "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/jba-1.php",
   "thumb": "thumbs/925bd3d7bc7d.jpg",
@@ -3984,7 +3968,7 @@
   "date": "2027-02-12",
   "game": "ヴァイスシュヴァルツ",
   "name": "ブースターパック 魔法少女ノ魔女裁判",
-  "pack": "440円(税込)",
+  "pack": "440円",
   "box": "4,400円",
   "url": "https://ws-tcg.com/products/mjs_bp_ws/",
   "thumb": "thumbs/9bf4b071e219.jpg",
@@ -4007,7 +3991,7 @@
   "date": "2027-02-13",
   "game": "遊戯王ラッシュデュエル",
   "name": "合奏のシャーマンバンデット",
-  "pack": "198円(税込)",
+  "pack": "198円",
   "box": "",
   "url": "",
   "thumb": "",
@@ -4034,7 +4018,8 @@
   "thumb": "thumbs/497774bd47bc.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://unionarena-tcg.com/jp/products/boosters/ex_rly.php",
@@ -4075,10 +4060,11 @@
   "pack": "440円",
   "box": "4,400円",
   "url": "https://ws-tcg.com/products/bd_mmvol2_bp/",
-  "thumb": "",
+  "thumb": "thumbs/31076a500447.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://ws-tcg.com/products/bd_mmvol2_bp",
@@ -4095,12 +4081,13 @@
   "game": "ONE PIECE",
   "name": "ブースターパック 応答せよ、世界【OP-19】",
   "pack": "240円",
-  "box": "",
+  "box": "5,760円",
   "url": "https://www.onepiece-cardgame.com/products/op19.html",
-  "thumb": "",
+  "thumb": "thumbs/4a9bc27ae5d6.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://onepiece-cardgame.com/products/op19.html",
@@ -4115,8 +4102,8 @@
   "date": "2027-02-27",
   "game": "ガンダム",
   "name": "Cosmic Crisis [EB02]",
-  "pack": "250円(税込)",
-  "box": "",
+  "pack": "250円",
+  "box": "6,000円",
   "url": "https://www.gundam-gcg.com/jp/products/eb02.html",
   "thumb": "thumbs/517489ee2ca5.jpg",
   "approx": false,
@@ -4137,8 +4124,8 @@
   "date": "2027-02-27",
   "game": "バトルスピリッツ",
   "name": "[26RCB03]コラボブースター 学園アイドルマスター 輝けるアイドル",
-  "pack": "363円(税込)",
-  "box": "",
+  "pack": "363円",
+  "box": "5,808円",
   "url": "https://www.battlespirits.com/product/booster/booster-26rcb03.php",
   "thumb": "",
   "approx": false,
@@ -4213,7 +4200,8 @@
    "key": "anniversaryデッキvol.2deepflowers",
    "site": "official"
   },
-  "official_name": "Anniversaryデッキ vol.2 Deep Flowers"
+  "official_name": "Anniversaryデッキ vol.2 Deep Flowers",
+  "per_pack": 3
  },
  {
   "id": "idb3e8dfa0b",
@@ -4242,7 +4230,7 @@
   "date": "2027-02-27",
   "game": "遊戯王OCG",
   "name": "RARITY COLLECTION  -CLIMAX SCENE EDITION-",
-  "pack": "396円(税込)",
+  "pack": "396円",
   "box": "",
   "url": "",
   "thumb": "",
@@ -4266,17 +4254,17 @@
   "pack": "550円",
   "box": "5,500円",
   "url": "https://ws-rose.com/products/yuz2",
-  "thumb": "",
+  "thumb": "thumbs/7b6290a1a852.jpg",
   "approx": false,
   "sources": [
    "official"
   ],
   "source": {
    "url": "https://ws-rose.com/products/yuz2",
-   "key": "wsrブースターパックゆずソフトvol.2",
+   "key": "ブースターパックゆずソフトvol.2",
    "site": "official"
   },
-  "official_name": "WSR ブースターパック ゆずソフト Vol.2",
+  "official_name": "ブースターパック ゆずソフト Vol.2",
   "per_pack": 6,
   "per_box": 10
  },
@@ -4284,21 +4272,22 @@
   "id": "i67a22c2de1",
   "date": "2027-03-12",
   "game": "UNION ARENA",
-  "name": "ブースターパック 涼宮ハルヒの憂鬱【UA63BT】",
+  "name": "涼宮ハルヒの憂鬱【UA63BT】",
   "pack": "385円",
-  "box": "",
+  "box": "6,160円",
   "url": "https://www.unionarena-tcg.com/jp/products/boosters/shs-1.php",
-  "thumb": "",
+  "thumb": "thumbs/1ee405260c00.jpg",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://unionarena-tcg.com/jp/products/boosters/shs-1.php",
-   "key": "UA63BT",
+   "key": "ブースターパック涼宮ハルヒの憂鬱",
    "site": "official"
   },
-  "official_name": "ブースターパック 涼宮ハルヒの憂鬱【UA63BT】",
+  "official_name": "ブースターパック 涼宮ハルヒの憂鬱",
   "per_pack": 8,
   "per_box": 16
  },
@@ -4320,7 +4309,7 @@
    "key": "レボリューションパック-魂の探索-",
    "site": "official"
   },
-  "official_name": "レボリューションパック －魂の探索－"
+  "official_name": "レボリューションパック－魂の探索－"
  },
  {
   "id": "id9bdb93818",
@@ -4337,10 +4326,10 @@
   ],
   "source": {
    "url": "https://square-enix-shop.com/jp/ff-tcg/news/fftcg_2027_schedule.html",
-   "key": "英雄の交響曲(symphonyofheroes)ブースターパック日本語版",
+   "key": "ブースターパック英雄の交響曲",
    "site": "official"
   },
-  "official_name": "英雄の交響曲（Symphony of Heroes） ブースターパック 日本語版",
+  "official_name": "ブースターパック 英雄の交響曲",
   "per_box": 18,
   "per_pack": 12
  },
@@ -4354,9 +4343,7 @@
   "url": "",
   "thumb": "thumbs/1e98f11eeec9.jpg",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://square-enix-shop.com/jp/ff-tcg/news/fftcg_2027_schedule.html",
    "key": "英雄の交響曲(symphonyofheroes)ブースターパック英語版",
@@ -4372,12 +4359,13 @@
   "game": "バトルスピリッツ",
   "name": "[26REB01]ドリームブースター パワーオブリザレクション",
   "pack": "330円",
-  "box": "",
+  "box": "6,600円",
   "url": "https://www.battlespirits.com/product/booster/booster-26reb01.php",
   "thumb": "",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
    "url": "https://battlespirits.com/product/booster/booster-26reb01.php",
@@ -4397,15 +4385,36 @@
   "url": "https://www.battlespirits.com/product/starter/starter-26rsd14.php",
   "thumb": "",
   "approx": false,
-  "sources": [
-   "official"
-  ],
+  "sources": [],
   "source": {
    "url": "https://battlespirits.com/product/starter/starter-26rsd14.php",
    "key": "26RSD14",
    "site": "official"
   },
-  "official_name": "[26RSD14]ドリームスターター 3人の馬神"
+  "official_name": "[26RSD14]ドリームスターター 3人の馬神",
+  "per_pack": 60
+ },
+ {
+  "id": "i6999876319",
+  "date": "2027-04-02",
+  "game": "Flesh and Blood",
+  "name": "マスタリーパック：野人 ブースターボックス",
+  "pack": "",
+  "box": "2,880円",
+  "url": "",
+  "thumb": "thumbs/b315a8f59d34.jpg",
+  "approx": false,
+  "sources": [
+   "official"
+  ],
+  "source": {
+   "url": "https://fabtcg.com/ja/products/product/%e3%83%9e%e3%82%b9%e3%82%bf%e3%83%aa%e3%83%bc%e3%83%91%e3%83%83%e3%82%af%e9%87%8e%e4%ba%ba",
+   "key": "マスタリーパック:野人ブースターボックス",
+   "site": "official"
+  },
+  "official_name": "マスタリーパック：野人 ブースターボックス",
+  "per_box": 12,
+  "per_pack": 13
  },
  {
   "id": "i8cc911d298",
@@ -4438,10 +4447,11 @@
   "thumb": "",
   "approx": false,
   "sources": [
-   "official"
+   "official",
+   "torecamap"
   ],
   "source": {
-   "url": "https://onepiece-cardgame.com/products/per01.html",
+   "url": "https://onepiece-cardgame.com/products/peb01.html",
    "key": "PEB-01",
    "site": "official"
   },
