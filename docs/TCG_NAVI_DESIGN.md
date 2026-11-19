@@ -159,7 +159,7 @@ AI 适合调查来源、编写与修复适配器、解析不规则内容和辅�
 | 组件 | 候选 | 状态 |
 | --- | --- | --- |
 | 前端 | Worker 静态资源（`dist/`，`auto-trailing-slash`、`404-page`） | 已决定；替代 Cloudflare Pages |
-| 赛事查询 API | 同一 Worker，`run_worker_first: ["/api/*"]`；必须指定 1–5 个地点（都道府县或オンライン）；Cache API 按数据版本缓存 24 小时 | 已决定 |
+| 赛事查询 API | 同一 Worker，`run_worker_first: ["/api/*"]`；必须指定 1–5 个地点（都道府县或オンライン；页面只选 1 个）；Cache API 按数据版本缓存 24 小时 | 已决定 |
 | 赛事数据 | Cloudflare D1 `shindan-navi-events`（远端已创建，空库），Free 方案 | 已决定；本地手动导入 |
 | 浏览器采集 | 本机 Chrome | 现行方案；云端浏览器暂不考虑 |
 | 来源快照存储（R2）、任务队列 | — | 暂不引入，出现具体需求再评估 |

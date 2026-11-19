@@ -68,8 +68,9 @@ Tests use the same stand-in.
   newest import of the event's games).
 - Shared events: the same `id` under several games is stored once; `game_mask` holds every listing game. Copies
   should be identical apart from `game_code`/`last_seen_at`; if not, the importer warns and the last game read wins.
-- Meta (game windows, prefecture / online / category / type counts over each game's latest window) is computed in
-  the importer from the post-import state and stored as JSON, so `/events/meta` reads one row.
+- Meta (game windows, prefecture / online / category / type counts over each game's latest window, and `loc_counts`:
+  per location × game_mask × type × month weekend/weekday counts for the location picker) is computed in the importer
+  from the post-import state and stored as JSON, so `/events/meta` reads one row (~20 KB with the current data).
 - Statements are chunked to at most 60,000 UTF-8 bytes including the INSERT head and ON CONFLICT tail (D1 limit
   100 KB). A first import of the current data (~33k events) is ~580 statements, ~34 MB of SQL (`wrangler d1
   execute --file` accepts up to 5 GiB).
@@ -351,7 +352,7 @@ the first import.
 - The API accepts exactly what the page sends: `pref`, `from`, `until`, `game`, `type`, `days` (`weekend`/`weekday`),
   plus `limit` (only 50) and `cursor` for `/events`. Anything else is 400, so it can neither bypass the cache nor add
   work. Empty list values (`game=`) mean "no filter"; `from`, `until`, `days`, `limit`, `cursor` may appear once.
-- `pref` is required: 1-5 of `JP-01`..`JP-47` / `online`.
+- `pref` is required: 1-5 of `JP-01`..`JP-47` / `online` (the page sends one).
 - Ranges are month-shaped: `/events/days` takes a whole month, `/events` any start day up to the 1st of the next
   month. Both are clamped to the data window (union of the latest import windows, kept in site_meta `state`); a
   range wholly outside answers empty without a D1 read.
