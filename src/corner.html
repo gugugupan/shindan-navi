@@ -1,14 +1,14 @@
 <!--
-  Top-right corner of every page, inserted by build.py at the CORNER slot (styles: "corner" in template.html).
-  Product switch (TOOLS; a bottom tab bar on phones), settings (theme; logged in, it moves into the account 設定 dialog),
-  and with LOGIN_ENABLED the user control. With FEEDBACK_ENABLED both menus link to /feedback/?from=<this path>.
+  Logo-row controls of every page, inserted by build.py at the CORNER slot (styles: "corner" in template.html).
+  The product switch (TOOLS) sits right after the logo (a bottom tab bar on phones); the corner on the right holds
+  settings (theme; logged in, it moves into the account 設定 dialog) and with LOGIN_ENABLED the user control. With FEEDBACK_ENABLED both menus link to /feedback/?from=<this path>.
   The user control calls /api/v1/me only while the __Host-sn_user cookie is set, so logged-out visitors make no
   /api calls. It publishes the user as window.snUser (undefined = not known yet, null = logged out) and a
   "sn:user" event on document whenever that changes. Logged in, it also syncs favourites, /events/ saved filters
   and the add-to-calendar setting with the account (window.snPrefs, "sn:prefs" event; see the sync block below).
 -->
+<!--TOOLTABS-->
 <div class="corner">
-  <!--TOOLTABS-->
   <div class="cmenu" id="setBox">
     <button class="cbtn" id="setBtn" aria-haspopup="true" aria-expanded="false" aria-controls="setPop" aria-label="設定" title="設定"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     <div class="cpop" id="setPop" hidden>

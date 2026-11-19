@@ -27,8 +27,9 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${server.address().port}`;
 
-const pages = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/.pages.json'), 'utf8')).map(p => p.path)
-  .filter(p => p !== '/events/'); // needs the Worker API; see api/scripts/preview-check.mjs
+const PAGES = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/.pages.json'), 'utf8'));
+const pages = PAGES.map(p => p.path).filter(p => p !== '/events/'); // needs the Worker API; see api/scripts/preview-check.mjs
+const pageGame = Object.fromEntries(PAGES.map(p => [p.path, p.js && p.js.game]));
 const VIEWPORTS = { desktop: { width: 1280, height: 900 }, mobile: { width: 390, height: 844, isMobile: true, hasTouch: true } };
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -36,6 +37,8 @@ const fails = [];
 const fail = (where, msg) => fails.push(`${where}: ${msg}`);
 // /feedback/ is built only with FEEDBACK_ENABLED=1; Turnstile and the API are stubbed.
 const HAS_FEEDBACK = fs.existsSync(path.join(DIST, 'feedback/index.html'));
+// BUILD_EVENTS=0 builds have no /events/ and no tool tabs
+const HAS_EVENTS = fs.existsSync(path.join(DIST, 'events/index.html'));
 const TURNSTILE_STUB = `window.turnstile={_o:null,_n:0,
   render(el,o){this._o=o;setTimeout(()=>o.callback('tok-'+(++this._n)),0);return 'w1';},
   reset(){window.__tsResets=(window.__tsResets||0)+1;setTimeout(()=>this._o.callback('tok-'+(++this._n)),0);}};
@@ -95,6 +98,22 @@ async function checkFeedback(ctx, vp) {
   console.log(`  ${where.padEnd(22)} posts=${posts.length}`);
   await page.close();
 }
+// Logo row: the tool tabs follow the logo on desktop (settings / user at the right end), a bottom bar on phones.
+async function headerProblem(page, width) {
+  const h = await page.evaluate(() => {
+    const r = s => document.querySelector(s)?.getBoundingClientRect();
+    const tabs = document.querySelector('header.top .tooltabs');
+    return { tabs: !!tabs, fixed: tabs && getComputedStyle(tabs).position === 'fixed', brand: r('header.top .brand'), t: r('header.top .tooltabs'),
+      corner: r('header.top .corner'), header: r('header.top') };
+  });
+  if (!h.tabs) return HAS_EVENTS ? 'no tool tabs in the logo row' : '';
+  if (width <= 760) return h.fixed ? '' : 'tool tabs are not the bottom bar';
+  if (h.fixed) return 'tool tabs fixed on desktop';
+  if (h.t.left < h.brand.right || h.t.left - h.brand.right > 24) return `tool tabs not right after the logo (${Math.round(h.t.left - h.brand.right)}px)`;
+  if (h.t.right > h.corner.left) return 'tool tabs overlap the corner';
+  if (Math.abs(h.corner.right - h.header.right) > 1) return 'corner not at the right end';
+  return '';
+}
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 
 for (const [vp, opt] of Object.entries(VIEWPORTS)) {
@@ -115,17 +134,23 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.evaluate(() => { for (const i of document.images) i.loading = 'eager'; });
     await page.waitForLoadState('networkidle');
 
-    const st = await page.evaluate(() => {
+    const st = await page.evaluate(game => {
+      const gm = game ? [...new Set(DATA.filter(d => d.game === game).map(d => d.date.slice(0, 7)))].sort() : [];
       const visibleCards = [...document.querySelectorAll('.pk')].filter(e => e.offsetParent).length;
       const brokenImgs = [...document.images].filter(i => i.complete && i.naturalWidth === 0).map(i => i.getAttribute('src'));
       return { month: document.getElementById('monthLabel').textContent,
         noneUpcoming: (document.querySelector('.ptitle p')?.textContent || '').includes('発売予定の新弾はありません'),
-        visibleCards, brokenImgs, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
-    });
+        visibleCards, brokenImgs, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        gm, note: !document.getElementById('mnote').hidden };
+    }, pageGame[p] || null);
     const m = /^\/(\d{4})-(\d{2})\/$/.exec(p);
     const [wy, wm] = m ? [m[1], m[2]] : TODAY.split('-');
-    const want = `${+wy}年${+wm}月`;
+    // a title page with nothing this month opens on the title's next month with releases (else its latest) and says so
+    const cur = `${wy}-${wm}`, gm = st.gm;
+    const open = gm.length && !gm.includes(cur) ? gm.find(x => x > cur) || gm.at(-1) : cur;
+    const want = `${+open.slice(0, 4)}年${+open.slice(5)}月`;
     if (st.month !== want) fail(where, `calendar opens on ${st.month}, expected ${want}`);
+    if (st.note !== (open !== cur)) fail(where, `month note ${st.note ? 'shown' : 'missing'}`);
     let shown = st.visibleCards;
     if (!shown && !st.noneUpcoming && !m) {
       // a title can have nothing this month; its upcoming items must then be a few 次月 clicks away
@@ -137,6 +162,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (shown) await page.locator('#goToday').click();
     }
     if (!shown && !st.noneUpcoming) fail(where, 'no visible release cards');
+    const hdr = await headerProblem(page, opt.width);
+    if (hdr) fail(where, hdr);
     if (st.brokenImgs.length) fail(where, `broken images ${st.brokenImgs.slice(0, 3).join(', ')}`);
     if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
     for (const b of [...new Set(bad)]) fail(where, b);
@@ -231,6 +258,49 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (!dlg.open || dlg.n !== todays.length || dlg.hash) fail(`${vp} /releases/#d=`, `dialog ${JSON.stringify(dlg)}`);
   }
   console.log(`  ${where.padEnd(22)} today=${todays.length} events=${hasEvents} api=${api.length}`);
+  await ctx.close();
+}
+// /events/ with a stubbed API: today's events in Tokyo. The day view's 今日 returns to the calendar without saving
+// リスト as the default view; phones show the count without opening 絞り込み.
+for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
+  const where = `${vp} /events/`;
+  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  const bad = [];
+  page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  const until = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 92 * 864e5).toISOString().slice(0, 10);
+  await page.route('**/api/v1/**', route => {
+    const u = new URL(route.request().url());
+    if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [{ code: 'OPCG', record_count: 7, complete: true,
+      fetched_at: `${TODAY}T06:00:00+09:00`, window: { from: TODAY, until } }], types: [], prefectures: [{ code: 'JP-13', count: 7 }] } });
+    if (u.pathname.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 7, by_game: { OPCG: 7 } }] } });
+    const from = u.searchParams.get('from');
+    route.fulfill({ json: { events: from > TODAY ? [] : Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, name: `テスト大会 ${i + 1}`, game_code: 'OPCG',
+      game_codes: ['OPCG'], starts_on: TODAY, time_precision: 'date', timezone: 'Asia/Tokyo', attendance_mode: 'offline',
+      venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' })), next_cursor: null } });
+  });
+  try {
+    await page.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'networkidle' });
+    const hdr = await headerProblem(page, opt.width);
+    if (hdr) fail(where, hdr);
+    await page.locator(`.cd[data-day="${TODAY}"]`).click();
+    await page.locator('#list .ev').first().waitFor();
+    const mcount = page.locator('#rhead .mcount');
+    if (opt.width <= 760 && !(await mcount.isVisible() && (await mcount.textContent()).includes('7'))) fail(where, 'day view: count not visible without 絞り込み');
+    if (opt.width > 760 && await mcount.isVisible()) fail(where, 'count shown twice on desktop');
+    await page.locator('#goToday').click();
+    await page.waitForFunction(() => !location.search.includes('range=custom'));
+    const after = await page.evaluate(() => ({ q: location.search, cal: !document.getElementById('calv').hidden, saved: JSON.parse(localStorage.getItem('tcg.ev.filters') || 'null'),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+    if (!after.cal || /view=list/.test(after.q) || after.saved?.view === 'list') fail(where, `今日 from the day view saved the list view: ${after.q} ${JSON.stringify(after.saved)}`);
+    if (after.overflow > 1) fail(where, `page scrolls horizontally by ${after.overflow}px`);
+    await page.screenshot({ path: path.join(OUT, `${vp}-events.png`), fullPage: false });
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
 await browser.close();

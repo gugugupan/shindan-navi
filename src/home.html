@@ -164,7 +164,7 @@ function renderRel(){
   } else {
     body.innerHTML = `<div class="rels">${its.map(d=>{
       const pr = d.pack ? `<span class="pr">${esc(d.pack)}</span>` : '';
-      return `<a class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}" href="/releases/#i=${d.id}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" aria-label="お気に入り">★</span>':''}${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></a>`;
+      return `<a class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}" href="/releases/#i=${d.id}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></a>`;
     }).join('')}</div>`;
   }
   const u=user(), nStar=its.filter(isStar).length;

@@ -164,7 +164,7 @@ def page_def():
     return pages
 
 ICO=lambda d:f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg>'
-# path, name (prefix + suffix the toolbar drops between 761 and 1100px), icon
+# path, name (two parts, joined), icon
 # BUILD_EVENTS=0 leaves /events/ out entirely (page, sitemap, tool tabs): hosts without the /api/ Worker (the Pages site before cutover).
 BUILD_EVENTS=os.environ.get('BUILD_EVENTS','1')!='0'
 TOOLS=[('/releases/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
@@ -188,10 +188,10 @@ def flags(src):
 def tooltabs(tool):
     if len(TOOLS)<2: return ''
     return '<nav class="tooltabs" aria-label="ツール">'+''.join(
-        f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}<span class="tl">{b}</span></span></a>' for p,a,b,ic in TOOLS)+'</nav>'
+        f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}{b}</span></a>' for p,a,b,ic in TOOLS)+'</nav>'
 CORNER_SRC=open(os.path.join(ROOT,'src/corner.html')).read()
 def corner(tool):
-    # top-right corner of every page: product switch, settings, user (src/corner.html)
+    # logo-row controls of every page: product switch after the logo, settings and user on the right (src/corner.html)
     return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
 def siterow(cur):
     cur_=lambda p:' aria-current="page"' if cur==p else ''
