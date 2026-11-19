@@ -1,7 +1,7 @@
 <!--
   Top-right corner of every page, inserted by build.py at the CORNER slot (styles: "corner" in template.html).
   Product switch (TOOLS; a bottom tab bar on phones), settings (theme; logged in, it moves into the account 設定 dialog),
-  and with LOGIN_ENABLED the user control.
+  and with LOGIN_ENABLED the user control. With FEEDBACK_ENABLED both menus link to /feedback/?from=<this path>.
   The user control calls /api/v1/me only while the __Host-sn_user cookie is set, so logged-out visitors make no
   /api calls. It publishes the user as window.snUser (undefined = not known yet, null = logged out) and a
   "sn:user" event on document whenever that changes. Logged in, it also syncs favourites, /events/ saved filters
@@ -14,7 +14,8 @@
     <div class="cpop" id="setPop" hidden>
       <p class="cpop-h" id="setThemeH">テーマ</p>
       <div class="seg themeseg" role="radiogroup" aria-labelledby="setThemeH"><button role="radio" data-theme-v="auto">自動</button><button role="radio" data-theme-v="light">ライト</button><button role="radio" data-theme-v="dark">ダーク</button></div>
-    </div>
+<!--FEEDBACK-->      <hr class="cpop-sep"><a class="mi" href="/feedback/" data-feedback>ご意見・ご要望</a>
+<!--/FEEDBACK-->    </div>
   </div>
 <!--LOGIN-->
   <div class="cmenu" id="userBox">
@@ -23,7 +24,8 @@
     <div class="cpop" id="userPop" hidden>
       <p class="cpop-h cpop-user" id="userName"></p>
       <button class="mi" data-acct="settings">設定</button>
-      <button class="mi" data-acct="logout">ログアウト</button>
+<!--FEEDBACK-->      <a class="mi" href="/feedback/" data-feedback>ご意見・ご要望</a>
+<!--/FEEDBACK-->      <button class="mi" data-acct="logout">ログアウト</button>
       <button class="mi danger" data-acct="delete">アカウント削除</button>
     </div>
   </div>
@@ -65,6 +67,9 @@
     theme=b.dataset.themeV; ls.set('tcg.theme',theme); track('change_theme',{theme}); applyTheme();
   });
   applyTheme();
+
+  // ---- feedback links carry the page they were opened from
+  if(location.pathname!=='/feedback/') document.querySelectorAll('a[data-feedback]').forEach(a=>{ a.href=`/feedback/?from=${encodeURIComponent(location.pathname).replace(/%2F/g,'/')}`; });
 
   // ---- popover menus (one open at a time; outside click / Escape closes)
   const menus=[...document.querySelectorAll('.corner [aria-controls][aria-haspopup]')];

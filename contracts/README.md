@@ -225,6 +225,26 @@ Client rules:
 - On 5xx or a failed write keep local state and fall back to localStorage silently; never log out on 5xx.
 - `__Host-` + `Secure` cookies work on `http://localhost` in Chrome, not in Safari.
 
+## Feedback API (`/feedback/` form)
+
+Same Worker and origin. Dark until enabled: answers 404 `{ "error": "feedback disabled" }` while `TURNSTILE_SECRET_KEY`,
+`FEEDBACK_TO` or the `FEEDBACK_EMAIL` binding is missing or the origin is not `SITE_ORIGIN` (setup: `api/README.md` ›
+Feedback). `Cache-Control: private, no-store`, never cached, no CORS headers.
+
+```
+POST /api/v1/feedback      Origin: SITE_ORIGIN, Content-Type: application/json, body ≤ 16 KB
+  { "kind": "bug" | "request" | "data" | "other",
+    "message": string,          1-2,000 characters after trim (code points); tab/newline allowed, other controls not
+    "reply_to"?: string|null,   plain address ≤ 254 ("" = none)
+    "page"?: string|null,       same-origin path the visitor came from (?from=), ≤ 512 ("" = none)
+    "turnstile": string }       Cloudflare Turnstile token (action "feedback")
+  → 202 { "ok": true, "id": "<uuid>" }   stored; the notification mail may still have failed (recorded server-side)
+  | 400 invalid body | 403 wrong Origin or Turnstile failed | 413 body too large | 415 not JSON
+  | 429 rate limited (Retry-After: 60) | 503 Turnstile unavailable (Retry-After: 60) | 500 not stored
+```
+
+Unknown fields are 400. A logged-in session cookie, if any, links the row to the account (server-side only).
+
 ## Getting data into the production D1
 
 Manual, from the operator's machine with the collected files in `data/events/`; CI never imports. No git step:

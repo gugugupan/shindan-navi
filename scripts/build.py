@@ -173,8 +173,16 @@ if not BUILD_EVENTS: TOOLS=[t for t in TOOLS if t[0]!='/events/']
 # Login UI (user control in the corner, sync wording in the legends, LOGIN parts of /privacy/): LOGIN_ENABLED=1, a repo
 # variable passed to the Worker build only; always off with BUILD_EVENTS=0 (no Worker behind that build).
 LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
+# Feedback form (/feedback/, its links in the footer and both corner menus, FEEDBACK parts of /privacy/ and 404.html):
+# FEEDBACK_ENABLED=1, Worker build only like LOGIN_ENABLED. TURNSTILE_SITE_KEY is the widget's public site key.
+FEEDBACK_ENABLED=BUILD_EVENTS and os.environ.get('FEEDBACK_ENABLED','')=='1'
+TURNSTILE_SITE_KEY=os.environ.get('TURNSTILE_SITE_KEY','').strip()
+if FEEDBACK_ENABLED and not re.fullmatch(r'[0-9A-Za-z_-]{10,100}',TURNSTILE_SITE_KEY):
+    sys.exit('FEEDBACK_ENABLED=1 needs TURNSTILE_SITE_KEY (the Turnstile widget site key, a repo variable)')
 def flags(src):
-    for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED)):
+    # STORE: parts about data kept on the server (login or feedback)
+    for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED),
+                     ('FEEDBACK',FEEDBACK_ENABLED),('STORE',LOGIN_ENABLED or FEEDBACK_ENABLED),('NOSTORE',not (LOGIN_ENABLED or FEEDBACK_ENABLED))):
         src=re.sub(rf'<!--{tag}-->(.*?)<!--/{tag}-->\n?',(lambda m:m.group(1)) if keep else '',src,flags=re.S)
     return src
 def tooltabs(tool):
@@ -187,7 +195,10 @@ def corner(tool):
     return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
 def siterow(cur):
     cur_=lambda p:' aria-current="page"' if cur==p else ''
-    return f'<div><b>新弾ナビ</b><a href="/"{cur_("/")}>トップ（全タイトル）</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a></div>'
+    fb=''
+    if FEEDBACK_ENABLED:
+        fb=f'<a href="/feedback/"{cur_("/feedback/")}>ご意見・ご要望</a>' if cur=='/feedback/' else f'<a href="/feedback/?from={urllib.parse.quote(cur)}">ご意見・ご要望</a>'
+    return f'<div><b>新弾ナビ</b><a href="/"{cur_("/")}>トップ（全タイトル）</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a>{fb}</div>'
 def toolrow(cur):
     if len(TOOLS)<2: return ''
     return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{a}{b}</a>' for p,a,b,ic in TOOLS)+'</div>'
@@ -324,13 +335,18 @@ def render_events():
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
 # Privacy policy (/privacy/). Each date is the day that variant first went live, set by hand: BASE = 制定 (the policy
-# without login), LOGIN = the revision that adds login, published only with LOGIN_ENABLED=1. Leave LOGIN None until
-# the day login is enabled.
+# without login), LOGIN = the revision that adds login, published only with LOGIN_ENABLED=1, FEEDBACK = the revision
+# that adds the feedback form, published only with FEEDBACK_ENABLED=1. Leave a date None until the day its feature
+# is enabled. 最終改定日 and the sitemap lastmod are the latest date among the enabled revisions.
 PRIVACY_EFFECTIVE_BASE='2026-11-19'
 PRIVACY_EFFECTIVE_LOGIN='2026-11-19'
+PRIVACY_EFFECTIVE_FEEDBACK=None
 if LOGIN_ENABLED and not PRIVACY_EFFECTIVE_LOGIN:
     sys.exit('LOGIN_ENABLED=1 needs PRIVACY_EFFECTIVE_LOGIN in scripts/build.py: set it to the date login goes live (YYYY-MM-DD)')
-PRIVACY_LASTMOD=PRIVACY_EFFECTIVE_LOGIN if LOGIN_ENABLED else PRIVACY_EFFECTIVE_BASE
+if FEEDBACK_ENABLED and not PRIVACY_EFFECTIVE_FEEDBACK:
+    sys.exit('FEEDBACK_ENABLED=1 needs PRIVACY_EFFECTIVE_FEEDBACK in scripts/build.py: set it to the date the feedback form goes live (YYYY-MM-DD)')
+PRIVACY_REVISIONS=[d for d,on in ((PRIVACY_EFFECTIVE_LOGIN,LOGIN_ENABLED),(PRIVACY_EFFECTIVE_FEEDBACK,FEEDBACK_ENABLED)) if on]
+PRIVACY_LASTMOD=max(PRIVACY_REVISIONS,default=PRIVACY_EFFECTIVE_BASE)
 PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
     desc='新弾ナビのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
 def render_privacy():
@@ -347,8 +363,11 @@ def render_privacy():
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--EFFECTIVE-->',day(PRIVACY_EFFECTIVE_BASE))
-    if LOGIN_ENABLED: src=src.replace('<!--REVISED-->',day(PRIVACY_EFFECTIVE_LOGIN))
-    assert '<!--REVISED-->' not in src
+    assert src.count('<!--REVISED-->')==1
+    src=src.replace('<!--REVISED-->',f'（最終改定日：{day(PRIVACY_LASTMOD)}）' if PRIVACY_REVISIONS else '')
+    if LOGIN_ENABLED: src=src.replace('<!--REVISED_LOGIN-->',day(PRIVACY_EFFECTIVE_LOGIN))
+    if FEEDBACK_ENABLED: src=src.replace('<!--REVISED_FEEDBACK-->',day(PRIVACY_EFFECTIVE_FEEDBACK))
+    assert '<!--REVISED' not in src
     assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
     title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
@@ -382,9 +401,49 @@ def render_privacy():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
+# /feedback/: noindex and not in the sitemap (a form, nothing to find in search; it only works with the Worker setup).
+FEEDBACK_PAGE=dict(path='/feedback/',desc='新弾ナビへのご意見・ご要望、不具合やデータの誤りのご報告はこちらから。')
+def render_feedback():
+    src=open(os.path.join(ROOT,'src/feedback.html')).read()
+    src=re.sub(r'\A<!--.*?-->\n','',src,count=1,flags=re.S)
+    src=flags(src)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),
+                     ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/feedback/")}{siterow("/feedback/")}</nav>'),
+                     ("/*TURNSTILE_SITE_KEY*/''",json.dumps(TURNSTILE_SITE_KEY))):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
+    title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    pg=FEEDBACK_PAGE
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="canonical" href="{SITE}{pg['path']}">
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
 shutil.copytree(os.path.join(ROOT,'public'),dist)
+nf=os.path.join(dist,'404.html')
+nf_src=flags(open(nf).read())
+open(nf,'w').write(nf_src)
 pages=page_def()
 for pg in pages:
     d=os.path.join(dist,pg['path'].strip('/'))
@@ -395,6 +454,9 @@ if BUILD_EVENTS:
     open(os.path.join(dist,'events/index.html'),'w').write(render_events())
 os.makedirs(os.path.join(dist,'privacy'),exist_ok=True)
 open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
+if FEEDBACK_ENABLED:
+    os.makedirs(os.path.join(dist,'feedback'),exist_ok=True)
+    open(os.path.join(dist,'feedback/index.html'),'w').write(render_feedback())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
@@ -408,4 +470,4 @@ if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
-print('pages',len(pages),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+print('pages',len(pages),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)

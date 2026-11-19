@@ -22,6 +22,12 @@ describe('remote-config', () => {
     expect(c.routes).toBeUndefined();
     expect(remoteConfig(FAKE_ID, { domain: true }).routes).toEqual([{ pattern: 'shindan-navi.app', custom_domain: true }]);
   });
+  it('adds the feedback mail binding only with feedback on, never with a fixed destination', () => {
+    expect(readBaseConfig().send_email).toBeUndefined();
+    expect(remoteConfig(FAKE_ID).send_email).toBeUndefined();
+    const [b] = remoteConfig(FAKE_ID, { feedback: true }).send_email;
+    expect(b).toEqual({ name: 'FEEDBACK_EMAIL', allowed_sender_addresses: ['feedback-form@shindan-navi.app'] });
+  });
   it('refuses a missing, placeholder or malformed id', () => {
     for (const id of [undefined, '', '  ', PLACEHOLDER_ID, 'abc', `${FAKE_ID}x`]) expect(() => remoteConfig(id)).toThrow(/D1_DATABASE_ID/);
   });

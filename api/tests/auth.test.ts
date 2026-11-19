@@ -425,7 +425,7 @@ describe('limits and misc', () => {
     expect(Object.keys(await import('../src/index'))).toEqual(['default']);
   });
   it('the Worker bundle has no dev login', async () => {
-    const out = await build({ entryPoints: [join(__dirname, '../src/index.ts')], bundle: true, format: 'esm', platform: 'neutral', write: false, logLevel: 'silent' });
+    const out = await build({ entryPoints: [join(__dirname, '../src/index.ts')], bundle: true, format: 'esm', platform: 'neutral', write: false, logLevel: 'silent', external: ['cloudflare:*'] });
     const code = out.outputFiles[0].text;
     expect(code).toContain('/api/v1/auth/google/callback');
     expect(code).not.toMatch(/__dev|dev-login|devLogin/);

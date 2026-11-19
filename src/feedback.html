@@ -1,0 +1,193 @@
+<!--
+  /feedback/ (ご意見・ご要望), built only with FEEDBACK_ENABLED=1. Head (noindex, not in the sitemap) comes from
+  render_feedback() in build.py. Posts to /api/v1/feedback (contracts/README.md › Feedback API) with a Cloudflare
+  Turnstile token; the site key fills TURNSTILE_SITE_KEY. ?from=<path> names the page the visitor came from.
+  On any error the entered text stays in the form and the Turnstile widget is reset (tokens are single-use).
+-->
+<title>ご意見・ご要望｜新弾ナビ</title>
+<style>/*SITE_CSS*/</style>
+<style>/*PAGE_FONTS*/</style>
+<style>
+.doc{max-width:720px;margin:4px auto 0}
+.doc h1{font-family:var(--display);font-size:clamp(22px,3.4vw,30px);line-height:1.25;margin:8px 0 6px}
+.doc .lead{margin:0 0 12px;font-size:13.5px;line-height:1.8;color:var(--muted)}
+.doc .seo{margin-top:12px}
+.doc a{color:var(--accent)}
+.fb{display:grid;gap:18px}
+.fb fieldset{border:0;margin:0;padding:0;min-width:0}
+.fb legend,.fb .lbl{display:block;font-weight:700;font-size:13.5px;margin:0 0 6px;padding:0}
+.fb .req,.fb .opt{font-size:11px;font-weight:700;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+.fb .req{background:var(--accent-soft);color:var(--accent)}
+.fb .opt{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.fb .kinds{display:flex;flex-wrap:wrap;gap:8px}
+.fb .kinds label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px 6px 10px;font-size:13px;cursor:pointer}
+.fb .kinds label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.fb .kinds input{accent-color:var(--accent);margin:0}
+.fb textarea,.fb input[type=email]{display:block;width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.fb textarea{min-height:180px;resize:vertical;line-height:1.7}
+.fb textarea:focus-visible,.fb input[type=email]:focus-visible{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.fb textarea[aria-invalid="true"],.fb input[aria-invalid="true"]{border-color:var(--sun)}
+.fb .hint{margin:6px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
+.fb .count{float:right;font-family:var(--mono);font-size:11.5px}
+.fb .count.over{color:var(--sun);font-weight:700}
+.fb .err{margin:6px 0 0;font-size:12.5px;font-weight:700;color:var(--sun)}
+.fb .err:empty{display:none}
+.fb .from{margin:0;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.fb .from code{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.fb .ts{min-height:65px}
+.fb .actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.fb .sbtn{height:40px;padding:0 22px;font-size:14px}
+.fb .sbtn[aria-busy="true"]{opacity:.6;cursor:progress}
+.fb .note{margin:0;font-size:12px;color:var(--muted);line-height:1.7}
+.fbstatus{margin:0;padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.7}
+.fbstatus:empty{display:none}
+.fbstatus.error{background:color-mix(in srgb,var(--sun) 12%,var(--surface));border:1px solid var(--sun)}
+.fbdone h2{font-size:17px;margin:0 0 8px}
+.fbdone p{margin:0 0 8px;font-size:13.5px;line-height:1.8}
+@media (max-width:760px){.doc .seo{padding:14px 12px}.fb .sbtn{width:100%}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <!--BRAND-->
+    <!--CORNER-->
+  </header>
+
+  <main class="doc">
+    <h1>ご意見・ご要望</h1>
+    <p class="lead">不具合のご報告、機能のご要望、発売日や商品情報の誤りなどをお知らせください。いただいた内容はサイトの改善に役立てます。すべてのご意見に返信できるとは限りません。</p>
+
+    <section class="seo about" id="fbFormBox">
+      <form class="fb" id="fbForm" novalidate>
+        <fieldset id="fbKind" aria-describedby="fbKindErr">
+          <legend>種類<span class="req">必須</span></legend>
+          <div class="kinds">
+            <label><input type="radio" name="kind" value="bug"> 不具合</label>
+            <label><input type="radio" name="kind" value="request"> 要望</label>
+            <label><input type="radio" name="kind" value="data"> データの誤り</label>
+            <label><input type="radio" name="kind" value="other"> その他</label>
+          </div>
+          <p class="err" id="fbKindErr"></p>
+        </fieldset>
+
+        <div>
+          <label class="lbl" for="fbMessage">内容<span class="req">必須</span><span class="count" id="fbCount" aria-hidden="true">0 / 2000</span></label>
+          <textarea id="fbMessage" name="message" maxlength="2000" required aria-describedby="fbMessageHint fbMessageErr"></textarea>
+          <p class="hint" id="fbMessageHint">2,000 文字まで。データの誤りの場合は、商品名と正しい内容（わかれば公式ページの URL）を書いていただけると助かります。</p>
+          <p class="err" id="fbMessageErr"></p>
+        </div>
+
+        <div>
+          <label class="lbl" for="fbEmail">返信先メールアドレス<span class="opt">任意</span></label>
+          <input type="email" id="fbEmail" name="reply_to" maxlength="254" autocomplete="email" inputmode="email" spellcheck="false" aria-describedby="fbEmailHint fbEmailErr">
+          <p class="hint" id="fbEmailHint">返信が必要な場合のみ入力してください。返信以外には使いません。</p>
+          <p class="err" id="fbEmailErr"></p>
+        </div>
+
+        <p class="from" id="fbFromRow" hidden>送信元ページ：<code id="fbFrom"></code>（あわせて送信されます）</p>
+
+        <div class="ts" id="fbTs"></div>
+
+        <p class="fbstatus" id="fbStatus" role="alert"></p>
+
+        <div class="actions">
+          <button class="sbtn" type="submit" id="fbSend">送信する</button>
+        </div>
+        <p class="note">送信内容の取り扱いは<a href="/privacy/">プライバシーポリシー</a>をご覧ください。<!--LOGIN-->ログイン中に送信した場合は、アカウントの ID もあわせて記録します。<!--/LOGIN-->スパム防止のため Cloudflare Turnstile を使用しています。</p>
+      </form>
+    </section>
+
+    <section class="seo about fbdone" id="fbDone" hidden>
+      <h2 id="fbDoneH" tabindex="-1">送信しました</h2>
+      <p>ご意見ありがとうございました。いただいた内容は運営者が確認します。</p>
+      <p><a href="/" id="fbBack">新弾ナビに戻る</a></p>
+    </section>
+  </main>
+
+  <!--SITENAV-->
+</div>
+<script>
+(function(){
+  const SITE_KEY=/*TURNSTILE_SITE_KEY*/'';
+  const API='/api/v1/feedback', MAX=2000;
+  const $=id=>document.getElementById(id);
+  const form=$('fbForm'), msg=$('fbMessage'), email=$('fbEmail'), send=$('fbSend'), status=$('fbStatus'), count=$('fbCount');
+  const track=(name,params)=>{ try{ if(window.gtag) window.gtag('event',name,params||{}); }catch(e){} };
+
+  // the page the visitor came from: a same-origin path only
+  const q=new URLSearchParams(location.search).get('from')||'';
+  const page=q.length<=512&&q[0]==='/'&&q[1]!=='/'&&!/[\\\s\u0000-\u001f\u007f]/.test(q)&&!q.startsWith('/feedback/')?q:'';
+  if(page){ $('fbFrom').textContent=page; $('fbFromRow').hidden=false; $('fbBack').href=page; $('fbBack').textContent='元のページに戻る'; }
+
+  const len=s=>[...s].length;
+  function updateCount(){
+    const n=len(msg.value); count.textContent=`${n} / ${MAX}`; count.classList.toggle('over',n>MAX);
+  }
+  msg.addEventListener('input',()=>{ updateCount(); if(msg.getAttribute('aria-invalid')==='true'&&msg.value.trim()) setErr(msg,$('fbMessageErr'),''); });
+  updateCount();
+  form.addEventListener('change',e=>{ if(e.target.name==='kind') setErr($('fbKind'),$('fbKindErr'),''); });
+  email.addEventListener('input',()=>{ if(email.getAttribute('aria-invalid')==='true') setErr(email,$('fbEmailErr'),''); });
+
+  function setErr(field,box,text){
+    box.textContent=text;
+    if(text) field.setAttribute('aria-invalid','true'); else field.removeAttribute('aria-invalid');
+  }
+  function say(text){ status.textContent=text; status.className='fbstatus'+(text?' error':''); }
+
+  // ---- Cloudflare Turnstile (explicit render; loaded only on this page)
+  let token='', widget=null;
+  window.snTurnstileReady=function(){
+    const t=document.documentElement.getAttribute('data-theme');
+    widget=window.turnstile.render('#fbTs',{sitekey:SITE_KEY, action:'feedback', language:'ja', theme:t==='dark'||t==='light'?t:'auto',
+      'refresh-expired':'auto',
+      callback:v=>{ token=v; if(status.dataset.ts) { say(''); delete status.dataset.ts; } },
+      'expired-callback':()=>{ token=''; },
+      'error-callback':()=>{ token=''; }});
+  };
+  const s=document.createElement('script');
+  s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=snTurnstileReady';
+  s.async=true; s.defer=true;
+  s.onerror=()=>say('スパム防止の確認（Cloudflare Turnstile）を読み込めませんでした。通信環境を確認して、ページを再読み込みしてください。入力した内容は再読み込みすると消えるため、必要ならコピーしておいてください。');
+  document.head.appendChild(s);
+  function resetWidget(){ token=''; try{ if(widget!=null) window.turnstile.reset(widget); }catch(e){} }
+
+  function validate(){
+    const kind=form.querySelector('input[name="kind"]:checked');
+    const text=msg.value.trim(), mail=email.value.trim();
+    setErr($('fbKind'),$('fbKindErr'),kind?'':'種類を選んでください。');
+    setErr(msg,$('fbMessageErr'),!text?'内容を入力してください。':len(text)>MAX?`${MAX} 文字以内で入力してください。`:'');
+    setErr(email,$('fbEmailErr'),mail&&!email.checkValidity()?'メールアドレスの形式を確認してください。':'');
+    const first=!kind?form.querySelector('input[name="kind"]'):$('fbMessageErr').textContent?msg:$('fbEmailErr').textContent?email:null;
+    if(first){ first.focus(); return null; }
+    return {kind:kind.value, message:text, reply_to:mail, page, turnstile:token};
+  }
+
+  let busy=false;
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    if(busy) return;
+    say('');
+    const body=validate(); if(!body) return;
+    if(!token){ say('スパム防止の確認が終わるまでお待ちください。確認が表示されない場合は、ページを再読み込みしてください。'); status.dataset.ts='1'; return; }
+    busy=true; send.setAttribute('aria-busy','true'); send.textContent='送信中…';
+    let r=null;
+    try{
+      r=await fetch(API,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json',accept:'application/json'},body:JSON.stringify(body)});
+    }catch(err){ r=null; }
+    busy=false; send.removeAttribute('aria-busy'); send.textContent='送信する';
+    if(r&&r.status===202){
+      track('send_feedback',{kind:body.kind});
+      $('fbFormBox').hidden=true; $('fbDone').hidden=false; $('fbDoneH').focus();
+      return;
+    }
+    resetWidget();
+    const keep='入力した内容はそのまま残っています。';
+    if(!r) say(`送信できませんでした。通信環境を確認して、もう一度お試しください。${keep}`);
+    else if(r.status===429) say(`短時間に続けて送信されたため、受け付けられませんでした。1 分ほどおいてもう一度お試しください。${keep}`);
+    else if(r.status===403) say(`スパム防止の確認に失敗しました。確認が終わってから、もう一度お試しください。${keep}`);
+    else if(r.status===400) say(`入力内容を受け付けられませんでした。内容を確認して、もう一度お試しください。${keep}`);
+    else if(r.status===404) say(`現在、このフォームはご利用いただけません。お手数ですが、プライバシーポリシーに記載のお問い合わせ先までご連絡ください。${keep}`);
+    else say(`送信できませんでした。時間をおいてもう一度お試しください。${keep}`);
+  });
+})();
+</script>

@@ -37,11 +37,16 @@
     // so ≤ 21,600 rows per user and day per location: api/README.md › D1 budget); GET /me, /me/prefs per session.
     { "name": "AUTH_LIMIT", "namespace_id": "71103", "simple": { "limit": 30, "period": 60 } },
     { "name": "AUTH_WRITE_LIMIT", "namespace_id": "71104", "simple": { "limit": 5, "period": 60 } },
-    { "name": "AUTH_READ_LIMIT", "namespace_id": "71105", "simple": { "limit": 60, "period": 60 } }
+    { "name": "AUTH_READ_LIMIT", "namespace_id": "71105", "simple": { "limit": 60, "period": 60 } },
+    // Feedback form: POST /api/v1/feedback per client, checked before Turnstile and D1.
+    { "name": "FEEDBACK_LIMIT", "namespace_id": "71106", "simple": { "limit": 5, "period": 60 } }
   ],
   // Login, cookies and CSRF checks derive from SITE_ORIGIN, never from Host; on any other origin (workers.dev
   // previews, wrangler dev) the account routes answer 404. Secrets (wrangler secret put): GOOGLE_OAUTH_CLIENT_ID,
   // GOOGLE_OAUTH_CLIENT_SECRET, SESSION_SECRET; without all three the account routes answer 404 as well.
+  // POST /api/v1/feedback answers 404 unless SITE_ORIGIN matches, the secrets TURNSTILE_SECRET_KEY and FEEDBACK_TO
+  // are set and the FEEDBACK_EMAIL send_email binding exists; remote-config.mjs adds that binding only with
+  // FEEDBACK_ENABLED=1, so deploys work before Email Routing is set up (api/README.md › Feedback).
   "vars": { "SITE_ORIGIN": "https://shindan-navi.app" },
   "dev": { "port": 8787 }
 }

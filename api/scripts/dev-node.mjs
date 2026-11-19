@@ -27,7 +27,7 @@ const outfile = join(API_DIR, '.local', 'worker-node.mjs');
 // The Worker entry plus the two auth helpers /__dev/login needs; the entry itself exports only the handler.
 await build({
   stdin: { contents: "export { default } from './src/index.ts';\nexport { issueSession, safeReturn } from './src/auth.ts';", resolveDir: API_DIR, loader: 'ts' },
-  bundle: true, format: 'esm', platform: 'neutral', outfile, logLevel: 'warning',
+  bundle: true, format: 'esm', platform: 'neutral', outfile, logLevel: 'warning', external: ['cloudflare:*'],
 });
 const mod = await import(`${outfile}?t=${Date.now()}`);
 const worker = mod.default;

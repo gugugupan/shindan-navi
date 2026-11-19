@@ -157,10 +157,25 @@ def check_dist(today, head, ov):
             if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', lm) or lm > today: fail(f'sitemap: /privacy/ lastmod {lm}')
         elif lm != meta['updated']: fail(f'sitemap: {loc} lastmod {lm} != meta.updated {meta["updated"]}')
 
+    # /feedback/ exists only with FEEDBACK_ENABLED=1: then noindex, out of the sitemap and linked from every footer;
+    # otherwise nothing may link to it.
+    fb = os.path.join(DIST, 'feedback/index.html')
+    has_fb = os.path.exists(fb)
+    if has_fb:
+        fsrc = open(fb).read()
+        if '<meta name="robots" content="noindex">' not in fsrc: fail('/feedback/: noindex missing')
+        if f'{SITE}/feedback/' in sitemap: fail('sitemap: /feedback/ must not be listed')
+        if not re.search(r"const SITE_KEY=\"[0-9A-Za-z_-]{10,}\";", fsrc): fail('/feedback/: Turnstile site key missing')
+    for f in [os.path.join(DIST, '404.html'), os.path.join(DIST, 'privacy/index.html')] + [os.path.join(DIST, p.strip('/'), 'index.html') for p in paths]:
+        if not os.path.exists(f): continue
+        linked = 'href="/feedback/' in open(f).read()
+        if linked != has_fb: fail(f'{os.path.relpath(f, DIST)}: feedback link {"present without" if linked else "missing with"} /feedback/')
+
     for p in paths:
         f = os.path.join(DIST, p.strip('/'), 'index.html')
         if not os.path.exists(f): fail(f'{p}: index.html missing'); continue
         src = open(f).read()
+        if has_fb and f'href="/feedback/?from={p}"' not in src: fail(f'{p}: footer feedback link without ?from={p}')
         pp = PageParser(); pp.feed(src)
         if pp.canonical != SITE + p: fail(f'{p}: canonical {pp.canonical}')
         for k in hidden:
