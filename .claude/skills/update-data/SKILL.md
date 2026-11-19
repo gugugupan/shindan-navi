@@ -19,7 +19,7 @@ It pins `TODAY` (env, else today in Asia/Tokyo) and runs: collectors (`tools/rel
 
 A new worktree has no `.env` (it is git-ignored), so without the keys in the environment the official collector and enrich are skipped (the packet says `official: skipped`). To run them, copy the main checkout's `.env` into the worktree (`cp <repo>/.env .env`); never commit it.
 
-Cost with the keys: a full official collect (all of `sources.json`) is ~$0.16 on OpenRouter (2026-11-19: 74 calls, ~360k prompt tokens, ~3 min of API time) plus Jev; the merge's matching adds ~$0.001 and box-info enrich a few cents more (one light-LLM call per upcoming item that lacks box info and has an official page). `--skip-collect` reruns repeat only the merge's calls. Partial runs (`collect.py --games …`) cost proportionally less.
+Cost with the keys: a full official collect (all of `sources.json`) is ~$0.16-0.18 on OpenRouter (2026-11-19: 74-79 calls, ~360-390k prompt tokens, ~3 min of API time) plus Jev; the merge's matching adds ~$0.001 and box-info enrich a few cents more (one light-LLM call per upcoming item that lacks box info and has an official page). `--skip-collect` reruns repeat only the merge's calls. Partial runs (`collect.py --games …`) cost proportionally less.
 
 If a collector refuses (layout marker missing, no records) or the merge aborts ("empty source", "stale run", "only N releases scraped"), a source page probably changed layout — open it in the browser pane, compare with `tools/release-collectors/cardlabo/parse.py` / `torecamap/parse.py`, fix the parser (a reviewed behaviour change: see `contracts/releases.md` › golden replay), rerun. Do not lower `MIN_RATIO` to get past it.
 

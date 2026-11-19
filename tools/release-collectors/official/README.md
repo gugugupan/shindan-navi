@@ -43,7 +43,8 @@ Every entry gets a `source` (`scripts/sourcekey.py`): canonical official page af
 | MTG | 13 | 4 (31%) | 4/4 | – | 12 |
 
 About $0.016 (OpenRouter) + Jev for these three titles, ~20 s. A full collect over every title in `sources.json` costs
-~$0.16 (2026-11-19: OpenRouter 74 calls, ~357k prompt + ~46k completion tokens, $0.158; Jev 29 calls) plus ~$0.0005
+~$0.16-0.18 (2026-11-19: OpenRouter 74 calls / $0.158 with five Bandai titles failing, 79 calls / $0.177 complete,
+~390k prompt + ~53k completion tokens; Jev ~34 calls) plus ~$0.0005
 for the merge's matching; box-info enrich (`fill_box_info`) adds one light-LLM call per item it reads.
 
 Findings:
