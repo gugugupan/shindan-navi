@@ -35,6 +35,11 @@ GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポ�
        ('dragonball','DBフュージョンワールド','ドラゴンボールスーパーカードゲーム フュージョンワールド','フュージョンワールド'),
        ('digimon','デジモン','デジモンカードゲーム','デジカ')]
 
+# Prices come as 6600円(税込) / 6,050円 / 240円 depending on the source; pages say once that prices include tax.
+def price_label(s):
+    s=re.sub(r'\s*[（(]税込[)）]','',s or '').strip()
+    return re.sub(r'(?<![\d,])\d{4,}(?![\d,])',lambda m:f'{int(m.group()):,}',s)
+
 overrides=json.load(open(os.path.join(ROOT,'data/overrides.json')))
 it=json.load(open(os.path.join(ROOT,'data/items.json')))
 keep=['id','date','game','name','pack','box','per_box','per_pack','url','thumb','approx']
@@ -46,6 +51,7 @@ for i in it:
     d.update({k:v for k,v in ov.items() if k in keep})
     if 'url' not in ov and not any(urllib.parse.urlparse(d['url']).netloc.replace('www.','').endswith(x) for x in OFFDOM): d['url']=''
     if d['thumb'] and not d['thumb'].startswith('/'): d['thumb']='/'+d['thumb']
+    for k in ('pack','box'): d[k]=price_label(d[k])
     data.append(d)
 data.sort(key=lambda d:(d['date'],d['game']))
 used={d['game'] for d in data}
@@ -105,7 +111,7 @@ def page_def():
         h1='TCG・トレカ新弾 発売日カレンダー',
         lead=f'{len(used)}タイトル・{len(data)}件の新弾／新商品を掲載（{upd_label}更新）',
         crumbs=[('トップ','/'),('新弾カレンダー',None)], js=None,
-        list=static_list(soon,'直近30日の発売予定',f'{fmt(TODAY,True)}から30日以内に発売されるTCG・トレカ新弾 {len(soon)}件。')
+        list=static_list(soon,'全タイトルの直近30日の発売予定',f'{fmt(TODAY,True)}から30日以内に発売されるTCG・トレカ新弾 {len(soon)}件（上のカレンダーの絞り込みにかかわらず、全タイトルを掲載）。価格は税込。')
             +about_block('新弾カレンダーについて',[
               f'トレカカレンダーの新弾カレンダーは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をひとつのカレンダーにまとめたページです。ポケモンカード、ONE PIECEカードゲーム、マジック：ザ・ギャザリング、遊戯王OCG、デュエル・マスターズ、ヴァイスシュヴァルツ、UNION ARENA など{len(used)}タイトルの拡張パック・ブースターパック・スターターデッキの発売日と価格（税込）を掲載しています。',
               'タイトルで絞り込んで推しのTCGだけを表示したり、☆でお気に入り登録した商品をまとめて確認・予算計算したりできます。お気に入りの商品は Google カレンダーや iPhone のカレンダーに追加でき、発売日の前日に通知を受け取れます。',
@@ -141,7 +147,7 @@ def page_def():
             list=static_list(lst,list_head,list_note,show_game=False)
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
-                  f'カレンダーでは{esc(short)}の発売予定だけを表示しています。上の「すべて」を押すと、ほかのTCGの新弾もまとめて確認できます。気になる商品は☆でお気に入りに追加すると、Google カレンダーやスマホのカレンダーにも登録できます。']),
+                  f'カレンダーでは{esc(short)}の発売予定だけを表示しています。タイトルの絞り込み（スマホでは「絞り込み」ボタンの中）で「すべて」を選ぶと、ほかのTCGの新弾もまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。']),
             ld_items=lst))
     for ym in months:
         its=[d for d in data if d['date'].startswith(ym)]
@@ -412,9 +418,9 @@ def home_page():
     # 旧・新弾ナビ in the description and the footer brand (sitenav('/')) keeps the old name findable
     return dict(path='/',og='home',lo=lo,hi=hi,
         title=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}｜トレカカレンダー',
-        desc=(f'トレカカレンダー（旧・新弾ナビ）で、今日発売のTCG・トレカ新弾（ポケカ・ワンピカード・MTG・遊戯王・デュエマ・ヴァイスほか{len(used)}タイトル）'
-              +('と、選んだ都道府県で今日開催されるTCGイベント（店舗大会・交流会・体験会）をタイトル別に' if BUILD_EVENTS else 'を')
-              +'ひと目でチェック。明日・今週の発売予定'+('とイベント数' if BUILD_EVENTS else '')+'もまとめて確認できます。'),
+        desc=('トレカカレンダー（旧・新弾ナビ）で今日発売のTCG・トレカ新弾と、選んだ都道府県で今日開催の店舗大会などTCGイベントをタイトル別にチェック。ポケカ・ワンピ・MTGほか、明日・今週の予定もひと目で。'
+              if BUILD_EVENTS else
+              f'トレカカレンダー（旧・新弾ナビ）で今日発売のTCG・トレカ新弾をチェック。ポケカ・ワンピカード・MTG・遊戯王ほか{len(used)}タイトル、明日・今週の発売予定もひと目で確認できます。'),
         keywords=['今日発売','今日 発売 トレカ','TCG 今日','トレカ 新弾 今日','今週 発売 トレカ','新弾ナビ']+(['TCG イベント 今日','店舗大会'] if BUILD_EVENTS else [])+COMMON_KW,
         h1=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}',
         lead=f'{len(used)}タイトルの新弾{ev}を、日本時間の「今日」で表示しています（発売情報は{upd_label}更新）。'

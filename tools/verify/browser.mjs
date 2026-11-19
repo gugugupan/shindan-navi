@@ -98,6 +98,51 @@ async function checkFeedback(ctx, vp) {
   console.log(`  ${where.padEnd(22)} posts=${posts.length}`);
   await page.close();
 }
+// Table columns match their headers; a month page keeps its month in the table view; a month without upcoming
+// releases for the chosen title points to the next one.
+async function checkScopes(ctx, vp) {
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  try {
+    await page.goto(`${BASE}/releases/`, { waitUntil: 'load' });
+    const ym = TODAY.slice(0, 7);
+    const pick = await page.evaluate(([today, ym]) => {
+      const gs = [...new Set(DATA.map(d => d.game))];
+      const g = gs.find(g => DATA.some(d => d.game === g && d.date.startsWith(ym) && d.date < today)
+        && !DATA.some(d => d.game === g && d.date.startsWith(ym) && d.date >= today) && DATA.some(d => d.game === g && d.date > today));
+      return g ? { g, next: DATA.find(d => d.game === g && d.date > today).date } : null;
+    }, [TODAY, ym]);
+    const months = await page.evaluate(() => [...new Set(DATA.map(d => d.date.slice(0, 7)))].sort());
+    const mp = months.find(m => m > ym) || ym;
+    await page.evaluate(([g]) => { localStorage.setItem('tcg.view', '"tbl"'); localStorage.setItem('tcg.sel', JSON.stringify(g ? [g] : [])); }, [pick && pick.g]);
+    if (vp === 'desktop') {
+      await page.goto(`${BASE}/releases/`, { waitUntil: 'load' });
+      const cols = await page.evaluate(() => ({ th: [...document.querySelectorAll('thead th')].map(t => t.dataset.k || t.className),
+        td: [...document.querySelector('#tbody tr:not(.tl)').children].map(t => t.className) }));
+      const want = [['nosort sc', 'sc'], ['date', 'd'], ['nosort', 'im'], ['game', 'gm'], ['name', 'nm'], ['packN', 'p p1'], ['boxN', 'p bx'], ['nosort', 'lk']];
+      if (JSON.stringify(want.map(w => w[0])) !== JSON.stringify(cols.th) || JSON.stringify(want.map(w => w[1])) !== JSON.stringify(cols.td))
+        fail(`${vp} /releases/ table`, `columns ${JSON.stringify(cols)}`);
+    }
+    await page.goto(`${BASE}/${mp}/`, { waitUntil: 'load' });
+    const mt = await page.evaluate(() => ({ nav: !document.getElementById('monthNav').hidden, tbl: !document.getElementById('tblView').hidden,
+      dates: [...document.querySelectorAll('#tbody tr:not(.tl) td.d')].map(t => t.textContent) }));
+    const [y, m] = mp.split('-').map(Number);
+    if (!mt.tbl || !mt.nav || mt.dates.some(d => !d.startsWith(`${y}/${m}/`))) fail(`${vp} /${mp}/ table`, `month page table not scoped: ${JSON.stringify({ ...mt, dates: mt.dates.slice(0, 3) })}`);
+    if (pick) {
+      await page.evaluate(() => localStorage.setItem('tcg.view', '"cal"'));
+      await page.goto(`${BASE}/releases/`, { waitUntil: 'load' });
+      const nn = page.locator('#nextnote');
+      if (!(await nn.isVisible()) || !(await nn.textContent()).includes('この月の発売予定はありません')) fail(`${vp} /releases/ ${pick.g}`, 'no next-release note');
+      else {
+        await nn.locator('button').click();
+        const lab = await page.locator('#monthLabel').textContent();
+        if (lab !== `${+pick.next.slice(0, 4)}年${+pick.next.slice(5, 7)}月`) fail(`${vp} /releases/ ${pick.g}`, `next-release jump opened ${lab}`);
+      }
+    }
+  } catch (e) { fail(`${vp} scopes`, `interaction: ${e.message.split('\n')[0]}`); }
+  await page.evaluate(() => localStorage.clear());
+  await page.close();
+}
 // Logo row: the tool tabs follow the logo on desktop (settings / user at the right end), a bottom bar on phones.
 async function headerProblem(page, width) {
   const h = await page.evaluate(() => {
@@ -168,6 +213,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
     for (const b of [...new Set(bad)]) fail(where, b);
 
+    if (!(await page.locator('#filterBtn').getAttribute('aria-label'))?.startsWith('絞り込み')) fail(where, '#filterBtn has no accessible name');
+    const rowOver = await page.evaluate(() => { const r = document.querySelector('.panel>.row'), last = [...r.children].filter(e => e.offsetParent).at(-1);
+      return Math.max(r.scrollWidth - r.clientWidth, last ? last.getBoundingClientRect().right - r.getBoundingClientRect().right : 0); });
+    if (rowOver > 1) fail(where, `toolbar row overflows by ${Math.round(rowOver)}px`);
     if (p === '/releases/') try {
       if (await page.locator('#filterBtn').isVisible()) await page.locator('#filterBtn').click();
       const chip = page.locator('#chips .chip:not(.all):not(.toggle):not(.starchip)').first();
@@ -189,6 +238,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.close();
   }
   if (HAS_FEEDBACK) await checkFeedback(ctx, vp);
+  await checkScopes(ctx, vp);
   await ctx.close();
 }
 // / is the today page: today (Asia/Tokyo) from the embedded releases, favourites first, the saved location's events
@@ -319,9 +369,11 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
       fetched_at: `${TODAY}T06:00:00+09:00`, window: { from: TODAY, until } }], types: [], prefectures: [{ code: 'JP-13', count: 7 }] } });
     if (u.pathname.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 7, by_game: { OPCG: 7 } }] } });
     const from = u.searchParams.get('from');
+    // e0 started at 10:00 (the clock says 12:00), e1 is cancelled: both go after the rest of the day
     route.fulfill({ json: { events: from > TODAY ? [] : Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, name: `テスト大会 ${i + 1}`, game_code: 'OPCG',
-      game_codes: ['OPCG'], starts_on: TODAY, time_precision: 'date', timezone: 'Asia/Tokyo', attendance_mode: 'offline',
-      venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' })), next_cursor: null } });
+      game_codes: ['OPCG'], starts_on: TODAY, timezone: 'Asia/Tokyo', attendance_mode: 'offline',
+      ...(i === 0 ? { time_precision: 'datetime', starts_at: `${TODAY}T10:00:00+09:00` } : { time_precision: 'date' }),
+      venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: i === 1 ? 'cancelled' : 'scheduled' })), next_cursor: null } });
   });
   try {
     await page.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'networkidle' });
@@ -329,6 +381,14 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
     if (hdr) fail(where, hdr);
     await page.locator(`.cd[data-day="${TODAY}"]`).click();
     await page.locator('#list .ev').first().waitFor();
+    const order = await page.evaluate(() => [...document.querySelectorAll(`#list .list > *`)].map(e => e.classList.contains('evsep') ? '|' : e.querySelector('h4').textContent.replace('テスト大会 ', '')));
+    if (order.join(' ') !== '3 4 5 6 7 | 1 2') fail(where, `today's order ${order.join(' ')}`);
+    const cl = await page.locator('#list .ev.off .ev-link').textContent();
+    if (!cl.startsWith('公式で確認')) fail(where, `cancelled link reads ${cl}`);
+    if (!(await page.locator('#filterBtn').getAttribute('aria-label'))?.startsWith('絞り込み')) fail(where, '#filterBtn has no accessible name');
+    const rowOver = await page.evaluate(() => { const r = document.querySelector('.panel>.row'), last = [...r.children].filter(e => e.offsetParent).at(-1);
+      return Math.max(r.scrollWidth - r.clientWidth, last ? last.getBoundingClientRect().right - r.getBoundingClientRect().right : 0); });
+    if (rowOver > 1) fail(where, `toolbar row overflows by ${Math.round(rowOver)}px`);
     const mcount = page.locator('#rhead .mcount');
     if (opt.width <= 760 && !(await mcount.isVisible() && (await mcount.textContent()).includes('7'))) fail(where, 'day view: count not visible without 絞り込み');
     if (opt.width > 760 && await mcount.isVisible()) fail(where, 'count shown twice on desktop');

@@ -21,10 +21,6 @@
 .blk-h .sub{font-size:12.5px;font-weight:700;color:var(--muted);display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
 .blk-h .n{margin-left:auto;font-size:12.5px;color:var(--muted);white-space:nowrap}
 .blk-h .n b{font-family:var(--mono);color:var(--ink)}
-.locbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px 3px 8px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
-.locbtn svg{color:var(--accent);flex:none}
-.locbtn small{font-size:11px;color:var(--accent)}
-.locbtn:hover{border-color:var(--accent)}
 .blk-f{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin-top:auto}
 .go{font:inherit;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--surface);white-space:nowrap;cursor:pointer}
 .go:hover{border-color:var(--accent)}
@@ -59,6 +55,8 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .ev .tag{font-size:11px;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%));margin-right:6px}
 .ev .st{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:6px;background:var(--sun);color:#fff}
 .ev.off a{text-decoration:line-through;color:var(--muted)}
+.ev.done .tm{color:var(--muted)}
+.ev.done .tm::after{content:"開始済み";display:block;font-family:var(--body);font-size:10px;font-weight:700}
 .sk{height:52px;border-radius:10px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%}
 @media (prefers-reduced-motion:no-preference){.sk{animation:sk 1.2s linear infinite}@keyframes sk{to{background-position:-200% 0}}}
 /* tomorrow and the rest of the week */
@@ -72,6 +70,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .wd li{font-size:12px;line-height:1.35;min-width:0}
 .wd li a{color:var(--ink);text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
 .wd li a:hover{color:var(--accent)}
+.wd li .gl{font-size:10.5px;font-weight:700;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%));margin-right:4px}
 .wd li i{display:inline-block;width:7px;height:7px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l));margin-right:4px;vertical-align:1px}
 .wd li.st a::before{content:"★ ";color:var(--foil)}
 .wd li.st a{font-weight:700}
@@ -135,7 +134,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
     </section>
   </main>
 
-  <p class="legend"><!--LEAD-->発売日・価格<!--EVENTS-->・イベント情報<!--/EVENTS-->は変更されることがあるので、公式情報をご確認ください。<!--NOLOGIN-->お気に入り<!--EVENTS-->・イベントの地域<!--/EVENTS-->はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->お気に入り・イベントの地域はお使いのブラウザ（localStorage）に保存され、ログイン中はアカウントと同期します。<!--/LOGIN-->本サイトはアクセス解析のため Google アナリティクスを利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
+  <p class="legend"><!--LEAD-->価格は税込。発売日・価格<!--EVENTS-->・イベント情報<!--/EVENTS-->は変更されることがあるので、公式情報をご確認ください。<!--NOLOGIN-->お気に入り<!--EVENTS-->・イベントの地域<!--/EVENTS-->はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->お気に入り・イベントの地域はお使いのブラウザ（localStorage）に保存され、ログイン中はアカウントと同期します。<!--/LOGIN-->本サイトはアクセス解析のため Google アナリティクスを利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
 </div>
 <!--EVENTS-->
@@ -159,6 +158,10 @@ const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m>12){
 const WEEK = Array.from({length:6},(_,i)=>addD(TODAY,i+1));
 // releases are known for H.from..H.until only (build day -1 .. +14)
 const covered = d => d>=H.from && d<=H.until;
+// short title labels for the week list (other titles show their full name)
+const SHORT = {'ポケモンカード':'ポケカ','ONE PIECE':'ワンピ','遊戯王OCG':'遊戯王','遊戯王ラッシュデュエル':'ラッシュデュエル','デュエル・マスターズ':'デュエマ',
+  'ヴァイスシュヴァルツ':'ヴァイス','UNION ARENA':'ユニアリ','DBフュージョンワールド':'フュージョンワールド','デジモン':'デジカ','バトルスピリッツ':'バトスピ',
+  'ヴァンガード':'ヴァンガ','Shadowverse EVOLVE':'シャドバ','ラブライブ！OCG':'ラブライブ','名探偵コナン':'コナン'};
 
 // same colours as the release calendar (src/template.html: titles by count, golden-angle hues)
 const games = Object.keys(H.counts).sort((a,b)=>H.counts[b]-H.counts[a]||a.localeCompare(b,'ja'));
@@ -250,7 +253,10 @@ function todayCols(){
   const n={}; ev.list.filter(e=>e.starts_on===TODAY).forEach(e=>codesOf(e).forEach(c=>n[c]=(n[c]||0)+1));
   return EV_GAMES.filter(g=>n[g.code]).map(g=>({g, n:n[g.code]}));
 }
-const rowsFor = (code,d) => ev.list.filter(e=>e.starts_on===d && codesOf(e).includes(code));
+// Within a day: today, events that already started follow the upcoming ones; cancelled ones go last (as on /events/).
+const started = e => e.starts_on===TODAY && e.time_precision==='datetime' && !!e.starts_at && Date.parse(e.starts_at)<=Date.now();
+const dayRank = e => e.event_status==='cancelled' ? 2 : started(e) ? 1 : 0;
+const rowsFor = (code,d) => ev.list.filter(e=>e.starts_on===d && codesOf(e).includes(code)).sort((a,b)=>dayRank(a)-dayRank(b));
 async function loadEvents(force){
   if(!EVENTS) return;
   evF=evFilters();
@@ -270,7 +276,8 @@ async function loadEvents(force){
     // The page runs in start order across all games, so a busy game can fill it before the others start: one more
     // page (the /events/ list's second, same key) when a column would show fewer than it could.
     const last=ev.list[ev.list.length-1], cols=todayCols();
-    if(page.next_cursor && last && last.starts_on===TODAY && cols.some(c=>rowsFor(c.g.code,TODAY).length<Math.min(c.n,SHOW(cols.length)))){
+    // Upcoming events come first in a column, so a column whose loaded rows are mostly over also asks for it.
+    if(page.next_cursor && last && last.starts_on===TODAY && cols.some(c=>{ const rs=rowsFor(c.g.code,TODAY); return rs.length<c.n && rs.filter(e=>!dayRank(e)).length<SHOW(cols.length); })){
       const more=await api('/events',q(f,{api:{from:TODAY,until:next},tail:{limit:50,cursor:page.next_cursor}}));
       if(key!==evKey) return;
       ev.list=ev.list.concat(more.events||[]);
@@ -292,7 +299,7 @@ function evRow(e,col){
   const where = e.attendance_mode==='online' ? 'オンライン開催' : venueLabel(e.venue) || '会場は公式で確認';
   const st = e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st">延期</span>' : '';
   const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,h:0}; return `<span class="tag" style="--h:${x.h}">${esc(x.name)}</span>`; }).join('');
-  return `<li class="ev${e.event_status==='cancelled'?' off':''}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
+  return `<li class="ev${e.event_status==='cancelled'?' off':started(e)?' done':''}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
 }
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 function renderEv(){
@@ -347,10 +354,10 @@ function renderWeek(){
     } else if(f&&f.pref&&!(ev&&ev.loading)) chips=`<a class="gc any" href="${esc(dayLink(f,d))}">イベント ›</a>`;
     let top;
     if(its==null) top='<p class="q">発売情報は新弾カレンダーで</p>';
-    else if(rel) top=`<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}"><i aria-hidden="true"></i>${esc(x.name)}</a></li>`).join('')}</ul><a class="rl" href="/releases/#d=${d}">発売 <b>${its.length}</b>件 ›</a>`;
+    else if(rel) top=`<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}"><i aria-hidden="true"></i><span class="gl">${esc(SHORT[x.game]||x.game)}</span>${esc(x.name)}</a></li>`).join('')}</ul><a class="rl" href="/releases/#d=${d}">発売 <b>${its.length}</b>件 ›</a>`;
     else {
       // no releases: a few of the day's events when the loaded pages reach it (start order), else just the counts
-      const evs = known ? ev.list.filter(e=>e.starts_on===d).slice(0,2) : [];
+      const evs = known ? ev.list.filter(e=>e.starts_on===d).sort((a,b)=>dayRank(a)-dayRank(b)).slice(0,2) : [];
       top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e)[0]]||{h:0}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="--h:${g.h}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>`
         : chips ? '' : `<p class="q">${f&&f.pref&&known?'発売・イベントなし':'発売なし'}</p>`;
     }
@@ -369,7 +376,7 @@ function locCounts(){
 }
 function openLoc(){
   if(!metaAsked){ metaAsked=true; api('/events/meta').then(m=>{ meta=m; LOC.refresh(); },()=>{}); }
-  LOC.open({current:(evF||evFilters()).pref, counts:locCounts, onPick:c=>{
+  LOC.open({current:()=>evFilters().pref, counts:locCounts, onPick:c=>{
     const s=store.get(SAVED_KEY,null), o=s&&typeof s==='object'?{...s}:{};
     if(o.pref!==c){
       o.pref=c; store.set(SAVED_KEY,o);
@@ -388,7 +395,7 @@ document.addEventListener('click',e=>{
   else if(e.target.closest('#locBtn,#pickLoc')) openLoc();
 });
 // logged in, corner.html replaces the local favourites / saved filters with the account's: re-read them
-document.addEventListener('sn:prefs',()=>{ readStars(); renderAll(); loadEvents(); });
+document.addEventListener('sn:prefs',()=>{ readStars(); renderAll(); loadEvents(); if(LOC) LOC.refresh(); });
 document.addEventListener('sn:user',()=>{ renderRel(); renderEv(); });
 })();
 </script>

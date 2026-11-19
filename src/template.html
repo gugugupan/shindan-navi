@@ -249,6 +249,9 @@ a.mi{color:var(--ink);text-decoration:none}
 td.sc{width:36px;padding-right:0}
 tbody tr.starred td.nm{font-weight:700}
 .mnote{margin:8px 2px 0;font-size:12.5px;color:var(--muted)}
+.nextbtn{border:0;background:none;padding:0;font-size:inherit;font-weight:700;color:var(--accent)}
+.nextbtn:hover{text-decoration:underline}
+#calView{scroll-margin-top:130px}
 .starbar{margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;background:var(--foil-soft);border:1px solid var(--foil);border-radius:14px;padding:10px 14px}
 .sb-main{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;font-size:13px;color:var(--muted)}
 .sb-main b{font-size:15px;color:var(--ink)}
@@ -304,6 +307,11 @@ tbody tr.starred td.nm{font-weight:700}
 .sitenav a:hover{text-decoration:underline}
 .sitenav a[aria-current]{color:var(--ink);font-weight:700}
 
+/* location button (/ and /events/: opens the shared picker, src/locpick.html) */
+.locbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px 3px 8px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.locbtn svg{color:var(--accent);flex:none}
+.locbtn small{font-size:11px;color:var(--accent)}
+.locbtn:hover{border-color:var(--accent)}
 /* tool tabs: next to the logo on desktop, a bar fixed to the bottom of the screen on phones */
 .tooltabs{display:inline-flex;flex:none;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:9px}
 .tooltabs a{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;border-radius:7px;font-weight:700;font-size:13px;color:var(--muted);text-decoration:none;white-space:nowrap}
@@ -334,8 +342,8 @@ tbody tr.starred td.nm{font-weight:700}
   .seg button{padding:0;width:30px;height:30px;justify-content:center;color:var(--ink)}
   .seg button[aria-pressed="true"]{display:none}
   .month b{min-width:0}
-  .filterbtn,.starbtn{width:30px;flex:none}
-  .filterbtn{padding:0;justify-content:center}
+  .starbtn{width:30px;flex:none}
+  .filterbtn{flex:none;justify-content:center}
   .starbar{padding:10px 12px;border-radius:12px}
   .sb-act{width:100%;flex-wrap:wrap}
   #calStars{flex-basis:100%}
@@ -354,8 +362,7 @@ tbody tr.starred td.nm{font-weight:700}
   .seg button span{display:none}
   .month b small{display:block;font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1;margin-bottom:1px}
   .month b{line-height:1;font-size:17px;min-width:3.2em}
-  .filterbtn{display:inline-flex;height:32px;padding:0 9px}
-  .filterbtn span{display:none}
+  .filterbtn{display:inline-flex;height:32px;padding:0 8px;gap:4px;font-size:12px;white-space:nowrap}
   .filters{display:none;flex-direction:column;align-items:stretch;padding-top:8px}
   .filters>.row{order:0}
   .filters .chips{flex:none}
@@ -414,6 +421,8 @@ tbody tr.starred td.nm{font-weight:700}
   tr.tl td div{padding:4px 0}
   tbody td.empty{grid-column:1/-1}
 }
+@media (max-width:760px){.panel>.row:has(.starbtn) .filterbtn:has(em:not([hidden])) span{display:none}}
+@media (max-width:379px){.filterbtn{width:30px;padding:0}.filterbtn span{display:none}}
 @media (max-width:760px){
   html:has(.tooltabs){scroll-padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
   .wrap:has(.tooltabs){padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
@@ -443,7 +452,7 @@ tbody tr.starred td.nm{font-weight:700}
         <button id="vCal" aria-pressed="true" aria-label="カレンダー"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>カレンダー</span></button>
         <button id="vTbl" aria-pressed="false" aria-label="テーブル"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>テーブル</span></button>
       </div>
-      <button class="filterbtn" id="filterBtn" aria-expanded="false" aria-controls="filters"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span>絞り込み</span><em id="filterBadge" hidden></em></button>
+      <button class="filterbtn" id="filterBtn" aria-expanded="false" aria-controls="filters" aria-label="絞り込み"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span>絞り込み</span><em id="filterBadge" hidden></em></button>
       <button class="starbtn" id="starBtn" aria-pressed="false" aria-label="お気に入りだけ表示"><span class="ic">☆</span><em id="starBadge" hidden></em></button>
     </div>
     <div class="filters" id="filters">
@@ -463,6 +472,7 @@ tbody tr.starred td.nm{font-weight:700}
 
   <div class="starbar" id="starbar" hidden></div>
   <p class="mnote" id="mnote" hidden></p>
+  <p class="mnote" id="nextnote" hidden></p>
   <div id="calView">
     <div class="cal" id="cal"></div>
     <div class="agenda" id="agenda"></div>
@@ -587,13 +597,17 @@ function filtered(){
   return DATA.filter(d=>(!state.sel.size||state.sel.has(d.game)) && (!state.starOnly||isStar(d)));
 }
 
+// The calendar, and every view of a month page, show one month: chip counts and the N 件 count are that month's.
+const monthScoped = () => state.view==='cal' || !!(PAGE&&PAGE.month);
 function renderChips(){
   const el=document.getElementById('chips');
   const shown = state.chipsOpen ? chipOrder : chipOrder.filter(g=>DEFAULT_CHIPS.includes(g)||state.sel.has(g));
   const hiddenN = games.length-shown.length;
-  el.innerHTML = `<button class="chip all" aria-pressed="${!state.sel.size&&!state.starOnly}" data-g="">すべて <em>${DATA.length}</em></button>` +
+  const scope = monthScoped() ? DATA.filter(d=>d.date.startsWith(state.month)) : DATA, cn={};
+  scope.forEach(d=>cn[d.game]=(cn[d.game]||0)+1);
+  el.innerHTML = `<button class="chip all" aria-pressed="${!state.sel.size&&!state.starOnly}" data-g="">すべて <em>${scope.length}</em></button>` +
     `<button class="chip starchip" aria-pressed="${state.starOnly}" data-star="1">★ お気に入り <em>${stars.size}</em></button>` +
-    shown.map(g=>`<button class="chip" style="--h:${HUE[g]}" aria-pressed="${state.sel.has(g)}" data-g="${esc(g)}"><i></i>${esc(g)} <em>${counts[g]}</em></button>`).join('') +
+    shown.map(g=>`<button class="chip" style="--h:${HUE[g]}" aria-pressed="${state.sel.has(g)}" data-g="${esc(g)}"><i></i>${esc(g)} <em>${cn[g]||0}</em></button>`).join('') +
     (state.chipsOpen ? `<button class="chip toggle" data-toggle="1">閉じる ▲</button>`
       : hiddenN ? `<button class="chip toggle" data-toggle="1">ほか${hiddenN}タイトル ▼</button>` : '');
 }
@@ -607,7 +621,7 @@ document.getElementById('chips').addEventListener('click',e=>{
 });
 
 function pkBtn(d){
-  const pr=d.pack?`<span class="pr">${esc(d.pack)}${d.box?` · BOX ${esc(d.box)}${d.per_box?`（${d.per_box}パック）`:''}`:''}</span>`:'';
+  const pr=d.pack?`<span class="pr">${esc(d.pack)}${d.box&&d.box!==d.pack?` · BOX ${esc(d.box)}${d.per_box?`（${d.per_box}パック）`:''}`:''}</span>`:'';
   return `<div class="pkw${isStar(d)?' on':''}"><button class="pk" style="--h:${HUE[d.game]}" data-id="${d.id}" title="${esc(d.game+' / '+d.name)}">${thumb(d)}<span class="t"><span class="g">${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></button>${starBtn(d)}</div>`;
 }
 
@@ -681,8 +695,8 @@ function renderTable(list){
   list.forEach(d=>{
     if(!lineDone && (dir>0 ? d.date>=TODAY : d.date<TODAY)){ h+=line; lineDone=true; }
     h+=`<tr class="${d.date===TODAY?'istoday':d.date<TODAY?'past':''}${isStar(d)?' starred':''}">
-    <td class="d">${fmtDate(d.date)}</td>
     <td class="sc">${starBtn(d)}</td>
+    <td class="d">${fmtDate(d.date)}</td>
     <td class="im"><button class="pk thbtn" style="--h:${HUE[d.game]}" data-id="${d.id}" aria-label="詳細">${thumb(d)}</button></td>
     <td class="gm"><span class="tag" style="--h:${HUE[d.game]}"><i></i>${esc(d.game)}</span></td>
     <td class="nm">${esc(d.name)}${d.approx?'<span class="ap">参考画像</span>':''}</td>
@@ -703,10 +717,10 @@ function render(){
   renderChips();
   renderStarbar();
   const list=filtered();
-  const isCal=state.view==='cal';
+  const isCal=state.view==='cal', scoped=monthScoped();
   document.getElementById('calView').hidden=!isCal;
   document.getElementById('tblView').hidden=isCal;
-  document.getElementById('monthNav').hidden=!isCal;
+  document.getElementById('monthNav').hidden=!scoped;
   document.getElementById('vCal').setAttribute('aria-pressed',isCal);
   document.getElementById('vTbl').setAttribute('aria-pressed',!isCal);
   const [y,m]=state.month.split('-').map(Number);
@@ -715,6 +729,7 @@ function render(){
   document.getElementById('sortSel').hidden=isCal;
   const nf=state.sel.size, badge=document.getElementById('filterBadge');
   badge.hidden=!nf; badge.textContent=nf;
+  document.getElementById('filterBtn').setAttribute('aria-label',nf?`絞り込み（${nf}タイトル選択中）`:'絞り込み');
   const sb=document.getElementById('starBtn'), sbb=document.getElementById('starBadge');
   sb.setAttribute('aria-pressed',state.starOnly); sb.querySelector('.ic').textContent=state.starOnly||stars.size?'★':'☆';
   sbb.hidden=!stars.size; sbb.textContent=stars.size;
@@ -723,9 +738,25 @@ function render(){
   const mnote=document.getElementById('mnote');
   mnote.hidden=!(isCal && pageHome && state.month===pageHome && state.sel.size===1 && state.sel.has(PAGE.game));
   if(!mnote.hidden) mnote.textContent = pageHome>curMonth ? `今月の発売はありません。次の発売月（${+pageHome.slice(5)}月）を表示しています` : '今月以降の発売はありません。最近の発売月を表示しています';
-  if(isCal){ renderCal(list); const n=list.filter(d=>d.date.startsWith(state.month)).length; document.getElementById('count').innerHTML=`この月 <b>${n}</b> 件`; }
+  // a month (from this one on) without upcoming releases for the filter points to the next release
+  const nn=document.getElementById('nextnote');
+  const nx=isCal && mnote.hidden && state.month>=curMonth && !list.some(d=>d.date>=TODAY&&d.date.startsWith(state.month))
+    ? list.find(d=>d.date>=TODAY&&d.date.slice(0,7)>state.month) : null;
+  nn.hidden=!nx;
+  if(nx) nn.innerHTML=`この月の発売予定はありません・<button class="nextbtn" data-next="${nx.date}">次の発売 ${fmtDate(nx.date,false)} へ ›</button>`;
+  const inMonth=list.filter(d=>d.date.startsWith(state.month));
+  if(isCal){ renderCal(list); document.getElementById('count').innerHTML=`この月 <b>${inMonth.length}</b> 件`; }
+  else if(scoped){ renderTable(inMonth); document.getElementById('count').innerHTML=`この月 <b>${inMonth.length}</b> 件`; }
   else { renderTable(list); document.getElementById('count').innerHTML=`全期間 <b>${list.length}</b> 件`; }
 }
+document.getElementById('nextnote').addEventListener('click',e=>{
+  const b=e.target.closest('[data-next]'); if(!b) return;
+  const k=b.dataset.next; state.month=k.slice(0,7); render();
+  requestAnimationFrame(()=>{
+    const el=document.querySelector(`.ag[data-day="${k}"]`);
+    (el&&el.offsetParent?el:document.getElementById('calView')).scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  });
+});
 
 document.addEventListener('click',e=>{
   const a=e.target.closest('a[href^="http"]'); if(!a) return;
@@ -847,7 +878,7 @@ function downloadIcs(items){
   const blob=new Blob([buildIcs(items)],{type:'text/calendar;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url;
-  a.download=items.length===1?`shindan-navi-${ymd(items[0].date)}.ics`:'shindan-navi-favorites.ics';
+  a.download=items.length===1?`torecal-${ymd(items[0].date)}.ics`:'torecal-favorites.ics';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
