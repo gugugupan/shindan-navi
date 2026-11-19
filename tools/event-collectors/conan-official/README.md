@@ -92,5 +92,5 @@ writes no negative entry for the venue that hit it; the cache is saved every 50 
 Key setup (owner): in a GCP project with billing, enable Geocoding API and Places API (New); create an API key
 restricted to exactly those two APIs, with no application restriction (it runs locally, so no referrer); set a
 daily quota and a budget alert. Put it in the repo `.env` as `GOOGLE_GEOCODING_API_KEY=…` (never commit it; it is
-separate from the browser Maps key). ~1,000 distinct CONAN venues means about that many Geocoding requests on the
+separate from the browser Maps key). The 2026-11-19 run had 417 distinct venues (2,139 events), so about that many Geocoding requests on the
 first run plus Places requests for the imprecise ones; later runs only look up new or expired venues.
