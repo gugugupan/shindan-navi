@@ -160,6 +160,69 @@ Clarifications:
   matches), `/events` from the range start (or the 1st) to the end of each month, and cuts both to the selected range
   itself. It waits 300 ms after filter changes before requesting, and loads at most 3 requests per scroll step.
 
+## Accounts API (Google login, synced preferences)
+
+Same Worker and origin. Dark until enabled: every `/api/v1/auth/*`, `/api/v1/me*` and `/api/v1/billing/*` route
+answers 404 `{ "error": "auth disabled" }` while any of `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+`SESSION_SECRET` is unset or the request origin is not `SITE_ORIGIN` (so `*.workers.dev` previews have no login).
+Every response of these routes, including redirects and errors, carries `Cache-Control: private, no-store` and is
+never put in the Cache API. No CORS headers.
+
+```
+GET  /api/v1/auth/google/start?return=<path>   302 to Google (openid email profile, PKCE S256, state, nonce);
+                                                sets __Host-sn_oauth (10 min). return: same-origin relative path,
+                                                default and fallback "/"
+GET  /api/v1/auth/google/callback              Google's redirect target. Success: sets __Host-sn_session and
+                                                __Host-sn_user, 302 to the return path. Cancelled or failed: 302 to
+                                                the return path (or "/") without session cookies
+POST /api/v1/auth/logout                       → 204; deletes the session, clears both cookies
+GET  /api/v1/me                                → 200 { "user": { "id", "display_name", "avatar_url", "plan" } }
+                                                | 401 { "error": "unauthenticated" } (also clears both cookies)
+GET  /api/v1/me/prefs                          → 200 Prefs
+PUT  /api/v1/me/prefs                          partial: { "stars"?: { "add"?: [id], "remove"?: [id] },
+                                                "event_filters"?: object|null, "ask_calendar"?: value|null }
+                                                stars applied server-side; the other keys replaced; null removes
+                                                → 200 Prefs (after the change)
+POST /api/v1/me/prefs/merge                    once after login: { "stars": [id], "event_filters"?, "ask_calendar"? }
+                                                → 200 Prefs (after the merge)
+DELETE /api/v1/me                              → 204; deletes the account and everything tied to it, clears cookies
+POST /api/v1/billing/webhook                   → 501 (placeholder)
+
+Prefs = { "prefs": { "stars"?: [id], "event_filters"?: object, "ask_calendar"?: boolean|"ask"|"off" },
+          "updated_at": { "<key>": "<ISO 8601>" } }      keys absent when never set
+```
+
+Values:
+
+- `stars`: item ids `^i[0-9a-f]{10}$` (the client drops legacy `date|name` keys first), at most 2,000, no duplicates;
+  order is server order (existing first, new appended).
+- `event_filters`: the `/events/` saved filters (`tcg.ev.filters`): an object whose keys are among `game`, `pref`,
+  `type`, `days`, `view`, each a string; at most 1 KB as JSON.
+- `ask_calendar`: the 「今後は確認しない」 setting: `true`/`false` or `"ask"`/`"off"`.
+- Request bodies at most 64 KB. Invalid values → 400 `{ "error": "<message>" }`; nothing is written.
+
+Merge semantics: `stars` = server ∪ client (server order first, capped at 2,000); `event_filters` and `ask_calendar`
+keep the server value when one exists, else take the client's. Only changed keys are written.
+
+Cookies (all `Path=/; Secure; SameSite=Lax`, `__Host-` so no `Domain`):
+
+| Cookie | HttpOnly | Lifetime | Content |
+| --- | --- | --- | --- |
+| `__Host-sn_session` | yes | 180 days, absolute | random session id + HMAC-SHA256 (`SESSION_SECRET`); D1 keeps only sha256 of the id |
+| `__Host-sn_user` | no | same as the session | `1`: tells the page to call `/me`; the page clears it on 401 / logout |
+| `__Host-sn_oauth` | yes | 10 min, cleared at the callback | signed state, PKCE verifier, nonce, return path |
+
+Client rules:
+
+- Call `/api/v1/me` only when `__Host-sn_user` is present; logged-out visitors make no `/api` calls on `/`.
+- Every non-GET request must send `Origin` equal to the site origin (browsers do for `fetch`) and
+  `Content-Type: application/json` (also for bodiless logout / DELETE), else 403 `{ "error": "forbidden" }` /
+  415 `{ "error": "unsupported media type" }`.
+- 429 `{ "error": "too many requests" }` (Retry-After: 60): login start/callback per client IP, PUT/merge/DELETE
+  per user, 30 per minute each (`AUTH_LIMIT`). Batch star toggles (debounce) rather than one PUT per click.
+- On 5xx or a failed write keep local state and fall back to localStorage silently; never log out on 5xx.
+- `__Host-` + `Secure` cookies work on `http://localhost` in Chrome, not in Safari.
+
 ## Getting data into the production D1
 
 Manual, from the operator's machine with the collected files in `data/events/`; CI never imports. No git step:
