@@ -743,8 +743,10 @@ function renderPrompt(){
     : `<div class="state" id="prefPrompt"><b>地域を選んでください</b><span>都道府県（またはオンライン）を${MAX_PREFS}つまで選ぶと、その地域のイベントを表示します。</span><button class="sbtn" id="pickPref">都道府県を選ぶ</button></div>`;
 }
 // /days for one month of the list (whole month requested, cut to the range here)
-async function loadMonthDays(sg, signal){
+async function loadMonthDays(sg, signal, my){
   const r=await api('/events/days',apiQuery(state,[sg.month+'-01',addM(sg.month,1)+'-01']),signal);
+  // An answer for an earlier load must not touch this load's totals.
+  if(my!==gen) return;
   const end=rangeEnd(), days=(r.days||[]).filter(d=>d.date>=sg.from&&d.date<end);
   dayCounts=Object.assign(dayCounts||{},Object.fromEntries(days.map(d=>[d.date,d.count])));
   sg.count=days.reduce((t,d)=>t+d.count,0);
@@ -759,7 +761,7 @@ async function loadPage(){
     // count for the filters, so a month ends as soon as all its events arrived and empty months cost no /events.
     for(let got=0, fetches=0; !done && got<PAGE_SIZE && fetches<MAX_FETCH_PER_LOAD; ){
       const sg=segs[seg];
-      if(sg.count==null){ fetches++; await loadMonthDays(sg,signal); if(my!==gen) return; continue; }
+      if(sg.count==null){ fetches++; await loadMonthDays(sg,signal,my); if(my!==gen) return; continue; }
       if(sg.got<sg.count){
         fetches++;
         const q=apiQuery(state,[sg.from,sg.until]); q.set('limit',PAGE_SIZE); if(nextCursor) q.set('cursor',nextCursor);
