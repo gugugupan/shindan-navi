@@ -12,7 +12,7 @@ Working notes for people and coding agents: `CLAUDE.md` (architecture, owner dec
 - `data/meta.json` — date of the last data update (shown as 更新日, used as sitemap lastmod)
 - `data/update-report.md` — what the last update changed
 - `public/` — copied as-is into `dist/` (`thumbs/`, `favicon.svg`, `_headers`)
-- `brand/` — logo mark and lockup SVGs (wordmark glyphs outlined from Dela Gothic One, OFL)
+- `brand/` — logo mark and lockup SVGs (`torecal-*`: wordmark glyphs outlined from M PLUS Rounded 1c ExtraBold, OFL; the older `shindan-navi-*` ones from Dela Gothic One, OFL)
 
 ## Updating the data
 

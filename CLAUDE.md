@@ -80,5 +80,5 @@ Local preview: `api/` `npm run dev:node` (site + API), or serve `dist/` alone (l
 - yu-gi-oh.jp blocks curl for HTML (Cloudflare) but its image URLs download fine — open articles in the browser pane, copy the image URL, fetch with curl.
 - Official "NOW DESIGNING / NOW PRINTING" images are placeholders — never use them as thumbnails; pin `thumb: ""` instead.
 - Fonts are subset at build time from the characters on the built pages (plus kana/ASCII). Sources are OFL fonts in `brand/fonts/`.
-- The logo wordmark is outlined Dela Gothic One glyphs (`brand/shindan-navi-lockup-*.svg`); the favicon is a simplified pack + star (`brand/icon/`). Don't use the full lockup at icon sizes.
+- The logo lockup (`brand/torecal-lockup-*.svg`, concept 金の日: calendar with a gold card) has the wordmark outlined from M PLUS Rounded 1c ExtraBold (OFL; the font is not in `brand/fonts/` because no page uses it as text). `src/template.html` inlines the light lockup with CSS variables instead of its fixed colours, so it follows the theme; the other pages take it from there. The favicon (`brand/icon/favicon.svg`) and app icon (`brand/icon/app-icon.svg`) are simplified marks; don't use the full lockup at icon sizes.
 - The repo is public: never commit `.wrangler/`, `wrangler.remote.json`, the D1 database id, tokens, account ids or personal emails.

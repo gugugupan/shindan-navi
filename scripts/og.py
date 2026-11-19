@@ -14,8 +14,8 @@ SHORT = {'pokemon': 'ポケカ', 'onepiece': 'ワンピカード', 'mtg': 'MTG',
 
 pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
 items = json.load(open(os.path.join(ROOT, 'data/items.json')))
-lockup = open(os.path.join(ROOT, 'brand/shindan-navi-lockup-light.svg')).read()
-lockup = lockup.replace(' width="1154" height="336"', '')
+lockup = open(os.path.join(ROOT, 'brand/torecal-lockup-light.svg')).read()
+lockup = lockup.replace(' width="1431" height="336"', '')
 font = 'file://' + os.path.join(ROOT, 'brand/fonts/DelaGothicOne-Regular.ttf')
 out_dir = os.path.join(ROOT, 'public/og')
 os.makedirs(out_dir, exist_ok=True)
