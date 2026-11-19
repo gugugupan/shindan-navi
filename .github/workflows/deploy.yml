@@ -51,6 +51,8 @@ jobs:
 
       - name: Build for the Worker
         if: env.LIVE_HOST == 'worker' || env.HAS_D1_ID == 'true'
+        env:
+          MAPS_BROWSER_KEY: ${{ vars.MAPS_BROWSER_KEY }}
         run: python -I scripts/build.py
 
       - uses: actions/setup-node@v4

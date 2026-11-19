@@ -254,6 +254,8 @@ def render(pg):
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
 
 EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
+# Browser key for the /events/ day-view map (Maps JavaScript API only, HTTP-referrer restricted; public by design). Empty = placeholder.
+MAPS_BROWSER_KEY=os.environ.get('MAPS_BROWSER_KEY','').strip()
 EVENTS_PAGE=dict(path='/events/',og='events',
     desc='ONE PIECEカードゲーム・UNION ARENA・名探偵コナン カードゲーム・ポケモンカードの店舗大会・ジムバトル・交流会・体験会を、開催日・都道府県・イベント形式で探せるTCGイベントカレンダー。公式イベント情報をまとめて一覧でチェックできます。',
     keywords=['TCG イベント','トレカ 大会','店舗大会','ジムバトル','交流会','体験会','ワンピカード 大会','ユニアリ 大会','コナンカード 大会','ポケカ 大会','イベントカレンダー'],
@@ -262,7 +264,7 @@ def render_events():
     src=open(os.path.join(ROOT,'src/events.html')).read()
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE))):
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY))):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--NAV_TOOLBAR-->',tooltabs('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}</nav>')

@@ -100,6 +100,32 @@ Never set `LIVE_HOST=worker` before step 2. Rollback: remove the domain from the
 
 Limits: the Worker limits uncached API requests itself (`API_LIMIT` 20/min per client, `API_BREAKER` 300/min per location; see `api/README.md` › D1 budget). Optionally add the Free plan's one WAF rate-limiting rule (Security → WAF → Rate limiting rules): *URI Path starts with `/api/`*, counted per IP, 30 requests / 10 s, Block for 10 s. It does not protect D1 (misses are already limited) but keeps one client from spending the Workers Free plan's 100,000 requests/day on cached `/api/` answers. A normal visit makes 3-4 API requests on load and about one per 50 events while scrolling.
 
+## Event map (`/events/` day view)
+
+Clicking a day (calendar cell, or 地図 on a list day heading) opens that single day (`range=custom&from=D&to=D`, no
+extra URL parameter): a Google map of the venues on the left (on phones on top, collapsed behind 地図を表示), the
+day's cards on the right. The page pages through the whole day by itself (up to 12 `/events` pages, ~13 uncached
+requests incl. `/days`, under `API_LIMIT` 20/min), then shows さらに読み込む. One classic `google.maps.Marker` per place
+(coordinates rounded to 5 decimals), count badge for several events there; marker ↔ card highlight/pan. Events whose
+venue has no `geo` show 地図なし. The Maps JavaScript API is loaded only when a day's map opens
+(`language=ja&region=JP`, `loading=async`); classic markers need no Map ID (AdvancedMarkerElement would). Without a key,
+or on `gm_authFailure` / script error / ad blocker / 15 s timeout, the map is a short placeholder and the list works as
+before. The legend on the page says that opening the map sends the IP etc. to Google.
+
+The key comes from the build env `MAPS_BROWSER_KEY` (`scripts/build.py` → `MAPS_KEY` in the page; the deploy
+workflow passes the repository **variable** `MAPS_BROWSER_KEY` to the Worker build; the Pages build has no `/events/`).
+A browser key is public by design; restrictions are what protect it. Owner checklist before setting it:
+
+1. GCP project with billing enabled; enable **Maps JavaScript API** only.
+2. Create an API key restricted to *Maps JavaScript API* and to HTTP referrers `https://shindan-navi.app/*`,
+   `https://*.guratan-game-asobu.workers.dev/*` and `http://localhost:8787/*`.
+3. Set a daily request quota on the Maps JavaScript API (Quotas page) and a billing budget with an alert.
+4. Repository variable `MAPS_BROWSER_KEY` = that key (Settings → Secrets and variables → Actions → Variables);
+   locally `MAPS_BROWSER_KEY=… python3 -I scripts/build.py`.
+5. Geocoding uses a **separate** server key, `GOOGLE_GEOCODING_API_KEY` (Geocoding API only), which lives only in the
+   git-ignored `.env` for the collectors and is never given to the build or CI. Google results (`geo.source = google`)
+   may only be shown on a Google map and count as null 30 days after `geocoded_at` (the Worker enforces it).
+
 ## GA events
 
 `favorite`, `filter_game`, `filter_favorites`, `switch_view`, `view_item`, `copy_favorites`, `change_theme`, `click_official`.

@@ -101,6 +101,33 @@ button.cd:hover{background:var(--surface-2)}
 .cd .gs i{width:7px;height:7px;border-radius:50%;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
 .cd .zero{font-size:11px;color:var(--faint)}
 
+/* day view (single-day range in the list): venue map + that day's cards */
+.daymap{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:1px 9px;font-family:var(--body);font-size:11px;font-weight:700;color:var(--accent)}
+.daymap:hover{border-color:var(--accent)}
+.ag h3 .daymap{order:4}
+.dayback{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 12px 3px 10px;font-size:12px;font-weight:700;color:var(--ink)}
+.dayback:hover{border-color:var(--accent)}
+#results.dayv{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:12px;align-items:start;margin-top:8px}
+#results.dayv.nomap{grid-template-columns:minmax(0,1fr);gap:0}
+.mapv{position:sticky;top:calc(var(--barh,150px) + 8px);display:grid;gap:6px;min-width:0;scroll-margin-top:calc(var(--barh,150px) + 8px)}
+.dayv.nomap .mapv{position:static;margin-bottom:12px}
+.mapv-head{display:flex;align-items:center;gap:8px;min-height:24px;font-size:12px;color:var(--muted)}
+.mapv-head b{color:var(--ink)}
+.mapv-tog{display:none}
+.mapbox{position:relative;height:calc(100vh - var(--barh,150px) - 48px);min-height:320px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface-2);box-shadow:var(--shadow)}
+.dayv.nomap .mapbox{height:auto;min-height:0;box-shadow:none;border-style:dashed}
+#gmap{position:absolute;inset:0}
+.dayv.nomap #gmap{display:none}
+.mapph{display:grid;gap:4px;place-content:center;text-align:center;padding:12px 16px;color:var(--muted);font-size:12.5px;background:var(--surface)}
+.mapph b{color:var(--ink);font-size:13.5px}
+.ev-pin{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 8px;font-size:11px;font-weight:700;color:var(--accent);line-height:1.6}
+.ev-pin:hover{border-color:var(--accent)}
+.nomapt{font-size:11px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 7px}
+.dayv .ev[data-mk]{cursor:pointer}
+.dayv.nomap .ev[data-mk]{cursor:auto}
+.dayv.nomap .ev-pin,.dayv.nomap .nomapt{display:none}
+.ev.hl{box-shadow:0 0 0 2px var(--accent);background:var(--accent-soft)}
+
 /* prefecture picker */
 .prefdlg{width:min(640px,calc(100vw - 32px))}
 .prefdlg fieldset{border:0;margin:0;padding:10px 0 0;border-top:1px solid var(--line);display:grid;gap:6px}
@@ -137,8 +164,16 @@ button.cd:hover{background:var(--surface-2)}
   .cd .c{font-size:10px}
   .cd .c b{font-size:15px;margin:0}
   .cd .zero{display:none}
+  .ag h3 .daymap{font-size:10px;padding:1px 5px;margin-top:4px}
+  #results.dayv{grid-template-columns:minmax(0,1fr);gap:8px}
+  .mapv{position:static}
+  .mapv-tog{display:inline-flex}
+  .mapbox{height:40vh;min-height:240px}
+  .mapv:not(.open) .mapbox{display:none}
+  .dayv .ev[data-mk]{cursor:auto}
 }
 @media (min-width:761px){
+  .dayv.nomap .mapv-head{display:none}
   .ev{grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
   .ev>*{grid-column:1}
   .ev>.ev-link{grid-column:2;grid-row:1/span 4;align-self:center;margin:0}
@@ -169,13 +204,17 @@ button.cd:hover{background:var(--surface-2)}
   <div id="notice"></div>
   <main id="results">
     <h2 class="sr">イベント一覧</h2>
+    <aside class="mapv" id="mapv" hidden aria-label="会場の地図">
+      <div class="mapv-head"><button class="chip mapv-tog" id="mapTog" aria-expanded="false" aria-controls="mapbox">地図を表示</button><span id="mapSum"></span></div>
+      <div class="mapbox" id="mapbox"><div id="gmap"></div><div class="mapph" id="mapph" hidden></div></div>
+    </aside>
     <div id="list" aria-busy="false"></div>
     <div id="calv" hidden></div>
   </main>
 
   <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div></div>
   <p class="legend">イベント情報は各タイトルの公式イベントページで公開されている内容をもとに掲載しています。開催可否・参加費・定員・申込方法は変わることがあるため、参加前に必ず「公式で詳細・申込」から最新情報をご確認ください。定員は募集人数で、残り枠ではありません。</p>
-  <p class="legend">絞り込み条件・表示設定はお使いのブラウザ（localStorage）にのみ保存され、外部には送信されません。初めて開いたときの都道府県は、接続元 IP アドレスから推定したものです（位置情報の許可は求めず、推定結果も保存しません）。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener">Google のポリシー</a> をご覧ください。</p>
+  <p class="legend">絞り込み条件・表示設定はお使いのブラウザ（localStorage）にのみ保存され、外部には送信されません。初めて開いたときの都道府県は、接続元 IP アドレスから推定したものです（位置情報の許可は求めず、推定結果も保存しません）。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。日付ごとの会場地図には Google マップを使っており、地図を開くと IP アドレスなどの情報が Google に送信されます。詳しくは <a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener">Google のポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
 </div>
 
@@ -303,7 +342,7 @@ function commit(changes, opts={}){
   if(!opts.auto){ state.autoPref=false; saveFilters(); }
   if(!('month' in changes) && ('range' in changes || 'from' in changes || 'to' in changes)) state.month=monthOf(rangeOf(state)[0]);
   const qs=toQuery(state), url=location.pathname+(qs?'?'+qs:'');
-  if(url!==location.pathname+location.search) history[opts.replace?'replaceState':'pushState'](null,'',url);
+  if(url!==location.pathname+location.search) history[opts.replace?'replaceState':'pushState'](opts.day?{day:1}:null,'',url);
   renderControls();
   reload();
 }
@@ -342,6 +381,9 @@ function renderControls(){
   document.getElementById('vCal').setAttribute('aria-pressed',state.view==='cal');
   document.getElementById('list').hidden=state.view!=='list';
   document.getElementById('calv').hidden=state.view!=='cal';
+  renderMapPane();
+  if(isDay() && !narrow.matches && !mapOpen) openMap();
+  setBarH();
 
   if(focusKey){
     const el=document.querySelector(`[data-k="${focusKey[0]}"][data-v="${CSS.escape(focusKey[1])}"]`);
@@ -472,13 +514,15 @@ function regText(e){
 function venueText(e){
   const online = e.attendance_mode==='online' || e.attendance_mode==='hybrid';
   const v=e.venue;
-  const place = v ? `${esc(v.name)}${v.region_name||v.city?` <span>· ${esc([v.region_name||PREF[v.region_code]||'',v.city||''].filter(Boolean).join(' '))}</span>`:''}` : '';
+  const place = v ? `${esc(venueLabel(v))}${v.region_name||v.city?` <span>· ${esc([v.region_name||PREF[v.region_code]||'',v.city||''].filter(Boolean).join(' '))}</span>`:''}` : '';
   if(e.attendance_mode==='online') return 'オンライン開催';
   if(e.attendance_mode==='hybrid') return (place?place+' <span>· </span>':'')+'オンライン参加あり';
   return place || '<span>会場は公式で確認</span>';
 }
-function card(e){
+function card(e, day){
   const g=GAME[e.game_code]||{name:e.game_code,h:0};
+  const mk=day&&e.venue?geoKey(e.venue.geo):null;
+  const pin=!day||!e.venue ? '' : mk ? `<button type="button" class="ev-pin" aria-label="${esc(venueLabel(e.venue))}を地図で見る">地図</button>` : '<span class="nomapt">地図なし</span>';
   const tags=(Array.isArray(e.game_codes)&&e.game_codes.length?e.game_codes:[e.game_code]).map(c=>{ const x=GAME[c]||{name:c,h:0}; return `<span class="tag" style="--h:${x.h}"><i></i>${esc(x.name)}</span>`; }).join('');
   const w=whenText(e), fee=feeText(e), reg=regText(e);
   const st = e.event_status==='cancelled' ? '<span class="st cancel">中止</span>' : e.event_status==='postponed' ? '<span class="st post">延期</span>' : '';
@@ -488,8 +532,8 @@ function card(e){
   if(Number.isInteger(e.capacity)) facts.push(`<li>定員 ${e.capacity.toLocaleString('ja-JP')}名</li>`);
   if(e.event_status!=='cancelled') facts.push(`<li class="${reg.cls}">${reg.text}</li>`);
   if(REG_METHOD[e.registration_method] && e.event_status!=='cancelled') facts.push(`<li>${REG_METHOD[e.registration_method]}</li>`);
-  return `<article class="ev${e.event_status==='cancelled'?' off':''}" style="--h:${g.h}">
-    <div class="ev-top">${st}<span class="ev-time ${w.cls}">${w.text}</span>${tags}${cat?`<span class="cat">${cat}</span>`:''}</div>
+  return `<article class="ev${e.event_status==='cancelled'?' off':''}${mk&&mk===selKey?' hl':''}" style="--h:${g.h}"${mk?` data-mk="${mk}"`:''}>
+    <div class="ev-top">${st}<span class="ev-time ${w.cls}">${w.text}</span>${tags}${cat?`<span class="cat">${cat}</span>`:''}${pin}</div>
     <h4>${esc(e.name)}${grp}</h4>
     <p class="ev-venue">${venueText(e)}</p>
     <ul class="ev-facts">${facts.join('')}</ul>
@@ -497,12 +541,157 @@ function card(e){
   </article>`;
 }
 
+// ---- map: pure helpers (no DOM, no google.maps; unit-testable on their own)
+// Prefectural office coordinates in JIS order (JP-01..JP-47): the map's centre when a day has no mappable venue.
+const PREF_LL = [[43.064,141.347],[40.824,140.740],[39.704,141.153],[38.269,140.872],[39.719,140.102],[38.240,140.364],[37.750,140.468],
+  [36.342,140.447],[36.566,139.884],[36.391,139.061],[35.857,139.649],[35.605,140.123],[35.690,139.692],[35.448,139.643],
+  [37.902,139.023],[36.695,137.211],[36.595,136.626],[36.065,136.222],[35.664,138.568],[36.651,138.181],[35.391,136.722],[34.977,138.383],[35.180,136.907],
+  [34.730,136.509],[35.004,135.868],[35.021,135.756],[34.686,135.520],[34.691,135.183],[34.685,135.833],[34.226,135.168],
+  [35.504,134.238],[35.472,133.051],[34.662,133.935],[34.397,132.460],[34.186,131.471],
+  [34.066,134.559],[34.340,134.043],[33.842,132.766],[33.560,133.531],
+  [33.607,130.418],[33.249,130.299],[32.745,129.874],[32.790,130.742],[33.238,131.613],[31.911,131.424],[31.560,130.558],[26.212,127.681]];
+const JP_VIEW = {center:{lat:36.2,lng:138.3}, zoom:5};
+// Some PTCG venues carry a postcode as their name; the address reads better then.
+const isPostcode = s => /^〒?\s*\d{3}-?\d{4}$/.test(String(s||'').trim());
+const venueLabel = v => !v ? '' : isPostcode(v.name) && v.address ? v.address : v.name;
+// One marker per place: coordinates rounded to 5 decimals (~1 m), not the source's venue id.
+const geoKey = g => g && Number.isFinite(g.lat) && Number.isFinite(g.lng) ? g.lat.toFixed(5)+','+g.lng.toFixed(5) : null;
+function groupVenues(evs){
+  const out=new Map();
+  for(const e of evs){
+    const k=geoKey(e.venue&&e.venue.geo); if(!k) continue;
+    let x=out.get(k);
+    if(!x){ x={key:k, lat:e.venue.geo.lat, lng:e.venue.geo.lng, label:venueLabel(e.venue), ids:[]}; out.set(k,x); }
+    if(!x.ids.includes(e.id)) x.ids.push(e.id);
+  }
+  return out;
+}
+// → {bounds:{south,west,north,east}} for several places, else {center,zoom}
+function mapView(groups, prefs){
+  const gs=[...groups.values()];
+  if(gs.length){
+    const lat=gs.map(g=>g.lat), lng=gs.map(g=>g.lng);
+    const b={south:Math.min(...lat), west:Math.min(...lng), north:Math.max(...lat), east:Math.max(...lng)};
+    // one place, or several within a few hundred metres: fitBounds would zoom in to street level
+    if(b.north-b.south<0.003 && b.east-b.west<0.003) return {center:{lat:(b.south+b.north)/2, lng:(b.west+b.east)/2}, zoom:16};
+    return {bounds:b};
+  }
+  const p=(prefs||[]).find(c=>/^JP-\d\d$/.test(c));
+  if(!p) return JP_VIEW;
+  const [lat,lng]=PREF_LL[+p.slice(3)-1];
+  return {center:{lat,lng}, zoom:p==='JP-01'?7:10};
+}
+// ---- map: end pure helpers
+
+// Maps JavaScript API, loaded only when a day view's map opens. Classic google.maps.Marker: AdvancedMarkerElement
+// needs a Map ID (Cloud console setup per key), the classic one does not.
+const MAPS_KEY = /*MAPS_KEY*/'';
+const narrow = window.matchMedia('(max-width:760px)');
+const mapEls = {v:document.getElementById('mapv'), tog:document.getElementById('mapTog'), sum:document.getElementById('mapSum'), box:document.getElementById('mapbox'), gmap:document.getElementById('gmap'), ph:document.getElementById('mapph')};
+let mapsP=null, gm=null, gmap=null, mapFail=MAPS_KEY?null:'nokey', mapOpen=false, userMoved=false, selKey=null;
+const markers=new Map();
+const isDay = () => state.view==='list' && state.range==='custom' && state.from===state.to;
+function loadMaps(){
+  if(mapsP) return mapsP;
+  mapsP=new Promise((resolve,reject)=>{
+    if(!MAPS_KEY){ reject(new Error('nokey')); return; }
+    const fail=why=>{ if(!mapFail) mapFail=why; reject(new Error(why)); renderMapPane(); };
+    // Google calls this on a rejected key or referrer (it then draws its own error over the map)
+    window.gm_authFailure=()=>fail('auth');
+    window.__snMapsReady=async()=>{
+      try{
+        const [{Map},{Marker,Animation}]=await Promise.all([google.maps.importLibrary('maps'),google.maps.importLibrary('marker')]);
+        resolve({Map,Marker,Animation});
+      }catch(e){ fail('load'); }
+    };
+    const s=document.createElement('script');
+    s.src='https://maps.googleapis.com/maps/api/js?'+new URLSearchParams({key:MAPS_KEY, callback:'__snMapsReady', loading:'async', v:'weekly', language:'ja', region:'JP'});
+    s.async=true; s.onerror=()=>fail('load');
+    setTimeout(()=>{ if(!gm) fail('timeout'); },15000);
+    document.head.appendChild(s);
+  });
+  mapsP.catch(()=>{});
+  return mapsP;
+}
+async function openMap(){
+  mapOpen=true; renderMapPane();
+  if(mapFail) return;
+  try{ gm=await loadMaps(); }catch(e){ return; }
+  if(mapFail) return;
+  if(!gmap){
+    const v0=mapView(new Map(),state.pref);
+    gmap=new gm.Map(mapEls.gmap,{center:v0.center, zoom:v0.zoom, clickableIcons:false, mapTypeControl:false, streetViewControl:false,
+      gestureHandling:narrow.matches?'cooperative':'greedy'});
+    gmap.addListener('dragstart',()=>{ userMoved=true; });
+  }
+  syncMap();
+  if(selKey) selectVenue(selKey,'card');
+}
+function renderMapPane(){
+  const day=isDay();
+  mapEls.v.hidden=!day;
+  const res=document.getElementById('results');
+  res.classList.toggle('dayv',day);
+  res.classList.toggle('nomap',day&&!!mapFail);
+  if(!day) return;
+  mapEls.v.classList.toggle('open',mapOpen);
+  mapEls.tog.textContent=mapOpen?'地図を閉じる':'地図を表示';
+  mapEls.tog.setAttribute('aria-expanded',mapOpen);
+  mapEls.ph.hidden=!mapFail;
+  if(mapFail) mapEls.ph.innerHTML = mapFail==='nokey'
+    ? '<b>地図は準備中です</b><span>この日のイベントは一覧でご覧ください。</span>'
+    : '<b>地図を読み込めませんでした</b><span>広告ブロックや通信状況により Google マップを表示できません。イベントは一覧でご覧ください。</span>';
+  const groups=groupVenues(events), nogeo=events.filter(e=>e.venue&&!geoKey(e.venue.geo)).length;
+  mapEls.sum.innerHTML = events.length && !mapFail ? `会場 <b>${groups.size}</b> か所${nogeo?` · 地図なし ${nogeo}件`:''}${done?'':' · 読み込み中'}` : '';
+}
+// Markers follow the loaded events: added as pages arrive, removed when the day or filters change.
+function syncMap(){
+  renderMapPane();
+  if(!gmap||!isDay()) return;
+  const groups=groupVenues(events);
+  for(const [k,m] of markers) if(!groups.has(k)){ m.setMap(null); markers.delete(k); }
+  groups.forEach(g=>{
+    const n=g.ids.length, label=n>1?{text:String(n),color:'#fff',fontSize:'11px',fontWeight:'700'}:null, title=`${g.label}（${n}件）`;
+    let m=markers.get(g.key);
+    if(!m){
+      m=new gm.Marker({map:gmap, position:{lat:g.lat,lng:g.lng}, title, label});
+      m.addListener('click',()=>selectVenue(g.key,'map'));
+      markers.set(g.key,m);
+    } else { m.setLabel(label); m.setTitle(title); }
+  });
+  if(userMoved || (!groups.size && !done)) return;
+  const v=mapView(groups,state.pref);
+  if(v.bounds) gmap.fitBounds(v.bounds,48); else { gmap.setCenter(v.center); gmap.setZoom(v.zoom); }
+}
+function resetMap(){ userMoved=false; selKey=null; for(const m of markers.values()) m.setMap(null); markers.clear(); }
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function selectVenue(key, from){
+  selKey=key;
+  listEl.querySelectorAll('.ev.hl').forEach(x=>x.classList.remove('hl'));
+  const cards=[...listEl.querySelectorAll(`.ev[data-mk="${CSS.escape(key)}"]`)];
+  cards.forEach(c=>c.classList.add('hl'));
+  if(from==='map' && cards[0]) cards[0].scrollIntoView({behavior:reducedMotion()?'auto':'smooth', block:'center'});
+  const m=markers.get(key);
+  if(!m||!gmap) return;
+  markers.forEach(x=>x.setZIndex(x===m?1000:null));
+  if(from==='card'){ userMoved=true; gmap.panTo(m.getPosition()); if(gmap.getZoom()<14) gmap.setZoom(15); }
+  if(!reducedMotion() && gm.Animation){ m.setAnimation(gm.Animation.BOUNCE); setTimeout(()=>m.setAnimation(null),1400); }
+}
+mapEls.tog.onclick=()=>{ if(mapOpen){ mapOpen=false; renderMapPane(); } else { openMap(); track('events_map',{action:'open'}); } };
+// the sticky map sits below the sticky toolbar, whose height depends on its rows
+const setBarH=()=>root.style.setProperty('--barh',document.querySelector('.bar').offsetHeight+'px');
+window.addEventListener('resize',setBarH);
+
 // ---- list view
 // The API answers per calendar month (/days: whole months, /events: a start day to the month's end), so the list
 // walks the range month by month. Each month's /days is loaded when the list reaches it, which also skips months
 // without matches; the header total is "at least" until every month is known.
 let events=[], segs=[], seg=0, nextCursor=null, done=false, total=null, dayCounts=null, loading=false, failed=false, ctrl=null, gen=0, reloadTimer=null;
 const MAX_FETCH_PER_LOAD = 3;
+// A day view pages through the whole day by itself (markers need every venue), up to DAY_AUTO_PAGES loads
+// (~13 API requests with /days, under the 20 uncached requests/min per client), then asks.
+const DAY_AUTO_PAGES = 12;
+let dayBudget = DAY_AUTO_PAGES;
 function segments([f,u]){ const out=[]; for(let a=f;a<u;){ const next=addM(monthOf(a),1)+'-01'; out.push({from:a, until:next, month:monthOf(a), count:null, got:0}); a=next; } return out; }
 const rangeEnd=()=>rangeOf(state)[1];
 const listEl=document.getElementById('list');
@@ -517,6 +706,7 @@ function reload(){
   if(ctrl) ctrl.abort();
   ctrl=new AbortController(); gen++;
   events=[]; segs=segments(rangeOf(state)); seg=0; nextCursor=null; done=false; total=null; dayCounts=null; failed=false;
+  dayBudget=DAY_AUTO_PAGES; resetMap(); syncMap();
   renderNotice();
   clearTimeout(reloadTimer);
   if(!state.pref.length){ renderPrompt(); return; }
@@ -567,6 +757,7 @@ async function loadPage(){
     failed=err;
   }
   loading=false; renderList();
+  if(isDay() && my===gen && !done && !failed && --dayBudget>0) setTimeout(()=>{ if(my===gen) loadPage(); },0);
 }
 function renderHead(){
   const el=document.getElementById('rhead');
@@ -576,7 +767,7 @@ function renderHead(){
   const exact = state.view==='cal' || segs.every(x=>x.count!=null);
   const cnt = total==null ? '' : `<span class="count"><b>${total.toLocaleString('ja-JP')}</b> 件${exact?'':'以上'}</span>`;
   el.innerHTML = state.view==='cal' ? `<span class="sub">${esc(where)}</span>`
-    : `${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}</span>`;
+    : `${isDay()?'<button class="dayback" id="dayBack">‹ 一覧に戻る</button>':''}${cnt}<span class="rng">${rng}</span><span class="sub">${esc(where)}</span>`;
 }
 function renderNotice(){
   const sel=state.game.length?state.game:GAMES.map(g=>g.code);
@@ -594,6 +785,7 @@ function renderList(){
   renderHead();
   if(state.view!=='list') return;
   listEl.setAttribute('aria-busy',loading);
+  syncMap();
   if(failed && !events.length){ listEl.innerHTML=errorState(failed); return; }
   if(loading && !events.length){ listEl.innerHTML=Array.from({length:4},()=>'<div class="sk" aria-hidden="true"></div>').join('')+'<span class="sr">読み込み中…</span>'; return; }
   // Not done yet but nothing found so far: offer to keep looking rather than claiming there is nothing.
@@ -608,26 +800,38 @@ function renderList(){
   const byDay=new Map();
   events.forEach(e=>{ if(!byDay.has(e.starts_on)) byDay.set(e.starts_on,[]); byDay.get(e.starts_on).push(e); });
   let h='';
+  const day=isDay();
   byDay.forEach((its,k)=>{
     const [,,dd]=k.split('-').map(Number), w=dowOf(k);
-    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}</h3><div class="list">${its.map(card).join('')}</div></section>`;
+    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${its.map(e=>card(e,day)).join('')}</div></section>`;
   });
   const rest = total!=null && segs.every(x=>x.count!=null) ? total-events.length : null;
-  if(!done) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`もっと見る（残り ${rest.toLocaleString('ja-JP')}件）`:'もっと見る'}</button>`;
+  if(!done) h+=`<button class="loadmore" id="loadMore"${loading?' disabled':''}>${loading?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;
   listEl.innerHTML=h;
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
 }
+function closeDay(){ if(history.state&&history.state.day) history.back(); else commit({range:'upcoming'}); }
+document.getElementById('rhead').addEventListener('click',e=>{ if(e.target.closest('#dayBack')) closeDay(); });
+narrow.addEventListener('change',()=>{ renderControls(); });
 const io = 'IntersectionObserver' in window ? new IntersectionObserver(es=>{
-  if(es.some(x=>x.isIntersecting) && !done && !loading && !failed && state.view==='list') loadPage();
+  if(es.some(x=>x.isIntersecting) && !done && !loading && !failed && state.view==='list' && !isDay()) loadPage();
 },{rootMargin:'400px 0px'}) : null;
 document.getElementById('results').addEventListener('click',e=>{
-  if(e.target.closest('#loadMore')){ failed=false; loadPage(); return; }
+  if(e.target.closest('#loadMore')){ failed=false; dayBudget=DAY_AUTO_PAGES; loadPage(); return; }
   if(e.target.closest('#retry')){ if(!meta) loadMeta(); reload(); return; }
   if(e.target.closest('#resetAll2')){ commit({game:[],type:[],days:'',range:'upcoming'}); return; }
   if(e.target.closest('#pickPref')){ openPref(); return; }
-  const a=e.target.closest('a.ev-link'); if(a) track('click_event_source',{game:a.dataset.game});
-  const d=e.target.closest('button.cd[data-day]');
-  if(d){ commit({view:'list',range:'custom',from:d.dataset.day,to:d.dataset.day}); window.scrollTo({top:0}); return; }
+  const a=e.target.closest('a.ev-link'); if(a){ track('click_event_source',{game:a.dataset.game}); return; }
+  const d=e.target.closest('button.cd[data-day],button.daymap[data-open]');
+  if(d){ const k=d.dataset.day||d.dataset.open; commit({view:'list',range:'custom',from:k,to:k},{day:true}); window.scrollTo({top:0}); track('events_map',{action:'day'}); return; }
+  const ev=e.target.closest('.ev[data-mk]');
+  if(ev && isDay() && !mapFail){
+    const pin=e.target.closest('.ev-pin');
+    if(!pin && narrow.matches) return;
+    selectVenue(ev.dataset.mk,'card');
+    if(narrow.matches){ if(!mapOpen) openMap(); mapEls.v.scrollIntoView({behavior:reducedMotion()?'auto':'smooth'}); }
+    return;
+  }
   const m=e.target.closest('[data-month]'); if(m){ commit({month:m.dataset.month}); }
 });
 
