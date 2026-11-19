@@ -1,0 +1,303 @@
+{
+ "success": {
+  "code": 200,
+  "organizer_event_series": [
+   {
+    "event_series_id": 3486,
+    "organizer_id": 913,
+    "series_type": 1,
+    "team_count": 1,
+    "game_title_id": 10,
+    "flgs": 1051184,
+    "organizer_name": "竜星の嵐 新宿店",
+    "organizer_phone_number": "0300000000",
+    "place_geo": {
+     "x": 35.6889147,
+     "y": 139.6985926
+    },
+    "event_series_title": "11月度 hololive OFFICIAL CARD GAME ショップ大会(2026)",
+    "organizer_game_title_notes": "TEL 03-0000-0000",
+    "organizer_type": 1,
+    "is_event_info_hidden": false,
+    "is_count_applicants_hidden": false,
+    "is_start_datetime_hidden": false,
+    "is_max_join_count_hidden": false,
+    "disable_entry_fee_comment": false,
+    "is_phone_number_hidden": false,
+    "events": [
+     {
+      "event_series_id": 3486,
+      "organizer_id": 913,
+      "id": 1799515,
+      "flgs": 344,
+      "status_id": 11,
+      "checkin_start_datetime": "2026-11-19T05:30:00+00:00",
+      "checkin_end_datetime": "2026-11-19T06:00:00+00:00",
+      "start_datetime": "2026-11-19T06:00:00+00:00",
+      "user_apply_deadline_type": 0,
+      "max_join_count": 16,
+      "game_format_id": 22,
+      "game_format_name": "スタンダード",
+      "pref_code": 13,
+      "checkin_range": 100,
+      "requirement_type": 1,
+      "entry_fee": "0.000",
+      "place": "新宿区西新宿1-18-1　小川ビル5階",
+      "place_geo": {
+       "x": 35.6889147,
+       "y": 139.6985926
+      },
+      "event_judge": 0,
+      "is_arriving_first": true,
+      "entry_method": 1,
+      "is_no_advance_application": false,
+      "is_canceled": true
+     },
+     {
+      "event_series_id": 3486,
+      "organizer_id": 913,
+      "id": 1799516,
+      "flgs": 328,
+      "status_id": 11,
+      "checkin_start_datetime": "2026-11-26T05:30:00+00:00",
+      "checkin_end_datetime": "2026-11-26T06:00:00+00:00",
+      "start_datetime": "2026-11-26T06:00:00+00:00",
+      "user_apply_deadline_type": 0,
+      "max_join_count": 16,
+      "game_format_id": 22,
+      "game_format_name": "スタンダード",
+      "pref_code": 13,
+      "checkin_range": 100,
+      "requirement_type": 1,
+      "entry_fee": "0.000",
+      "place": "新宿区西新宿1-18-1　小川ビル5階",
+      "place_geo": {
+       "x": 35.6889147,
+       "y": 139.6985926
+      },
+      "event_judge": 0,
+      "is_arriving_first": true,
+      "entry_method": 1,
+      "is_no_advance_application": false,
+      "is_canceled": false
+     }
+    ]
+   },
+   {
+    "event_series_id": 3567,
+    "organizer_id": 521,
+    "series_type": 1,
+    "team_count": 1,
+    "game_title_id": 2,
+    "flgs": 1051184,
+    "organizer_name": "カードショップアビス",
+    "organizer_phone_number": "0300000000",
+    "place_geo": {
+     "x": 40.2673906,
+     "y": 140.5552885
+    },
+    "event_series_title": "[WS] 11月度ショップ大会(2026)",
+    "organizer_game_title_notes": "TEL 03-0000-0000",
+    "organizer_type": 1,
+    "is_event_info_hidden": false,
+    "is_count_applicants_hidden": false,
+    "is_start_datetime_hidden": false,
+    "is_max_join_count_hidden": false,
+    "disable_entry_fee_comment": false,
+    "is_phone_number_hidden": false,
+    "events": [
+     {
+      "event_series_id": 3567,
+      "organizer_id": 521,
+      "id": 1808563,
+      "flgs": 328,
+      "status_id": 11,
+      "checkin_start_datetime": "2026-11-21T00:30:00+00:00",
+      "checkin_end_datetime": "2026-11-21T01:00:00+00:00",
+      "start_datetime": "2026-11-21T01:00:00+00:00",
+      "user_apply_deadline_type": 0,
+      "max_join_count": 8,
+      "game_format_id": 4,
+      "game_format_name": "オープン",
+      "pref_code": 5,
+      "checkin_range": 100,
+      "requirement_type": 3,
+      "entry_fee": "200.000",
+      "place": "大館市常盤木町12-24",
+      "place_geo": {
+       "x": 40.2673906,
+       "y": 140.5552885
+      },
+      "event_judge": 0,
+      "is_arriving_first": true,
+      "entry_method": 1,
+      "is_no_advance_application": false,
+      "is_canceled": false
+     }
+    ]
+   },
+   {
+    "event_series_id": 3567,
+    "organizer_id": 1338,
+    "series_type": 1,
+    "team_count": 1,
+    "game_title_id": 2,
+    "flgs": 1051184,
+    "organizer_name": "カードショップラフテリア",
+    "organizer_phone_number": "0300000000",
+    "place_geo": {
+     "x": 34.6719396,
+     "y": 135.0250256
+    },
+    "event_series_title": "[WS] 11月度ショップ大会(2026)",
+    "organizer_game_title_notes": "TEL 03-0000-0000",
+    "organizer_type": 1,
+    "is_event_info_hidden": false,
+    "is_count_applicants_hidden": false,
+    "is_start_datetime_hidden": false,
+    "is_max_join_count_hidden": false,
+    "disable_entry_fee_comment": false,
+    "is_phone_number_hidden": false,
+    "events": [
+     {
+      "event_series_id": 3567,
+      "organizer_id": 1338,
+      "id": 1795639,
+      "flgs": 72,
+      "status_id": 11,
+      "checkin_start_datetime": "2026-11-21T01:50:00+00:00",
+      "checkin_end_datetime": "2026-11-21T02:00:00+00:00",
+      "start_datetime": "2026-11-21T02:00:00+00:00",
+      "user_apply_deadline_type": 0,
+      "max_join_count": 8,
+      "game_format_id": 4,
+      "game_format_name": "オープン",
+      "pref_code": 28,
+      "checkin_range": 100,
+      "requirement_type": 3,
+      "entry_fee": "500.000",
+      "place": "神戸市西区池上2-30-1　伊川センタービル3F C4",
+      "place_geo": {
+       "x": 34.6719396,
+       "y": 135.0250256
+      },
+      "event_judge": 0,
+      "is_arriving_first": true,
+      "entry_method": 1,
+      "is_no_advance_application": false,
+      "is_canceled": false
+     }
+    ]
+   },
+   {
+    "event_series_id": 3567,
+    "organizer_id": 796,
+    "series_type": 1,
+    "team_count": 1,
+    "game_title_id": 2,
+    "flgs": 1051184,
+    "organizer_name": "TSUTAYA秩父店",
+    "organizer_phone_number": "0300000000",
+    "place_geo": {
+     "x": 36.0139206,
+     "y": 139.0930406
+    },
+    "event_series_title": "[WS] 11月度ショップ大会(2026)",
+    "organizer_game_title_notes": "TEL 03-0000-0000",
+    "organizer_type": 1,
+    "is_event_info_hidden": false,
+    "is_count_applicants_hidden": false,
+    "is_start_datetime_hidden": false,
+    "is_max_join_count_hidden": false,
+    "disable_entry_fee_comment": false,
+    "is_phone_number_hidden": false,
+    "events": [
+     {
+      "event_series_id": 3567,
+      "organizer_id": 796,
+      "id": 1798528,
+      "flgs": 328,
+      "status_id": 11,
+      "checkin_start_datetime": "2026-11-21T01:30:00+00:00",
+      "checkin_end_datetime": "2026-11-21T02:00:00+00:00",
+      "start_datetime": "2026-11-21T02:00:00+00:00",
+      "user_apply_deadline_type": 0,
+      "max_join_count": 16,
+      "game_format_id": 5,
+      "game_format_name": "ネオスタンダード",
+      "pref_code": 11,
+      "checkin_range": 300,
+      "requirement_type": 1,
+      "entry_fee": "0.000",
+      "place": "秩父市下宮地町18-9",
+      "place_geo": {
+       "x": 36.0139206,
+       "y": 139.0930406
+      },
+      "event_judge": 0,
+      "is_arriving_first": true,
+      "entry_method": 1,
+      "is_no_advance_application": false,
+      "is_canceled": false
+     }
+    ]
+   },
+   {
+    "event_series_id": 3568,
+    "organizer_id": 1482,
+    "series_type": 3,
+    "team_count": 1,
+    "game_title_id": 2,
+    "flgs": 1312945,
+    "organizer_name": "トレーディングカードゲームショップ193名駅椿店",
+    "organizer_phone_number": "0300000000",
+    "place_geo": {
+     "x": 35.169172243574,
+     "y": 136.87938574584
+    },
+    "event_series_title": "[WS]11月度CXチャレンジ「anemoi」(2026)",
+    "organizer_game_title_notes": "TEL 03-0000-0000",
+    "organizer_type": 1,
+    "is_event_info_hidden": false,
+    "is_count_applicants_hidden": false,
+    "is_start_datetime_hidden": false,
+    "is_max_join_count_hidden": false,
+    "disable_entry_fee_comment": false,
+    "is_phone_number_hidden": false,
+    "events": [
+     {
+      "event_series_id": 3568,
+      "organizer_id": 1482,
+      "id": 1810388,
+      "excerpt": "問い合わせ: test@example.com",
+      "flgs": 82120,
+      "status_id": 11,
+      "checkin_start_datetime": "2026-11-21T01:30:00+00:00",
+      "checkin_end_datetime": "2026-11-21T02:00:00+00:00",
+      "start_datetime": "2026-11-21T02:00:00+00:00",
+      "user_apply_deadline_type": 0,
+      "max_join_count": 16,
+      "game_format_id": 5,
+      "game_format_name": "ネオスタンダード",
+      "title": "トレーディングカードゲームショップ193名駅椿店",
+      "pref_code": 23,
+      "checkin_range": 100,
+      "requirement_type": 3,
+      "entry_fee": "500.000",
+      "place": "名古屋市中村区椿町11-1　Vプラザ7-10階",
+      "place_geo": {
+       "x": 35.169172243574,
+       "y": 136.87938574584
+      },
+      "event_judge": 0,
+      "is_arriving_first": true,
+      "entry_method": 1,
+      "is_no_advance_application": false,
+      "is_canceled": false
+     }
+    ]
+   }
+  ],
+  "total": 5
+ }
+}

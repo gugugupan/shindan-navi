@@ -11,7 +11,7 @@
       "type": ["string", "null"],
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(\\+09:00|Z|[+-]\\d{2}:\\d{2})$"
     },
-    "gameCode": { "enum": ["OPCG", "UATCG", "CONAN", "PTCG"] },
+    "gameCode": { "enum": ["OPCG", "UATCG", "CONAN", "PTCG", "WS", "VG", "SVE", "HOCG", "LLOCG"] },
     "category": { "enum": ["tournament", "casual", "teaching", "festival", "other", "unknown"] },
     "venue": {
       "type": "object",
@@ -37,7 +37,7 @@
       "properties": {
         "lat": { "type": "number", "minimum": 20, "maximum": 46 },
         "lng": { "type": "number", "minimum": 122, "maximum": 154 },
-        "source": { "enum": ["tcgplus", "ptcg", "google"] },
+        "source": { "enum": ["tcgplus", "ptcg", "google", "bushinavi"] },
         "precision": { "$ref": "#/definitions/nullableText", "description": "Source accuracy label as given (e.g. Google location_type ROOFTOP); null when the source has none." },
         "place_id": { "$ref": "#/definitions/nullableText", "description": "Google place_id; null for other sources." },
         "geocoded_at": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Lookup date (Asia/Tokyo). Required for google." }
@@ -59,9 +59,9 @@
         "event_status", "source_status_text", "last_seen_at"
       ],
       "properties": {
-        "id": { "type": "string", "pattern": "^(tcgp|ptcg|conan):[A-Za-z0-9_-]+$", "description": "<source prefix>:<external_id>. Never derived from date, name or venue." },
+        "id": { "type": "string", "pattern": "^(tcgp|ptcg|conan|bnavi):[A-Za-z0-9_-]+$", "description": "<source prefix>:<external_id>. Never derived from date, name or venue." },
         "game_code": { "$ref": "#/definitions/gameCode" },
-        "source_code": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official"] },
+        "source_code": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official", "bushinavi"] },
         "external_id": { "type": "string", "minLength": 1 },
         "source_url": { "type": "string", "pattern": "^https://" },
         "group": {
@@ -91,7 +91,7 @@
         "fee_currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
         "fee_text": { "$ref": "#/definitions/nullableText" },
         "registration_method": { "enum": ["first_come", "lottery", "walk_in", "invitation", "other", "unknown"] },
-        "registration_platform": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official", "store", "other", null] },
+        "registration_platform": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official", "bushinavi", "store", "other", null] },
         "registration_url": { "type": ["string", "null"], "pattern": "^https://" },
         "registration_opens_at": { "$ref": "#/definitions/nullableDateTime" },
         "registration_closes_at": { "$ref": "#/definitions/nullableDateTime" },

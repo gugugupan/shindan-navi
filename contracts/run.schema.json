@@ -6,8 +6,8 @@
   "additionalProperties": false,
   "required": ["game_code", "source_code", "fetched_at", "window", "query", "source_total", "record_count", "complete", "collector_version", "notes"],
   "properties": {
-    "game_code": { "enum": ["OPCG", "UATCG", "CONAN", "PTCG"] },
-    "source_code": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official"] },
+    "game_code": { "enum": ["OPCG", "UATCG", "CONAN", "PTCG", "WS", "VG", "SVE", "HOCG", "LLOCG"] },
+    "source_code": { "enum": ["bandai_tcg_plus", "pokemon_players", "conan_official", "bushinavi"] },
     "fetched_at": { "type": "string", "pattern": "Z$" },
     "window": {
       "type": "object",
