@@ -152,8 +152,10 @@ def check_dist(today, head, ov):
     sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
     for p in paths:
         if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
-    for lm in set(re.findall(r'<lastmod>(.*?)</lastmod>', sitemap)):
-        if lm != meta['updated']: fail(f'sitemap: lastmod {lm} != meta.updated {meta["updated"]}')
+    for loc, lm in re.findall(r'<loc>(.*?)</loc><lastmod>(.*?)</lastmod>', sitemap):
+        if loc == SITE + '/privacy/':  # dated by the policy's effective date in build.py, not by the data
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', lm) or lm > today: fail(f'sitemap: /privacy/ lastmod {lm}')
+        elif lm != meta['updated']: fail(f'sitemap: {loc} lastmod {lm} != meta.updated {meta["updated"]}')
 
     for p in paths:
         f = os.path.join(DIST, p.strip('/'), 'index.html')
