@@ -64,4 +64,7 @@ export const TYPE_LABELS: Record<string, string> = {
   newtype_challenge: 'ニュータイプチャレンジ',
   team_battle: 'チーム戦',
   battleski_event: 'バトルスキー主催大会',
+  dc1_grand_prix: 'DC-1グランプリ',
+  wild_bout: 'ワイルドバウト',
+  serial_card_challenge: 'シリアルカードチャレンジ',
 };

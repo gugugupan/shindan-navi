@@ -104,6 +104,11 @@ test('series classification and time helpers', () => {
   }
   assert.equal(classifySeries('アルティメットバトルEX in CHAMPIONSHIP 26-27 WAVE2 エリア予選 愛知大会').event_type_code, 'championship_qualifier');
   assert.equal(classifySeries('【スタンダード】バトルスキー初心者講習会(12月開催)').event_type_code, 'teaching');
+  assert.deepEqual(classifySeries('DC-1グランプリ SEASON 2'), { category: 'tournament', event_type_code: 'dc1_grand_prix' });
+  assert.deepEqual(classifySeries('【スタンダード】バトルスピリッツ　ワイルドバウト'), { category: 'tournament', event_type_code: 'wild_bout' });
+  assert.deepEqual(classifySeries('シリアルカードチャレンジ GCG EXPO in Osaka Nov.'), { category: 'other', event_type_code: 'serial_card_challenge' });
+  // Shared BANDAI CARD GAMES series stay untyped: their OPCG / UATCG copies must hash the same.
+  assert.deepEqual(classifySeries('メタロビWeekend in バンダイカードゲームズメタバースロビー（11月開催）'), { category: 'unknown', event_type_code: null });
   assert.deepEqual(classifySeries('謎のイベント'), { category: 'unknown', event_type_code: null });
   assert.equal(isJstZone('Asia/Yakutsk', '2026-12-01'), true);
   assert.equal(isJstZone('Asia/Shanghai', '2026-12-01'), false);
