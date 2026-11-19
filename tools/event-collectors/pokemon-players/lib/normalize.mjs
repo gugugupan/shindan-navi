@@ -50,6 +50,7 @@ export function venueLabel(raw) {
 // 大型大会 rows have none. The free-text `venue` is whatever the organizer typed in 会場: a place name, but just as
 // often the address, directions, seat counts, opening hours or house rules.
 const SHOP = 1;
+const PERSON = 2;
 // Tested on NFKC-folded text without spaces (full-width digits are ASCII by then).
 const DIRECTIONS = /徒歩|歩いて|降りて|下車|改札|出口|駅(?:から|より)|[口駅]から\d|バス|交通|direction/i;
 const SENTENCE = /[。、]|ます|ません|ください|下さい|です|でした|お願い|ご注意|ご確認|ご利用|予定|受付|参加|駐車|定員|席数|\d+席|開店|閉店|毎日|毎週|毎月|詳細|未定|調整中|公開|注意|車で|お越し|お借り|ほど|など|対応|駐輪|場合|販売|あり|完備|無休|トイレ|お手洗い|\d:\d\d|\d+時|平日|土日|祝日|\d+年|\d+月\d+日|禁止|協力|アカウント|常備|aed|→|有$|での$|^[(（]|close/i;
@@ -117,8 +118,8 @@ export function shopHomes(rows) {
 
 /**
  * venue.name: the shop for shop-organized events at the shop's usual address (their free text is notes about the
- * shop), else the place the free text names, else the address without its prefecture and postcode (the page shows the
- * prefecture next to the name), else VENUE_UNKNOWN.
+ * shop), else the place the free text names, else (not for a person's event) the address without its prefecture and
+ * postcode (the page shows the prefecture next to the name), else VENUE_UNKNOWN.
  */
 export function venueName(row, homes = new Map()) {
   const shop = text(row.shop_name);
@@ -128,6 +129,8 @@ export function venueName(row, homes = new Map()) {
   if (row.shop_term === SHOP && shop && !elsewhere) return shop;
   const label = placeLabel(row.venue, address);
   if (label) return label;
+  // Owner decision: a person's event without a named place shows no address as its name.
+  if (row.shop_term === PERSON) return VENUE_UNKNOWN;
   if (address) {
     const pref = text(row.prefecture_name);
     const rest = (pref && address.startsWith(pref) ? address.slice(pref.length) : address)

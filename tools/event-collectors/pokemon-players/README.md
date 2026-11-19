@@ -89,8 +89,9 @@ observed, but the site never states the two share one id space. If a collision e
   Otherwise (and for such external venues; `shop_term` 2 = a person, whose `shop_name` is a nickname; 大型大会 have
   none): the first `venue` line that reads as a place (`placeLabel`: no address, directions, notes, opening hours,
   floor-only, generic-space or bare-room lines; `店舗名：` / `会場名：` / `場所` prefixes, `…にて開催` / `様` trailers and
-  `（＠handle）` cut), else `address` without its prefecture and postcode (the page shows the prefecture next to the
-  name), else `会場は公式で確認`. Directions and notes are dropped
+  `（＠handle）` cut), else `会場は公式で確認` for a person's event (owner decision: never the address as its name),
+  else `address` without its prefecture and postcode (the page shows the prefecture next to the name), else
+  `会場は公式で確認`. Directions and notes are dropped
   (the detail page has them). `source_id` is null whenever the first `venue` line is usable text (it may describe a place
   other than the shop), else the `shop_id`; this keeps the geo cache keys. `city` is null (not a separate source field;
   not parsed from the address).

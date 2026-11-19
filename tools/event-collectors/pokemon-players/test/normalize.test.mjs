@@ -166,7 +166,7 @@ test('shop events are named after the shop, not the free-text 会場', () => {
   assert.equal(seats.venue.name, byId(1186915).shop_name);
 });
 
-test('organizer events: a place line from 会場, else the address, else a pointer to the detail page', async () => {
+test('organizer events: a place line from 会場, else a pointer to the detail page, never the address', async () => {
   const { VENUE_UNKNOWN } = await import('../lib/normalize.mjs');
   const org = (over) => ({ ...byId(1168984), shop_term: 2, shop_name: 'ニックネーム', ...over });
   const name = (over) => normalizeEvent(org(over), SEEN).venue.name;
@@ -174,8 +174,9 @@ test('organizer events: a place line from 会場, else the address, else a point
   assert.equal(name({ venue: '篠路コミュニティーセンターにて行います。' }), '篠路コミュニティーセンター');
   assert.equal(name({ venue: '開催会場：ONEポケ\n伊勢崎から店舗移転していますのでご注意ください。' }), 'ONEポケ');
   assert.equal(name({ venue: 'ホビーステーション 町田店様' }), 'ホビーステーション 町田店');
-  assert.equal(name({ venue: '', address: '茨城県土浦市中神立町18-2', prefecture_name: '茨城県' }), '土浦市中神立町18-2');
-  assert.equal(name({ venue: 'JR茨木駅　東出口より徒歩約２分', address: '大阪府茨木市駅前１丁目３番９号　生田ビル３０１号', prefecture_name: '大阪府' }), '茨木市駅前１丁目３番９号　生田ビル３０１号');
+  assert.equal(name({ venue: '', address: '茨城県土浦市中神立町18-2', prefecture_name: '茨城県' }), VENUE_UNKNOWN);
+  assert.equal(name({ venue: 'JR茨木駅　東出口より徒歩約２分', address: '大阪府茨木市駅前１丁目３番９号　生田ビル３０１号', prefecture_name: '大阪府' }), VENUE_UNKNOWN);
+  assert.equal(name({ venue: '守口市大枝西町17-15', address: '大阪府守口市大枝西町17-15', prefecture_name: '大阪府' }), VENUE_UNKNOWN);
   assert.equal(name({ venue: 'レンタルスペースなど\nご参加確定後、DMにて公開致しますが、神田駅近辺が多いです。', address: '東京都', prefecture_name: '東京都' }), VENUE_UNKNOWN);
   assert.equal(normalizeEvent(org({ venue: '' }), SEEN).venue.source_id, String(byId(1168984).shop_id));
 });
@@ -245,10 +246,11 @@ test('placeLabel strips label prefixes, trailers and @handles', async () => {
   assert.equal(placeLabel('連絡先 someone@example.com'), null);
 });
 
-test('address fallback drops the prefecture, 日本 and the postcode', () => {
-  const org = (over) => ({ ...byId(1168984), shop_term: 2, venue: '', ...over });
-  assert.equal(normalizeEvent(org({ address: '福岡県〒813-0013  福岡市東区香椎駅前２丁目13-10', prefecture_name: '福岡県' }), SEEN).venue.name, '福岡市東区香椎駅前２丁目13-10');
-  assert.equal(normalizeEvent(org({ address: '岡山県日本、〒700-0066 岡山市北区野殿西町３２９－１', prefecture_name: '岡山県' }), SEEN).venue.name, '岡山市北区野殿西町３２９－１');
+test('address fallback (major tournaments, shops away from home) drops the prefecture, 日本 and the postcode', async () => {
+  const { venueName } = await import('../lib/normalize.mjs');
+  const major = (over) => ({ ...byId(1169952), shop_term: null, shop_name: null, shop_id: null, venue: '', ...over });
+  assert.equal(venueName(major({ address: '福岡県〒813-0013  福岡市東区香椎駅前２丁目13-10', prefecture_name: '福岡県' })), '福岡市東区香椎駅前２丁目13-10');
+  assert.equal(venueName(major({ address: '岡山県日本、〒700-0066 岡山市北区野殿西町３２９－１', prefecture_name: '岡山県' })), '岡山市北区野殿西町３２９－１');
 });
 
 test('a shop event away from the shop usual address is named after its own venue', async () => {
