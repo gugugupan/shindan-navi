@@ -90,16 +90,17 @@ themes, under normal vision and simulated protan/deutan (OKLab ΔE×100; dataviz
 | 6 | BS | `#7c1d4d` | `#ce3b85` |
 | 7 | DCG | `#12a581` | `#40e7be` |
 | 8 | DBFW | `#8a2e0f` | `#e45525` |
-| 9 | (next) | `#d31785` | `#ed6eb8` |
-| 10 | | `#808a0f` | `#d4e425` |
-| 11 | | `#4d6f2a` | `#85b950` |
-| 12 | | `#a96660` | `#cfadaa` |
-| 13 | | `#366063` | `#62a1a7` |
-| 14 | | `#534077` | `#8a76b2` |
+| 9 | WS | `#d31785` | `#ed6eb8` |
+| 10 | VG | `#808a0f` | `#d4e425` |
+| 11 | SVE | `#4d6f2a` | `#85b950` |
+| 12 | HOCG | `#a96660` | `#cfadaa` |
+| 13 | LLOCG | `#366063` | `#62a1a7` |
+| 14 | (next) | `#534077` | `#8a76b2` |
 
-Worst pair, normal vision / protan-deutan: all 8 current games 10.4 / 7.9 (the old hue-only eight: 7.6 / 4.5); all 14
-9.2 / 4.6. Fourteen categories cannot reach the dataviz targets (15 / 8; the validator FAILs them and the darkest /
-palest slots sit outside its lightness band on purpose), so the names stay mandatory.
+Worst pair, normal vision / protan-deutan: the first 8 games 10.4 / 7.9 (the old hue-only eight: 7.6 / 4.5); all 14
+9.2 / 4.6 (the 13 current games are no worse). Fourteen categories cannot reach the dataviz targets (15 / 8; the
+validator FAILs them and the darkest / palest slots sit outside its lightness band on purpose), so the names stay
+mandatory. 遊戯王 has no colour: KONAMI's terms forbid scraping, so `/events/` only links to its official search.
 
 ## Gotchas
 

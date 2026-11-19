@@ -1,4 +1,4 @@
-<title>TCGイベント・大会カレンダー（ポケカ・ワンピ・ガンダム・デジモンほか）｜トレカカレンダー</title>
+<title>TCGイベント・大会カレンダー（ポケカ・ワンピ・ヴァイス・ホロカ・ガンダムほか）｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
 <style>/*EVENT_FONTS*/</style>
 <style>
@@ -15,6 +15,9 @@
 .fbtn.on{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .fbtn.on small{color:inherit;opacity:.7}
 .freset{border:0;background:none;color:var(--accent);font-size:12px;font-weight:700;padding:4px 6px}
+.ygo{margin-left:auto;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;padding:4px 2px;white-space:nowrap}
+.ygo:hover{text-decoration:underline}
+.state .ygo{margin:0}
 .fgrp{display:grid;gap:6px}
 .fgrp h3{margin:0;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
 .fgrp h3 i{width:8px;height:8px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
@@ -203,7 +206,7 @@ button.cd:hover{background:var(--surface-2)}
     <div id="calv"></div>
   </main>
 
-  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード・ガンダム・DBフュージョンワールド・バトルスピリッツ・デジモン）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
+  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード・ガンダム・DBフュージョンワールド・バトルスピリッツ・デジモン・ヴァイスシュヴァルツ・ヴァンガード・Shadowverse EVOLVE・ホロライブ・ラブライブ！OCG）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
   <p class="legend">イベント情報は各タイトルの公式イベントページで公開されている内容をもとに掲載しています。開催可否・参加費・定員・申込方法は変わることがあるため、参加前に必ず「公式で詳細・申込」から最新情報をご確認ください。定員は募集人数で、残り枠ではありません。</p>
   <p class="legend"><!--NOLOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存されます。ログインすると、絞り込み条件（都道府県を含む）をアカウントに保存し、ほかの端末と同期します。<!--/LOGIN-->初めて開いたときの都道府県は、接続元 IP アドレスから推定したものです（位置情報の許可は求めず、推定結果も保存しません）。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。日付ごとの会場地図には Google マップを使っており、地図を開くと IP アドレスなどの情報が Google に送信されます。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
@@ -225,7 +228,12 @@ const GAMES = [
   {code:'GCG', name:'ガンダム', c:'#1d357c', cd:'#3b60ce', bit:16},
   {code:'DBFW', name:'DBフュージョンワールド', c:'#8a2e0f', cd:'#e45525', bit:32},
   {code:'BS', name:'バトルスピリッツ', c:'#7c1d4d', cd:'#ce3b85', bit:64},
-  {code:'DCG', name:'デジモン', c:'#12a581', cd:'#40e7be', bit:128}
+  {code:'DCG', name:'デジモン', c:'#12a581', cd:'#40e7be', bit:128},
+  {code:'WS', name:'ヴァイスシュヴァルツ', c:'#d31785', cd:'#ed6eb8', bit:256},
+  {code:'VG', name:'ヴァンガード', c:'#808a0f', cd:'#d4e425', bit:512},
+  {code:'SVE', name:'Shadowverse EVOLVE', c:'#4d6f2a', cd:'#85b950', bit:1024},
+  {code:'HOCG', name:'ホロライブ', c:'#a96660', cd:'#cfadaa', bit:2048},
+  {code:'LLOCG', name:'ラブライブ！OCG', c:'#366063', cd:'#62a1a7', bit:4096}
 ];
 const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
 const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
@@ -374,6 +382,17 @@ function gameCounts(){
   }
   return out;
 }
+// Yu-Gi-Oh! is not collected (KONAMI's terms forbid scraping): a link to the official search for the dates on
+// screen. Its page reads sDate / eDate (YYYY-MM-DD) from the URL and searches at once; stateCodes takes ids from its
+// own API, so the prefecture is not passed.
+function ygoUrl(){
+  let from=TODAY, to=null;
+  if(state.range==='custom'){ from=state.from; to=state.to; }
+  else if(state.view==='cal'){ const m1=state.month+'-01'; if(m1>from) from=m1; to=addD(addM(state.month,1)+'-01',-1); if(to<from) to=from; }
+  const q=new URLSearchParams({sDate:from}); if(to) q.set('eDate',to);
+  return 'https://cardgame-network.konami.net/tournament_search?'+q;
+}
+const ygoLink = () => `<a class="ygo" href="${esc(ygoUrl())}" target="_blank" rel="noopener" data-ygo>遊戯王の大会は公式サイトで探す ↗</a>`;
 function renderControls(){
   const focusKey = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.k
     ? [document.activeElement.dataset.k, document.activeElement.dataset.v] : null;
@@ -393,7 +412,7 @@ function renderControls(){
     fb('pref','都道府県',state.pref.length?locName(state.pref[0]):'') +
     fb('type','イベント形式',sum(state.type,typeName)) +
     fb('days','曜日',(DAYS.find(d=>d[0]===state.days&&d[0])||[])[1]||'') +
-    (activeFilterCount()||state.range==='custom'?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
+    (activeFilterCount()||state.range==='custom'?`<button class="freset" id="resetAll">条件をクリア</button>`:'') + ygoLink();
   if(fDlg.open) renderF();
   window.snLoc.refresh();
 
@@ -902,7 +921,7 @@ function renderList(){
     return;
   }
   if(!events.length){
-    listEl.innerHTML=`<div class="state"><b>条件に合うイベントはありません</b><span>ほかの都道府県に変えるか、絞り込み条件をゆるめてみてください。</span>${activeFilterCount()||state.game.length||state.range!=='upcoming'?'<button class="sbtn ghost" id="resetAll2">条件をリセット</button>':''}</div>`;
+    listEl.innerHTML=`<div class="state"><b>条件に合うイベントはありません</b><span>ほかの都道府県に変えるか、絞り込み条件をゆるめてみてください。</span>${activeFilterCount()||state.game.length||state.range!=='upcoming'?'<button class="sbtn ghost" id="resetAll2">条件をリセット</button>':''}${ygoLink()}</div>`;
     return;
   }
   const byDay=new Map();

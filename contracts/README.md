@@ -12,7 +12,7 @@ operator's machine; `api/scripts/import-events.mjs --target remote` pushes it to
 ```
 data/events/<GAME>/<YYYY-MM>.json   array of events (event.schema.json), month = starts_on, sorted by starts_on, starts_at, id
 data/events/<GAME>/_run.json        last accepted run (run.schema.json)
-data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptcg, google); see "Venue geo"
+data/events/.venues/<source>.json   venue geo cache per geo source (tcgplus, ptcg, google); see "Venue geo" (bushinavi needs none)
 ```
 
 - `<GAME>` is one of `OPCG`, `UATCG`, `CONAN`, `PTCG`, `GCG` (ガンダムカードゲーム), `DBFW` (ドラゴンボールスーパーカードゲーム
@@ -286,6 +286,7 @@ events in D1 now, inserted / updated / unchanged / hidden. The operator reads it
 | `tools/event-collectors/lib/` | lead |
 | `tools/event-collectors/tcg-plus/`, `data/events/{OPCG,UATCG,GCG,DBFW,BS,DCG}/` | TCG+ collector |
 | `tools/event-collectors/pokemon-players/`, `data/events/PTCG/` | Pokémon collector |
+| `tools/event-collectors/bushi-navi/`, `data/events/{WS,VG,SVE,HOCG,LLOCG}/` | Bushi Navi collector |
 | `api/` (Worker, migrations, importer, tests) | backend |
 | `src/events.html`, `scripts/build.py`, `public/events/` | web |
 | `docs/` | lead |

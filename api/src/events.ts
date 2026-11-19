@@ -6,8 +6,8 @@ export const PAGE_LIMIT = 50;
 // Worker; a page that hits the cap returns what matched plus a cursor to continue. Above the busiest
 // location-day so far (178 events), so a page normally covers its first matching day.
 export const SCAN_LIMIT = 200;
-// Printable ASCII only: ids are tcgp:/ptcg:/conan: + digits or hex; anything else (NUL, quotes…) is a forgery.
-const ID_RE = /^(tcgp|ptcg|conan):[\x21-\x7e]{1,200}$/;
+// Printable ASCII only: ids are tcgp:/ptcg:/conan:/bnavi: + digits or hex; anything else (NUL, quotes…) is a forgery.
+const ID_RE = /^(tcgp|ptcg|conan|bnavi):[\x21-\x7e]{1,200}$/;
 // 9999-12-31T23:59:59Z, the starts_sort of date-only events.
 const MAX_SORT = 253402300799;
 // Keeps the bound-parameter total under D1's 100 per query.

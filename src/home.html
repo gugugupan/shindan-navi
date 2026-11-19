@@ -221,7 +221,12 @@ const EV_GAMES = [
   {code:'GCG', name:'ガンダム', short:'ガンダム', c:'#1d357c', cd:'#3b60ce', bit:16},
   {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', c:'#8a2e0f', cd:'#e45525', bit:32},
   {code:'BS', name:'バトルスピリッツ', short:'バトスピ', c:'#7c1d4d', cd:'#ce3b85', bit:64},
-  {code:'DCG', name:'デジモン', short:'デジカ', c:'#12a581', cd:'#40e7be', bit:128}
+  {code:'DCG', name:'デジモン', short:'デジカ', c:'#12a581', cd:'#40e7be', bit:128},
+  {code:'WS', name:'ヴァイスシュヴァルツ', short:'ヴァイス', c:'#d31785', cd:'#ed6eb8', bit:256},
+  {code:'VG', name:'ヴァンガード', short:'ヴァンガ', c:'#808a0f', cd:'#d4e425', bit:512},
+  {code:'SVE', name:'Shadowverse EVOLVE', short:'シャドバ', c:'#4d6f2a', cd:'#85b950', bit:1024},
+  {code:'HOCG', name:'ホロライブ', short:'ホロライブ', c:'#a96660', cd:'#cfadaa', bit:2048},
+  {code:'LLOCG', name:'ラブライブ！OCG', short:'ラブライブ', c:'#366063', cd:'#62a1a7', bit:4096}
 ];
 const EVG = Object.fromEntries(EV_GAMES.map(g=>[g.code,g]));
 const gvars = g => `--gl:${g.c};--gd:${g.cd}`;

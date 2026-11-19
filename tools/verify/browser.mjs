@@ -260,9 +260,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
   // Stub API. Default: 7 OPCG events today, /days without by_game (the page then groups the list itself).
   // scenario 'busy': 50 OPCG events fill the first page; PTCG's 3 come only on the cursor page.
-  // scenario 'many': seven games today; the five busiest get columns, the other two chips.
+  // scenario 'many': nine games today; the five busiest get columns, the other four chips.
   let scenario = 'plain';
-  const MANY = { GCG: 9, OPCG: 8, PTCG: 7, DCG: 6, BS: 5, UATCG: 2, DBFW: 1 };
+  const MANY = { HOCG: 10, GCG: 9, OPCG: 8, PTCG: 7, DCG: 6, BS: 5, UATCG: 2, DBFW: 1, LLOCG: 1 };
   const evt = (i, code, hh, day = TODAY) => ({ id: `${code}${i}`, name: `テスト大会 ${code} ${i + 1}`, game_code: code, game_codes: [code],
     starts_on: day, time_precision: 'datetime', starts_at: `${day}T${String(hh).padStart(2, '0')}:00:00+09:00`, timezone: 'Asia/Tokyo',
     attendance_mode: 'offline', venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
@@ -354,9 +354,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const many = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => c.getAttribute('aria-label')),
       rest: [...document.querySelectorAll('#evBody .gmore a.gc')].map(a => [a.textContent, a.getAttribute('href')]),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
-    if (JSON.stringify(many.cols) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ガンダム', 'バトルスピリッツ', 'デジモン'])) fail(where, `many: columns ${JSON.stringify(many.cols)}`);
-    if (JSON.stringify(many.rest) !== JSON.stringify([['UNION ARENA2', `/events/?game=UATCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`],
-      ['DBフュージョンワールド1', `/events/?game=DBFW&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`]])) fail(where, `many: other titles ${JSON.stringify(many.rest)}`);
+    if (JSON.stringify(many.cols) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ガンダム', 'デジモン', 'ホロライブ'])) fail(where, `many: columns ${JSON.stringify(many.cols)}`);
+    const dayLink = g => `/events/?game=${g}&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`;
+    if (JSON.stringify(many.rest) !== JSON.stringify([['UNION ARENA2', dayLink('UATCG')], ['DBフュージョンワールド1', dayLink('DBFW')],
+      ['バトルスピリッツ5', dayLink('BS')], ['ラブライブ！OCG1', dayLink('LLOCG')]])) fail(where, `many: other titles ${JSON.stringify(many.rest)}`);
     if (api.length !== 2) fail(where, `many: API requests ${api.join(' ')}`);
     if (many.overflow > 1) fail(where, `many: page scrolls horizontally by ${many.overflow}px`);
     await page.screenshot({ path: path.join(OUT, `${vp}-home-many.png`), fullPage: true });
@@ -401,6 +402,15 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
     await page.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'networkidle' });
     const hdr = await headerProblem(page, opt.width);
     if (hdr) fail(where, hdr);
+    // 13 title chips stay inside the panel (phones: behind 絞り込み); 遊戯王 is a link to the official search only
+    if (opt.width <= 760) await page.locator('#filterBtn').click();
+    const ym = TODAY.slice(0, 7), monthEnd = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).toISOString().slice(0, 10);
+    const gch = await page.evaluate(() => { const c = document.getElementById('games'), r = c.getBoundingClientRect(), y = document.querySelector('#frow a.ygo');
+      return { n: c.querySelectorAll('.chip.g').length, out: [...c.children].filter(b => { const x = b.getBoundingClientRect(); return x.right > r.right + 1 || x.left < r.left - 1; }).length,
+        scroll: c.scrollWidth - c.clientWidth, ygo: y && y.offsetParent ? y.href : null }; });
+    if (gch.n !== 13 || gch.out || gch.scroll > 1) fail(where, `title chips ${JSON.stringify(gch)}`);
+    if (gch.ygo !== `https://cardgame-network.konami.net/tournament_search?sDate=${TODAY}&eDate=${monthEnd}`) fail(where, `遊戯王 link ${gch.ygo}`);
+    if (opt.width <= 760) await page.locator('#filterBtn').click();
     await page.locator(`.cd[data-day="${TODAY}"]`).click();
     await page.locator('#list .ev').first().waitFor();
     const order = await page.evaluate(() => [...document.querySelectorAll(`#list .list > *`)].map(e => e.classList.contains('evsep') ? '|' : e.querySelector('h4').textContent.replace('テスト大会 ', '')));

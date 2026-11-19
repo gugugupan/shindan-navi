@@ -7,6 +7,11 @@ export const GAMES = [
   { code: 'DBFW', name: 'ドラゴンボールスーパーカードゲーム フュージョンワールド', slug: 'dragonball', bit: 32 },
   { code: 'BS', name: 'バトルスピリッツ', slug: 'battlespirits', bit: 64 },
   { code: 'DCG', name: 'デジモンカードゲーム', slug: 'digimon', bit: 128 },
+  { code: 'WS', name: 'ヴァイスシュヴァルツ', slug: 'weiss', bit: 256 },
+  { code: 'VG', name: 'カードファイト!! ヴァンガード', slug: 'vanguard', bit: 512 },
+  { code: 'SVE', name: 'Shadowverse EVOLVE', slug: 'shadowverse-evolve', bit: 1024 },
+  { code: 'HOCG', name: 'hololive OFFICIAL CARD GAME', slug: 'hololive', bit: 2048 },
+  { code: 'LLOCG', name: 'ラブライブ！シリーズ オフィシャルカードゲーム', slug: 'lovelive', bit: 4096 },
 ] as const;
 export const GAME_CODES = GAMES.map((g) => g.code);
 // events.game_mask allows bits 2^0..2^29 (migrations/0005): masks stay positive 32-bit integers in JS bit operations.
@@ -67,4 +72,14 @@ export const TYPE_LABELS: Record<string, string> = {
   dc1_grand_prix: 'DC-1グランプリ',
   wild_bout: 'ワイルドバウト',
   serial_card_challenge: 'シリアルカードチャレンジ',
+  shop_tournament: 'ショップ大会',
+  shop_support: '公認店サポート',
+  shop_event: '公認イベント',
+  official_event: '公式イベント',
+  cs: 'CS大会',
+  grand_prix: 'グランプリ',
+  signing: 'サイン会',
+  limited_format: '限定構築',
+  cx_challenge: 'CXチャレンジ',
+  bloom_cup: 'ブルームカップ',
 };

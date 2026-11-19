@@ -22,7 +22,15 @@ DIST = os.path.join(ROOT, 'dist')
 FIXTURE = os.path.join(ROOT, 'contracts/fixtures/sample-events.json')
 WINDOW = ('2026-11-18', '2027-02-18')
 GAMES = [('OPCG', 'ONE PIECEカードゲーム', 'onepiece'), ('UATCG', 'UNION ARENA', 'unionarena'),
-         ('CONAN', '名探偵コナンTCG', 'conan'), ('PTCG', 'ポケモンカードゲーム', 'pokemon')]
+         ('CONAN', '名探偵コナンTCG', 'conan'), ('PTCG', 'ポケモンカードゲーム', 'pokemon'),
+         ('GCG', 'ガンダムカードゲーム', 'gundam'), ('DBFW', 'ドラゴンボールスーパーカードゲーム フュージョンワールド', 'dragonball'),
+         ('BS', 'バトルスピリッツ', 'battlespirits'), ('DCG', 'デジモンカードゲーム', 'digimon'),
+         ('WS', 'ヴァイスシュヴァルツ', 'weiss'), ('VG', 'カードファイト!! ヴァンガード', 'vanguard'),
+         ('SVE', 'Shadowverse EVOLVE', 'shadowverse-evolve'), ('HOCG', 'hololive OFFICIAL CARD GAME', 'hololive'),
+         ('LLOCG', 'ラブライブ！シリーズ オフィシャルカードゲーム', 'lovelive')]
+# where each game's events come from (contracts/README.md › Sources)
+SOURCE = {'PTCG': ('pokemon_players', 'ptcg'), 'CONAN': ('conan_official', 'conan'),
+          **{g: ('bushinavi', 'bnavi') for g in ('WS', 'VG', 'SVE', 'HOCG', 'LLOCG')}}
 PREFS = ['北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県', '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
          '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県', '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
          '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県', '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
@@ -38,6 +46,15 @@ TYPES = {
     'CONAN': [('store_battle', '店舗大会', 'tournament')],
     'PTCG': [('gym_battle', 'ジムバトル', 'tournament'), ('city_league', 'シティリーグ', 'tournament'),
              ('trainers_league', 'トレーナーズリーグ', 'casual'), ('beginners', 'はじめてのポケカ体験会', 'teaching')],
+    'GCG': [('newtype_challenge', 'ニュータイプチャレンジ', 'tournament')],
+    'DBFW': [('flagship_battle', 'フラッグシップバトル', 'tournament')],
+    'BS': [('shop_battle', 'ショップバトル', 'tournament')],
+    'DCG': [('tamer_battle', 'テイマーバトル', 'tournament')],
+    'WS': [('shop_tournament', 'ショップ大会', 'tournament'), ('cx_challenge', 'CXチャレンジ', 'tournament')],
+    'VG': [('shop_tournament', 'ショップ大会', 'tournament'), ('meetup', '交流会', 'casual')],
+    'SVE': [('shop_tournament', 'ショップ大会', 'tournament'), ('limited_format', '限定構築', 'tournament')],
+    'HOCG': [('shop_tournament', 'ショップ大会', 'tournament'), ('meetup', '交流会', 'casual'), ('bloom_cup', 'ブルームカップ', 'tournament')],
+    'LLOCG': [('shop_tournament', 'ショップ大会', 'tournament'), ('shop_support', '公認店サポート', 'tournament')],
 }
 SHOPS = ['カードショップ', 'ホビーショップ', 'トレカ専門店', 'ゲームセンター', '書店']
 
@@ -58,7 +75,8 @@ def synth(empty_games):
     while day < end:
         per_day = 4 + (6 if day.weekday() >= 5 else 0) + rnd.randint(0, 3)
         for _ in range(per_day):
-            game = rnd.choice(['OPCG', 'OPCG', 'PTCG', 'PTCG', 'PTCG', 'UATCG', 'CONAN'])
+            game = rnd.choice(['OPCG', 'OPCG', 'PTCG', 'PTCG', 'PTCG', 'UATCG', 'CONAN', 'GCG', 'DBFW', 'BS', 'DCG',
+                               'WS', 'VG', 'SVE', 'HOCG', 'HOCG', 'LLOCG'])
             if game in empty_games:
                 continue
             code, tname, cat = rnd.choice(TYPES[game])
@@ -72,15 +90,15 @@ def synth(empty_games):
             fee = rnd.choice([0, 300, 500, 500, 1000, None, None])
             reg = rnd.choice(['open', 'open', 'not_open', 'closed', 'waitlist', 'unknown', 'unknown'])
             status = 'cancelled' if rnd.random() < .03 else 'postponed' if rnd.random() < .02 else 'scheduled'
-            src = 'pokemon_players' if game == 'PTCG' else 'bandai_tcg_plus'
+            src, prefix = SOURCE.get(game, ('bandai_tcg_plus', 'tcgp'))
             ext = f'synth{n:05d}'
-            eid = ('ptcg:' if game == 'PTCG' else 'tcgp:') + ext
+            eid = f'{prefix}:{ext}'
             venue = None if online else {
                 'name': f'SAMPLE {rnd.choice(SHOPS)} {city.replace("市", "")}{rnd.choice(["店", "本店", "駅前店"])}', 'source_id': None,
                 'country_code': 'JP', 'region_code': pref, 'region_name': PREFS[pi], 'city': city, 'address': None, 'postal_code': None}
             out.append({
                 'id': eid, 'game_code': game, 'source_code': src, 'external_id': ext,
-                'source_url': f'https://example.com/{"ptcg" if game == "PTCG" else "tcgp"}/{ext}',
+                'source_url': f'https://example.com/{prefix}/{ext}',
                 'group': {'source_id': None, 'name': tname, 'category': cat, 'event_type_code': code if rnd.random() < .9 else None},
                 'name': f'【SAMPLE】{tname}' + (f'（{rnd.choice(["スタンダード", "エクストラ", "初心者歓迎"])}）' if rnd.random() < .5 else ''),
                 'attendance_mode': 'online' if online else ('hybrid' if rnd.random() < .02 else 'in_person'), 'venue': venue,

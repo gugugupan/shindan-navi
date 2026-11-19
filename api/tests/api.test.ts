@@ -103,6 +103,8 @@ describe('GET /api/v1/events', () => {
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, 'nope'])}`)).body.error).toMatch(/invalid cursor/);
     // The key is checked before anything reaches SQL: a NUL, a space or an empty id is a 400, not a 500.
     for (const id of ['tcgp:\u0000x', 'tcgp:a b', 'tcgp:']) expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, id])}`)).body.error).toMatch(/invalid cursor/);
+    // Every importer id prefix is a valid cursor key.
+    for (const id of ['tcgp:1', 'ptcg:1', 'conan:a', 'bnavi:1']) expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, id])}`)).status, id).toBe(200);
   });
 
   it('clamps ranges to the data window and answers ranges outside it without data', async () => {
@@ -272,7 +274,8 @@ describe('GET /api/v1/events/meta', () => {
     expect(r.status).toBe(200);
     const m = r.body;
     expect(m.games.map((g: Ev) => [g.code, g.slug])).toEqual([['OPCG', 'onepiece'], ['UATCG', 'unionarena'], ['CONAN', 'conan'], ['PTCG', 'pokemon'],
-      ['GCG', 'gundam'], ['DBFW', 'dragonball'], ['BS', 'battlespirits'], ['DCG', 'digimon']]);
+      ['GCG', 'gundam'], ['DBFW', 'dragonball'], ['BS', 'battlespirits'], ['DCG', 'digimon'], ['WS', 'weiss'], ['VG', 'vanguard'],
+      ['SVE', 'shadowverse-evolve'], ['HOCG', 'hololive'], ['LLOCG', 'lovelive']]);
     expect(m.games.find((g: Ev) => g.code === 'DCG')).toMatchObject({ record_count: 0, fetched_at: null, complete: false, window: null });
     const opcg = m.games[0];
     expect(opcg).toMatchObject({ name: 'ONE PIECEカードゲーム', fetched_at: '2026-11-18T00:00:00Z', complete: true, window: { from: '2026-11-18', until: '2027-02-18' } });

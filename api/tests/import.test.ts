@@ -277,6 +277,38 @@ describe('games with bits above 8', () => {
     expect(rows.filter((_, i) => i % 5 === 0)).toContain(145);
   });
 
+  it('imports Bushi Navi games (bnavi ids, bushinavi geo) with bits 256-4096', async () => {
+    // WS has more than one page (limit 50) in one month, so a cursor carries a bnavi id.
+    const n = (g: string) => (g === 'WS' ? 240 : 4);
+    const bnavi = ['WS', 'VG', 'SVE', 'HOCG', 'LLOCG'].flatMap((g, i) => synthetic(n(g), 2_000 + i * 300).map((e) => ({
+      ...e, game_code: g, source_code: 'bushinavi', id: `bnavi:${i}${e.external_id}`, external_id: `${i}${e.external_id}`,
+      registration_platform: 'bushinavi', group: { ...e.group, event_type_code: 'shop_tournament' },
+      venue: e.venue && { ...e.venue, geo: { lat: 35.697890, lng: 139.772187, source: 'bushinavi', precision: null, place_id: null, geocoded_at: null } },
+    })));
+    const db = newDb();
+    const results = importDir(db, writeDataDir([...evs, ...bnavi]), 1_000);
+    expect(results.flatMap((r) => [...r.errors, ...r.warnings])).toEqual([]);
+    expect(mask(db, bnavi.find((e) => e.game_code === 'LLOCG')!.id)).toBe(4096);
+    for (const g of ['WS', 'VG', 'SVE', 'HOCG', 'LLOCG']) {
+      expect((await apiAll(db, `${Q}&game=${g}`)).body.events).toHaveLength(n(g));
+    }
+    const meta = (await api(db, '/api/v1/events/meta')).body;
+    expect(meta.types).toContainEqual(expect.objectContaining({ game_code: 'HOCG', code: 'shop_tournament', name: 'ショップ大会' }));
+    const withGeo = (await apiAll(db, `${Q}&game=WS`)).body.events.find((e: Ev) => e.venue);
+    if (withGeo) expect(withGeo.venue.geo.source).toBe('bushinavi');
+  });
+
+  it('a re-import of only the games imported last writes nothing (meta does not depend on import order)', () => {
+    const db = newDb();
+    const dir = writeDataDir(evs);
+    const accepted = loadAll(dir).filter((r) => r.errors.length === 0);
+    const late = (r: Ev) => ['GCG', 'DBFW', 'BS', 'DCG'].includes(r.game);
+    db.execAll(planImport(accepted.filter((r) => !late(r)), db.readState(), { now: 1_000 }).statements);
+    db.execAll(planImport(accepted.filter(late), db.readState(), { now: 2_000 }).statements);
+    expect(planImport(accepted.filter(late), db.readState(), { now: 3_000 }).statements).toEqual([]);
+    expect(planImport(accepted, db.readState(), { now: 4_000 }).statements).toEqual([]);
+  });
+
   it('game bits: one power of two per game below 2^30, the same in the importer, Worker and schema', () => {
     expect(GAMES.length).toBeLessThanOrEqual(MAX_GAMES);
     expect(GAME_CODES).toEqual(GAMES.map((g) => g.code));

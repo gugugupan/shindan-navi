@@ -12,8 +12,8 @@ export const REPO_DIR = resolve(API_DIR, '..');
 export const CONTRACTS_DIR = join(REPO_DIR, 'contracts');
 export const DEFAULT_DATA_DIR = join(REPO_DIR, 'data', 'events');
 
-export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG'];
-const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan' };
+export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG', 'WS', 'VG', 'SVE', 'HOCG', 'LLOCG'];
+const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan', bushinavi: 'bnavi' };
 // 9999-12-31T23:59:59Z: date-only events sort after timed ones on the same day.
 export const NULL_SORT = 253402300799;
 const MAX_ERRORS = 50;
@@ -175,7 +175,9 @@ export function sqlLiteral(v) {
 }
 
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;
-export const GAME_BITS = { OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8, GCG: 16, DBFW: 32, BS: 64, DCG: 128 };
+export const GAME_BITS = {
+  OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8, GCG: 16, DBFW: 32, BS: 64, DCG: 128, WS: 256, VG: 512, SVE: 1024, HOCG: 2048, LLOCG: 4096,
+};
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'];
 const VENUE_KEYS = ['name', 'source_id', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code', 'geo'];
 
@@ -343,11 +345,14 @@ export function computeLocCounts(events, window) {
 
 /** The /events/meta body without labels, over each game's latest import window. */
 export function computeMeta(events, imports) {
-  const latest = {};
+  const newest = {};
   for (const imp of imports) {
-    const cur = latest[imp.game_code];
-    if (!cur || imp.fetched_at > cur.fetched_at) latest[imp.game_code] = imp;
+    const cur = newest[imp.game_code];
+    if (!cur || imp.fetched_at > cur.fetched_at) newest[imp.game_code] = imp;
   }
+  // Keyed in GAME_CODES order: the stored JSON must not depend on the order imports were read, or a re-import after
+  // a `--games` import would see stale meta and rewrite it.
+  const latest = Object.fromEntries(GAME_CODES.filter((g) => newest[g]).map((g) => [g, newest[g]]));
   const games = {};
   for (const [g, imp] of Object.entries(latest)) {
     games[g] = { record_count: imp.record_count, fetched_at: imp.fetched_at, complete: imp.complete === 1, window: { from: imp.window_from, until: imp.window_until } };

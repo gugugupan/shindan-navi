@@ -48,7 +48,7 @@ Tests use the same stand-in.
 ## Import behaviour
 
 - Reads `data/events/<GAME>/_run.json` and `<YYYY-MM>.json`, validates them against `contracts/*.schema.json`
-  plus: game/source match the directory and run, `id` = `<tcgp|ptcg|conan>:<external_id>`, no duplicate ids, file
+  plus: game/source match the directory and run, `id` = `<tcgp|ptcg|conan|bnavi>:<external_id>`, no duplicate ids, file
   month = `starts_on` month, `starts_on` inside the run window, `ends_on >= starts_on`, `datetime` precision has
   `starts_at`, `record_count` = events in files. In-person events whose venue has no `region_code` get a warning:
   no location filter can reach them (0 in the current data).
@@ -71,7 +71,7 @@ Tests use the same stand-in.
 - Meta (game windows, prefecture / online / category / type counts over each game's latest window, and `loc_counts`:
   per location × game_mask × type × month weekend/weekday counts for the location picker) is computed in the importer
   from the post-import state and stored as JSON, so `/events/meta` reads one row (~40 KB with the eight games' data of
-  2026-11-19).
+  2026-11-19, ~50 KB with all 13).
 - Statements are chunked to at most 60,000 UTF-8 bytes including the INSERT head and ON CONFLICT tail (D1 limit
   100 KB). A first import of the current data (~33k events) is ~580 statements, ~34 MB of SQL (`wrangler d1
   execute --file` accepts up to 5 GiB).
@@ -109,6 +109,10 @@ migration. A new game still needs its `games` row (`imports.game_code` reference
 The rebuild keeps every column and row (rehearsed on a copy of the live data: tables byte-identical, `content_hash`
 unchanged, integrity and foreign-key checks clean), so the code before and after it both work on the migrated
 database. Runbook: [Migration 0005](#migration-0005-runbook).
+
+`migrations/0006_bushinavi_games.sql`: the five ブシナビ games WS, VG, SVE, HOCG, LLOCG (`games` bits 256-4096). Only
+the `INSERT` (5 rows written); their ids (`bnavi:<digits>`) and sources (`bushinavi`) already pass 0005's shape
+checks. Runbook: [Day 3](#day-3-bushi-navi-games).
 
 ## Accounts (Google login, synced preferences)
 
@@ -254,6 +258,13 @@ its own and the first import of GCG, DBFW, BS, DCG (20,736 events, window 2026-1
 `--games BS,DBFW`). They go on different UTC days: [Migration 0005](#migration-0005-runbook). Free-plan limits are per
 day across everything, so check the dashboard before a large import on a day that already had one.
 
+The first import of the five ブシナビ games (collected 2026-11-19: 20,566 events, window 2026-11-18..2027-02-18),
+measured with `--dry-run` on a copy holding the eight games above (54,215 events): ~49,624 rows written (events
+41,132, day_counts 8,485, imports 5, site_meta 2); reads ~102k (the state read ~73k + one lookup per written row).
+Per game: HOCG ~19.4k, VG ~9.9k, SVE ~8.3k, WS ~7.4k, LLOCG ~4.6k (or two days: `--games WS,VG,SVE` ~25.6k /
+`--games HOCG,LLOCG` ~24.1k). It is its own UTC day after the Bandai import: [Day 3](#day-3-bushi-navi-games). With
+all 13 games (74,781 events, 27,517 day_counts rows) the state read of every later import is ~102k rows.
+
 `venue.geo` is stored inside `venue_json` (no migration, no extra reads per request). A `geo` of `null` and a missing
 `geo` give the same content hash, so rows imported before the field existed are rewritten only when their venue gains
 coordinates; until then the Worker serves them with `geo: null`. Measured on a copy of the 2026-11-18 data with
@@ -303,10 +314,10 @@ month per request.
 
 | Request | Rows |
 | --- | ---: |
-| `/events/days`, one month: 東京都 / 5 largest (8 games, December) | ≤ 636 / ≤ 2,733 (4 games: ≤ 290 / ≤ 1,238) |
+| `/events/days`, one month: 東京都 / 5 largest (13 games, December) | ≤ 887 / ≤ 3,846 (8 games: ≤ 636 / ≤ 2,733; 4: ≤ 290 / ≤ 1,238) |
 | `/events` page, no game/type/days filter: 東京都 / 5 largest (max per request while paging Dec) | 103 / 486 |
 | `/events` page with filters, scan per request: 東京都 / 5 largest (max while paging) | 154 / 984 |
-| `/events` page with filters, day lookup | ≤ month's day_counts rows (8 games: ≤ 636 / ≤ 2,733) |
+| `/events` page with filters, day lookup | ≤ month's day_counts rows (13 games: ≤ 887 / ≤ 3,846) |
 | `/events/meta`, data version | 1, 1 |
 
 Paging through December with all cursors: Tokyo unfiltered 1,693 events in 34 requests / 2,557 rows; 5 largest
@@ -322,7 +333,7 @@ day's count from `/days` has arrived, so they read the same pages as the list. B
 prefecture (東京都, 178 events) ≈ `/days` + 4 pages ≈ 700 rows; 5 largest (640 events) ≈ 14 requests (`/days` + 12
 pages + meta, the cap) ≈ 7,100 rows. That is ~700 uncached worst-case day views per 5M reads (~350 if D1 counts
 every scanned row twice). With eight games the busiest 東京都 day has 217 events (11/21): `/days` + 5 pages
-≈ 1,000 rows uncached.
+≈ 1,000 rows uncached; with 13 games 271 events: `/days` + 6 pages ≈ 1,500 rows.
 
 **Today page** (`/`, `src/home.html`): no request without a saved location. With one, 2-3 requests per visit, all
 keys the `/events/` page uses too, with the saved `game`/`type` (not `days`): `/events/days` for this month (calendar
@@ -335,14 +346,14 @@ total and a link. Uncached, one prefecture: ≤ ~290 + ~103 (+ ~103) rows (Tokyo
 and online do not. `/events/meta` (1 row, same key as `/events/`) only when the location picker is opened, for its
 counts; no `/geo`. Days of the next month in its week strip link without a count.
 
-**Worst case.** A miss costs at most ~3.8k rows with eight games (~2.3k with four): a filtered `/events` page on the
-5 largest prefectures reads the whole month's day_counts when matches are sparse (≤ 2,733), up to 200 rows per
-location and the ≤ 50 matches in full. ~1,300 distinct uncached requests use up 5M/day (~650 if D1 counts every
-scanned row twice). The key space is small but not tiny
+**Worst case.** A miss costs at most ~4.9k rows with 13 games (~3.8k with eight, ~2.3k with four): a filtered
+`/events` page on the 5 largest prefectures reads the whole month's day_counts when matches are sparse (≤ 3,846), up
+to 200 rows per location and the ≤ 50 matches in full. ~1,000 distinct uncached requests use up 5M/day (~500 if D1
+counts every scanned row twice). The key space is small but not tiny
 (≤4 months or ~92 start days × location sets × game/type/days), so the limits matter:
 
-- one client (IPv4 address or IPv6 /64) gets 20 misses per minute per location: ≤ ~45k rows/min, so a single client
-  that keeps hitting the limit exhausts the daily reads in about 2 hours;
+- one client (IPv4 address or IPv6 /64) gets 20 misses per minute per location: ≤ ~100k rows/min, so a single client
+  that keeps hitting the limit exhausts the daily reads in under an hour;
 - all clients together get 300 misses per minute per location (breaker, 503), which bounds bursts but not the daily
   total.
 
@@ -377,6 +388,22 @@ until 00:00 UTC (09:00 JST); cached API answers keep serving.
    review (~50,000 rows written, 20,736 inserted), then `-- --yes`. From then on only the new importer (this
    branch or later) may write to D1: an older one rejects the new game directories and computes meta and `loc_counts`
    without bits 16-128.
+
+## Day 3: Bushi Navi games
+
+After day 2 (the Bandai import), on a new UTC day (after 09:00 JST), from `api/` with `D1_DATABASE_ID` exported:
+
+1. **Check today's writes** in the dashboard (well under ~45,000 before an import of ~50,000).
+2. **Apply 0006:** `node scripts/remote-config.mjs && ./node_modules/.bin/wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json`
+   (5 rows written; additive, safe for the Worker already deployed). Check `"SELECT code, bit FROM games"` (13 rows).
+3. **Push the code** (the 13-game Worker). The older Worker would serve the new games' events without a `game_code`
+   and answers 400 to a page cursor that ends on a `bnavi:` id, so never import them before the push.
+4. **Plan:** `npm run import:remote -- --data <dir with WS, VG, SVE, HOCG, LLOCG> --games WS,VG,SVE,HOCG,LLOCG --plan`;
+   review (~49,600 rows written, 20,566 inserted on the 2026-11-19 collection; a fresher collection lists more of
+   the later weeks), then the same command with `--yes` instead of `--plan`.
+5. **Check:** `/api/v1/events/meta` lists the five games with their counts; `/events/` in 東京都 shows ヴァイスシュヴァルツ
+   … chips with numbers. From then on only this importer (or later) may write to D1: an older one rejects the new
+   game directories and computes meta without bits 256-4096.
 
 ## Migrations
 
