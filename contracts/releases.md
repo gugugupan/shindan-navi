@@ -162,8 +162,8 @@ title, name), written only by a non-dry run, together with `items.json`:
   (the page turns into 発売済み), then kept.
 - Leaves the archive: an id that is back in `items.json` (the calendar entry wins), and entries released more than
   `KEEP_ARCHIVE_DAYS` (730, ~2 years) before TODAY (their page then answers 404 and leaves the sitemap).
-- Thumbnails: an archived item keeps its `thumb` file; the run's thumbnail pruning counts archive references, and
-  drops a file once its entry leaves the archive. Nothing is downloaded for the archive. The build shows the
+- Thumbnails: an archived item keeps its `thumb` file; the run's thumbnail pruning counts archive references (and
+  every `overrides.json` `thumb`), and drops a file once nothing references it. Nothing is downloaded for the archive. The build shows the
   placeholder when the file is not in `public/thumbs` any more.
 - `scripts/refresh.py` resets `items-archive.json` to HEAD with `items.json` before the merge, and its packet counts
   the entries archived and dropped vs HEAD.
@@ -173,7 +173,14 @@ Build (`scripts/build.py`, `archived`): one `/item/<id>/` page per archive entry
 (a tag next to the title name, 「（発売済み）」 after the date, 発売時の価格, a 発売済み legend), keeps the 公式 links, and
 has no 新弾カレンダーで見る link: its main link goes to the title page (else `/releases/`); 発売月 links the month page
 only while one is built. Archived items never appear in the release calendar, title / month pages, their JSON-LD or
-`/`. 同じタイトルの前後の新弾 runs over calendar and archived items together, so archived pages stay linked.
+`/`. 同じタイトルの前後の新弾 runs over calendar and archived items together, so archived pages stay linked. A
+neighbour list changing (an item archived, added or moved next to it) moves no `changed` / sitemap `lastmod`: only the
+item's own shown fields do.
+
+Known edge case (rare, accepted): an id leaves the archive only when the same id is back in `items.json`. A released
+product that comes back both rescheduled past the window and renamed (e.g. a reissue under a new name) gets a new id,
+so the archive entry and the calendar item stand side by side as two pages of one product until someone hides one
+(`hide: true` in `overrides.json`, which also takes the archive page down).
 
 verify (`check_archive` / `check_items` in `verify_release.py`, `browser.mjs`): ids unique and not in `items.json`;
 `changed` a date on or before `--today` (a merge stamps `meta.json` `updated`, a hand-added entry its publishing day); released before the 30-day window; an item that left
