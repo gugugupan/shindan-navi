@@ -286,8 +286,14 @@ def check_voices():
         t = open(x).read()
         if '<nav class="tooltabs"' in t and 'href="/voices/"' not in t: fail(f'{os.path.relpath(x, DIST)}: tool tabs lack /voices/')
     if 'tcg.voices' not in privacy or '話題カレンダー' not in privacy: fail('/privacy/: voices section missing')
-    for u in re.findall(r'https://x\.com/[^"\s]+', m[1]):
-        if not re.fullmatch(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}', u): fail(f'/voices/: odd post URL {u}')
+    # owner decision 2026-11-20: no topic links to the players who posted; the only X URLs are the official reacting_to posts
+    official = {t['reacting_to'] for x in v['snapshots'] for t in x['topics'] if t.get('reacting_to')}
+    if any('posts' in t for x in v['snapshots'] for t in x['topics']): fail('/voices/: embedded topics carry player posts')
+    if 'data-x="post"' in src or '関連する投稿' in src: fail('/voices/: the page script still links players\' posts')
+    for u in set(re.findall(r'https?://(?:www\.)?(?:x|twitter)\.com/[^"\s<>\\]+', src)) - official:
+        fail(f'/voices/: X URL that is not a topic\'s official reacting_to post {u}')
+    for u in official:
+        if not re.fullmatch(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}', u): fail(f'/voices/: odd reacting_to URL {u}')
     print(f'  /voices/     snapshots={len(got)} topics={sum(len(x["ids"]) for x in got)} sample_only={sample_only}')
     check_voice_days(sitemap)
 
@@ -352,14 +358,16 @@ def check_voice_days(sitemap):
         if got != want: fail(f'{p}: {len(got)} topic cards != {len(want)} in GAMES order')
         secs = re.findall(r'<section class="vgsec" id="g-([A-Z]+)"', src)
         if secs != [c for c in games if any(t['game'] == c for t in s['topics'])]: fail(f'{p}: game sections {secs}')
-        # no post text: no quotes or embeds, every X link is one of the topic's posts / reacting_to, labelled by us
+        # no post text: no quotes or embeds; the only X URLs are the topics' official reacting_to posts, labelled by us
         if re.search(r'<blockquote|twitter-tweet|platform\.twitter\.com|publish\.twitter\.com|<iframe', src): fail(f'{p}: quote or X embed')
-        allowed = {u for t in s['topics'] for u in t['posts'] + ([t['reacting_to']] if t['reacting_to'] else [])}
+        allowed = {t['reacting_to'] for t in s['topics'] if t['reacting_to']}
+        for u in set(re.findall(r'https?://(?:www\.)?(?:x|twitter)\.com/[^"\s<>]+', src)) - allowed: fail(f'{p}: X URL that is not a reacting_to post {u}'); break
+        if 'data-x="post"' in src or '関連する投稿' in src: fail(f'{p}: links to players\' posts')
         for a, h, body in re.findall(r'(<a [^>]*href="(https://(?:x|twitter)\.com/[^"]*)"[^>]*>)(.*?)</a>', src):
             rel = (re.search(r'rel="([^"]*)"', a) or [None, ''])[1].split()
             if h not in allowed: fail(f'{p}: X link not from the data {h}'); break
             if not {'nofollow', 'noopener'} <= set(rel) or 'target="_blank"' not in a: fail(f'{p}: X link rel {rel}'); break
-            if re.sub(r'<[^>]+>', '', body).strip() not in [str(n) for n in range(1, 4)] + ['反応元の公式投稿 ↗（外部サイト・X）']: fail(f'{p}: X link text {body[:40]!r}'); break
+            if re.sub(r'<[^>]+>', '', body).strip() != '反応元の公式投稿 ↗（外部サイト・X）': fail(f'{p}: X link text {body[:40]!r}'); break
         for t in s['topics']:
             card = re.search(rf'<article class="tc"[^>]* id="topic-{t["id"]}".*?</article>', src, re.S)
             if not card: continue
@@ -369,7 +377,7 @@ def check_voice_days(sitemap):
             if html.escape(t['summary']) not in c or html.escape(t['title']) not in c: fail(f'{p}: {t["id"]} title / summary missing')
             if f'href="/voices/#t={t["id"]}"' not in c: fail(f'{p}: {t["id"]} lacks its /voices/#t= link')
             # the tag is what card() in src/voices.html emits: the shared game icon (gi), then the name
-            tag = re.search(r'<span class="tag">(<img class="gi" src="/gi/[a-z0-9]+\.png" width="16" height="16" alt="" aria-hidden="true">|<span class="gi" aria-hidden="true">[^<]+</span>)([^<]+)</span>', c)
+            tag = re.search(r'<span class="tag">(<img class="gi" src="/gi/[a-z0-9]+\.(?:png|svg)" width="16" height="16" alt="" aria-hidden="true">|<span class="gi" aria-hidden="true">[^<]+</span>)([^<]+)</span>', c)
             if not tag: fail(f'{p}: {t["id"]} tag without the game icon')
             n = sum(t['share'].values())
             pct = [int(x) for x in re.findall(r'約(\d+)%', re.search(r'<span class="alg"[^>]*>(.*?)</span></div>', c, re.S)[1])] if 'class="alg"' in c else []

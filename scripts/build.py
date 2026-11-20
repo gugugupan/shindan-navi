@@ -38,19 +38,20 @@ GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポ�
        ('digimon','デジモン','デジモンカードゲーム','デジカ')]
 
 # Icon next to every game name on every page, by display name (owner decision 2026-11-20): `x.png` = official site
-# favicon kept in public/gi/ (identification only, never hotlinked), otherwise a one-character monogram tile in the
-# game's colour. Never a KONAMI asset for 遊戯王. Titles missing here get their first character.
+# favicon kept in public/gi/ (identification only, never hotlinked), `x.svg` = an icon we drew ourselves (no official
+# asset), otherwise a one-character monogram tile in the game's colour. Never a KONAMI asset for 遊戯王. Titles
+# missing here get their first character.
 GAME_ICON={'UNION ARENA':'ua.png','DBフュージョンワールド':'dbfw.png','デジモン':'dcg.png','ヴァイスシュヴァルツ':'ws.png',
     'ヴァンガード':'vg.png','ホロライブ':'hocg.png','ラブライブ！OCG':'llocg.png','MTG':'mtg.png',
-    'ONE PIECE':'ワ','ポケモンカード':'ポ','ガンダム':'ガ','バトルスピリッツ':'バ','Shadowverse EVOLVE':'シ','デュエル・マスターズ':'デ',
-    '遊戯王OCG':'遊','遊戯王ラッシュデュエル':'ラ','名探偵コナン':'コ','DIVINE CROSS':'D','Flesh and Blood':'F','ビルディバイド':'ビ',
+    'ONE PIECE':'opcg.png','ポケモンカード':'ptcg.svg','ガンダム':'ガ','バトルスピリッツ':'バ','Shadowverse EVOLVE':'シ','デュエル・マスターズ':'デ',
+    '遊戯王OCG':'遊','遊戯王ラッシュデュエル':'ラ','名探偵コナン':'conan.svg','DIVINE CROSS':'D','Flesh and Blood':'F','ビルディバイド':'ビ',
     'ウルトラマン':'ウ','KAMITSUBAKI':'K','アニマルカードゲーム':'ア','パルワールド':'パ','ゴジラ':'ゴ','FFTCG':'F','Xross Stars':'X',
     'ホロビート':'ホ','Z/X':'Z','バボカ!!':'ボ','リセ':'リ','OSICA':'O','ファンスターズリーグ':'フ','Harry Potter':'H',
     '五等分の花嫁':'五','WIXOSS':'W'}
-for _v in GAME_ICON.values(): assert not _v.endswith('.png') or os.path.exists(os.path.join(ROOT,'public/gi',_v)),_v
+for _v in GAME_ICON.values(): assert not _v.endswith(('.png','.svg')) or os.path.exists(os.path.join(ROOT,'public/gi',_v)),_v
 # gi(name) in every page script (slot /*GICON*/); decorative, the name always sits next to it
 GICON_JS=('const GICON = '+json.dumps(GAME_ICON,ensure_ascii=False)+';\n'
-    "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.png$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };")
+    "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.(png|svg)$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };")
 
 # Prices come as 6600円(税込) / 6,050円 / 240円 depending on the source; pages say once that prices include tax.
 def price_label(s):
@@ -564,7 +565,7 @@ def voices_data():
     snaps=[]
     xpost=re.compile(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}')
     isdate=lambda v:isinstance(v,str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}',v) and jd(v)
-    TOPIC={'id','game','title','summary','attitude','share','volume','voices','reacting_to','posts','window','first_seen','status','source'}
+    TOPIC={'id','game','title','summary','attitude','share','volume','voices','reacting_to','window','first_seen','status','source'}
     for f in sorted(glob.glob(os.path.join(ROOT,'data/voices/*.json'))):
         name=os.path.relpath(f,ROOT)
         def bad(msg): sys.exit(f'{name}: {msg} (contracts/voices.md)')
@@ -579,6 +580,7 @@ def voices_data():
         for t in s['topics']:
             tid=t.get('id','?')
             def tbad(msg): bad(f'topic {tid}: {msg}')
+            if 'posts' in t: tbad('posts: player post URLs are never committed (contracts/voices.md)')
             if set(t)!=TOPIC: tbad(f'fields {sorted(set(t)^TOPIC)}')
             if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,63}',str(tid)) or tid in ids: tbad('bad or duplicate id')
             ids.add(tid)
@@ -591,7 +593,6 @@ def voices_data():
             if t['volume'] not in ('high','mid','low'): tbad('volume')
             if not (isinstance(t['voices'],list) and len(t['voices'])<=3 and all(isinstance(v,str) and 0<len(v.strip())<=80 for v in t['voices'])): tbad('voices: at most 3 strings of 1-80 characters')
             if t['reacting_to'] is not None and not (isinstance(t['reacting_to'],str) and xpost.fullmatch(t['reacting_to'])): tbad('reacting_to must be an x.com status URL or null')
-            if not (isinstance(t['posts'],list) and 1<=len(t['posts'])<=3 and len(set(t['posts']))==len(t['posts']) and all(isinstance(u,str) and xpost.fullmatch(u) for u in t['posts'])): tbad('posts: 1-3 distinct x.com status URLs')
             if t['window']!=w: tbad('window differs from the snapshot window')
             if not isdate(t['first_seen']) or t['first_seen']>s['date']: tbad('first_seen after the snapshot date')
             if t['status'] not in ('new','continuing','cooling'): tbad('status')
@@ -682,7 +683,7 @@ def vday_path(d): return f'/voices/{d}/'
 def gi(n):
     # same markup as gi() in GICON_JS (the page scripts' game icon)
     v=GAME_ICON.get(n) or str(n or '?')[0].upper()
-    return f'<img class="gi" src="/gi/{esc(v)}" width="16" height="16" alt="" aria-hidden="true">' if v.endswith('.png') else f'<span class="gi" aria-hidden="true">{esc(v)}</span>'
+    return f'<img class="gi" src="/gi/{esc(v)}" width="16" height="16" alt="" aria-hidden="true">' if v.endswith(('.png','.svg')) else f'<span class="gi" aria-hidden="true">{esc(v)}</span>'
 def vgvars(c):
     g=VGAME[c]; return f'--gl:{g["c"]};--gd:{g["cd"]}' if g.get('c') else '--gl:hsl(220 62% 46%);--gd:hsl(220 60% 68%)'
 def vtenths(s,ks):
@@ -714,8 +715,7 @@ def vcard(t,snap):
     voices=(f'<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">'+''.join(f'<li><span aria-hidden="true">💬 </span>{esc(v)}</li>' for v in t['voices'])+'</ul>') if t['voices'] else ''
     ext='<span class="sr">（外部サイト・X）</span>'
     rel='nofollow noopener noreferrer'
-    links=(f'<a href="{esc(t["reacting_to"])}" target="_blank" rel="{rel}" data-x="reacting">反応元の公式投稿 ↗{ext}</a>' if t['reacting_to'] else '') \
-        +'<span class="lab">関連する投稿 ↗</span>'+''.join(f'<a href="{esc(u)}" target="_blank" rel="{rel}" data-x="post" aria-label="関連する投稿{i+1}をXで見る（外部サイト）">{i+1}</a>' for i,u in enumerate(t['posts']))
+    links=f'<a href="{esc(t["reacting_to"])}" target="_blank" rel="{rel}" data-x="reacting">反応元の公式投稿 ↗{ext}</a>' if t['reacting_to'] else ''
     return (f'<article class="tc" style="{vgvars(t["game"])}" id="topic-{esc(t["id"])}" data-topic="{esc(t["id"])}">'
             f'<div class="tc-top"><span class="tag">{gi(VGAME[t["game"]]["name"])}{esc(VGAME[t["game"]]["name"])}</span>{badge}<span class="ai">AIによる要約</span></div>'
             f'<h3>{esc(t["title"])}</h3><p class="sum">{esc(t["summary"])}</p>{vatt_block(t)}{voices}'

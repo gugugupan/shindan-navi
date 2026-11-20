@@ -2,7 +2,7 @@
   "version": 1,
   "date": "2026-11-20",
   "window": { "from": "2026-11-17", "to": "2026-11-20" },
-  "note": "Grok app answers for 2026-11-17..20 JST, one prompt per game. Every post and reacting_to URL was checked via X oEmbed (exists, posted inside the window, on topic, not sales/video/tournament reports/shops); topics need 2+ distinct authors. Summaries and voices are our own paraphrases. share: Grok gave percentages for some games; those were turned into rough post counts (percentage x Grok's author estimate).",
+  "note": "Grok app answers for 2026-11-17..20 JST, one prompt per game. The supporting player posts and every reacting_to URL were checked via X oEmbed (exists, posted inside the window, on topic, not sales/video/tournament reports/shops); topics need 2+ distinct authors. Player post URLs are kept locally, never committed; reacting_to is always an official account. Summaries and voices are our own paraphrases. share: Grok gave percentages for some games; those were turned into rough post counts (percentage x Grok's author estimate).",
   "topics": [
     {
       "id": "opcg-bonney-ban-pair-speed",
@@ -18,11 +18,6 @@
         "環境が固まる前に早めに手を打った点は評価できるという声"
       ],
       "reacting_to": "https://x.com/ONEPIECE_tcg/status/2122649652109742321",
-      "posts": [
-        "https://x.com/boat1_23_234/status/2122654034523984097",
-        "https://x.com/reitsuki95/status/2123418501893525789",
-        "https://x.com/ikettitencho/status/2123350003741835535"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-17",
       "status": "new",
@@ -42,11 +37,6 @@
         "アイカツのカードにはゼクーガに勝てる強さを期待するという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/BS_Sagittarius/status/2123411229574082759",
-        "https://x.com/73exp_requiem/status/2123124730559660147",
-        "https://x.com/kazuki200027/status/2123359133605007538"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -65,11 +55,6 @@
         "金のアルファモンと並べて使えば映えそうだという声"
       ],
       "reacting_to": "https://x.com/digimon_tcg/status/2123394646206492812",
-      "posts": [
-        "https://x.com/Mu_ri_pomP/status/2123571401118642554",
-        "https://x.com/nengmian225286/status/2123429006204932412",
-        "https://x.com/d6lah2vyeBex0c3/status/2123399571166662781"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -89,11 +74,6 @@
         "入れ替えへの不安を冗談まじりに語る投稿もある"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/nodata1213/status/2123533976694579443",
-        "https://x.com/1020Kadekaru/status/2123431262715281824",
-        "https://x.com/9UG4swedRVlDiDw/status/2123401962129703031"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -113,11 +93,6 @@
         "過去の強力カードを思い出すほど強いという感想"
       ],
       "reacting_to": "https://x.com/shadowverse_ev/status/2123345579938034002",
-      "posts": [
-        "https://x.com/puyo_hobby/status/2123412391350427704",
-        "https://x.com/motti_niconico/status/2123356102892847362",
-        "https://x.com/duelst318ryu/status/2123345940140667101"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -136,11 +111,6 @@
         "一言で最高だと絶賛する反応が多い"
       ],
       "reacting_to": "https://x.com/LL_cardgame/status/2123355618715095369",
-      "posts": [
-        "https://x.com/f7hEjlT6i15ty7A/status/2123361342229029097",
-        "https://x.com/ED24700481/status/2123356413980561748",
-        "https://x.com/G_SEED_DESTINY/status/2123355704597885291"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -160,11 +130,6 @@
         "他のゲームの禁止にすぐマウントを取るのはやめるべきだという批判"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/kazuha0023/status/2123366155624841255",
-        "https://x.com/mgr_pkc/status/2123262227490984415",
-        "https://x.com/PokoLarko/status/2123388733496180853"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -184,11 +149,6 @@
         "12月のウマ娘弾のほうが強そうで、11月の弾に手を出すか迷うという声"
       ],
       "reacting_to": "https://x.com/UNION_ARENA_TCG/status/2123325415330844840",
-      "posts": [
-        "https://x.com/westmtshinji/status/2123423575969546725",
-        "https://x.com/2heartsww/status/2123346685850255763",
-        "https://x.com/onisama_hentai_/status/2123186431590056171"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -207,11 +167,6 @@
         "D.Gray-manの新弾はイラストの出来が良すぎるという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/CM_johnSV/status/2123408837923459534",
-        "https://x.com/onponpp03/status/2123265007832154375",
-        "https://x.com/izayoikaren/status/2123008174903226566"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -231,11 +186,6 @@
         "7弾にもなってこの性能のカードを出すのかと開発に不満を向ける声"
       ],
       "reacting_to": "https://x.com/GUNDAM_GCG_JP/status/2123325410545209767",
-      "posts": [
-        "https://x.com/umeboshi_bs/status/2123402122477900198",
-        "https://x.com/ScrapShark21_0/status/2123354913862479973",
-        "https://x.com/raigugeiosu/status/2123453607823786239"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -255,11 +205,6 @@
         "作中の活躍に比べると性能は控えめだと受け止める声"
       ],
       "reacting_to": "https://x.com/GUNDAM_GCG_JP/status/2122963024978083880",
-      "posts": [
-        "https://x.com/Zero_one8323/status/2123074649185800237",
-        "https://x.com/iga1218/status/2123029335938621491",
-        "https://x.com/goldenballmasa/status/2123049352751137081"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -279,11 +224,6 @@
         "KOするカードを相手が選ぶ仕様では物足りないという疑問"
       ],
       "reacting_to": "https://x.com/dbfw_cardgameJP/status/2123340560098615514",
-      "posts": [
-        "https://x.com/asokataraneba/status/2123374230175944895",
-        "https://x.com/12anubis25/status/2123407423969108393",
-        "https://x.com/yagionosasayaki/status/2123441081757167787"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -303,11 +243,6 @@
         "神龍の強化を待っていたので残念だが、カード単体は強いという声"
       ],
       "reacting_to": "https://x.com/dbfw_cardgameJP/status/2122615820107055510",
-      "posts": [
-        "https://x.com/fam_p0/status/2122684523779658122",
-        "https://x.com/pokeks0203/status/2122699004173840429",
-        "https://x.com/asokataraneba/status/2122631856529252453"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-17",
       "status": "new",
@@ -327,11 +262,6 @@
         "新弾で使っているデッキに強化が入りそうで嬉しいという声"
       ],
       "reacting_to": "https://x.com/bs_official/status/2123573067062620425",
-      "posts": [
-        "https://x.com/saiking319/status/2123572729450525074",
-        "https://x.com/HNniatori03/status/2123509934457581727",
-        "https://x.com/7n_7n7n/status/2123396477905223780"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -351,11 +281,6 @@
         "次のキャラはさらに上からゼクーガを倒せるはずと期待する声"
       ],
       "reacting_to": "https://x.com/bs_official/status/2123370711804793182",
-      "posts": [
-        "https://x.com/MatoTsukimiya/status/2123417765482578376",
-        "https://x.com/takeken_23/status/2123377201798369577",
-        "https://x.com/yatsunise/status/2123375287929119223"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -375,11 +300,6 @@
         "トリドラの新ユニットはオーダーを選ばない点が特に強力という評価"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/RARAMIA000/status/2123423098410307686",
-        "https://x.com/AKKI_AGE_VG/status/2123546285970161770",
-        "https://x.com/MTpH3v7s4UOn5Gr/status/2122672362470670632"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-17",
       "status": "new",
@@ -399,11 +319,6 @@
         "コストはかかるが、しっかりフィニッシャーとして働くという評価"
       ],
       "reacting_to": "https://x.com/shadowverse_ev/status/2122888397815681215",
-      "posts": [
-        "https://x.com/jgafyrkuYQM92Tz/status/2123344177744203986",
-        "https://x.com/onigiriTCG/status/2122994945904844805",
-        "https://x.com/Spacevespine/status/2123008803901931893"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -423,11 +338,6 @@
         "6コストで9点を狙える性能を評価する声"
       ],
       "reacting_to": "https://x.com/shadowverse_ev/status/2122983195859960071",
-      "posts": [
-        "https://x.com/minipo_chama/status/2123360822030434719",
-        "https://x.com/mizuki_duema/status/2122997431856230819",
-        "https://x.com/lokki48963591/status/2122991678747488755"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -447,11 +357,6 @@
         "カードパワーの上昇が速く、以前のほうが楽しめたという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/WbqMdys/status/2123440934205759897",
-        "https://x.com/m09zin56/status/2123392911933071599",
-        "https://x.com/sid_thegazette/status/2123227091693113690"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -470,10 +375,6 @@
         "ツインパクトなので試合の早い段階から役に立つ点を評価する声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/satiyobiyousitu/status/2122990659024134193",
-        "https://x.com/KiyuSakubu/status/2122991784863146354"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -493,11 +394,6 @@
         "シティリーグ以外は遊ぶ気が起きないという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/pktorisky/status/2123421668316217741",
-        "https://x.com/Sigma_public/status/2123558452941468140",
-        "https://x.com/YutR46684/status/2123560679143772214"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -517,11 +413,6 @@
         "コストの重さに思わず読み間違えたかと驚く声"
       ],
       "reacting_to": "https://x.com/dbfw_cardgameJP/status/2122978146228322758",
-      "posts": [
-        "https://x.com/ku6maku/status/2123423218170310840",
-        "https://x.com/Iamadamun/status/2122981989439709675",
-        "https://x.com/db_z903/status/2122986786792378464"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -541,11 +432,6 @@
         "ワンピースのようなペア禁止の方式を取り入れてほしいという要望"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/MEGANEZARU_TUBE/status/2123557834713600400",
-        "https://x.com/tojiro02160216/status/2123330294807949458",
-        "https://x.com/2508sarada/status/2123059136657326331"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -565,10 +451,6 @@
         "課題はあるものの、入門にはスタンダードが向いているという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/kuma8902rize/status/2122709362254971012",
-        "https://x.com/darumaruma1/status/2123364852249059357"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -587,10 +469,6 @@
         "ワンピースの禁止を見て、同じバンダイのデジカのバランスが気になるという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/digi_dru_dan_d/status/2123299138024718664",
-        "https://x.com/YutoMujou/status/2123390208087634072"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -610,11 +488,6 @@
         "規制が重くなってきたので、汎用の対策カードを配ってほしいという要望"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/rosokuthukihi/status/2123290798175498286",
-        "https://x.com/takko0330/status/2123078481387147340",
-        "https://x.com/shii_tcg/status/2123041189335269855"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-18",
       "status": "new",
@@ -634,11 +507,6 @@
         "強い環境でも規制せずに乗り切ったのは、信頼を守る意味で良かったという評価"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/namaka_w/status/2123441651360436315",
-        "https://x.com/saikakuseisya/status/2123387054759563742",
-        "https://x.com/PleasantCrowd/status/2123223082827710778"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -657,10 +525,6 @@
         "懐かしいカードで遊べるコンセプトを評価し、人気デッキも駆け引きがあるという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/In_0ther_vv0rds/status/2123424147640562059",
-        "https://x.com/ioh182018/status/2123299624744259655"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-19",
       "status": "new",
@@ -680,11 +544,6 @@
         "他タイトルと比べて運営の対応に安心感があるという声"
       ],
       "reacting_to": null,
-      "posts": [
-        "https://x.com/yuzukosyou_rara/status/2123490279244353834",
-        "https://x.com/kariyakokoro/status/2123388227721805861",
-        "https://x.com/Orange_1295/status/2122704076941254732"
-      ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-17",
       "status": "new",

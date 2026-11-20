@@ -117,7 +117,6 @@
 .voices{list-style:none;margin:0;padding:0;display:grid;gap:4px}
 .voices li{font-size:12.5px;line-height:1.6;background:var(--surface);border-radius:8px;padding:4px 10px}
 .tc-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;font-size:12px}
-.tc-links .lab{color:var(--muted);font-weight:700}
 .tc-links a{font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface);white-space:nowrap}
 .tc-links a:hover{border-color:var(--accent)}
 .cplink{margin-left:auto;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font:inherit;font-size:11.5px;font-weight:700;padding:3px 10px;white-space:nowrap}
@@ -451,10 +450,9 @@ function attBlock(t){
 const ext = '<span class="sr">（外部サイト・X）</span>';
 function card(v, hx='h3'){
   const t=v.t, g=GAME[t.game];
-  // the voices paraphrase the topic as a whole: they are not matched to the posts below, which are listed apart
+  // the voices paraphrase the topic as a whole; players' posts are never linked (owner decision 2026-11-20), only the official post
   const voices=t.voices.length?`<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">${t.voices.map(x=>`<li><span aria-hidden="true">💬 </span>${esc(x)}</li>`).join('')}</ul>`:'';
-  const links=(t.reacting_to?`<a href="${esc(t.reacting_to)}" target="_blank" rel="noopener noreferrer" data-x="reacting">反応元の公式投稿 ↗${ext}</a>`:'')
-    + `<span class="lab">関連する投稿 ↗</span>` + t.posts.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-x="post" aria-label="関連する投稿${i+1}をXで見る（外部サイト）">${i+1}</a>`).join('');
+  const links=t.reacting_to?`<a href="${esc(t.reacting_to)}" target="_blank" rel="nofollow noopener noreferrer" data-x="reacting">反応元の公式投稿 ↗${ext}</a>`:'';
   return `<article class="tc" style="${gvars(t.game)}" data-topic="${esc(t.id)}">
     <div class="tc-top"><span class="tag">${gi(g.name)}${esc(g.name)}</span>${badge(v)}<span class="ai">AIによる要約</span></div>
     <${hx}>${esc(t.title)}</${hx}>

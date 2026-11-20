@@ -147,7 +147,7 @@ A browser key is public by design; restrictions are what protect it. Owner check
 
 `/feedback/`: `send_feedback` (`kind` only; never the text or the address).
 
-`/voices/`: `voices_filter` (`key` game / att), `switch_view`, `voices_open` (`kind` day / topic), `click_voice_post` (`kind` post / reacting, `game`).
+`/voices/`: `voices_filter` (`key` game / att), `switch_view`, `voices_open` (`kind` day / topic), `click_voice_post` (`kind` reacting: the official post, `game`).
 
 `/events/`: `events_filter`, `switch_view`, `change_theme`, `click_event_source`, `events_map` (`action`: `day` = a
 day view opened from the list or calendar, `open` = the map opened with 地図を表示).

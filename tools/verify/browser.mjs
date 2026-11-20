@@ -10,6 +10,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const DIST = path.join(ROOT, 'dist');
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const TODAY = arg('--today', new Date().toISOString().slice(0, 10));
+// the official posts the voices snapshots react to: the only X links /voices/ may show
+const OFFICIAL_X = new Set(fs.existsSync(path.join(ROOT, 'data/voices')) ? fs.readdirSync(path.join(ROOT, 'data/voices')).filter(f => f.endsWith('.json'))
+  .flatMap(f => JSON.parse(fs.readFileSync(path.join(ROOT, 'data/voices', f), 'utf8')).topics.map(t => t.reacting_to).filter(Boolean)) : []);
 const OUT = path.resolve(ROOT, arg('--out', '.verify'));
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -647,7 +650,11 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     await page.locator(`.vd[data-day="${d0}"] .vdn`).click();
     await page.locator('#vDlg[open]').waitFor();
     const dl = await page.evaluate(() => ({ n: document.querySelectorAll('#vBody .tc').length, title: document.getElementById('vTitle').textContent,
-      links: [...document.querySelectorAll('#vBody a[data-x]')].map(a => [a.href, a.target, a.rel]), ai: document.querySelectorAll('#vBody .ai').length }));
+      links: [...document.querySelectorAll('#vBody a[data-x]')].map(a => [a.href, a.target, a.rel]), ai: document.querySelectorAll('#vBody .ai').length,
+      xa: [...document.querySelectorAll('#vBody a')].filter(a => /^https?:\/\/(www\.)?(x|twitter)\.com\//.test(a.href)).map(a => [a.href, a.dataset.x, a.textContent]),
+      players: document.getElementById('vBody').textContent.includes('関連する投稿') }));
+    // owner decision 2026-11-20: a card links only its official reacting_to post, never the players who posted
+    if (dl.players || dl.xa.some(([h, k, txt]) => k !== 'reacting' || !txt.startsWith('反応元の公式投稿') || !OFFICIAL_X.has(h))) fail(where, `day dialog links players' posts ${JSON.stringify(dl.xa.slice(0, 2))}`);
     if (dl.n !== want[d0].length || dl.ai !== dl.n) fail(where, `day dialog ${d0}: ${dl.n} cards (${dl.ai} AI labels), expected ${want[d0].length}`);
     if (dl.links.some(([h, t, r]) => !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(h) || t !== '_blank' || !/noopener/.test(r) || !/noreferrer/.test(r))) fail(where, `unsafe X links ${JSON.stringify(dl.links.slice(0, 2))}`);
     const dlgOver = await page.evaluate(() => { const d = document.getElementById('vDlg'); return d.scrollWidth - d.clientWidth; });
@@ -791,6 +798,8 @@ for (const [vp, opt] of VOICE_DAYS.length ? Object.entries(VIEWPORTS) : []) {
         visible: [...document.querySelectorAll('article.tc')].filter(e => e.offsetParent).length,
         h1: [...document.querySelectorAll('h1')].map(h => h.textContent),
         links: [...document.querySelectorAll('a[data-x]')].map(a => [a.href, a.target, a.rel]),
+        xa: [...document.querySelectorAll('a')].filter(a => /^https?:\/\/(www\.)?(x|twitter)\.com\//.test(a.href)).map(a => [a.href, a.dataset.x, a.textContent]),
+        players: document.body.textContent.includes('関連する投稿'),
         shares: [...document.querySelectorAll('.tc .att:not([data-small]) .alg')].map(a => [...a.children].reduce((t, x) => t + (+(/約(\d+)%/.exec(x.textContent) || [0, 0])[1]), 0)),
         smallPct: [...document.querySelectorAll('.tc .att[data-small]')].filter(a => /\d+%/.test(a.textContent) || a.querySelector('.abar')).length,
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -802,6 +811,8 @@ for (const [vp, opt] of VOICE_DAYS.length ? Object.entries(VIEWPORTS) : []) {
       if (st.cards.length !== snap.topics.length || st.visible !== st.cards.length) fail(where, `${st.cards.length} cards (${st.visible} visible), expected ${snap.topics.length}`);
       if (st.h1.length !== 1 || !st.h1[0].includes('のTCG話題まとめ')) fail(where, `h1 ${JSON.stringify(st.h1)}`);
       if (st.links.some(([h, t, r]) => !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(h) || t !== '_blank' || !/nofollow/.test(r) || !/noopener/.test(r))) fail(where, `unsafe X links ${JSON.stringify(st.links.slice(0, 2))}`);
+      const ownX = new Set(snap.topics.map(t => t.reacting_to).filter(Boolean));
+      if (st.players || st.xa.some(([h, k, txt]) => k !== 'reacting' || !txt.startsWith('反応元の公式投稿') || !ownX.has(h))) fail(where, `links players' posts ${JSON.stringify(st.xa.slice(0, 2))}`);
       if (st.shares.some(n => n !== 100)) fail(where, `share labels add up to ${[...new Set(st.shares.filter(n => n !== 100))].join('/')}%`);
       if (st.smallPct) fail(where, `${st.smallPct} small-sample cards show percentages`);
       if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px (${st.wide.join(', ')})`);

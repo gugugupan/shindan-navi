@@ -24,7 +24,7 @@
     "topic": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "game", "title", "summary", "attitude", "share", "volume", "voices", "reacting_to", "posts", "window", "first_seen", "status", "source"],
+      "required": ["id", "game", "title", "summary", "attitude", "share", "volume", "voices", "reacting_to", "window", "first_seen", "status", "source"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$", "description": "Stable across snapshots while the topic continues." },
         "game": { "type": "string", "pattern": "^[A-Z]{2,6}$", "description": "Game code: an /events/ code (OPCG, PTCG, …) or MTG / YGO / DM; list in contracts/voices.md." },
@@ -46,8 +46,7 @@
           "items": { "type": "string", "minLength": 1, "maxLength": 80 },
           "description": "2-3 short paraphrased opinions in our own words, never post text. May be empty when none were paraphrased."
         },
-        "reacting_to": { "oneOf": [{ "$ref": "#/definitions/xpost" }, { "type": "null" }], "description": "Official post the topic reacts to." },
-        "posts": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "$ref": "#/definitions/xpost" } },
+        "reacting_to": { "oneOf": [{ "$ref": "#/definitions/xpost" }, { "type": "null" }], "description": "Official (game / brand account) post the topic reacts to; the only X link a topic carries." },
         "window": { "$ref": "#/definitions/window" },
         "first_seen": { "$ref": "#/definitions/date" },
         "status": { "enum": ["new", "continuing", "cooling"] },
