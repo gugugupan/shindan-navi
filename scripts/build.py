@@ -448,6 +448,7 @@ def render_home():
     keep=['id','date','game','name','pack','thumb']
     home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
+    if VOICES_ENABLED: home['voices']=home_voices()
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
@@ -576,6 +577,15 @@ def voices_data():
     if any(not x['sample'] for x in snaps): snaps=[x for x in snaps if not x['sample']]
     return snaps
 VOICES=voices_data() if VOICES_ENABLED else []
+# the home page's いま話題 block: only the latest real snapshot, only the fields it shows (None: no block)
+VOICE_GAME_INFO=[dict(re.findall(r"(\w+):'([^']*)'",x)) for x in re.findall(r'\{code:[^}]*\}',VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])]
+def home_voices():
+    if not VOICES or VOICES[-1]['sample']: return None
+    s=VOICES[-1]
+    used={t['game'] for t in s['topics']}
+    return {'date':s['date'],
+            'games':[{k:g[k] for k in ('code','name','short','c','cd') if k in g} for g in VOICE_GAME_INFO if g['code'] in used],
+            'topics':[{k:t[k] for k in ('id','game','title','summary','attitude','volume','first_seen')} for t in s['topics']]}
 # sample-only data stays out of search: noindex and no sitemap entry until a real snapshot exists
 VOICES_INDEX=bool(VOICES) and not any(x['sample'] for x in VOICES)
 VOICES_PAGE=dict(path='/voices/',og='voices',

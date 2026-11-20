@@ -43,6 +43,8 @@ const fail = (where, msg) => fails.push(`${where}: ${msg}`);
 const HAS_FEEDBACK = fs.existsSync(path.join(DIST, 'feedback/index.html'));
 // BUILD_EVENTS=0 builds have no /events/ and no tool tabs
 const HAS_EVENTS = fs.existsSync(path.join(DIST, 'events/index.html'));
+// /voices/ and the home page's いま話題 block: VOICES_ENABLED=1 builds only
+const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
 const TURNSTILE_STUB = `window.turnstile={_o:null,_n:0,
   render(el,o){this._o=o;setTimeout(()=>o.callback('tok-'+(++this._n)),0);return 'w1';},
   reset(){window.__tsResets=(window.__tsResets||0)+1;setTimeout(()=>this._o.callback('tok-'+(++this._n)),0);}};
@@ -355,6 +357,106 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   console.log(`  ${where.padEnd(22)} today=${todays.length} events=${hasEvents} api=${api.length}`);
   await ctx.close();
 }
+// / いま話題 (VOICES_ENABLED=1 builds only): the latest snapshot's topics, at most 5 rows and 2 per game unless one game
+// is shown; read only: games from the /voices/ saved filter (tcg.voices), else the /events/ one, kept to games with
+// topics, else all; nothing written. Hidden once the snapshot is more than 7 days old. No API calls without a location.
+for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
+  const where = `${vp} / いま話題`;
+  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  const bad = [], api = [];
+  page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
+  const state = () => page.evaluate(() => {
+    const sec = document.getElementById('vtr');
+    return { shown: !!sec && !sec.hidden && sec.offsetParent !== null, label: sec && document.getElementById(sec.getAttribute('aria-labelledby'))?.textContent,
+      sub: document.getElementById('vtSub')?.textContent, buttons: sec ? sec.querySelectorAll('button').length : 0,
+      rows: [...document.querySelectorAll('#vtBody a.vt')].map(a => a.getAttribute('href').replace('/voices/#t=', '')),
+      asof: document.getElementById('vtAsOf')?.textContent, saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')],
+      oneLine: (() => { const s = document.querySelector('#vtBody .sm'); return s ? getComputedStyle(s).whiteSpace === 'nowrap' : null; })(),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
+  try {
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    const HV = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]).voices);
+    if (!HV) throw new Error('no embedded voices data');
+    const byId = Object.fromEntries(HV.topics.map(t => [t.id, t]));
+    const short = Object.fromEntries(HV.games.map(g => [g.code, g.short || g.name]));
+    const W = { high: 3, mid: 2, low: 1 };
+    const order = ids => ids.every((id, i) => !i || W[byId[ids[i - 1]].volume] > W[byId[id].volume] || (W[byId[ids[i - 1]].volume] === W[byId[id].volume] && byId[ids[i - 1]].first_seen >= byId[id].first_seen));
+    const perGame = ids => Math.max(0, ...Object.values(ids.reduce((m, id) => (m[byId[id].game] = (m[byId[id].game] || 0) + 1, m), {})));
+    const allOk = st => st.sub === 'すべてのタイトル' && st.rows.length === Math.min(5, HV.topics.length) && perGame(st.rows) <= 2 && order(st.rows);
+    // nothing saved: top topics across all games, no controls
+    let st = await state();
+    const [, mm, dd] = HV.date.split('-').map(Number);
+    if (!st.shown || st.label !== 'いま話題') fail(where, `block not shown (${st.label})`);
+    if (st.buttons) fail(where, `${st.buttons} buttons in the read-only block`);
+    if (!allOk(st)) fail(where, `all games: sub "${st.sub}" rows ${st.rows.join(' ')}`);
+    if (st.asof !== `${mm}/${dd} 時点・AI要約`) fail(where, `footer ${st.asof}`);
+    if (opt.width <= 760 && st.oneLine !== true) fail(where, 'summary is not one line on phones');
+    if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
+    await page.locator('#vtr').screenshot({ path: path.join(OUT, `${vp}-home-voices.png`) });
+    // the /events/ games when tcg.voices has none; games without topics dropped
+    const two = HV.games.slice(0, 2).map(g => g.code);
+    const evf = { game: [...two, 'ZZZ'].join(',') };
+    await setStore({ 'tcg.ev.filters': evf });
+    await page.reload({ waitUntil: 'networkidle' });
+    st = await state();
+    if (st.sub !== `${two.map(c => short[c]).join('・')} の話題`) fail(where, `from /events/: sub "${st.sub}"`);
+    if (!st.rows.length || st.rows.some(id => !two.includes(byId[id].game)) || perGame(st.rows) > 2 || !order(st.rows)) fail(where, `from /events/: rows ${st.rows.join(' ')}`);
+    if (st.saved[0] !== null || st.saved[1] !== JSON.stringify(evf)) fail(where, `storage written: ${st.saved}`);
+    // tcg.voices wins over /events/; one game: up to 5 of its topics
+    const one = HV.games.find(g => HV.topics.filter(t => t.game === g.code).length > 2) || HV.games[0];
+    const vf = { game: one.code, view: 'list' };
+    await setStore({ 'tcg.voices': vf, 'tcg.ev.filters': evf });
+    await page.reload({ waitUntil: 'networkidle' });
+    st = await state();
+    const n1 = HV.topics.filter(t => t.game === one.code).length;
+    if (st.sub !== `${short[one.code]} の話題` || st.rows.length !== Math.min(5, n1) || st.rows.some(id => byId[id].game !== one.code) || !order(st.rows)) fail(where, `one game: sub "${st.sub}" rows ${st.rows.join(' ')}`);
+    if (st.saved[0] !== JSON.stringify(vf)) fail(where, `tcg.voices written: ${st.saved[0]}`);
+    // more than 4 games: 4 short names, then ほかN
+    if (HV.games.length > 4) {
+      const codes = HV.games.map(g => g.code);
+      await setStore({ 'tcg.voices': { game: codes.join(',') } });
+      await page.reload({ waitUntil: 'networkidle' });
+      st = await state();
+      if (st.sub !== `${codes.slice(0, 4).map(c => short[c]).join('・')} ほか${codes.length - 4} の話題`) fail(where, `many games: sub "${st.sub}"`);
+    }
+    // saved games none of which has topics now: /events/' games, else all
+    await setStore({ 'tcg.voices': { game: 'ZZZ' }, 'tcg.ev.filters': evf });
+    await page.reload({ waitUntil: 'networkidle' });
+    st = await state();
+    if (st.sub !== `${two.map(c => short[c]).join('・')} の話題`) fail(where, `absent /voices/ games: sub "${st.sub}"`);
+    await setStore({ 'tcg.voices': { game: 'ZZZ' }, 'tcg.ev.filters': { game: 'ZZZ' } });
+    await page.reload({ waitUntil: 'networkidle' });
+    st = await state();
+    if (!allOk(st)) fail(where, `absent games everywhere: sub "${st.sub}" rows ${st.rows.join(' ')}`);
+    if (st.saved[0] !== JSON.stringify({ game: 'ZZZ' })) fail(where, `tcg.voices overwritten: ${st.saved[0]}`);
+    // the row link opens that topic on /voices/
+    const href = await page.locator('#vtBody a.vt').first().getAttribute('href');
+    await page.locator('#vtBody a.vt').first().click();
+    await page.waitForURL(u => u.pathname === '/voices/');
+    await page.waitForFunction(() => document.getElementById('vDlg')?.open);
+    if (await page.evaluate(() => location.hash) !== href.slice('/voices/'.length)) fail(where, `/voices/ hash after the row`);
+    // more than 7 days after the snapshot: no block
+    const stale = await ctx.newPage();
+    await stale.clock.setFixedTime(new Date(Date.parse(`${HV.date}T12:00:00+09:00`) + 8 * 864e5));
+    await stale.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    if (await stale.locator('#vtr').isVisible()) fail(where, 'shown with a snapshot 8 days old');
+    await stale.clock.setFixedTime(new Date(Date.parse(`${HV.date}T12:00:00+09:00`) + 7 * 864e5));
+    await stale.reload({ waitUntil: 'networkidle' });
+    if (!(await stale.locator('#vtr').isVisible())) fail(where, 'hidden with a snapshot 7 days old');
+    await stale.close();
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+  if (api.length) fail(where, `API called: ${api.join(' ')}`);
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} checked`);
+  await ctx.close();
+}
 // /events/ with a stubbed API: today's events in Tokyo. The day view's 今日 returns to the calendar without saving
 // リスト as the default view; phones show the count without opening 絞り込み.
 for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
@@ -412,7 +514,6 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
 // one game is selected, a dot per game on phones) on the right days, the day, game and topic dialogs, the list view,
 // the filters and safe X links; shares that add up to 100%, one freshness line per snapshot, the dialog in the URL hash
 // and the copied topic link, 🆕 only with an older snapshot, one tab stop per day.
-const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
 for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   const where = `${vp} /voices/`;
   const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,

@@ -172,7 +172,23 @@ def check_home(today, head, ov):
     # the location picker is one shared partial (src/locpick.html) on / and /events/
     for f2, want in ((src, events), (open(os.path.join(DIST, 'events/index.html')).read() if events else '', events)):
         if (f2.count('<dialog id="prefDlg"'), f2.count('window.snLoc=')) != ((1, 1) if want else (0, 0)): fail('location picker missing or duplicated on / or /events/')
-    print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events}')
+    # いま話題: with VOICES_ENABLED=1 the latest real snapshot's topics, only the fields the block shows
+    von = os.environ.get('VOICES_ENABLED', '') == '1'
+    real = sorted((json.load(open(x)) for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json'))), key=lambda x: x['date'])
+    real = [x for x in real if not x.get('sample')] if von else []
+    hv = h.get('voices')
+    if ('id="vtr"' in src) != von: fail(f'/: いま話題 block {"missing" if von else "present while VOICES is off"}')
+    if not von or not real:
+        if hv: fail('/: HOME voices data embedded without a real snapshot / VOICES_ENABLED')
+    elif not hv: fail('/: HOME voices data missing')
+    else:
+        last = real[-1]
+        if hv.get('date') != last['date']: fail(f'/: HOME voices date {hv.get("date")} != latest snapshot {last["date"]}')
+        if [t.get('id') for t in hv.get('topics', [])] != [t['id'] for t in last['topics']]: fail('/: HOME voices topics differ from the latest snapshot')
+        keys = {'id', 'game', 'title', 'summary', 'attitude', 'volume', 'first_seen'}
+        if any(set(t) != keys for t in hv.get('topics', [])): fail('/: HOME voices topics carry other fields than the block needs')
+        if {g.get('code') for g in hv.get('games', [])} != {t['game'] for t in last['topics']}: fail('/: HOME voices games differ from the topics\' games')
+    print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events} voices={len(hv["topics"]) if hv else 0}')
 
 
 def check_voices():

@@ -143,6 +143,8 @@ A browser key is public by design; restrictions are what protect it. Owner check
 
 `favorite`, `filter_game`, `filter_favorites`, `switch_view`, `view_item`, `copy_favorites`, `change_theme`, `click_official`.
 
+`/`: `home_location` (`value` = the picked location).
+
 `/feedback/`: `send_feedback` (`kind` only; never the text or the address).
 
 `/voices/`: `voices_filter` (`key` game / att), `switch_view`, `voices_open` (`kind` day / topic), `click_voice_post` (`kind` post / reacting, `game`).

@@ -72,7 +72,9 @@ refuses unknown ones. Add a code there (and here) before writing topics for a ne
   on close); each card has リンクをコピー (`/voices/#t=<id>`).
 - The list view shows every snapshot, newest first, with its topics.
 - The page embeds `{snapshots, counts}` as `const V = …;` (`counts` = release counts per title, for the title colours).
-  `voices_data()` in `scripts/build.py` returns the same snapshots for other pages (the home-page block comes later).
+  `voices_data()` in `scripts/build.py` returns the same snapshots for other pages; the home page's いま話題 block embeds only the latest real snapshot's
+  `{id, game, title, summary, attitude, volume, first_seen}` plus its date and games (`home_voices()`). The block only reads the
+  saved title filters (`tcg.voices`, else `tcg.ev.filters`) and never writes them.
 
 ## Build checks (scripts/build.py)
 
