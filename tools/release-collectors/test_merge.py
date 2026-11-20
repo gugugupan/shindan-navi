@@ -440,10 +440,11 @@ class Archive(MergeCase):
         ancient = {'id': 'iancient000', 'date': '2024-10-01', 'game': OP, 'name': '二年以上前', 'thumb': 'thumbs/anc.jpg', 'changed': '2024-11-01'}
         back = {'id': E1['id'], 'date': '2026-10-01', 'game': OP, 'name': E1['name'], 'thumb': '', 'changed': '2026-11-01'}
         kept = {'id': 'ikept000000', 'date': '2025-06-01', 'game': OP, 'name': '去年の商品', 'thumb': '', 'changed': '2025-07-01'}
-        self.write_data([old, hidden, recent, E1, E2, E3], {hidden['id']: {'hide': True}})
+        self.write_data([old, hidden, recent, E1, E2, E3], {hidden['id']: {'hide': True},
+                                                            'iother00000': {'thumb': 'thumbs/ov.jpg', '_name': '別の商品'}})
         with open(os.path.join(self.data, 'items-archive.json'), 'w') as f:
             json.dump([ancient, back, kept], f, ensure_ascii=False)
-        for name in ('old.jpg', 'anc.jpg'):
+        for name in ('old.jpg', 'anc.jpg', 'ov.jpg'):
             open(os.path.join(self.thumbs, name), 'w').close()
         self.write_source('cardlabo', CLABO)
         self.write_source('torecamap', TORECAMAP)
@@ -460,7 +461,8 @@ class Archive(MergeCase):
         self.assertEqual(archive[1], {'id': old['id'], 'date': old['date'], 'game': OP, 'name': old['name'], 'pack': '220円',
                                       'box': '', 'url': '', 'thumb': 'thumbs/old.jpg', 'approx': False, 'source': old['source'],
                                       'changed': TODAY})
-        self.assertEqual(sorted(os.listdir(self.thumbs)), ['old.jpg'])  # archive thumbs are kept, dropped ones pruned
+        # archive and override thumbs are kept, dropped ones pruned
+        self.assertEqual(sorted(os.listdir(self.thumbs)), ['old.jpg', 'ov.jpg'])
 
 
 class Thumbs(MergeCase):

@@ -94,8 +94,9 @@ for a in ARCHIVE:
     d['archived']=True
     archived.append(d)
 archived.sort(key=lambda d:(d['date'],d['game']))
-# per-item change date for the sitemap (contracts/releases.md › changed); items the updater has not stamped yet: meta.updated
-CHANGED={i['id']:i.get('changed') or UPDATED for i in it+ARCHIVE}
+# per-item change date for the sitemap (contracts/releases.md › changed); items the updater has not stamped yet: meta.updated.
+# A calendar item wins over a stale archive entry with the same id.
+CHANGED={i['id']:i.get('changed') or UPDATED for i in ARCHIVE+it}
 def lastmod(items): return max((CHANGED[d['id']] for d in items),default=UPDATED)
 used={d['game'] for d in data}
 off={k:v for k,v in OFFICIAL.items() if k in used}

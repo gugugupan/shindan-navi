@@ -684,7 +684,9 @@ def update(args, dry, data):
         with open(tmp, 'w') as f:
             json.dump({'updated': today.isoformat()}, f, indent=2)
         os.replace(tmp, os.path.join(data, 'meta.json'))
-        referenced = {i['thumb'].split('/')[-1] for i in items + archive if i.get('thumb')}
+        # overrides count too: an override's thumb can belong to an archived or hidden item (refresh.override_thumbs)
+        referenced = {i['thumb'].split('/')[-1] for i in items + archive + list(overrides.values())
+                      if isinstance(i, dict) and isinstance(i.get('thumb'), str) and i['thumb']}
         for f in os.listdir(THUMBS):
             if f.endswith('.jpg') and f not in referenced:
                 os.remove(os.path.join(THUMBS, f))
