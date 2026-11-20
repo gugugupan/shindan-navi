@@ -51,7 +51,6 @@
 [style*="--gl"]{--g:var(--gl);--gt:color-mix(in oklab,var(--gl) 65%,#000);--gtint:color-mix(in oklab,var(--gl) 12%,var(--surface))}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}}
 :root[data-theme="dark"] [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}
-.chip i,.tag i{background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
 .chip[aria-pressed="true"]{border-color:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)))}
 
 /* month calendar: one grid per week; a chip per game in each day, or bars spanning their days when one game is
@@ -76,6 +75,8 @@
 .vchips{display:flex;flex-wrap:wrap;gap:3px;width:100%}
 .vchip{display:inline-flex;align-items:center;gap:2px;max-width:100%;height:20px;padding:0 5px 0 4px;border:0;border-left:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:5px;background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));font-size:11px;font-weight:700;line-height:1;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)));white-space:nowrap;overflow:hidden}
 .vchip:hover{box-shadow:inset 0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+.vchip .gi,.vbar .gi{--gi:14px}
+.vchip .gi{margin-right:2px}
 .vchip .vn{margin-left:1px;font-family:var(--mono);font-size:10px;color:var(--muted)}
 .vbar{position:relative;z-index:1;align-self:center;margin:0 5px;min-width:0;height:22px;display:flex;align-items:center;gap:5px;padding:0 8px 0 6px;border:0;border-left:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:6px;background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));font-size:12px;line-height:1;text-align:left;color:var(--ink);white-space:nowrap;overflow:hidden}
 .vbar:hover{box-shadow:inset 0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
@@ -210,6 +211,7 @@
 
 <script>
 const V = /*VOICES*/null;
+/*GICON*/
 // c / cd = light / dark colour: the /events/ game palette (CLAUDE.md › Event game palette), MTG / DM / YGO on its
 // slots 14-16 (contracts/voices.md); rel = release-calendar title whose hue colours a game without a pair. build.py
 // reads the codes from this list to check data/voices/.
@@ -357,7 +359,7 @@ function renderControls(){
   const n=c=>cal ? ALL.filter(x=>x.game===c&&inMonth(x,state.month)&&(!state.att||attOf(x)===state.att)).length
     : SNAPS.reduce((t,s)=>t+s.topics.filter(x=>x.game===c&&(!state.att||x.attitude===state.att)).length,0);
   $('games').innerHTML = chip('game','','すべて',!state.game.length,' all') +
-    dataGames.map(c=>`<button class="chip g" style="${gvars(c)}" data-k="game" data-v="${c}" aria-pressed="${state.game.includes(c)}"><i></i>${esc(GAME[c].name)} <em>${n(c)}</em></button>`).join('');
+    dataGames.map(c=>`<button class="chip g" style="${gvars(c)}" data-k="game" data-v="${c}" aria-pressed="${state.game.includes(c)}">${gi(GAME[c].name)}${esc(GAME[c].name)} <em>${n(c)}</em></button>`).join('');
   $('frow').innerHTML = `<span class="fl" aria-hidden="true">反応</span>` + chip('att','','すべて',!state.att,' k') +
     ATTS.map(a=>chip('att',a,`<span class="am a-${a}" aria-hidden="true">${ATT[a].m}</span>${ATT[a].l}`,state.att===a,` k a-${a}`)).join('') +
     (state.att||state.game.length?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
@@ -444,7 +446,7 @@ function card(v, hx='h3'){
   const links=(t.reacting_to?`<a href="${esc(t.reacting_to)}" target="_blank" rel="noopener noreferrer" data-x="reacting">反応元の公式投稿 ↗${ext}</a>`:'')
     + `<span class="lab">関連する投稿 ↗</span>` + t.posts.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-x="post" aria-label="関連する投稿${i+1}をXで見る（外部サイト）">${i+1}</a>`).join('');
   return `<article class="tc" style="${gvars(t.game)}" data-topic="${esc(t.id)}">
-    <div class="tc-top"><span class="tag"><i></i>${esc(g.name)}</span>${badge(v)}<span class="ai">AIによる要約</span></div>
+    <div class="tc-top"><span class="tag">${gi(g.name)}${esc(g.name)}</span>${badge(v)}<span class="ai">AIによる要約</span></div>
     <${hx}>${esc(t.title)}</${hx}>
     <p class="sum">${esc(t.summary)}</p>
     ${attBlock(t)}
@@ -490,7 +492,7 @@ function renderCal(){
       const gs=dayGames(on,k);
       // phones: one dot per game with its tone that day
       const dots=gs.map(g=>`<span class="vg a-${g.a}" style="${gvars(g.c)}" title="${esc(GAME[g.c].name)}：${ATT[g.a].l}"><i></i><em class="am">${ATT[g.a].m}</em></span>`).join('');
-      const chips=bars1?'':`<span class="vchips">${gs.map(g=>`<button class="vchip a-${g.a}" style="${gvars(g.c)}" tabindex="-1" data-day="${k}" data-game="${g.c}" aria-label="${esc(`${md(k)} ${GAME[g.c].name}：話題${g.xs.length}件（${ATT[g.a].l}）`)}">${esc(GAME[g.c].short)}<em class="am" aria-hidden="true">${ATT[g.a].m}</em>${g.xs.length>1?`<span class="vn" aria-hidden="true">${g.xs.length}</span>`:''}</button>`).join('')}</span>`;
+      const chips=bars1?'':`<span class="vchips">${gs.map(g=>`<button class="vchip a-${g.a}" style="${gvars(g.c)}" tabindex="-1" data-day="${k}" data-game="${g.c}" aria-label="${esc(`${md(k)} ${GAME[g.c].name}：話題${g.xs.length}件（${ATT[g.a].l}）`)}">${gi(GAME[g.c].name)}${esc(GAME[g.c].short)}<em class="am" aria-hidden="true">${ATT[g.a].m}</em>${g.xs.length>1?`<span class="vn" aria-hidden="true">${g.xs.length}</span>`:''}</button>`).join('')}</span>`;
       const label=`${md(k)} 話題${on.length}件（${gs.map(g=>GAME[g.c].name).join('・')}）`;
       cells+=`<div class="${cls.join(' ')}" style="grid-column:${i+1}" data-day="${k}"><button class="vdn" data-day="${k}" aria-label="${esc(label)}">${n}</button><span class="vdots" aria-hidden="true">${dots}</span>${chips}${hidden[k]?`<span class="vmore" aria-hidden="true">ほか${hidden[k]}件</span>`:''}</div>`;
     }
@@ -498,7 +500,7 @@ function renderCal(){
       const x=sg.x, v=versionOn(x,sg.s), t=v.t, a=t.attitude, g=GAME[x.game];
       const c0=diffD(ws,sg.s)+1, c1=diffD(ws,sg.e)+2;
       const cl=x.first<ws?' cl':'', cr=x.last>we?' cr':'';
-      bars+=`<button class="vbar a-${a}${cl}${cr}" style="${gvars(x.game)};grid-column:${c0}/${c1};grid-row:${sg.lane+2}" data-topic="${esc(x.id)}" data-day="${sg.s}" tabindex="-1" aria-label="${esc(`${g.name}：${t.title}（${ATT[a].l}・${md(x.first)}〜${md(x.last)}）`)}"><b>${esc(g.short)}</b><em class="am" aria-hidden="true">${ATT[a].m}</em><span class="tt">${esc(t.title)}</span></button>`;
+      bars+=`<button class="vbar a-${a}${cl}${cr}" style="${gvars(x.game)};grid-column:${c0}/${c1};grid-row:${sg.lane+2}" data-topic="${esc(x.id)}" data-day="${sg.s}" tabindex="-1" aria-label="${esc(`${g.name}：${t.title}（${ATT[a].l}・${md(x.first)}〜${md(x.last)}）`)}">${gi(g.name)}<b>${esc(g.short)}</b><em class="am" aria-hidden="true">${ATT[a].m}</em><span class="tt">${esc(t.title)}</span></button>`;
     });
     const rows=bars1?`32px${L?` repeat(${L},26px)`:''} minmax(${Object.keys(hidden).length?24:8}px,1fr)`:'minmax(96px,auto)';
     h+=`<div class="vwk" style="--rows:${rows}">${cells}${bars}</div>`;
@@ -538,7 +540,7 @@ function openDay(k, game){
   const on=gs.filter(g=>!sel||g.c===sel).flatMap(g=>g.xs);
   const hiddenN=ALL.filter(x=>activeOn(x,k)).length-all.length;
   // the game filter inside the dialog: what the calendar chips do, also for keyboards and phones (no chips there)
-  const row=gs.length>1?`<div class="dgames" role="group" aria-label="タイトルで絞り込み">${chip('dgame','','すべて',!sel,' all')}${gs.map(g=>`<button class="chip g" style="${gvars(g.c)}" data-k="dgame" data-v="${g.c}" aria-pressed="${g.c===sel}"><i></i>${esc(GAME[g.c].short)} <em>${g.xs.length}</em></button>`).join('')}</div>`:'';
+  const row=gs.length>1?`<div class="dgames" role="group" aria-label="タイトルで絞り込み">${chip('dgame','','すべて',!sel,' all')}${gs.map(g=>`<button class="chip g" style="${gvars(g.c)}" data-k="dgame" data-v="${g.c}" aria-pressed="${g.c===sel}">${gi(GAME[g.c].name)}${esc(GAME[g.c].short)} <em>${g.xs.length}</em></button>`).join('')}</div>`:'';
   openDlg(sel?`${mdj(k)}の${GAME[sel].name}の話題`:`${mdj(k)}の話題`, row + (on.length?on.map(x=>card(versionOn(x,k))).join(''):'<p class="dl-note">この日の話題はありません。</p>')
     + (sel&&all.length>on.length?`<button class="sbtn ghost" data-allday="${k}">この日のすべての話題を見る（${all.length}件）</button>`:'')
     + (!sel&&hiddenN?`<p class="dl-note">絞り込み条件により、ほか${hiddenN}件を表示していません。</p>`:''));

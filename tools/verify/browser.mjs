@@ -835,6 +835,61 @@ if (HAS_EVENTS) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
+// game icons (gi() in build.py) next to game names in both themes: every one loaded and at its fixed size
+{
+  const GC = ['OPCG', 'UATCG', 'CONAN', 'PTCG'];
+  const ev = i => ({ id: `gi${i}`, name: `E${i}`, game_code: GC[i % 4], game_codes: i % 4 ? [GC[i % 4]] : ['OPCG', 'UATCG'], starts_on: TODAY,
+    time_precision: 'datetime', starts_at: `${TODAY}T21:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'offline',
+    venue: { name: `店 ${i}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
+  const evs = Array.from({ length: 8 }, (_, i) => ev(i));
+  const tmr = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
+  const targets = [['/releases/', '.gi'], ['/', HAS_EVENTS ? '#evBody .gcol h3 .gi' : '.gi']];
+  if (HAS_EVENTS) targets.push(['/events/?pref=JP-13&view=list', '#list .ev .gi']);
+  // phones show dots on the calendar: the day dialog (latest snapshot) has the chips and cards
+  const vday = HAS_VOICES && fs.readdirSync(path.join(ROOT, 'data/voices')).filter(f => /^\d{4}-\d\d-\d\d\.json$/.test(f)).sort().pop()?.slice(0, 10);
+  if (HAS_VOICES) targets.push(['/voices/', '.gi']);
+  for (const [vp, opt] of Object.entries(VIEWPORTS)) for (const scheme of ['light', 'dark']) for (const [p, need] of targets) {
+    const where = `${vp} ${scheme} ${p.split('?')[0]} icons`;
+    const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+      hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', colorScheme: scheme });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [];
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    await page.route('**/api/v1/**', route => {
+      const u = new URL(route.request().url());
+      if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: GC.map(code => ({ code, record_count: 2, complete: true,
+        fetched_at: `${TODAY}T06:00:00+09:00` })), types: [], prefectures: [{ code: 'JP-13', count: 8 }] } });
+      if (u.pathname.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 8, by_game: { OPCG: 2, UATCG: 2, CONAN: 2, PTCG: 2 } },
+        { date: tmr, count: 3, by_game: { OPCG: 1, CONAN: 1, PTCG: 1 } }] } });
+      route.fulfill({ json: { events: u.searchParams.get('from') > TODAY ? [] : evs, next_cursor: null } });
+    });
+    try {
+      await page.goto(`${BASE}${p}${p === '/voices/' && vp === 'mobile' && vday ? `#d=${vday}` : ''}`, { waitUntil: 'networkidle' });
+      if (p === '/') { await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' }))); await page.reload({ waitUntil: 'networkidle' }); }
+      await page.locator(need).first().waitFor({ state: 'attached', timeout: 5000 });
+      if (p === '/' && HAS_EVENTS && !await page.locator('#wkBody a.gc .gi').count()) fail(where, 'no icons in the week event chips');
+      const r = await page.evaluate(() => [...document.querySelectorAll('.gi')].filter(e => e.getClientRects().length).map(e => {
+        const b = e.getBoundingClientRect(), t = e.tagName !== 'IMG' && e.firstChild && document.createRange();
+        if (t) t.selectNodeContents(e); const g = t && t.getBoundingClientRect();
+        // monogram glyph centred in its tile (a flex/inline rule from the label must not override the grid)
+        const off = g ? Math.max(Math.abs(g.left + g.width / 2 - b.left - b.width / 2), Math.abs(g.top + g.height / 2 - b.top - b.height / 2)) : 0;
+        return { disp: getComputedStyle(e).display, off: Math.round(off * 10) / 10, txt: e.textContent, img: e.tagName === 'IMG', src: e.getAttribute('src'), ok: e.tagName !== 'IMG' || (e.complete && e.naturalWidth > 0),
+          w: b.width, h: b.height, aria: e.getAttribute('aria-hidden'), alt: e.getAttribute('alt') }; }));
+      if (!r.length) fail(where, 'no visible game icons');
+      const broken = r.filter(x => !x.ok), size = r.filter(x => x.w < 13 || x.w > 17 || x.h !== x.w), a11y = r.filter(x => x.aria !== 'true' || (x.img && x.alt !== ''));
+      if (broken.length) fail(where, `broken icons ${[...new Set(broken.map(x => x.src))].join(' ')}`);
+      if (size.length) fail(where, `icon size ${JSON.stringify(size[0])}`);
+      if (a11y.length) fail(where, 'icons not decorative (aria-hidden / alt)');
+      const off = r.filter(x => !x.img && (x.disp !== 'inline-grid' && x.disp !== 'grid' || x.off > 1.5));
+      if (off.length) fail(where, `monogram not centred ${JSON.stringify(off[0])}`);
+      await page.screenshot({ path: path.join(OUT, `icons-${vp}-${scheme}-${p.split('?')[0].replace(/\//g, '') || 'home'}.png`), fullPage: true });
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
+}
 await browser.close();
 server.close();
 for (const f of fails) console.log('FAIL', f);
