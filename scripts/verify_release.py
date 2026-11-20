@@ -96,19 +96,24 @@ def check_data(base, today):
         if d: changed.append((b[k], d))
 
     # `changed` (contracts/releases.md): a date no later than the data update; a merge run moves it for every new item
-    # and every item whose shown fields changed
+    # and every item whose shown fields changed. A branch may hold merge runs of several days (a rerun the next day
+    # compares against the previous run's commit), so an item changed since the base carries a date from base's
+    # update on, not necessarily the last run's.
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     old_meta = git_json(base, 'data/meta.json')
+    merged = meta['updated'] != old_meta['updated']
     stale = []
     for i in head:
         c = i.get('changed')
         if c is not None and not (isinstance(c, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', c) and c <= meta['updated']):
             fail(f'data: {i["id"]} changed {c!r} is not a date on or before meta.updated {meta["updated"]}')
-        if (i['id'] not in a or shown(a[i['id']]) != shown(i)) and i.get('changed', meta['updated']) != meta['updated']:
-            stale.append(i)
+        if i['id'] not in a or shown(a[i['id']]) != shown(i):
+            c = i.get('changed', meta['updated'])
+            if (c < old_meta['updated']) if merged else (c != meta['updated']):
+                stale.append(i)
     for i in stale:
         msg = f'data: {i["id"]} {i["name"]} is new or changed but its changed date is {i.get("changed")}'
-        if meta['updated'] != old_meta['updated']: fail(msg + f' (merge ran on {meta["updated"]})')
+        if merged: fail(msg + f' (merge runs since {base}\'s {old_meta["updated"]}, last on {meta["updated"]})')
         else: warn(msg + ' (items.json edited without a merge run: its sitemap lastmod stays old)')
 
     print(f'## data vs {base}: {len(old)} -> {len(head)} items, +{len(added)} / -{len(removed)} / ~{len(changed)}')
