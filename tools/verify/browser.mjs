@@ -264,7 +264,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
   page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
   // Stub API. Default: 7 OPCG events today, /days without by_game (the page then groups the list itself).
-  // scenario 'busy': 50 OPCG events fill the first page; PTCG's 3 come only on the cursor page.
+  // scenario 'busy': 50 OPCG events fill the first page; PTCG's 3 come only on the cursor page. by_game_type: OPCG has
+  // four named types and untyped ones (2 named + ほか), PTCG two (both named).
   // scenario 'many': seven games today; the five busiest get columns, the other two chips.
   let scenario = 'plain';
   const MANY = { GCG: 9, OPCG: 8, PTCG: 7, DCG: 6, BS: 5, UATCG: 2, DBFW: 1 };
@@ -277,13 +278,15 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [],
       loc_counts: { months: [TODAY.slice(0, 7)], types: ['x'], rows: { 'JP-13': [1, 0, 0, 3, 4], 'JP-27': [8, 0, 0, 1, 1] } } } });
     if (scenario === 'busy') {
-      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 53, by_game: { OPCG: 50, PTCG: 3 } },
+      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 53, by_game: { OPCG: 50, PTCG: 3 },
+        by_game_type: { OPCG: { '': 2, flagship_battle: 12, meetup: 5, other: 1, standard_battle: 30 }, PTCG: { city_league: 1, gym_battle: 2 } } },
         { date: WEEK1, count: 4, by_game: { UATCG: 1, CONAN: 3 } }] } });
       return route.fulfill({ json: u.searchParams.get('cursor') ? { events: [0, 1, 2].map(i => evt(i, 'PTCG', 20)), next_cursor: null }
         : { events: Array.from({ length: 50 }, (_, i) => evt(i, 'OPCG', 10 + (i % 9))), next_cursor: 'c1' } });
     }
     if (scenario === 'many') {
-      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 38, by_game: MANY }] } });
+      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 38, by_game: MANY,
+        by_game_type: Object.fromEntries(Object.entries(MANY).map(([c, n]) => [c, { standard_battle: n }])) }] } });
       return route.fulfill({ json: { events: Object.entries(MANY).flatMap(([code, n]) => Array.from({ length: n }, (_, i) => evt(i, code, 13 + (i % 6)))), next_cursor: null } });
     }
     const body = u.pathname.endsWith('/days') ? { days: [{ date: TODAY, count: 7 }] }
@@ -321,8 +324,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const want = [`/api/v1/events/days?from=${ym}-01&until=${next}&game=OPCG&pref=JP-13`, `/api/v1/events?from=${TODAY}&until=${next}&game=OPCG&pref=JP-13&limit=50`];
     if (JSON.stringify([...api].sort()) !== JSON.stringify(want.sort())) fail(where, `API requests ${api.join(' ')}`);
     const ev = await page.evaluate(() => ({ rows: document.querySelectorAll('#evBody .ev').length, more: document.querySelector('#evBody a.go')?.getAttribute('href'),
-      cols: document.querySelectorAll('#evBody .gcol').length, where: document.getElementById('evWhere').textContent }));
+      cols: document.querySelectorAll('#evBody .gcol').length, types: document.querySelectorAll('#evBody .ty').length, where: document.getElementById('evWhere').textContent }));
     if (ev.cols !== 1 || ev.rows !== 5) fail(where, `today's events show ${ev.cols} columns / ${ev.rows} rows`);
+    // /days without by_game_type (answers cached before it existed): no type line
+    if (ev.types) fail(where, `${ev.types} type lines without by_game_type`);
     if (ev.more !== `/events/?game=OPCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `day view link ${ev.more}`);
     if (!ev.where.startsWith('東京都')) fail(where, `location ${ev.where}`);
 
@@ -347,16 +352,21 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.reload({ waitUntil: 'networkidle' });
     const busy = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelectorAll('.ev').length,
       c.querySelector('a.go')?.textContent]), chips: [...document.querySelectorAll('#wkBody .wd')][0].querySelectorAll('a.gc').length,
+      types: [...document.querySelectorAll('#evBody .gcol')].map(c => c.querySelector('.ty')?.textContent || null),
+      tyLine: (() => { const t = document.querySelector('#evBody .gcol .ty'); return t ? { nowrap: getComputedStyle(t).whiteSpace === 'nowrap', h: t.getBoundingClientRect().height } : null; })(),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     if (JSON.stringify(busy.cols) !== JSON.stringify([['ONE PIECE', 5, 'ほか 45件 ›'], ['ポケモンカード', 3, '地図で見る ›']])) fail(where, `busy columns ${JSON.stringify(busy.cols)}`);
     if (api.length !== 3 || !api.some(a => a.includes('cursor=c1'))) fail(where, `busy: API requests ${api.join(' ')}`);
     if (busy.chips !== 2) fail(where, `tomorrow shows ${busy.chips} game chips`);
+    if (JSON.stringify(busy.types) !== JSON.stringify(['スタンダードバトル 30件・フラッグシップバトル 12件・ほか 8件', 'ジムバトル 2件・シティリーグ 1件'])) fail(where, `busy: type lines ${JSON.stringify(busy.types)}`);
+    if (opt.width <= 760 && !(busy.tyLine && busy.tyLine.nowrap && busy.tyLine.h < 24)) fail(where, `busy: type line not one line on phones ${JSON.stringify(busy.tyLine)}`);
     if (busy.overflow > 1) fail(where, `busy: page scrolls horizontally by ${busy.overflow}px`);
     await page.screenshot({ path: path.join(OUT, `${vp}-home-busy.png`), fullPage: true });
 
     scenario = 'many'; api.length = 0;
     await page.reload({ waitUntil: 'networkidle' });
     const many = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => c.getAttribute('aria-label')),
+      types: document.querySelectorAll('#evBody .ty').length,
       rest: [...document.querySelectorAll('#evBody .gmore a.gc')].map(a => [a.textContent, a.getAttribute('href')]),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     if (JSON.stringify(many.cols) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ガンダム', 'バトルスピリッツ', 'デジモン'])) fail(where, `many: columns ${JSON.stringify(many.cols)}`);
@@ -364,6 +374,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       ['DBフュージョンワールド1', `/events/?game=DBFW&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`]])) fail(where, `many: other titles ${JSON.stringify(many.rest)}`);
     if (api.length !== 2) fail(where, `many: API requests ${api.join(' ')}`);
     if (many.overflow > 1) fail(where, `many: page scrolls horizontally by ${many.overflow}px`);
+    // a type line per column; the ほかのタイトル chips carry totals only (checked above)
+    if (many.types !== 5) fail(where, `many: ${many.types} type lines for 5 columns`);
     await page.screenshot({ path: path.join(OUT, `${vp}-home-many.png`), fullPage: true });
   }
   await page.screenshot({ path: path.join(OUT, `${vp}-home.png`), fullPage: true });
@@ -474,6 +486,152 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     await stale.close();
   } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
   if (api.length) fail(where, `API called: ${api.join(' ')}`);
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} checked`);
+  await ctx.close();
+}
+// / 明日・今週の予定 follows the saved titles (tcg.voices with VOICES builds, else /events/' game filter; read only):
+// releases and event chips of those titles, a すべて表示 toggle for the visit, and every title with a note when the
+// chosen ones have nothing this week. Same 2 API requests as without the filter.
+for (const [vp, opt] of Object.entries(VIEWPORTS)) {
+  const where = `${vp} / week filter`;
+  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  const bad = [], api = [];
+  page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
+  // tomorrow: OPCG 2 + PTCG 1 events, the day after: PTCG 4; the saved game filter applies as on the API
+  const WEEK2 = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 2 * 864e5).toISOString().slice(0, 10);
+  await page.route('**/api/v1/**', route => {
+    const u = new URL(route.request().url()), gf = (u.searchParams.get('game') || '').split(',').filter(Boolean);
+    if (!u.pathname.endsWith('/days')) return route.fulfill({ json: { events: [], next_cursor: null } });
+    const days = [[WEEK1, { OPCG: 2, PTCG: 1 }], [WEEK2, { PTCG: 4 }]].map(([date, bg]) => {
+      const by_game = Object.fromEntries(Object.entries(bg).filter(([g]) => !gf.length || gf.includes(g)));
+      return { date, count: Object.values(by_game).reduce((a, b) => a + b, 0), by_game };
+    }).filter(d => d.count);
+    route.fulfill({ json: { days } });
+  });
+  const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
+  const state = () => page.evaluate(() => {
+    const f = document.getElementById('wkF');
+    return { shown: !f.hidden, text: f.textContent, btn: f.querySelector('button')?.textContent || null, controls: f.querySelector('button')?.getAttribute('aria-controls') || null,
+      rels: [...document.querySelectorAll('#wkBody a[href^="/releases/#i="]')].map(a => a.getAttribute('title').split(' / ')[0]),
+      chips: [...document.querySelectorAll('#wkBody a.gc:not(.any)')].map(a => a.getAttribute('title').split('・')[0]),
+      others: [...document.querySelectorAll('#wkBody .rl')].filter(a => a.textContent.includes('ほか')).length,
+      days: [...document.querySelectorAll('#wkBody .wd')].map(w => ({ q: w.querySelector('.q')?.textContent || null,
+        rl: [...w.querySelectorAll('.rl')].map(a => [a.textContent, a.getAttribute('href')]), any: [...w.querySelectorAll('a.gc.any')].map(a => a.getAttribute('href')) })),
+      saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')],
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  try {
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    const H = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]));
+    if (!H.titles || !H.titles.OPCG) throw new Error('no embedded title map');
+    const week = Array.from({ length: 6 }, (_, i) => new Date(Date.parse(`${TODAY}T00:00:00Z`) + (i + 1) * 864e5).toISOString().slice(0, 10));
+    const inWeek = H.items.filter(x => week.includes(x.date) && x.date >= H.from && x.date <= H.until);
+    const shown = games => week.reduce((n, d) => n + Math.min(3, inWeek.filter(x => x.date === d && (!games || games.includes(x.game))).length), 0);
+    const EVC = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG'];
+    // a title with releases this week (an /events/ game, so the /events/ filter can hold it too)
+    const code = EVC.find(c => inWeek.some(x => x.game === H.titles[c]));
+    // a title with nothing this week: no releases, no stubbed events
+    const none = EVC.find(c => c !== 'OPCG' && c !== 'PTCG' && !inWeek.some(x => x.game === H.titles[c]));
+    const short = c => ({ OPCG: 'ワンピ', UATCG: 'ユニアリ', CONAN: 'コナン', PTCG: 'ポケカ', GCG: 'ガンダム', DBFW: 'フュージョンワールド', BS: 'バトスピ', DCG: 'デジカ' })[c];
+    // nothing saved: every title, no sub-line
+    await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
+    await page.reload({ waitUntil: 'networkidle' });
+    let st = await state();
+    const all = st.rels.length;
+    if (st.shown) fail(where, `sub-line without a selection: ${st.text}`);
+    if (all !== shown(null)) fail(where, `all titles: ${all} releases listed, data has ${shown(null)}`);
+    if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ポケモンカード'])) fail(where, `all titles: chips ${st.chips}`);
+    if (!code) console.log(`  ${where.padEnd(22)} no /events/ title with releases this week: filter checks skipped`);
+    else {
+      const name = H.titles[code];
+      const dayRange = d => `range=custom&from=${d}&to=${d}`;
+      const filtered = async (label, evGame) => {
+        st = await state();
+        if (!st.shown || st.text !== `選択中のタイトルのみ（${short(code)}）すべて表示` || st.btn !== 'すべて表示' || st.controls !== 'wkBody') fail(where, `${label}: sub-line "${st.text}" ${st.controls}`);
+        if (st.rels.length !== shown([name]) || st.rels.some(g => g !== name)) fail(where, `${label}: releases ${st.rels}`);
+        if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(code === 'OPCG' ? ['ONE PIECE'] : code === 'PTCG' ? ['ポケモンカード', 'ポケモンカード'] : [])) fail(where, `${label}: chips ${st.chips}`);
+        // the day after tomorrow: nothing of the chosen title, only other titles' events (when /events/' filter lets them through)
+        if (HAS_EVENTS && code !== 'PTCG' && !inWeek.some(x => x.date === WEEK2 && x.game === name)) {
+          const d2 = st.days[1], others = evGame.includes('PTCG') ? 4 : 0;
+          const want = others ? [[`ほかのタイトルのイベント ${others}件 ›`, `/events/?game=${evGame}&pref=JP-13&${dayRange(WEEK2)}`]] : [];
+          if (d2.q !== '選択中のタイトルの予定なし' || JSON.stringify(d2.rl.filter(r => r[0].includes('イベント'))) !== JSON.stringify(want)) fail(where, `${label}: ${WEEK2} ${JSON.stringify(d2)}`);
+        }
+        if (inWeek.some(x => x.game !== name) && !st.others) fail(where, `${label}: other titles' releases not mentioned`);
+        if (st.overflow > 1) fail(where, `${label}: page scrolls horizontally by ${st.overflow}px`);
+      };
+      // from /events/' saved game filter
+      const evf = { pref: 'JP-13', game: code };
+      await setStore({ 'tcg.ev.filters': evf });
+      await page.reload({ waitUntil: 'networkidle' });
+      await filtered('from /events/', code);
+      // tcg.voices wins over /events/ (VOICES builds); /events/' game left out of it here
+      if (HAS_VOICES) {
+        const evGame = code === 'PTCG' ? 'OPCG,PTCG' : `${code},PTCG`;
+        await setStore({ 'tcg.voices': { game: code }, 'tcg.ev.filters': { pref: 'JP-13', game: evGame } });
+        await page.reload({ waitUntil: 'networkidle' });
+        await filtered('from /voices/', evGame);
+      }
+      await page.locator('#wkF').screenshot({ path: path.join(OUT, `${vp}-home-week-sub.png`) });
+      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-filtered.png`) });
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-filtered-dark.png`) });
+      await page.emulateMedia({ colorScheme: 'light' });
+      // すべて表示: every title for this visit, nothing saved; and back
+      const before = (await state()).saved;
+      await page.locator('#wkAll').click();
+      st = await state();
+      if (st.rels.length !== all || st.btn !== '選択中のタイトルのみ' || !st.text.startsWith('すべてのタイトルを表示中')) fail(where, `すべて表示: ${st.rels.length} releases, "${st.text}"`);
+      if (await page.evaluate(() => document.activeElement?.id) !== 'wkAll') fail(where, 'focus lost after すべて表示');
+      if (JSON.stringify(st.saved) !== JSON.stringify(before)) fail(where, `storage written: ${st.saved}`);
+      await page.locator('#wkAll').click();
+      st = await state();
+      if (st.rels.length !== shown([name]) || st.btn !== 'すべて表示') fail(where, `back to the selection: ${st.rels.length} releases, "${st.text}"`);
+      await page.reload({ waitUntil: 'networkidle' });
+      if ((await state()).btn !== 'すべて表示') fail(where, 'すべて表示 kept after a reload');
+    }
+    // the chosen titles have nothing this week: every title, with a note and no toggle
+    if (none) {
+      await setStore({ 'tcg.ev.filters': { pref: 'JP-13', game: none } });
+      await page.reload({ waitUntil: 'networkidle' });
+      st = await state();
+      if (!st.shown || st.text !== `選択中のタイトル（${short(none)}）の予定はありません。すべてのタイトルを表示しています。` || st.btn) fail(where, `empty after the filter: "${st.text}"`);
+      if (st.rels.length !== all) fail(where, `empty after the filter: ${st.rels.length} releases, want ${all}`);
+      if (st.saved[1] !== JSON.stringify({ pref: 'JP-13', game: none })) fail(where, `storage written: ${st.saved}`);
+      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-empty.png`) });
+    }
+    // next month's days (no counts): one chosen /events/ game opens its day view, two keep the saved filter
+    const end = new Date(Date.UTC(+TODAY.slice(0, 4), +TODAY.slice(5, 7), 0)).toISOString().slice(0, 10);
+    const next = Array.from({ length: 6 }, (_, i) => new Date(Date.parse(`${end}T00:00:00Z`) + (i + 1) * 864e5).toISOString().slice(0, 10));
+    const code2 = EVC.find(c => H.items.some(x => next.includes(x.date) && x.date <= H.until && x.game === H.titles[c]));
+    if (HAS_EVENTS && HAS_VOICES && code2) {
+      const p2 = await ctx.newPage();
+      await p2.clock.setFixedTime(new Date(`${end}T12:00:00+09:00`));
+      await p2.route('**/api/v1/**', r => r.fulfill({ json: { days: [], events: [], next_cursor: null } }));
+      for (const [g, want] of [[code2, `game=${code2}&`], [[code2, code2 === 'PTCG' ? 'OPCG' : 'PTCG'].join(','), null]]) {
+        await p2.goto(`${BASE}/`, { waitUntil: 'load' });
+        await p2.evaluate(g => { localStorage.clear(); localStorage.setItem('tcg.voices', JSON.stringify({ game: g })); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); }, g);
+        await p2.reload({ waitUntil: 'networkidle' });
+        const links = await p2.evaluate(() => [...document.querySelectorAll('#wkBody a.gc.any')].map(a => a.getAttribute('href')));
+        if (!links.length || links.some(h => want ? !h.startsWith(`/events/?${want}pref=JP-13&range=custom`) : h.includes('game='))) fail(where, `next month, ${g}: ${links.join(' ')}`);
+      }
+      await p2.close();
+    }
+    // no location, selection only: releases filtered, no API call
+    if (code) {
+      api.length = 0;
+      await setStore({ 'tcg.ev.filters': { game: code } });
+      await page.reload({ waitUntil: 'networkidle' });
+      st = await state();
+      if (st.rels.some(g => g !== H.titles[code]) || !st.shown) fail(where, `no location: releases ${st.rels}`);
+      if (api.length) fail(where, `API called without a location: ${api.join(' ')}`);
+    }
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
   for (const b of [...new Set(bad)]) fail(where, b);
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();

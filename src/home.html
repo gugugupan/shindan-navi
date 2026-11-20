@@ -7,6 +7,7 @@
   The location is the /events/ saved filter's (src/locpick.html), so changing it here changes it there.
   いま話題 (VOICES parts, VOICES_ENABLED on): the latest /voices/ snapshot embedded as H.voices, no requests; it only
   reads the /voices/ and /events/ saved game filters (changed on /voices/), never writes them.
+  明日・今週の予定 follows the same saved game filters (read only; すべて表示 lasts for the visit).
 -->
 <title>今日発売のTCG・トレカ新弾とイベント｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
@@ -45,6 +46,8 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .gcol h3 .c{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
 .gcol h3 .c b{font-family:var(--mono);color:var(--ink);font-size:13px}
 .gcol .more{align-self:flex-start;font-size:12.5px;padding:3px 10px}
+.gcol .ty{margin:-2px 2px 0;font-size:12px;line-height:1.4;color:var(--muted)}
+.gcol .ty b{font-family:var(--mono);font-weight:700;color:var(--ink)}
 .gcol .q{margin:2px;font-size:12px;color:var(--muted)}
 .evs{list-style:none;margin:0;padding:0;display:grid;gap:5px}
 .ev{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;background:var(--surface);border-radius:8px;padding:7px 9px}
@@ -83,6 +86,10 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .wd .rl{align-self:flex-start;font-size:11.5px;font-weight:700;color:var(--accent);text-decoration:none}
 .wd .rl b{font-family:var(--mono)}
 .wd .rl:hover{text-decoration:underline}
+.wd .rl .ot{font-weight:400;color:var(--muted)}
+.wkf{margin-top:-4px;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
+.wkf[hidden]{display:none}
+.wkf button{font:inherit;font-weight:700;color:var(--accent);background:none;border:0;padding:2px 0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .gcs{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
 .gcs.gmore{align-items:center;margin-top:8px}
 .gmore .lab{font-size:12px;color:var(--muted);margin-right:2px}
@@ -124,6 +131,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
   .vt .gm{min-width:0}
   .vt .sm{display:block;white-space:nowrap;text-overflow:ellipsis}
   .gcols{grid-template-columns:minmax(0,1fr)}
+  .gcol .ty{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wk{grid-template-columns:minmax(0,1fr)}
   .wd{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 10px;align-items:start}
   .wd h3{grid-row:1/span 4;flex-direction:column;align-items:center;gap:2px;font-size:16px}
@@ -162,6 +170,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 <!--/VOICES-->
     <section class="blk" aria-labelledby="wkH">
       <div class="blk-h"><h2 id="wkH">明日・今週の予定</h2><span class="sub" id="wkSub"></span></div>
+      <p class="hint wkf" id="wkF" hidden></p>
       <div class="wk" id="wkBody"></div>
     </section>
   </main>
@@ -276,7 +285,7 @@ function q(f,extra){
 const dayLink = (f,d,game) => '/events/?'+q(game?{...f,game}:f,{tail:{range:'custom',from:d,to:d}});
 const monthLink = f => '/events/?'+q(f,{});
 const SHOW = n => n<=2 ? 5 : 3; // events listed per game column for n columns
-let evF=null, evKey=null, ev=null; // ev: {loading} | {error} | {counts, byGame, list}
+let evF=null, evKey=null, ev=null; // ev: {loading} | {error} | {counts, byGame, byGameType, list}
 async function api(path,query){
   const r=await fetch(`${API_BASE}${path}${query?'?'+query:''}`,{headers:{accept:'application/json'}});
   let body=null; try{ body=await r.json(); }catch(e){}
@@ -318,7 +327,8 @@ async function loadEvents(force){
       api('/events',q(f,{api:{from:TODAY,until:next},tail:{limit:50}}))]);
     if(key!==evKey) return;
     const ds=days.days||[];
-    ev={counts:Object.fromEntries(ds.map(d=>[d.date,d.count])), byGame:Object.fromEntries(ds.filter(d=>d.by_game).map(d=>[d.date,d.by_game])), list:page.events||[]};
+    ev={counts:Object.fromEntries(ds.map(d=>[d.date,d.count])), byGame:Object.fromEntries(ds.filter(d=>d.by_game).map(d=>[d.date,d.by_game])),
+      byGameType:Object.fromEntries(ds.filter(d=>d.by_game_type).map(d=>[d.date,d.by_game_type])), list:page.events||[]};
     renderEv(); renderWeek();
     // The page runs in start order across all games, so a busy game can fill it before the others start: one more
     // page (the /events/ list's second, same key) when a column would show fewer than it could.
@@ -347,6 +357,19 @@ function evRow(e,col){
   const st = e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st">延期</span>' : '';
   const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="${gvars(x)}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
   return `<li class="ev${e.event_status==='cancelled'?' off':started(e)?' done':''}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
+}
+// A column's types today, busiest first: up to 3 named, else 2 and ほか (no type, その他 and unknown codes go to ほか).
+// None when /days has no by_game_type (answers cached before it existed).
+const TYPES = H.types||{};
+function typeLine(code){
+  const bt=(ev.byGameType[TODAY]||{})[code];
+  if(!bt) return '';
+  const named=Object.entries(bt).filter(([t])=>TYPES[t]&&t!=='other').sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1));
+  const total=Object.values(bt).reduce((a,b)=>a+b,0);
+  const show=named.length<=3&&named.reduce((a,x)=>a+x[1],0)===total ? named : named.slice(0,2);
+  const rest=total-show.reduce((a,x)=>a+x[1],0);
+  const parts=show.map(([t,n])=>`${esc(TYPES[t])} <b>${n}</b>件`).concat(rest?[`ほか <b>${rest}</b>件`]:[]);
+  return show.length ? `<p class="ty" title="${parts.join('・').replace(/<\/?b>/g,'')}">${parts.join('・')}</p>` : '';
 }
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 function renderEv(){
@@ -380,37 +403,76 @@ function renderEv(){
     const list = rows.length ? `<ul class="evs">${rows.map(e=>evRow(e,g.code)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件 ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${list}${more}</section>`;
+    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${typeLine(g.code)}${list}${more}</section>`;
   }).join('')}</div>${others}`;
+}
+
+// The player's titles, read only: the /voices/ saved title filter (tcg.voices; VOICES builds), else the /events/ one;
+// codes failing ok are dropped, and a filter left with none falls through. [] = all titles.
+function savedGames(ok){
+  for(const k of $('vtr')?['tcg.voices',SAVED_KEY]:[SAVED_KEY]){
+    const s=store.get(k,null), codes=s&&typeof s.game==='string'?s.game.split(',').filter(ok):[];
+    if(codes.length) return codes;
+  }
+  return [];
 }
 
 // ---- tomorrow and the rest of the week: releases, and with a location the events per game (this month's /days only;
 // later days link to the day view without a count, no extra request)
+const TITLES = H.titles||{}; // code -> release / event display name
+let wkAll=false; // すべて表示: this visit only, nothing saved
+const shortList = codes => codes.slice(0,4).map(c=>SHORT[TITLES[c]]||TITLES[c]).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
+// one day; sel = the codes to keep (null: all). has = something of the kept titles to show.
+function wkDay(d,i,f,sel,ym){
+  const w=dowOf(d), all=covered(d)?relsOn(d):null, keep=x=>!sel||sel.includes(x);
+  const names=sel&&new Set(sel.map(c=>TITLES[c]));
+  const its=all&&(sel?all.filter(x=>names.has(x.game)):all), rel=its&&its.length, hidden=all?all.length-its.length:0;
+  const known = f&&f.pref&&ev&&ev.counts && d.slice(0,7)===ym;
+  const bg = known ? ev.byGame[d]||{} : null, total = known ? ev.counts[d]||0 : 0;
+  // later days (next month, no counts): one chosen /events/ game opens its day view, several the saved filter's
+  const evSel=sel?sel.filter(c=>EVG[c]):[], one=evSel.length===1?evSel[0]:'';
+  let chips='', gs=[], anyChip=false;
+  if(known){
+    gs=EV_GAMES.filter(g=>bg[g.code]>0&&keep(g.code));
+    // /days without by_game: one chip for the day, whatever the titles
+    anyChip=!gs.length&&!!total&&!ev.byGame[d];
+    chips = gs.length ? gs.map(g=>`<a class="gc" style="${gvars(g)}" href="${esc(dayLink(f,d,g.code))}" title="${esc(g.name)}・${bg[g.code]}件"><span>${gi(g.name)}${esc(rel?g.short:g.name)}</span><b>${bg[g.code]}</b></a>`).join('')
+      : anyChip ? `<a class="gc any" href="${esc(dayLink(f,d))}">イベント <b>${total}</b></a>` : '';
+  } else if(f&&f.pref&&!(ev&&ev.loading)) chips=`<a class="gc any" href="${esc(dayLink(f,d,one))}">イベント ›</a>`;
+  let top, evs=[];
+  if(all==null) top='<p class="q">発売情報は新弾カレンダーで</p>';
+  else if(rel) top=`<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}">${gi(x.game)}<span class="gl">${esc(SHORT[x.game]||x.game)}</span>${esc(x.name)}</a></li>`).join('')}</ul><a class="rl" href="/releases/#d=${d}">発売 <b>${its.length}</b>件${hidden?`<span class="ot">（ほか${hidden}）</span>`:''} ›</a>`;
+  else {
+    // no releases: a few of the day's events when the loaded pages reach it (start order), else just the counts
+    evs = known ? ev.list.filter(e=>e.starts_on===d&&codesOf(e).some(keep)).sort((a,b)=>dayRank(a)-dayRank(b)).slice(0,2) : [];
+    // filtered: what the other titles have that day (shared events may count under a kept game too)
+    const otherEv = sel&&known&&ev.byGame[d]&&!gs.length ? Math.max(0,total-gs.reduce((a,g)=>a+bg[g.code],0)) : 0;
+    const ot = (hidden ? `<a class="rl" href="/releases/#d=${d}">ほかのタイトルの発売 <b>${hidden}</b>件 ›</a>` : '')
+      + (otherEv ? `<a class="rl" href="${esc(dayLink(f,d))}">ほかのタイトルのイベント <b>${otherEv}</b>件 ›</a>` : '');
+    top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>${ot}`
+      : chips ? ot : `<p class="q">${sel&&known?'選択中のタイトルの予定なし':sel?'選択中のタイトルの発売なし':known?'発売・イベントなし':'発売なし'}</p>${ot}`;
+  }
+  return {has:!!rel||gs.length>0||evs.length>0||(anyChip&&!sel),
+    html:`<div class="wd${all&&!rel&&chips?' norel':''}"><h3>${+d.slice(5,7)}/${+d.slice(8)}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${i===0?'<span class="lb">明日</span>':''}</h3>${top}${chips?`<div class="gcs">${chips}</div>`:''}</div>`};
+}
 function renderWeek(){
   const f=EVENTS?(evF||evFilters()):null, ym=TODAY.slice(0,7);
-  const evOk = f&&f.pref&&ev&&ev.counts;
+  const codes=savedGames(c=>TITLES[c]), sel=Object.keys(TITLES).filter(c=>codes.includes(c));
   $('wkSub').textContent = `${md(WEEK[0])}〜${md(WEEK[WEEK.length-1])}`;
-  $('wkBody').innerHTML = WEEK.map((d,i)=>{
-    const w=dowOf(d), its=covered(d)?relsOn(d):null, rel=its&&its.length;
-    const known = evOk && d.slice(0,7)===ym;
-    const bg = known ? ev.byGame[d]||{} : null, total = known ? ev.counts[d]||0 : 0;
-    let chips='';
-    if(f&&f.pref&&known){
-      const gs=EV_GAMES.filter(g=>bg[g.code]>0);
-      chips = gs.length ? gs.map(g=>`<a class="gc" style="${gvars(g)}" href="${esc(dayLink(f,d,g.code))}" title="${esc(g.name)}・${bg[g.code]}件"><span>${gi(g.name)}${esc(rel?g.short:g.name)}</span><b>${bg[g.code]}</b></a>`).join('')
-        : total ? `<a class="gc any" href="${esc(dayLink(f,d))}">イベント <b>${total}</b></a>` : '';
-    } else if(f&&f.pref&&!(ev&&ev.loading)) chips=`<a class="gc any" href="${esc(dayLink(f,d))}">イベント ›</a>`;
-    let top;
-    if(its==null) top='<p class="q">発売情報は新弾カレンダーで</p>';
-    else if(rel) top=`<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}">${gi(x.game)}<span class="gl">${esc(SHORT[x.game]||x.game)}</span>${esc(x.name)}</a></li>`).join('')}</ul><a class="rl" href="/releases/#d=${d}">発売 <b>${its.length}</b>件 ›</a>`;
-    else {
-      // no releases: a few of the day's events when the loaded pages reach it (start order), else just the counts
-      const evs = known ? ev.list.filter(e=>e.starts_on===d).sort((a,b)=>dayRank(a)-dayRank(b)).slice(0,2) : [];
-      top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e)[0]]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>`
-        : chips ? '' : `<p class="q">${f&&f.pref&&known?'発売・イベントなし':'発売なし'}</p>`;
-    }
-    return `<div class="wd${its&&!rel&&chips?' norel':''}"><h3>${+d.slice(5,7)}/${+d.slice(8)}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${i===0?'<span class="lb">明日</span>':''}</h3>${top}${chips?`<div class="gcs">${chips}</div>`:''}</div>`;
-  }).join('');
+  const filt=sel.length&&!wkAll, day=s=>WEEK.map((d,i)=>wkDay(d,i,f,s,ym));
+  let days=day(filt?sel:null), empty=false;
+  // nothing of the chosen titles this week (decided once the events are in): every title, with a note
+  if(filt && !(f&&f.pref&&ev&&ev.loading) && !days.some(x=>x.has)){
+    const all=day(null);
+    if(all.some(x=>x.has)){ days=all; empty=true; }
+  }
+  const fl=$('wkF');
+  fl.hidden=!sel.length;
+  fl.innerHTML = !sel.length ? ''
+    : empty ? `<span>選択中のタイトル（${esc(shortList(sel))}）の予定はありません。すべてのタイトルを表示しています。</span>`
+    : filt ? `<span>選択中のタイトルのみ（${esc(shortList(sel))}）</span><button type="button" id="wkAll" aria-controls="wkBody">すべて表示</button>`
+    : `<span>すべてのタイトルを表示中</span><button type="button" id="wkAll" aria-controls="wkBody">選択中のタイトルのみ</button>`;
+  $('wkBody').innerHTML = days.map(x=>x.html).join('');
 }
 
 // ---- location: the picker shared with /events/ (src/locpick.html). Its counts need /events/meta, asked for only
@@ -446,11 +508,8 @@ const daysBetween = (a,b) => Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a
 const vtGame = VT ? Object.fromEntries(VT.games.map(g=>[g.code,g])) : {};
 const vtvars = c => { const g=vtGame[c]; return g&&g.c ? `--gl:${g.c};--gd:${g.cd}` : '--gl:hsl(220 62% 46%);--gd:hsl(220 60% 68%)'; };
 function vtGames(){
-  for(const k of ['tcg.voices',SAVED_KEY]){
-    const s=store.get(k,null), codes=s&&typeof s.game==='string'?s.game.split(',').filter(c=>vtGame[c]):[];
-    if(codes.length) return VT.games.map(g=>g.code).filter(c=>codes.includes(c));
-  }
-  return [];
+  const codes=savedGames(c=>vtGame[c]);
+  return VT.games.map(g=>g.code).filter(c=>codes.includes(c));
 }
 function renderVt(){
   if(!VT) return;
@@ -479,6 +538,7 @@ readStars(); renderAll(); loadEvents();
 document.addEventListener('click',e=>{
   if(e.target.closest('#evRetry')) loadEvents(true);
   else if(e.target.closest('#locBtn,#pickLoc')) openLoc();
+  else if(e.target.closest('#wkAll')){ wkAll=!wkAll; track('home_week_all',{on:wkAll}); renderWeek(); $('wkAll')?.focus(); }
 });
 // logged in, corner.html replaces the local favourites / saved filters with the account's: re-read them
 document.addEventListener('sn:prefs',()=>{ readStars(); renderAll(); loadEvents(); if(LOC) LOC.refresh(); });

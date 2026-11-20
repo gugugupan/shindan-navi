@@ -106,8 +106,10 @@ GET /api/v1/events
 
 GET /api/v1/events/days         from must be the 1st of a month and until the 1st of the next (a whole month);
                                 pref, game, type, days as for /events
-→ { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... } }] }   only days with count > 0;
-   with game=…, by_game lists only the selected games
+→ { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... },
+                "by_game_type": { "OPCG": { "standard_battle": n, ... }, ... } }] }   only days with count > 0;
+   with game=…, by_game / by_game_type list only the selected games; by_game_type[g] splits by_game[g] by
+   event_type_code ("" = no type), sorted keys; type=… narrows both
 
 GET /api/v1/events/meta         no parameters
 → { "games": [{ "code", "name", "slug", "record_count", "fetched_at", "complete", "window": {"from","until"} }],
