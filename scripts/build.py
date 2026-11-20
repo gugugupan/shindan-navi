@@ -1,4 +1,6 @@
-import json,sys,os,urllib.parse,shutil,html,datetime,re
+import json,sys,os,urllib.parse,shutil,html,datetime,re,glob,unicodedata
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+from sourcekey import product_code
 OFFICIAL={'遊戯王OCG':'https://www.yugioh-card.com/japan/','ヴァイスシュヴァルツ':'https://ws-tcg.com/','ヴァンガード':'https://cf-vanguard.com/tcg/',
 'MTG':'https://mtg-jp.com/','バトルスピリッツ':'https://www.battlespirits.com/','デュエル・マスターズ':'https://dm.takaratomy.co.jp/','リセ':'https://lycee-tcg.com/',
 'ポケモンカード':'https://www.pokemon-card.com/','FFTCG':'https://www.square-enix-shop.com/jp/ff-tcg/','Z/X':'https://www.zxtcg.com/',
@@ -35,6 +37,22 @@ GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポ�
        ('dragonball','DBフュージョンワールド','ドラゴンボールスーパーカードゲーム フュージョンワールド','フュージョンワールド'),
        ('digimon','デジモン','デジモンカードゲーム','デジカ')]
 
+# Icon next to every game name on every page, by display name (owner decision 2026-11-20): `x.png` = official site
+# favicon kept in public/gi/ (identification only, never hotlinked), `x.svg` = an icon we drew ourselves (no official
+# asset), otherwise a one-character monogram tile in the game's colour. Never a KONAMI asset for 遊戯王. Titles
+# missing here get their first character.
+GAME_ICON={'UNION ARENA':'ua.png','DBフュージョンワールド':'dbfw.png','デジモン':'dcg.png','ヴァイスシュヴァルツ':'ws.png',
+    'ヴァンガード':'vg.png','ホロライブ':'hocg.png','ラブライブ！OCG':'llocg.png','MTG':'mtg.png',
+    'ONE PIECE':'opcg.png','ポケモンカード':'ptcg.svg','ガンダム':'ガ','バトルスピリッツ':'バ','Shadowverse EVOLVE':'シ','デュエル・マスターズ':'デ',
+    '遊戯王OCG':'遊','遊戯王ラッシュデュエル':'ラ','名探偵コナン':'conan.svg','DIVINE CROSS':'D','Flesh and Blood':'F','ビルディバイド':'ビ',
+    'ウルトラマン':'ウ','KAMITSUBAKI':'K','アニマルカードゲーム':'ア','パルワールド':'パ','ゴジラ':'ゴ','FFTCG':'F','Xross Stars':'X',
+    'ホロビート':'ホ','Z/X':'Z','バボカ!!':'ボ','リセ':'リ','OSICA':'O','ファンスターズリーグ':'フ','Harry Potter':'H',
+    '五等分の花嫁':'五','WIXOSS':'W'}
+for _v in GAME_ICON.values(): assert not _v.endswith(('.png','.svg')) or os.path.exists(os.path.join(ROOT,'public/gi',_v)),_v
+# gi(name) in every page script (slot /*GICON*/); decorative, the name always sits next to it
+GICON_JS=('const GICON = '+json.dumps(GAME_ICON,ensure_ascii=False)+';\n'
+    "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.(png|svg)$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };")
+
 # Prices come as 6600円(税込) / 6,050円 / 240円 depending on the source; pages say once that prices include tax.
 def price_label(s):
     s=re.sub(r'\s*[（(]税込み?\s*(?:\d+\s*[%％])?[)）]','',s or '').strip()
@@ -58,10 +76,13 @@ for i in it:
     for k in ('pack','box'): d[k]=price_label(d[k])
     data.append(d)
 data.sort(key=lambda d:(d['date'],d['game']))
+# per-item change date for the sitemap (contracts/releases.md › changed); items the updater has not stamped yet: meta.updated
+CHANGED={i['id']:i.get('changed') or UPDATED for i in it}
+def lastmod(items): return max((CHANGED[d['id']] for d in items),default=UPDATED)
 used={d['game'] for d in data}
 off={k:v for k,v in OFFICIAL.items() if k in used}
 template=open(os.path.join(ROOT,'src/template.html')).read()
-template=template.replace('/*DATA*/',json.dumps(data,ensure_ascii=False).replace('</','<\\/')).replace('/*OFFICIAL*/',json.dumps(off,ensure_ascii=False))
+template=template.replace('/*GICON*/',GICON_JS).replace('/*DATA*/',json.dumps(data,ensure_ascii=False).replace('</','<\\/')).replace('/*OFFICIAL*/',json.dumps(off,ensure_ascii=False))
 months=sorted({d['date'][:7] for d in data})
 
 esc=lambda t: html.escape(str(t),quote=True)
@@ -82,7 +103,7 @@ def static_list(items,heading,note,show_game=True):
         for d in its:
             name=esc(d['name'])
             g=(f'<a class="sg" href="/{SLUG[d["game"]]}/">{esc(d["game"])}</a>' if d['game'] in SLUG else f'<span class="sg">{esc(d["game"])}</span>') if show_game else ''
-            a=f'<a href="{esc(d["url"])}" target="_blank" rel="noopener">{name}</a>' if d['url'] else name
+            a=f'<a href="/item/{d["id"]}/">{name}</a>'
             pr=f'<span class="sp">{esc(d["pack"])}</span>' if d['pack'] else ''
             out.append(f'<li>{g}{a}{pr}</li>')
         out.append('</ul></div>')
@@ -96,6 +117,10 @@ ALIAS={'pokemon':['ポケモンカード','ポケカ','PTCG'],'onepiece':['ワ�
        'gundam':['ガンダムカード','ガンダムTCG','GCG'],'dragonball':['フュージョンワールド','DBFW','ドラゴンボールカード'],
        'digimon':['デジカ','デジモンカード']}
 SLUG={k:s for s,k,n,sh in GAMES}
+# the second name in a title page's <title>: the full or other common name people search with next to the short one
+TITLE_ALT={'pokemon':'ポケモンカード','onepiece':'ワンピースカード','mtg':'マジック：ザ・ギャザリング','yugioh':'遊戯王OCG',
+           'duelmasters':'デュエル・マスターズ','weiss':'ヴァイスシュヴァルツ','unionarena':'UNION ARENA','gundam':'ガンダムカードゲーム',
+           'dragonball':'ドラゴンボール','digimon':'デジモンカード'}
 COMMON_KW=['TCG','トレカ','トレーディングカードゲーム','新弾','発売日','発売スケジュール','カレンダー','拡張パック','ブースターパック','スターターデッキ','予約']
 
 def about_block(heading,paras):
@@ -104,7 +129,6 @@ def about_block(heading,paras):
 
 def page_def():
     pages=[]
-    year=TODAY[:4]
     up=[d for d in data if d['date']>=TODAY]
     soon=[d for d in up if d['date']<=(jd(TODAY)+datetime.timedelta(days=30)).isoformat()]
     gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if k in used)
@@ -120,7 +144,7 @@ def page_def():
               f'トレカカレンダーの新弾カレンダーは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をひとつのカレンダーにまとめたページです。ポケモンカード、ONE PIECEカードゲーム、マジック：ザ・ギャザリング、遊戯王OCG、デュエル・マスターズ、ヴァイスシュヴァルツ、UNION ARENA など{len(used)}タイトルの拡張パック・ブースターパック・スターターデッキの発売日と価格（税込）を掲載しています。',
               'タイトルで絞り込んで推しのTCGだけを表示したり、☆でお気に入り登録した商品をまとめて確認・予算計算したりできます。お気に入りの商品は Google カレンダーや iPhone のカレンダーに追加でき、発売日の前日に通知を受け取れます。',
               f'タイトル別の発売日一覧：{gl}']),
-        ld_items=soon))
+        ld_items=soon,lastmod=lastmod(data)))
     for slug,key,name,short in GAMES:
         its=[d for d in data if d['game']==key]
         if not its: continue
@@ -142,8 +166,8 @@ def page_def():
             list_head,list_note=f'{short} 最近の発売',f'{name}の最近発売された商品 {len(lst)}件。新しい発売予定が発表され次第掲載します。価格は税込。'
             about_next=f'現在、発売予定の新弾は掲載していません。最近の発売は{fmt(last["date"])}「{esc(last["name"])}」です。'
         pages.append(dict(path=f'/{slug}/',slug=slug,og=slug,
-            title=f'{short}（{al[0] if al[0]!=short else name}）新弾 発売日一覧【{year}年最新】｜トレカカレンダー',
-            desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}{year}年の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
+            title=f'{short} 新弾 発売日一覧（{TITLE_ALT[slug]}）｜トレカカレンダー',
+            desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}今後の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
             keywords=names+[f'{short} 新弾',f'{short} 発売日']+COMMON_KW,
             h1=f'{name} 新弾 発売日カレンダー' if short in name else f'{name}（{short}）新弾 発売日カレンダー',
             lead=lead,
@@ -152,7 +176,7 @@ def page_def():
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
                   f'カレンダーでは{esc(short)}の発売予定だけを表示しています。タイトルの絞り込み（スマホでは「絞り込み」ボタンの中）で「すべて」を選ぶと、ほかのTCGの新弾もまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。']),
-            ld_items=lst))
+            ld_items=lst,lastmod=lastmod(its)))
     for ym in months:
         its=[d for d in data if d['date'].startswith(ym)]
         cnt=__import__('collections').Counter(d['game'] for d in its)
@@ -160,7 +184,7 @@ def page_def():
         main_links='・'.join(f'<a href="/{SLUG[g]}/">{esc(g)}</a>' if g in SLUG else esc(g) for g,_ in cnt.most_common(8))
         days=sorted({d['date'] for d in its})
         pages.append(dict(path=f'/{ym}/',slug=ym,og='home',
-            title=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧｜トレカカレンダー',
+            title=f'{mlabel(ym)}発売のTCG・トレカ新弾一覧｜トレカカレンダー',
             desc=f'{mlabel(ym)}発売のTCG・トレカ新弾{len(its)}件（{top}ほか）の発売日と価格を一覧でチェック。拡張パック・スターターデッキの発売スケジュールをカレンダーで確認できます。',
             keywords=[f'{mlabel(ym)} 新弾',f'{int(ym[5:])}月 トレカ 発売',f'{int(ym[5:])}月 TCG 新弾']+COMMON_KW,
             h1=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧',
@@ -170,7 +194,7 @@ def page_def():
                 +about_block(f'{mlabel(ym)}のTCG新弾について',[
                   f'{mlabel(ym)}は{len(cnt)}タイトル・{len(its)}件の新弾・新商品が発売予定です（{fmt(days[0])}〜{fmt(days[-1])}）。発売件数が多いのは {main_links} です。',
                   'タイトルで絞り込むと、推しのTCGの発売日だけを確認できます。お気に入り登録した商品は、まとめて Google カレンダーやスマホのカレンダーに追加できます。']),
-            ld_items=its))
+            ld_items=its,lastmod=lastmod(its)))
     return pages
 
 ICO=lambda d:f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg>'
@@ -178,8 +202,13 @@ ICO=lambda d:f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 # BUILD_EVENTS=0 leaves /events/ out entirely (page, sitemap, tool tabs): hosts without the /api/ Worker (the Pages site before cutover).
 BUILD_EVENTS=os.environ.get('BUILD_EVENTS','1')!='0'
 TOOLS=[('/releases/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
-       ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>'))]
+       ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>')),
+       ('/voices/','話題','カレンダー',ICO('<path d="M4 5h16v11H9l-4 4v-4H4z"/><path d="M8 9h8M8 12h5"/>'))]
 if not BUILD_EVENTS: TOOLS=[t for t in TOOLS if t[0]!='/events/']
+# 話題カレンダー (/voices/, contracts/voices.md): VOICES_ENABLED=1 builds the page, its tool tab and the VOICES parts of
+# /privacy/; off by default. Its data is static, so unlike login / feedback it does not need the Worker.
+VOICES_ENABLED=os.environ.get('VOICES_ENABLED','')=='1'
+if not VOICES_ENABLED: TOOLS=[t for t in TOOLS if t[0]!='/voices/']
 # Login UI (user control in the corner, sync wording in the legends, LOGIN parts of /privacy/): LOGIN_ENABLED=1, a repo
 # variable passed to the Worker build only; always off with BUILD_EVENTS=0 (no Worker behind that build).
 LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
@@ -192,13 +221,13 @@ if FEEDBACK_ENABLED and not re.fullmatch(r'[0-9A-Za-z_-]{10,100}',TURNSTILE_SITE
 def flags(src):
     # STORE: parts about data kept on the server (login or feedback)
     for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED),
-                     ('FEEDBACK',FEEDBACK_ENABLED),('STORE',LOGIN_ENABLED or FEEDBACK_ENABLED),('NOSTORE',not (LOGIN_ENABLED or FEEDBACK_ENABLED))):
+                     ('FEEDBACK',FEEDBACK_ENABLED),('VOICES',VOICES_ENABLED),('STORE',LOGIN_ENABLED or FEEDBACK_ENABLED),('NOSTORE',not (LOGIN_ENABLED or FEEDBACK_ENABLED))):
         src=re.sub(rf'<!--{tag}-->(.*?)<!--/{tag}-->\n?',(lambda m:m.group(1)) if keep else '',src,flags=re.S)
     return src
 def tooltabs(tool):
     if len(TOOLS)<2: return ''
     return '<nav class="tooltabs" aria-label="ツール">'+''.join(
-        f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}{b}</span></a>' for p,a,b,ic in TOOLS)+'</nav>'
+        f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}<span class="tl2">{b}</span></span></a>' for p,a,b,ic in TOOLS)+'</nav>'
 CORNER_SRC=open(os.path.join(ROOT,'src/corner.html')).read()
 # location picker of /events/ and / (src/locpick.html), inserted before the page script at the LOCPICK slot
 LOCPICK=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/locpick.html')).read(),count=1,flags=re.S).strip()
@@ -242,7 +271,7 @@ def render(pg):
     items=pg['ld_items']
     if items:
         ld.append({'@context':'https://schema.org','@type':'ItemList','name':pg['h1'],'numberOfItems':len(items),
-            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],**({'url':d['url']} if d['url'] else {})} for i,d in enumerate(items)]})
+            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],'url':f'{SITE}/item/{d["id"]}/'} for i,d in enumerate(items)]})
     ldjs=''.join(f'<script type="application/ld+json">{json.dumps(x,ensure_ascii=False).replace("</","<\\/")}</script>' for x in ld)
     head=f"""<!doctype html>
 <html lang="ja">
@@ -300,7 +329,7 @@ def render_events():
     src=flags(open(os.path.join(ROOT,'src/events.html')).read())
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK)):
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK),('/*GICON*/',GICON_JS)):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--CORNER-->',corner('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}{siterow("/events/")}</nav>')
@@ -347,16 +376,19 @@ def render_events():
 
 # Privacy policy (/privacy/). Each date is the day that variant first went live, set by hand: BASE = 制定 (the policy
 # without login), LOGIN = the revision that adds login, published only with LOGIN_ENABLED=1, FEEDBACK = the revision
-# that adds the feedback form, published only with FEEDBACK_ENABLED=1. Leave a date None until the day its feature
+# that adds the feedback form, published only with FEEDBACK_ENABLED=1, VOICES = the one that adds /voices/ (VOICES_ENABLED=1). Leave a date None until the day its feature
 # is enabled. 最終改定日 and the sitemap lastmod are the latest date among the enabled revisions.
 PRIVACY_EFFECTIVE_BASE='2026-11-19'
 PRIVACY_EFFECTIVE_LOGIN='2026-11-19'
 PRIVACY_EFFECTIVE_FEEDBACK='2026-11-19'
+PRIVACY_EFFECTIVE_VOICES='2026-11-20'
 if LOGIN_ENABLED and not PRIVACY_EFFECTIVE_LOGIN:
     sys.exit('LOGIN_ENABLED=1 needs PRIVACY_EFFECTIVE_LOGIN in scripts/build.py: set it to the date login goes live (YYYY-MM-DD)')
 if FEEDBACK_ENABLED and not PRIVACY_EFFECTIVE_FEEDBACK:
     sys.exit('FEEDBACK_ENABLED=1 needs PRIVACY_EFFECTIVE_FEEDBACK in scripts/build.py: set it to the date the feedback form goes live (YYYY-MM-DD)')
-PRIVACY_REVISIONS=[d for d,on in ((PRIVACY_EFFECTIVE_LOGIN,LOGIN_ENABLED),(PRIVACY_EFFECTIVE_FEEDBACK,FEEDBACK_ENABLED)) if on]
+if VOICES_ENABLED and not PRIVACY_EFFECTIVE_VOICES:
+    sys.exit('VOICES_ENABLED=1 needs PRIVACY_EFFECTIVE_VOICES in scripts/build.py: set it to the date /voices/ goes live (YYYY-MM-DD)')
+PRIVACY_REVISIONS=[d for d,on in ((PRIVACY_EFFECTIVE_LOGIN,LOGIN_ENABLED),(PRIVACY_EFFECTIVE_FEEDBACK,FEEDBACK_ENABLED),(PRIVACY_EFFECTIVE_VOICES,VOICES_ENABLED)) if on]
 PRIVACY_LASTMOD=max(PRIVACY_REVISIONS,default=PRIVACY_EFFECTIVE_BASE)
 PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
     desc='トレカカレンダーのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
@@ -378,6 +410,7 @@ def render_privacy():
     src=src.replace('<!--REVISED-->',f'（最終改定日：{day(PRIVACY_LASTMOD)}）' if PRIVACY_REVISIONS else '')
     if LOGIN_ENABLED: src=src.replace('<!--REVISED_LOGIN-->',day(PRIVACY_EFFECTIVE_LOGIN))
     if FEEDBACK_ENABLED: src=src.replace('<!--REVISED_FEEDBACK-->',day(PRIVACY_EFFECTIVE_FEEDBACK))
+    if VOICES_ENABLED: src=src.replace('<!--REVISED_VOICES-->',day(PRIVACY_EFFECTIVE_VOICES))
     assert '<!--REVISED' not in src
     assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
     title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
@@ -439,9 +472,10 @@ def render_home():
     keep=['id','date','game','name','pack','thumb']
     home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
+    if VOICES_ENABLED: home['voices']=home_voices()
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
-                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
+                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
@@ -523,6 +557,379 @@ def render_feedback():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
+# ---- 話題カレンダー (/voices/): snapshots from data/voices/ (contracts/voices.md), checked here and embedded in the page
+VOICES_SRC=open(os.path.join(ROOT,'src/voices.html')).read()
+VOICE_GAMES=re.findall(r"\{code:'([A-Z]+)'",VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])
+def voices_data():
+    """All snapshots, oldest first. Sample snapshots only while no real one exists (then they are dropped)."""
+    snaps=[]
+    xpost=re.compile(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}')
+    isdate=lambda v:isinstance(v,str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}',v) and jd(v)
+    TOPIC={'id','game','title','summary','attitude','share','volume','voices','reacting_to','window','first_seen','status','source'}
+    for f in sorted(glob.glob(os.path.join(ROOT,'data/voices/*.json'))):
+        name=os.path.relpath(f,ROOT)
+        def bad(msg): sys.exit(f'{name}: {msg} (contracts/voices.md)')
+        s=json.load(open(f))
+        if set(s)-{'version','date','window','sample','note','topics'} or not {'version','date','window','topics'}<=set(s): bad('wrong top-level fields')
+        if s['version']!=1: bad('version must be 1')
+        w=s['window']
+        if not (isinstance(w,dict) and set(w)=={'from','to'} and isdate(w['from']) and isdate(w['to']) and w['from']<=w['to']): bad('bad window')
+        if not (isdate(s['date']) and s['date']==w['to']==os.path.basename(f)[:-5]): bad('file name, date and window.to must match')
+        if 'sample' in s and not isinstance(s['sample'],bool): bad('sample must be true/false')
+        ids=set()
+        for t in s['topics']:
+            tid=t.get('id','?')
+            def tbad(msg): bad(f'topic {tid}: {msg}')
+            if 'posts' in t: tbad('posts: player post URLs are never committed (contracts/voices.md)')
+            if set(t)!=TOPIC: tbad(f'fields {sorted(set(t)^TOPIC)}')
+            if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,63}',str(tid)) or tid in ids: tbad('bad or duplicate id')
+            ids.add(tid)
+            if t['game'] not in VOICE_GAMES: tbad(f'unknown game {t["game"]} (GAMES in src/voices.html)')
+            for k,n in (('title',40),('summary',160)):
+                if not isinstance(t[k],str) or not t[k].strip() or len(t[k])>n: tbad(f'{k} empty or over {n} characters')
+            if t['attitude'] not in ('positive','negative','mixed','neutral'): tbad('attitude')
+            sh=t['share']
+            if not (isinstance(sh,dict) and set(sh)=={'positive','negative','neutral'} and all(isinstance(v,int) and not isinstance(v,bool) and v>=0 for v in sh.values()) and sum(sh.values())>0): tbad('share')
+            if t['volume'] not in ('high','mid','low'): tbad('volume')
+            if not (isinstance(t['voices'],list) and len(t['voices'])<=3 and all(isinstance(v,str) and 0<len(v.strip())<=80 for v in t['voices'])): tbad('voices: at most 3 strings of 1-80 characters')
+            if t['reacting_to'] is not None and not (isinstance(t['reacting_to'],str) and xpost.fullmatch(t['reacting_to'])): tbad('reacting_to must be an x.com status URL or null')
+            if t['window']!=w: tbad('window differs from the snapshot window')
+            if not isdate(t['first_seen']) or t['first_seen']>s['date']: tbad('first_seen after the snapshot date')
+            if t['status'] not in ('new','continuing','cooling'): tbad('status')
+            if t['source'] not in ('grok-app','openrouter','x-api'): tbad('source')
+        snaps.append({k:s[k] for k in ('date','window','topics')}|{'sample':bool(s.get('sample'))})
+    if any(not x['sample'] for x in snaps): snaps=[x for x in snaps if not x['sample']]
+    return snaps
+VOICES=voices_data() if VOICES_ENABLED else []
+# the home page's いま話題 block: only the latest real snapshot, only the fields it shows (None: no block)
+VOICE_GAME_INFO=[dict(re.findall(r"(\w+):'([^']*)'",x)) for x in re.findall(r'\{code:[^}]*\}',VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])]
+def home_voices():
+    if not VOICES or VOICES[-1]['sample']: return None
+    s=VOICES[-1]
+    used={t['game'] for t in s['topics']}
+    return {'date':s['date'],
+            'games':[{k:g[k] for k in ('code','name','short','c','cd') if k in g} for g in VOICE_GAME_INFO if g['code'] in used],
+            'topics':[{k:t[k] for k in ('id','game','title','summary','attitude','volume','first_seen')} for t in s['topics']]}
+# sample-only data stays out of search: noindex and no sitemap entry until a real snapshot exists
+VOICES_INDEX=bool(VOICES) and not any(x['sample'] for x in VOICES)
+VOICES_PAGE=dict(path='/voices/',og='voices',
+    desc='ポケカ・ワンピ・ユニアリなどTCGのタイトルごとに、X（旧Twitter）のプレイヤーのあいだで話題になっていることをAIが要約。好意的・否定的な反応の割合や代表的な意見をカレンダーで振り返れます。')
+def render_voices():
+    src=re.sub(r'\A<!--.*?-->\n','',VOICES_SRC,count=1,flags=re.S)
+    src=flags(src)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    counts=__import__('collections').Counter(d['game'] for d in data)
+    v={'snapshots':VOICES,'counts':counts}
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
+                     ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/voices/")}{siterow("/voices/")}</nav>'),
+                     ('<!--VLATEST-->',voices_latest()),
+                     ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/')),('/*GICON*/',GICON_JS)):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
+    title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    pg=VOICES_PAGE
+    url=SITE+pg['path']
+    og=f'{SITE}/og/{pg["og"]}.png'
+    robots='' if VOICES_INDEX else '<meta name="robots" content="noindex">\n'
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+{robots}<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="トレカカレンダー">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TCG 話題カレンダー｜トレカカレンダー">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(title)}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+
+# ---- 話題カレンダー archive (/voices/<date>/, owner decision 2026-11-20): one indexable static page per real snapshot,
+# none for samples. The cards follow card() / attBlock() in src/voices.html; keep the share and badge rules in step.
+# a snapshot left without topics (all removed on request) gets no page, like a deleted file; prev / next skip it
+VOICES_DAYS=[s for s in VOICES if not s['sample'] and s['topics']]
+VGAME={g['code']:g for g in VOICE_GAME_INFO}
+VOLW={'high':3,'mid':2,'low':1}
+VDOW='日月火水木金土'
+def vmd(d): x=jd(d); return f'{x.month}/{x.day}({VDOW[(x.weekday()+1)%7]})'
+def vmdj(d): x=jd(d); return f'{x.month}月{x.day}日'
+def vymd(d): x=jd(d); return f'{x.year}年{x.month}月{x.day}日'
+def vday_path(d): return f'/voices/{d}/'
+def gi(n):
+    # same markup as gi() in GICON_JS (the page scripts' game icon)
+    v=GAME_ICON.get(n) or str(n or '?')[0].upper()
+    return f'<img class="gi" src="/gi/{esc(v)}" width="16" height="16" alt="" aria-hidden="true">' if v.endswith(('.png','.svg')) else f'<span class="gi" aria-hidden="true">{esc(v)}</span>'
+def vgvars(c):
+    g=VGAME[c]; return f'--gl:{g["c"]};--gd:{g["cd"]}' if g.get('c') else '--gl:hsl(220 62% 46%);--gd:hsl(220 60% 68%)'
+def vtenths(s,ks):
+    tot=sum(s[k] for k in ks); u=[s[k]/tot*10 for k in ks]; fl=[int(x) for x in u]
+    left=10-sum(fl)
+    for i in sorted(range(len(ks)),key=lambda i:(-(u[i]-fl[i]),-s[ks[i]])):
+        if left>0: fl[i]+=1; left-=1
+    return {k:fl[i]*10 for i,k in enumerate(ks)}
+VATT={'positive':('好意的','＋'),'negative':('否定的','－'),'mixed':('賛否両論','±'),'neutral':('中立','・')}
+VTREND={'positive':'好意的な声が多い','negative':'否定的な声が多い','mixed':'賛否が分かれている','neutral':'目立った賛否はない'}
+VVOL={'high':'多','mid':'中','low':'少'}
+def vatt_block(t):
+    s=t['share']; l,m=VATT[t['attitude']]; a=t['attitude']
+    head=f'<span class="atth">反応の傾向（推定）</span><span class="attl"><span aria-hidden="true">{m} </span>{l}</span>'
+    vol=f'<span class="vol">話題量 <b>{VVOL[t["volume"]]}</b></span>'
+    if sum(s.values())<5:
+        return f'<div class="att a-{a}" data-small>{head}<span class="trend">{VTREND[a]}</span>{vol}<span class="alg">投稿が少ないため、割合は出していません</span></div>'
+    parts=[(k,n) for k,n in (('positive','好意的'),('negative','否定的'),('neutral','中立')) if s[k]]
+    pc=vtenths(s,[k for k,_ in parts])
+    ap=lambda p:f'約{p}%' if p else 'わずか'
+    lab='・'.join(f'{n} {ap(pc[k])}' for k,n in parts)
+    seg=''.join(f'<span class="{c}" style="flex:{s[k]}"></span>' for k,c in (('positive','p'),('negative','n'),('neutral','u')) if s[k])
+    return (f'<div class="att a-{a}">{head}<span class="abar" role="img" aria-label="反応の傾向（推定） {esc(lab)}">{seg}</span>{vol}'
+            f'<span class="alg" aria-hidden="true">{"".join(f"<span class=\"a-{k}\"><i></i>{n} {ap(pc[k])}</span>" for k,n in parts)}</span></div>')
+def vcard(t,snap):
+    st=t['status']
+    badge=(f'<span class="badge hot">🔥 {(jd(snap["date"])-jd(t["first_seen"])).days+1}日連続</span>' if st=='continuing' else
+           '<span class="badge cool">📉 落ち着き</span>' if st=='cooling' else '<span class="badge new">🆕 新</span>' if len(VOICES)>1 else '')
+    voices=(f'<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">'+''.join(f'<li><span aria-hidden="true">💬 </span>{esc(v)}</li>' for v in t['voices'])+'</ul>') if t['voices'] else ''
+    ext='<span class="sr">（外部サイト・X）</span>'
+    rel='nofollow noopener noreferrer'
+    links=f'<a href="{esc(t["reacting_to"])}" target="_blank" rel="{rel}" data-x="reacting">反応元の公式投稿 ↗{ext}</a>' if t['reacting_to'] else ''
+    return (f'<article class="tc" style="{vgvars(t["game"])}" id="topic-{esc(t["id"])}" data-topic="{esc(t["id"])}">'
+            f'<div class="tc-top"><span class="tag">{gi(VGAME[t["game"]]["name"])}{esc(VGAME[t["game"]]["name"])}</span>{badge}<span class="ai">AIによる要約</span></div>'
+            f'<h3>{esc(t["title"])}</h3><p class="sum">{esc(t["summary"])}</p>{vatt_block(t)}{voices}'
+            f'<p class="tc-links">{links}<a class="vopen" href="/voices/#t={esc(t["id"])}">カレンダーで見る</a></p>'
+            f'<p class="tc-win">{vmd(t["window"]["from"])}〜{vmd(t["window"]["to"])} の投稿から（{vmd(snap["date"])} 時点）</p></article>')
+def vday_games(s):
+    """the snapshot's topics per game, in GAMES order (topics keep the snapshot's order)"""
+    return [(c,[t for t in s['topics'] if t['game']==c]) for c in VOICE_GAMES if any(t['game']==c for t in s['topics'])]
+def voices_day_page(s):
+    d=s['date']; x=jd(d); gs=vday_games(s); n=len(s['topics'])
+    top=[t['title'] for _,t in sorted(enumerate(s['topics']),key=lambda p:(-VOLW[p[1]['volume']],p[0]))[:2]]
+    names=[VGAME[c]['short'] for c,_ in gs]
+    gl='・'.join(names[:5])+('ほか' if len(names)>5 else '')
+    desc=(f'{x.year}年{x.month}月{x.day}日時点のTCGの話題を、X（旧Twitter）の{vmd(s["window"]["from"])}〜{vmd(s["window"]["to"])}の投稿から AI が要約。'
+          +''.join(f'「{t}」' for t in top)+f'など、{gl}の{len(gs)}タイトル・{n}件の話題と反応の傾向をまとめています。')
+    return dict(path=vday_path(d),title=f'{vymd(d)}のTCG話題｜話題カレンダー｜トレカカレンダー',h1=f'{vymd(d)}のTCG話題まとめ',
+                crumb=f'{vymd(d)}のTCG話題',desc=desc,games=gs)
+VOICES_DAY_SRC=open(os.path.join(ROOT,'src/voices-day.html')).read()
+def render_voices_day(i):
+    s=VOICES_DAYS[i]; d=s['date']; pg=voices_day_page(s); url=SITE+pg['path']; og=f'{SITE}/og/{VOICES_PAGE["og"]}.png'
+    prev=VOICES_DAYS[i-1] if i else None; nxt=VOICES_DAYS[i+1] if i+1<len(VOICES_DAYS) else None
+    x=jd(d)
+    crumbs=[('トップ','/'),('話題カレンダー','/voices/'),(pg['crumb'],None)]
+    ld={'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
+        {'@type':'ListItem','position':i+1,'name':n,'item':SITE+h if h else url} for i,(n,h) in enumerate(crumbs)]}
+    pn=lambda where: (f'<nav class="vpn" aria-label="ほかの日の話題（{where}）">'
+        +(f'<a href="{vday_path(prev["date"])}" rel="prev">‹ {vmdj(prev["date"])}の話題</a>' if prev else '')
+        +f'<a class="vpn-cal" href="/voices/#d={d}">話題カレンダーでこの日を見る</a>'
+        +(f'<a class="vpn-next" href="{vday_path(nxt["date"])}" rel="next">{vmdj(nxt["date"])}の話題 ›</a>' if nxt else '')+'</nav>')
+    body=('<main class="varc">'
+        +'<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in crumbs)+'</nav>'
+        +f'<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p><time datetime="{d}">{vmd(d)}</time>時点・{vmd(s["window"]["from"])}〜{vmd(s["window"]["to"])} の X の投稿から AI が要約（{len(pg["games"])}タイトル・{len(s["topics"])}件）</p></div>'
+        +pn('ページ上部')
+        +'<nav class="vtoc" aria-label="タイトル">'+''.join(f'<a class="chip g" style="{vgvars(c)}" href="#g-{c}">{gi(VGAME[c]["name"])}{esc(VGAME[c]["name"])} <em>{len(ts)}</em></a>' for c,ts in pg['games'])+'</nav>'
+        +''.join(f'<section class="vgsec" id="g-{c}" style="{vgvars(c)}" aria-labelledby="h-{c}"><h2 id="h-{c}">{gi(VGAME[c]["name"])}{esc(VGAME[c]["name"])}<small>{len(ts)}件</small></h2>'
+                 f'<div class="vcards">{"".join(vcard(t,s) for t in ts)}</div></section>' for c,ts in pg['games'])
+        +pn('ページ下部')+'</main>')
+    src=re.sub(r'\A<!--.*?-->\n','',VOICES_DAY_SRC,count=1,flags=re.S)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    voices_css=re.search(r'<style>\n(/\* attitude colours.*?)</style>',VOICES_SRC,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    for slot,val in (('/*SITE_CSS*/',site_css),('/*VOICES_CSS*/',voices_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
+                     ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(pg["path"])}{siterow(pg["path"])}</nav>'),('<!--BODY-->',body)):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(pg['title'])}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="トレカカレンダー">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(pg['title'])}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TCG 話題カレンダー｜トレカカレンダー">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(pg['title'])}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+<script type="application/ld+json">{json.dumps(ld,ensure_ascii=False).replace('</','<\\/')}</script>
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+def voices_latest():
+    """/voices/: the latest real snapshot's topic titles as a static list below the calendar, linking its archive page"""
+    if not VOICES_DAYS: return ''
+    s=VOICES_DAYS[-1]; p=vday_path(s['date'])
+    items=''.join(f'<li><a href="{p}#topic-{esc(t["id"])}"><span class="vlg" style="{vgvars(c)}">{esc(VGAME[c]["short"])}</span>{esc(t["title"])}</a></li>' for c,ts in vday_games(s) for t in ts)
+    return (f'<section class="vlatest" aria-labelledby="vl-h"><h2 id="vl-h"><a href="{p}">{vymd(s["date"])}のTCG話題まとめ</a></h2>'
+            f'<ul>{items}</ul></section>')
+
+# ---- /item/<id>/: one static page per visible release, for searches like 「OP-15 発売日」. Every visible item gets one
+# (past ones are still searched); an item that leaves items.json loses its page. Only BreadcrumbList JSON-LD (see Data model).
+ITEM_SRC=open(os.path.join(ROOT,'src/item.html')).read()
+RAW={i['id']:i for i in it}
+PLACEHOLDER=re.search(r"const PLACEHOLDER = '(.*?)';",template).group(1)
+_cnt=__import__('collections').Counter(d['game'] for d in data)
+# same colours as the calendar (HUE in src/template.html; ties there sort by localeCompare('ja'), here by code point)
+HUE={g:round((i*137.508+230)%360) for i,g in enumerate(sorted(_cnt,key=lambda g:(-_cnt[g],g)))}
+ITEM_NEAR=3
+TITLE_MAX=60
+def norm_kw(t): return re.sub(r'[\s・･:：]','',unicodedata.normalize('NFKC',t)).lower()
+def item_code(d):
+    """Official product code: the official source key when it is a code, else a code in the name."""
+    src=RAW[d['id']].get('source') or {}
+    k=src.get('key','')
+    if src.get('site')=='official' and k and product_code(k)==k: return k
+    return product_code(d['name'])
+def jdate(s):
+    x=jd(s); return f'{x.year}年{x.month}月{x.day}日({DOW[x.weekday()]})'
+def item_page(d,by_game):
+    g=d['game']; slug=SLUG.get(g)
+    short=next((sh for s,k,n,sh in GAMES if k==g),g)
+    code=item_code(d)
+    in_name=code and code in re.sub(r'[‐‑‒–—―]','-',unicodedata.normalize('NFKC',d['name']).upper())
+    price=[f'価格は{d["pack"]}'] if d['pack'] else []
+    if d['box']: price.append(f'1BOX {d["box"]}')
+    desc=(f'{d["name"]}（{g}）の発売日は{jdate(d["date"])}。'+('、'.join(price)+'（税込）。' if price else '')
+          +(f'商品コード {code}。' if code else '')+f'{short}の新弾の発売日・価格をトレカカレンダーでチェック。')
+    crumbs=[('トップ','/'),('新弾カレンダー','/releases/')]+([(f'{short} 新弾',f'/{slug}/')] if slug else [])+[(d['name'],None)]
+    lst=by_game[g]; k=lst.index(d)
+    near=lst[max(0,k-ITEM_NEAR):k+ITEM_NEAR+1]
+    # the title names the game unless the product name already does (「グローリー・エコー」 alone could be any TCG);
+    # past ~60 characters the game, then the brand go first, so the product name and 発売日 stay visible in results
+    nn=norm_kw(d['name'])
+    tag='' if any(norm_kw(x) in nn for x in [g,short,*ALIAS.get(slug,[])]) else f'（{short}）'
+    head=f'{d["name"]}{"" if not code or in_name else f"【{code}】"}'
+    cands=[f'{head}{tag} 発売日・価格｜トレカカレンダー',f'{head} 発売日・価格｜トレカカレンダー',f'{head} 発売日・価格']
+    title=next((t for t in cands if len(t)<=TITLE_MAX),cands[-1])
+    return dict(path=f'/item/{d["id"]}/',d=d,code=code,short=short,slug=slug,near=near,crumbs=crumbs,
+        title=title,desc=desc,
+        keywords=[x for x in (code and f'{code} 発売日',f'{short} 新弾',f'{short} 発売日') if x]+['発売日','価格','トレカ','TCG'])
+def item_body(pg):
+    d=pg['d']; g=d['game']; ym=d['date'][:7]
+    img=(f'<img class="th" src="{esc(d["thumb"])}" alt="{esc(d["name"])}">' if d['thumb'] else
+         f'<span class="th none" role="img" aria-label="{esc(d["name"])}（画像準備中）">{PLACEHOLDER}<small>画像準備中</small></span>')
+    if d['approx']: img+='<p class="ap">参考画像（実際の商品と異なる場合あり）</p>'
+    row=lambda t,v:f'<dt>{t}</dt><dd>{v}</dd>'
+    title_dd=f'<a href="/{pg["slug"]}/">{esc(g)}</a>' if pg['slug'] else esc(g)
+    rows=[row('発売日',f'<time datetime="{d["date"]}">{jdate(d["date"])}</time>'),
+          row('価格',f'<span class="num">{esc(d["pack"])}</span>' if d['pack'] else '—')]
+    if d['box']: rows.append(row('1BOX',f'<span class="num">{esc(d["box"])}</span>'+(f'（{esc(d["per_box"])}パック入り）' if d['per_box'] else '')))
+    if d['per_pack']:
+        n=re.search(r'\d+',d['pack'].replace(',',''))
+        unit='1パック' if d['per_box'] or (int(n.group()) if n else 0)<1000 else '1セット'  # same rule as the calendar's detail dialog
+        rows.append(row('内容',f'{unit}{esc(d["per_pack"])}枚入り'))
+    if pg['code']: rows.append(row('商品コード',f'<span class="num">{esc(pg["code"])}</span>'))
+    rows.append(row('タイトル',title_dd))
+    rows.append(row('発売月',f'<a href="/{ym}/">{mlabel(ym)}のTCG新弾一覧</a>'))
+    links=[f'<a class="go" href="/releases/#i={d["id"]}">新弾カレンダーで見る</a>']
+    if d['url']: links.append(f'<a href="{esc(d["url"])}" target="_blank" rel="noopener">公式商品ページ ↗</a>')
+    if g in OFFICIAL: links.append(f'<a href="{esc(OFFICIAL[g])}" target="_blank" rel="noopener">{esc(g)} 公式サイト ↗</a>')
+    card=(f'<article class="pd-card" style="--h:{HUE[g]}"><div class="pd-img">{img}</div><div>'
+          f'<p class="pd-tag"><span class="tag"><i></i>{esc(g)}</span></p><h1>{esc(d["name"])}</h1>'
+          f'<dl>{"".join(rows)}</dl><p class="dl-links">{"".join(links)}</p></div></article>')
+    lis=''.join(f'<li><time datetime="{x["date"]}">{fmt(x["date"],True)}</time>'
+                +(f'<span aria-current="page">{esc(x["name"])}</span>' if x is d else f'<a href="/item/{x["id"]}/">{esc(x["name"])}</a>')+'</li>' for x in pg['near'])
+    more=(f'<a class="pd-more" href="/{pg["slug"]}/">{esc(pg["short"])}の新弾をすべて見る</a>' if pg['slug'] else
+          f'<a class="pd-more" href="/releases/">新弾カレンダーで{esc(g)}の発売日を見る</a>')
+    near=f'<section class="pd-near" aria-labelledby="near-h"><h2 id="near-h">同じタイトルの前後の新弾</h2><ol>{lis}</ol>{more}</section>' if len(pg['near'])>1 else ''
+    legend=f'<p class="legend">価格は税込。発売日・価格は変更されることがあるので、購入前に公式情報をご確認ください（{upd_label}更新）。</p>'
+    return card+near+legend
+def render_item(pg):
+    d=pg['d']
+    url=SITE+pg['path']
+    src=re.sub(r'\A<!--.*?-->\n','',ITEM_SRC,count=1,flags=re.S)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    crumbs='<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in pg['crumbs'])+'</nav>'
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav(pg['path'])),
+                     ('<!--CRUMBS-->',crumbs),('<!--ITEM-->',item_body(pg))):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    # our own thumbnail as the share image (portrait, so a small card); a stand-in (approx) or no image: the site default
+    if d['thumb'] and not d['approx']: og,ogm,card=SITE+d['thumb'],'','summary'
+    else: og,ogm,card=f'{SITE}/og/home.png','<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n','summary_large_image'
+    ld={'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
+        {'@type':'ListItem','position':i+1,'name':n,'item':SITE+h if h else url} for i,(n,h) in enumerate(pg['crumbs'])]}
+    ldjs=f'<script type="application/ld+json">{json.dumps(ld,ensure_ascii=False).replace("</","<\\/")}</script>'
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(pg['title'])}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="トレカカレンダー">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(pg['title'])}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+{ogm}<meta property="og:image:alt" content="{esc(d['name'])}">
+<meta name="twitter:card" content="{card}">
+<meta name="twitter:title" content="{esc(pg['title'])}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+<meta name="keywords" content="{esc(','.join(dict.fromkeys(pg['keywords'])))}">
+{ldjs}
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+def item_pages():
+    by_game={}
+    for d in data: by_game.setdefault(d['game'],[]).append(d)
+    return [item_page(d,by_game) for d in data]
+
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
 shutil.copytree(os.path.join(ROOT,'public'),dist)
@@ -534,19 +941,34 @@ for pg in pages:
     d=os.path.join(dist,pg['path'].strip('/'))
     os.makedirs(d,exist_ok=True)
     open(os.path.join(d,'index.html'),'w').write(render(pg))
+items=item_pages()
+for pg in items:
+    d=os.path.join(dist,pg['path'].strip('/'))
+    os.makedirs(d,exist_ok=True)
+    open(os.path.join(d,'index.html'),'w').write(render_item(pg))
 if BUILD_EVENTS:
     os.makedirs(os.path.join(dist,'events'),exist_ok=True)
     open(os.path.join(dist,'events/index.html'),'w').write(render_events())
 open(os.path.join(dist,'index.html'),'w').write(render_home())
 os.makedirs(os.path.join(dist,'privacy'),exist_ok=True)
 open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
+if VOICES_ENABLED:
+    os.makedirs(os.path.join(dist,'voices'),exist_ok=True)
+    open(os.path.join(dist,'voices/index.html'),'w').write(render_voices())
+    for i,x in enumerate(VOICES_DAYS):
+        os.makedirs(os.path.join(dist,'voices',x['date']),exist_ok=True)
+        open(os.path.join(dist,'voices',x['date'],'index.html'),'w').write(render_voices_day(i))
 if FEEDBACK_ENABLED:
     os.makedirs(os.path.join(dist,'feedback'),exist_ok=True)
     open(os.path.join(dist,'feedback/index.html'),'w').write(render_feedback())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
-for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
+# calendar pages: the newest change among their items; item pages: their own (contracts/releases.md › changed)
+for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{pg["lastmod"]}</lastmod></url>')
+for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{CHANGED[pg["d"]["id"]]}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
+if VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
+for x in VOICES_DAYS: sm.append(f'<url><loc>{SITE}{vday_path(x["date"])}</loc><lastmod>{x["date"]}</lastmod></url>')
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
@@ -557,4 +979,5 @@ if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
-print('pages',len(pages),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+print('pages',len(pages),'| item pages',len(items),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
+      '| voices',f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}, {len(VOICES_DAYS)} archive pages' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)

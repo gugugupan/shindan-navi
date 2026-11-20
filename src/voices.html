@@ -1,0 +1,634 @@
+<!--
+  /voices/ 話題カレンダー (contracts/voices.md): what players on X talk about, per game. Built only with VOICES_ENABLED=1
+  by render_voices() in build.py, which fills SITE_CSS, BRAND, CORNER, SITENAV, VLATEST (the latest real snapshot's
+  titles, linking its archive page /voices/<date>/) and the VOICES data (snapshots from data/voices/). Static: the page makes no /api calls. Toolbar, filters and freshness line mirror /events/.
+-->
+<title>TCG話題カレンダー（ポケカ・ワンピ・ユニアリほか X の反応まとめ）｜トレカカレンダー</title>
+<style>/*SITE_CSS*/</style>
+<style>/*PAGE_FONTS*/</style>
+<style>
+/* attitude colours; never the only cue (every marker has a glyph and a label or tooltip) */
+:root{--pos:#1d7f4c;--mix:#94580a;--neg:var(--sun);--neu:var(--faint)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--pos:#5fd39a;--mix:#f0b44c}}
+:root[data-theme="dark"]{--pos:#5fd39a;--mix:#f0b44c}
+.a-positive{--a:var(--pos)} .a-negative{--a:var(--neg)} .a-mixed{--a:var(--mix)} .a-neutral{--a:var(--muted)}
+.chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.chip.k[aria-pressed="true"] .am{color:inherit}
+.filters{flex-wrap:wrap}
+.filters>.frow{order:3;flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:10px;border-top:1px solid var(--line)}
+.frow .fl{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-right:4px}
+.freset{border:0;background:none;color:var(--accent);font-size:12px;font-weight:700;padding:4px 6px}
+.rhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:14px 2px 0}
+.rhead:empty{display:none}
+.rhead .count{margin-left:0;font-size:13px}
+.rhead .mcount{display:none}
+.rhead .sub{font-size:12px;color:var(--muted)}
+.vintro{margin:10px 2px 0;display:grid;gap:4px}
+.vintro .ptitle h1{color:var(--ink);font-size:15px}
+.vintro .ptitle p{color:var(--muted)}
+.vkey{margin:0;display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;color:var(--muted)}
+.vkey>span{white-space:nowrap}
+.vkey .am{margin-right:2px}
+.vkey .vk-n b{font-family:var(--mono);font-size:10.5px;margin-right:2px}
+.vgkey{display:none;margin:8px 2px 0;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;color:var(--muted)}
+.vgkey span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.vgkey i{width:8px;height:8px;border-radius:50%;background:var(--g)}
+.notice{margin:8px 0 0;font-size:12.5px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px 12px}
+.notice b{color:var(--ink)}
+.fresh{margin:4px 0 0;font-size:12px;color:var(--faint);overflow:hidden}
+.fresh span{white-space:nowrap}
+.fresh .frl{display:flex;flex-wrap:wrap;margin-left:-1.2em}
+.fresh .frl>span::before{content:"・";display:inline-block;width:1.2em;text-align:center}
+.fresh .frl>.lab+span::before{content:"";width:.5em}
+.fresh .smp{color:var(--muted);font-weight:700}
+.state{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:32px 16px;text-align:center;color:var(--muted);display:grid;gap:12px;justify-items:center;margin-top:8px}
+.state b{color:var(--ink);font-size:15px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.am{font-style:normal;font-weight:700;color:var(--a)}
+/* games with a fixed light/dark colour pair (GAMES: c/cd, set inline as --gl/--gd) get --g (marks), --gt (text) and
+   --gtint (tints) per theme. --gt is mixed towards black / white so game-coloured text keeps >=4.5:1 on the tints
+   and cards in both themes for every pair in GAMES and every release-title hue. */
+[style*="--gl"]{--g:var(--gl);--gt:color-mix(in oklab,var(--gl) 65%,#000);--gtint:color-mix(in oklab,var(--gl) 12%,var(--surface))}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}}
+:root[data-theme="dark"] [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}
+.chip[aria-pressed="true"]{border-color:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)))}
+
+/* month calendar: one grid per week; a chip per game in each day, or bars spanning their days when one game is
+   selected (phones: a dot per game) */
+.vcal{margin-top:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+.vhead,.vwk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.vwk{grid-template-rows:var(--rows);min-height:96px;border-top:1px solid var(--line)}
+.vd{grid-row:1/-1;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:6px 8px;border-right:1px solid var(--line);min-width:0}
+.vd:nth-child(7){border-right:0}
+.vd[data-day]{cursor:pointer}
+.vd[data-day]:hover{background:var(--surface-2)}
+.vdn{border:0;background:none;padding:0;font:inherit;color:inherit;border-radius:50%}
+.vd.out{background:var(--surface-2)}
+.vd.out .n,.vd.nod .n{opacity:.4}
+.vd.nod{background:var(--surface-2)}
+.vd .n{font-family:var(--mono);font-size:13px;font-weight:700;min-width:26px;height:26px;display:inline-grid;place-items:center;border-radius:50%}
+.vd.sat .n{color:var(--sat)} .vd.sun .n{color:var(--sun)}
+.vd.today{background:var(--foil-soft);box-shadow:inset 0 0 0 2px var(--foil)}
+.vd.today .n{background:var(--foil);color:var(--foil-ink)}
+.vd .vmore{margin-top:auto;font-size:11px;font-weight:700;color:var(--accent)}
+.vdots{display:none}
+.vchips{display:flex;flex-wrap:wrap;gap:3px;width:100%}
+.vchip{display:inline-flex;align-items:center;gap:2px;max-width:100%;height:20px;padding:0 5px 0 4px;border:0;border-left:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:5px;background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));font-size:11px;font-weight:700;line-height:1;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)));white-space:nowrap;overflow:hidden}
+.vchip:hover{box-shadow:inset 0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+.vchip .gi,.vbar .gi{--gi:14px}
+.vchip .gi{margin-right:2px}
+.vchip .vn{margin-left:1px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.vbar{position:relative;z-index:1;align-self:center;margin:0 5px;min-width:0;height:22px;display:flex;align-items:center;gap:5px;padding:0 8px 0 6px;border:0;border-left:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:6px;background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));font-size:12px;line-height:1;text-align:left;color:var(--ink);white-space:nowrap;overflow:hidden}
+.vbar:hover{box-shadow:inset 0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+.vbar.cl{margin-left:0;border-radius:0 6px 6px 0;border-left-style:dotted}
+.vbar.cr{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.vbar b{flex:none;font-size:11px;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)))}
+.vbar .tt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vg{display:inline-flex;align-items:center;gap:1px;font-size:10px;line-height:1}
+.vg i{width:8px;height:8px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+
+/* topic cards (day dialog, list view) */
+.vcards{display:grid;gap:10px;min-width:0}
+.tc{position:relative;display:grid;gap:7px;min-width:0;background:var(--surface-2);border-radius:12px;padding:12px 14px 12px 16px}
+.tc::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+.tc-top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px}
+.tc .tag{color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)))}
+.badge{font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
+.badge.new{border-color:transparent;background:var(--accent-soft);color:var(--accent)}
+.badge.hot{border-color:var(--foil);background:var(--foil-soft);color:var(--foil-ink)}
+.badge.cool{color:var(--muted)}
+.ai{margin-left:auto;font-size:10.5px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 7px;white-space:nowrap}
+.tc h3{margin:0;font-size:15px;line-height:1.45;overflow-wrap:anywhere}
+.tc .sum{margin:0;font-size:13px;line-height:1.7}
+.atth{grid-column:1/-1;font-size:11.5px;font-weight:700;color:var(--muted)}
+.att{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:4px 10px;font-size:12px}
+.att .attl{font-weight:700;color:var(--a);white-space:nowrap}
+.abar{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--line);min-width:40px}
+.abar span{display:block;height:100%}
+.abar span+span{border-left:2px solid var(--surface-2)}
+.abar .p{background:var(--pos)} .abar .n{background:var(--neg)} .abar .u{background:var(--neu)}
+.att .vol{color:var(--muted);white-space:nowrap}
+.att .trend{font-weight:700;min-width:0}
+.att .vol b{color:var(--ink)}
+.alg{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;color:var(--muted)}
+.alg span{display:inline-flex;align-items:center;gap:4px}
+.alg i{width:8px;height:8px;border-radius:2px;background:var(--a)}
+.vlab{margin:0;font-size:11.5px;font-weight:700;color:var(--muted)}
+.voices{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.voices li{font-size:12.5px;line-height:1.6;background:var(--surface);border-radius:8px;padding:4px 10px}
+.tc-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;font-size:12px}
+.tc-links a{font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface);white-space:nowrap}
+.tc-links a:hover{border-color:var(--accent)}
+.cplink{margin-left:auto;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font:inherit;font-size:11.5px;font-weight:700;padding:3px 10px;white-space:nowrap}
+.cplink:hover{border-color:var(--accent);color:var(--accent)}
+.dgames{display:flex;flex-wrap:wrap;gap:6px}
+.dgames .chip{font-size:12px}
+.tc-win{margin:0;font-size:11px;color:var(--muted)}
+
+/* list view: snapshots, newest first */
+#list{margin-top:8px;display:flex;flex-direction:column;gap:12px}
+.vsnap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.vsnap h2{margin:0 0 10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-family:var(--display);font-weight:400;font-size:18px}
+.vsnap h2 small{font-family:var(--body);font-size:12px;font-weight:700;color:var(--muted)}
+.vsnap .vcards{grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}
+.vdlg{width:min(640px,calc(100vw - 32px));overflow:auto}
+.vdlg .dl-note{margin:0;font-size:12px;color:var(--muted)}
+.vcards>.sbtn{justify-self:start}
+/* latest snapshot's titles as static links to its archive page (/voices/<date>/), muted like the release pages' lists */
+.vlatest{margin-top:14px}
+.vlatest h2{margin:0 0 6px;font-size:12.5px;font-weight:700}
+.vlatest h2 a{color:var(--muted)}
+.vlatest ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:2px 20px}
+.vlatest li{font-size:12px;line-height:1.5;min-width:0}
+.vlatest li a{color:var(--muted);text-decoration:none}
+.vlatest li a:hover{color:var(--accent);text-decoration:underline}
+.vlatest .vlg{font-weight:700;color:var(--gt);margin-right:6px}
+.vsnap h2 .vsl{font-family:var(--body);font-size:12px;font-weight:700;color:var(--accent)}
+
+@media (max-width:760px){
+  .filters>.frow{flex:none;padding-top:8px}
+  .rhead .mcount{display:inline}
+  .bar.open~.rhead .mcount{display:none}
+  .vintro .ptitle h1{font-size:14px}
+  .vkey .vk-n{display:none}
+  .vgkey{display:flex}
+  .fresh .win{display:none}
+  .vwk{grid-template-rows:auto;min-height:64px}
+  .vd{padding:4px 3px;align-items:center;gap:3px}
+  .vd .n{font-size:12px;min-width:22px;height:22px}
+  .vbar,.vd .vmore,.vchips{display:none}
+  .vdots{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 3px}
+  .tc{padding:10px 10px 10px 13px}
+  .vsnap{padding:10px}
+  .vsnap .vcards{grid-template-columns:minmax(0,1fr)}
+  .att{grid-template-columns:auto minmax(0,1fr)}
+  .att .vol{grid-column:1/-1}
+}
+/* toolbar text labels where the row has room (no ★ button here, unlike /releases/) */
+@media (min-width:344px) and (max-width:379px){.filterbtn{width:auto;padding:0 8px}.filterbtn span{display:inline}}
+@media (min-width:384px) and (max-width:760px){.seg button{width:auto;padding:0 8px;gap:4px}.seg button span{display:inline;font-size:12px}}
+@media (max-width:760px){.filterbtn:has(em:not([hidden])) span{display:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <!--BRAND-->
+    <!--CORNER-->
+  </header>
+
+  <div class="bar"><div class="panel">
+    <div class="row">
+      <div class="month" id="monthNav">
+        <button class="ib" id="prev" aria-label="前月">‹</button>
+        <b id="monthLabel"></b>
+        <button class="ib" id="nextM" aria-label="翌月">›</button>
+      </div>
+      <button class="todaybtn" id="goToday">今日</button>
+      <div class="seg" role="group" aria-label="表示">
+        <button id="vCal" aria-pressed="true" aria-label="カレンダー表示"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>カレンダー</span></button>
+        <button id="vList" aria-pressed="false" aria-label="リスト表示"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>リスト</span></button>
+      </div>
+      <button class="filterbtn" id="filterBtn" aria-expanded="false" aria-controls="filters" aria-label="絞り込み"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span>絞り込み</span><em id="filterBadge" hidden></em></button>
+    </div>
+    <div class="filters" id="filters">
+      <div class="row"><span class="count" id="count" aria-live="polite"></span></div>
+      <div class="chips" id="games" role="group" aria-label="タイトルで絞り込み"></div>
+      <div class="frow" id="frow" role="group" aria-label="反応で絞り込み"></div>
+    </div>
+  </div></div>
+
+  <div class="vintro">
+    <div class="ptitle"><h1>TCG 話題カレンダー（X のプレイヤーの反応）</h1><p>タイトルごとに X で話題になっていることを AI が要約しています。日付を押すと、その日の話題を開きます。</p></div>
+    <p class="vkey" aria-label="記号の見方"><span>色＝タイトル</span><span><em class="am a-positive" aria-hidden="true">＋</em>好意的</span><span><em class="am a-negative" aria-hidden="true">－</em>否定的</span><span><em class="am a-mixed" aria-hidden="true">±</em>賛否両論</span><span><em class="am a-neutral" aria-hidden="true">・</em>中立</span><span class="vk-n"><b>2</b>＝話題の数</span></p>
+  </div>
+  <div class="rhead" id="rhead"></div>
+  <div id="notice"></div>
+  <main id="results">
+    <h2 class="sr">話題</h2>
+    <div id="calv"></div>
+    <div id="list" hidden></div>
+  </main>
+
+  <div class="pageinfo"><p class="fresh" id="fresh" aria-label="データの更新状況"></p><!--VLATEST--></div>
+  <p class="legend">話題は X（旧Twitter）で公開されている投稿をもとに AI が要約したものです。投稿の本文は掲載せず、要約・意見の言い換えと、もとの投稿へのリンクだけを載せています。反応の割合は集めた投稿のおおまかな傾向で、プレイヤー全体の意見を表すものではありません。公式の発表内容は各タイトルの公式サイト・公式アカウントでご確認ください。</p>
+  <p class="legend">絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
+  <!--SITENAV-->
+</div>
+
+<span class="sr" id="vLive" aria-live="polite"></span>
+<dialog id="vDlg" class="vdlg" aria-labelledby="vTitle"><div class="dlg"><button class="ib close" id="vClose" aria-label="閉じる">×</button><h2 class="dl-day" id="vTitle"></h2><div id="vBody" class="vcards"></div></div></dialog>
+
+<script>
+const V = /*VOICES*/null;
+/*GICON*/
+// c / cd = light / dark colour: the /events/ game palette (CLAUDE.md › Event game palette), MTG / DM / YGO on its
+// slots 14-16 (contracts/voices.md); rel = release-calendar title whose hue colours a game without a pair. build.py
+// reads the codes from this list to check data/voices/.
+const GAMES = [
+  {code:'OPCG', name:'ONE PIECE', short:'ワンピ', c:'#be362d', cd:'#de837c'},
+  {code:'UATCG', name:'UNION ARENA', short:'ユニアリ', c:'#7a2dbe', cd:'#b17cde'},
+  {code:'CONAN', name:'名探偵コナン', short:'コナン', c:'#2d81be', cd:'#7cb6de'},
+  {code:'PTCG', name:'ポケモンカード', short:'ポケカ', c:'#be972d', cd:'#dec47c'},
+  {code:'GCG', name:'ガンダム', short:'ガンダム', c:'#1d357c', cd:'#3b60ce'},
+  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', c:'#8a2e0f', cd:'#e45525'},
+  {code:'BS', name:'バトルスピリッツ', short:'バトスピ', c:'#7c1d4d', cd:'#ce3b85'},
+  {code:'DCG', name:'デジモン', short:'デジカ', c:'#12a581', cd:'#40e7be'},
+  {code:'WS', name:'ヴァイスシュヴァルツ', short:'ヴァイス', c:'#d31785', cd:'#ed6eb8'},
+  {code:'VG', name:'ヴァンガード', short:'ヴァンガ', c:'#808a0f', cd:'#d4e425'},
+  {code:'SVE', name:'Shadowverse EVOLVE', short:'シャドバ', c:'#4d6f2a', cd:'#85b950'},
+  {code:'HOCG', name:'ホロライブ', short:'ホロカ', c:'#a96660', cd:'#cfadaa'},
+  {code:'LLOCG', name:'ラブライブ！OCG', short:'ラブカ', c:'#366063', cd:'#62a1a7'},
+  {code:'MTG', name:'MTG', short:'MTG', c:'#534077', cd:'#8a76b2'},
+  {code:'YGO', name:'遊戯王OCG', short:'遊戯王', c:'#562d29', cd:'#b46b64'},
+  {code:'DM', name:'デュエル・マスターズ', short:'デュエマ', c:'#4d19e6', cd:'#825eed'}
+];
+const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
+// release titles: the same golden-angle hues as /releases/ (titles ordered by release count)
+const relTitles = Object.keys(V.counts).sort((a,b)=>V.counts[b]-V.counts[a]||a.localeCompare(b,'ja'));
+const HUE = {}; relTitles.forEach((g,i)=>HUE[g]=Math.round((i*137.508+230)%360));
+// titles without a pair get one from their hue, at the release calendar's chip lightness per theme
+const gvars = c => { const g=GAME[c], h=g&&HUE[g.rel]!=null?HUE[g.rel]:220; return g&&g.c ? `--gl:${g.c};--gd:${g.cd}` : `--gl:hsl(${h} 62% 46%);--gd:hsl(${h} 60% 68%)`; };
+const ATT = {positive:{l:'好意的',m:'＋'}, negative:{l:'否定的',m:'－'}, mixed:{l:'賛否両論',m:'±'}, neutral:{l:'中立',m:'・'}};
+const ATTS = Object.keys(ATT);
+const VOL = {high:'多', mid:'中', low:'少'}, VOLW = {high:3, mid:2, low:1};
+const DOW = ['日','月','火','水','木','金','土'];
+
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
+const track = (name, params) => { try { if (window.gtag) window.gtag('event', name, params || {}); } catch (e) {} };
+const $ = id => document.getElementById(id);
+
+// Japan dates as YYYY-MM-DD strings
+const TODAY = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const addD = (s,n) => { const d=new Date(s+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+const realDay = s => { const d=/^\d{4}-\d{2}-\d{2}$/.test(s)&&new Date(s+'T00:00:00Z'); return !!d&&!isNaN(d)&&d.toISOString().slice(0,10)===s; };
+const dowOf = s => new Date(s+'T00:00:00Z').getUTCDay();
+const diffD = (a,b) => Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/864e5);
+const md = s => { const [,m,d]=s.split('-').map(Number); return `${m}/${d}(${DOW[dowOf(s)]})`; };
+const mdj = s => { const [,m,d]=s.split('-').map(Number); return `${m}月${d}日(${DOW[dowOf(s)]})`; };
+const monthOf = s => s.slice(0,7);
+const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m<1){m+=12;y--} while(m>12){m-=12;y++} return y+'-'+String(m).padStart(2,'0'); };
+const maxS = (a,b) => a>b?a:b, minS = (a,b) => a<b?a:b;
+
+// ---- topics across snapshots: one entry per id, active from first_seen to the last snapshot that lists it
+const SNAPS = [...V.snapshots].sort((a,b)=>a.date<b.date?-1:1);
+const SAMPLE = SNAPS.some(s=>s.sample);
+const TOPICS = new Map();
+SNAPS.forEach(s=>s.topics.forEach((t,i)=>{
+  let x=TOPICS.get(t.id);
+  if(!x){ x={id:t.id, game:t.game, first:t.first_seen, last:s.date, vs:[], rank:i}; TOPICS.set(t.id,x); }
+  x.vs.push({snap:s, t}); x.last=s.date; x.game=t.game; if(t.first_seen<x.first) x.first=t.first_seen;
+}));
+const ALL = [...TOPICS.values()];
+// days the snapshots cover: from the earliest window / first_seen to the latest snapshot; other days are dimmed
+const DATA_FROM = SNAPS.reduce((m,s)=>s.topics.reduce((n,t)=>minS(n,t.first_seen),minS(m,s.window.from)),'9999'), DATA_TO = SNAPS.length?SNAPS[SNAPS.length-1].date:'';
+// 🆕 新 only once there is an older snapshot to be new against
+const SHOW_NEW = SNAPS.length>1;
+// what the topic looked like on day k: the first snapshot on or after k, else the latest
+const versionOn = (x,k) => x.vs.find(v=>v.snap.date>=k) || x.vs[x.vs.length-1];
+const latest = x => x.vs[x.vs.length-1];
+const dataGames = GAMES.filter(g=>ALL.some(x=>x.game===g.code)).map(g=>g.code);
+const gameOrd = c => GAMES.findIndex(g=>g.code===c);
+const dataMonths = (() => { const out=new Set(); ALL.forEach(x=>{ for(let m=monthOf(x.first); m<=monthOf(x.last); m=addM(m,1)) out.add(m); }); return [...out].sort(); })();
+const bounds = () => [minS(dataMonths[0]||monthOf(TODAY),monthOf(TODAY)), maxS(dataMonths[dataMonths.length-1]||monthOf(TODAY),monthOf(TODAY))];
+const homeMonth = () => dataMonths.includes(monthOf(TODAY)) || !dataMonths.length ? monthOf(TODAY) : dataMonths.filter(m=>m<monthOf(TODAY)).pop() || dataMonths[0];
+
+// ---- state <-> URL; filters and view are saved in tcg.voices. Without a saved choice the game filter starts from the
+// /events/ saved one (tcg.ev.filters), keeping only games that have topics here. Nothing is written back to /events/.
+const SAVED_KEY = 'tcg.voices', EV_KEY = 'tcg.ev.filters';
+function parse(q){
+  const games=(q.get('game')||'').split(',').filter(c=>GAME[c]);
+  return {game:[...new Set(games)], att:ATT[q.get('att')]?q.get('att'):'', view:q.get('view')==='list'?'list':'cal',
+    month:/^\d{4}-\d{2}$/.test(q.get('month')||'')?q.get('month'):null};
+}
+function readURL(){
+  const q=new URLSearchParams(location.search);
+  let s;
+  if(q.toString()) s=parse(q);
+  else {
+    const saved=store.get(SAVED_KEY,null);
+    if(saved&&typeof saved==='object') s=parse(new URLSearchParams(Object.entries(saved).filter(([,v])=>typeof v==='string'&&v)));
+    else {
+      const ev=store.get(EV_KEY,null), g=ev&&typeof ev.game==='string'?ev.game.split(',').filter(c=>dataGames.includes(c)):[];
+      s=parse(new URLSearchParams(g.length?{game:g.join(',')}:{}));
+    }
+  }
+  const [lo,hi]=bounds();
+  if(!s.month||s.month<lo||s.month>hi) s.month=homeMonth();
+  return s;
+}
+function toQuery(s){
+  const q=new URLSearchParams();
+  if(s.game.length) q.set('game',s.game.join(','));
+  if(s.att) q.set('att',s.att);
+  if(s.view==='list') q.set('view','list');
+  if(s.view==='cal' && s.month!==homeMonth()) q.set('month',s.month);
+  return q.toString().replace(/%2C/g,',');
+}
+let state = readURL();
+history.replaceState(null,'',location.pathname+(toQuery(state)?'?'+toQuery(state):'')+location.hash);
+function commit(ch, opts={}){
+  Object.assign(state,ch);
+  if(!opts.auto){
+    const o={}; if(state.game.length) o.game=state.game.join(','); if(state.att) o.att=state.att; if(state.view==='list') o.view='list';
+    store.set(SAVED_KEY,o);
+  }
+  const qs=toQuery(state), url=location.pathname+(qs?'?'+qs:'');
+  if(url!==location.pathname+location.search) history.pushState(null,'',url);
+  render();
+}
+window.addEventListener('popstate',()=>{ state=readURL(); render(); });
+
+// ---- filtering
+const inGame = x => !state.game.length || state.game.includes(x.game);
+const attOf = (x,k) => (k ? versionOn(x,k) : latest(x)).t.attitude;
+const visible = () => ALL.filter(inGame).filter(x=>!state.att||attOf(x)===state.att);
+const inMonth = (x,ym) => monthOf(x.first)<=ym && monthOf(x.last)>=ym;
+const activeOn = (x,k) => x.first<=k && k<=x.last;
+const byOrder = (a,b) => a.first<b.first?-1:a.first>b.first?1:(diffD(b.first,b.last)-diffD(a.first,a.last))||(gameOrd(a.game)-gameOrd(b.game))||(a.rank-b.rank);
+// topics active on day k grouped by game, busiest first (話題量 summed), then in GAMES order; a game with several
+// tones that day counts as 賛否両論
+function dayGames(on,k){
+  const m=new Map();
+  on.forEach(x=>{ const t=versionOn(x,k).t; let g=m.get(x.game); if(!g) m.set(x.game,g={c:x.game,xs:[],w:0,as:new Set()});
+    g.xs.push(x); g.w+=VOLW[t.volume]||1; g.as.add(t.attitude); });
+  const w=(x)=>VOLW[versionOn(x,k).t.volume]||1;
+  return [...m.values()].map(g=>({...g, a:g.as.size>1?'mixed':[...g.as][0], xs:g.xs.sort((p,q)=>w(q)-w(p)||byOrder(p,q))}))
+    .sort((p,q)=>q.w-p.w||gameOrd(p.c)-gameOrd(q.c));
+}
+// list entries: one per (snapshot, topic)
+const listEntries = () => SNAPS.slice().reverse().map(s=>({snap:s, ts:s.topics.filter(t=>(!state.game.length||state.game.includes(t.game))&&(!state.att||t.attitude===state.att))}));
+
+// ---- controls
+const chip = (key,val,label,on,extra='',style='') => `<button class="chip${extra}" data-k="${key}" data-v="${esc(val)}" aria-pressed="${on}"${style?` style="${style}"`:''}>${label}</button>`;
+function renderControls(){
+  const fk=document.activeElement&&document.activeElement.dataset&&document.activeElement.dataset.k?[document.activeElement.dataset.k,document.activeElement.dataset.v]:null;
+  const cal=state.view==='cal';
+  // numbers: this month's topics (calendar) or all entries (list) under the attitude filter
+  const n=c=>cal ? ALL.filter(x=>x.game===c&&inMonth(x,state.month)&&(!state.att||attOf(x)===state.att)).length
+    : SNAPS.reduce((t,s)=>t+s.topics.filter(x=>x.game===c&&(!state.att||x.attitude===state.att)).length,0);
+  $('games').innerHTML = chip('game','','すべて',!state.game.length,' all') +
+    dataGames.map(c=>`<button class="chip g" style="${gvars(c)}" data-k="game" data-v="${c}" aria-pressed="${state.game.includes(c)}">${gi(GAME[c].name)}${esc(GAME[c].name)} <em>${n(c)}</em></button>`).join('');
+  $('frow').innerHTML = `<span class="fl" aria-hidden="true">反応</span>` + chip('att','','すべて',!state.att,' k') +
+    ATTS.map(a=>chip('att',a,`<span class="am a-${a}" aria-hidden="true">${ATT[a].m}</span>${ATT[a].l}`,state.att===a,` k a-${a}`)).join('') +
+    (state.att||state.game.length?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
+  $('vList').setAttribute('aria-pressed',!cal);
+  $('vCal').setAttribute('aria-pressed',cal);
+  const [lo,hi]=bounds(), [y,m]=state.month.split('-').map(Number);
+  $('monthNav').hidden=!cal;
+  $('monthLabel').innerHTML=`<small>${y}年</small>${m}月`;
+  $('prev').disabled=state.month<=lo;
+  $('nextM').disabled=state.month>=hi;
+  const nf=state.game.length+(state.att?1:0), badge=$('filterBadge');
+  badge.hidden=!nf; badge.textContent=nf;
+  $('filterBtn').setAttribute('aria-label',nf?`絞り込み（${nf}件の条件）`:'絞り込み');
+  $('calv').hidden=!cal; $('list').hidden=cal;
+  if(fk){ const el=document.querySelector(`.panel [data-k="${fk[0]}"][data-v="${CSS.escape(fk[1])}"]`); if(el) el.focus(); }
+}
+function renderHead(total){
+  const t=`${state.view==='cal'?'この月 ':''}<b>${total.toLocaleString('ja-JP')}</b> 件`;
+  $('count').innerHTML=t;
+  // phones: the toolbar count sits behind 絞り込み, so the head repeats it
+  const first=state.month+'-01', last=addD(addM(state.month,1)+'-01',-1);
+  const note=state.view==='cal'&&DATA_TO&&(first<DATA_FROM||last>DATA_TO)?`<span class="sub">話題データは ${md(DATA_FROM)} から${DATA_TO<last?`（最新 ${md(DATA_TO)}）`:''}</span>`:'';
+  $('rhead').innerHTML=`<span class="count mcount">${t}</span>${note}`;
+}
+function renderNotice(){
+  $('notice').innerHTML = SAMPLE ? '<p class="notice"><b>サンプルデータを表示しています。</b>話題カレンダーは準備中で、内容は表示確認用の見本です。</p>' : '';
+}
+document.querySelector('.panel').addEventListener('click',e=>{
+  if(e.target.closest('#resetAll')){ commit({game:[],att:''}); return; }
+  const b=e.target.closest('[data-k]'); if(!b) return;
+  const k=b.dataset.k, v=b.dataset.v;
+  if(k==='game'){ commit({game: v ? (state.game.includes(v)?state.game.filter(x=>x!==v):[...state.game,v]) : []}); track('voices_filter',{key:'game',value:v||'all'}); }
+  if(k==='att'){ commit({att: v===state.att ? '' : v}); track('voices_filter',{key:'att',value:v||'all'}); }
+});
+$('prev').onclick=()=>commit({month:addM(state.month,-1)});
+$('nextM').onclick=()=>commit({month:addM(state.month,1)});
+$('goToday').onclick=()=>{
+  if(state.view==='cal'){ const [lo,hi]=bounds(), ym=monthOf(TODAY); if(ym!==state.month && ym>=lo && ym<=hi) commit({month:ym}); }
+  requestAnimationFrame(()=>{ const el=state.view==='cal'&&document.querySelector('.vd.today'); if(el) el.scrollIntoView({block:'center'}); else window.scrollTo({top:0}); });
+};
+$('filterBtn').onclick=e=>{ const bar=document.querySelector('.bar'), open=!bar.classList.contains('open'); bar.classList.toggle('open',open); e.currentTarget.setAttribute('aria-expanded',open); };
+$('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'voices_list'}); };
+$('vCal').onclick=()=>{ commit({view:'cal'}); track('switch_view',{view:'voices_calendar'}); };
+
+// ---- topic card
+function badge(v){
+  const st=v.t.status;
+  if(st==='continuing') return `<span class="badge hot">🔥 ${diffD(v.t.first_seen,v.snap.date)+1}日連続</span>`;
+  if(st==='cooling') return '<span class="badge cool">📉 落ち着き</span>';
+  return SHOW_NEW ? '<span class="badge new">🆕 新</span>' : '';
+}
+// share is a rough estimate from the posts we read: shown as proportions in 10% steps (largest remainder, so the
+// labels add up to 100%), never as counts
+function tenths(s, ks){
+  const tot=ks.reduce((t,k)=>t+s[k],0), u=ks.map(k=>s[k]/tot*10), fl=u.map(Math.floor);
+  let left=10-fl.reduce((a,b)=>a+b,0);
+  ks.map((k,i)=>i).sort((i,j)=>(u[j]-fl[j])-(u[i]-fl[i])||s[ks[j]]-s[ks[i]]).forEach(i=>{ if(left>0){ fl[i]++; left--; } });
+  return Object.fromEntries(ks.map((k,i)=>[k,fl[i]*10]));
+}
+const approx = p => p ? `約${p}%` : 'わずか';
+// fewer than SMALL posts behind a topic (share total, contracts/voices.md): a tendency phrase only, no bar or percentages
+const SMALL = 5;
+const TREND = {positive:'好意的な声が多い', negative:'否定的な声が多い', mixed:'賛否が分かれている', neutral:'目立った賛否はない'};
+const isSmall = t => t.share.positive+t.share.negative+t.share.neutral < SMALL;
+function attBlock(t){
+  const s=t.share, a=ATT[t.attitude];
+  if(isSmall(t)) return `<div class="att a-${t.attitude}" data-small><span class="atth">反応の傾向（推定）</span><span class="attl"><span aria-hidden="true">${a.m} </span>${a.l}</span>`
+    + `<span class="trend">${TREND[t.attitude]}</span><span class="vol">話題量 <b>${VOL[t.volume]}</b></span>`
+    + `<span class="alg">投稿が少ないため、割合は出していません</span></div>`;
+  const seg=(k,c)=>s[k]?`<span class="${c}" style="flex:${s[k]}"></span>`:'';
+  const parts=[['positive','好意的'],['negative','否定的'],['neutral','中立']].filter(([k])=>s[k]);
+  const pc=tenths(s,parts.map(([k])=>k));
+  const lab=parts.map(([k,l])=>`${l} ${approx(pc[k])}`).join('・');
+  return `<div class="att a-${t.attitude}"><span class="atth">反応の傾向（推定）</span><span class="attl"><span aria-hidden="true">${a.m} </span>${a.l}</span>`
+    + `<span class="abar" role="img" aria-label="反応の傾向（推定） ${lab}">${seg('positive','p')}${seg('negative','n')}${seg('neutral','u')}</span>`
+    + `<span class="vol">話題量 <b>${VOL[t.volume]}</b></span>`
+    + `<span class="alg" aria-hidden="true">${parts.map(([k,l])=>`<span class="a-${k}"><i></i>${l} ${approx(pc[k])}</span>`).join('')}</span></div>`;
+}
+const ext = '<span class="sr">（外部サイト・X）</span>';
+function card(v, hx='h3'){
+  const t=v.t, g=GAME[t.game];
+  // the voices paraphrase the topic as a whole; players' posts are never linked (owner decision 2026-11-20), only the official post
+  const voices=t.voices.length?`<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">${t.voices.map(x=>`<li><span aria-hidden="true">💬 </span>${esc(x)}</li>`).join('')}</ul>`:'';
+  const links=t.reacting_to?`<a href="${esc(t.reacting_to)}" target="_blank" rel="nofollow noopener noreferrer" data-x="reacting">反応元の公式投稿 ↗${ext}</a>`:'';
+  return `<article class="tc" style="${gvars(t.game)}" data-topic="${esc(t.id)}">
+    <div class="tc-top"><span class="tag">${gi(g.name)}${esc(g.name)}</span>${badge(v)}<span class="ai">AIによる要約</span></div>
+    <${hx}>${esc(t.title)}</${hx}>
+    <p class="sum">${esc(t.summary)}</p>
+    ${attBlock(t)}
+    ${voices}
+    <p class="tc-links">${links}<button class="cplink" data-copy="${esc(t.id)}" aria-label="この話題へのリンクをコピー">リンクをコピー</button></p>
+    <p class="tc-win">${md(t.window.from)}〜${md(t.window.to)} の投稿から（${md(v.snap.date)} 時点${v.snap.sample?'・サンプル':''}）</p>
+  </article>`;
+}
+
+// ---- calendar
+const MAX_LANES = 4;
+function renderCal(){
+  const ym=state.month, first=ym+'-01', start=addD(first,-dowOf(first)), days=diffD(first,addM(ym,1)+'-01');
+  const weeks=Math.ceil((dowOf(first)+days)/7);
+  // topics on any cell shown, including the neighbouring months' days in the first and last week
+  // bars only when exactly one game is selected; otherwise a chip per game and day
+  const bars1=state.game.length===1;
+  const tps=visible().filter(x=>x.first<=addD(start,weeks*7-1)&&x.last>=start).sort(byOrder);
+  const monthN=tps.filter(x=>inMonth(x,ym)).length;
+  renderHead(monthN);
+  if(!monthN){
+    $('calv').innerHTML=`<div class="state"><b>${state.game.length||state.att?'この条件の話題はありません':'この月の話題はまだありません'}</b><span>${dataMonths.length?'ほかの月を見るか、絞り込み条件をゆるめてみてください。':'話題のデータは準備中です。'}</span>${state.game.length||state.att?'<button class="sbtn ghost" id="resetAll2">条件をクリア</button>':''}</div>`;
+    return;
+  }
+  let h=`<div class="vhead">${DOW.map((w,i)=>`<div class="dow ${i==0?'sun':i==6?'sat':''}">${w}</div>`).join('')}</div>`;
+  for(let w=0; w<weeks; w++){
+    const ws=addD(start,w*7), we=addD(ws,6);
+    const segs=tps.filter(x=>x.first<=we&&x.last>=ws).map(x=>({x, s:maxS(x.first,ws), e:minS(x.last,we)}));
+    const laneEnd=[], hidden={};
+    if(bars1) segs.forEach(sg=>{
+      let l=laneEnd.findIndex(e=>e<sg.s); if(l<0){ l=laneEnd.length; laneEnd.push(''); }
+      laneEnd[l]=sg.e; sg.lane=l;
+      if(l>=MAX_LANES) for(let k=sg.s; k<=sg.e; k=addD(k,1)) hidden[k]=(hidden[k]||0)+1;
+    });
+    const L=Math.min(laneEnd.length,MAX_LANES);
+    let cells='', bars='';
+    for(let i=0;i<7;i++){
+      const k=addD(ws,i), wd=dowOf(k), on=segs.filter(sg=>activeOn(sg.x,k)).map(sg=>sg.x);
+      const cls=['vd', wd==0?'sun':wd==6?'sat':'']; if(monthOf(k)!==ym) cls.push('out'); if(k===TODAY) cls.push('today');
+      if(monthOf(k)===ym && (k<DATA_FROM || k>DATA_TO)) cls.push('nod');
+      const n=`<span class="n">${+k.slice(8)}</span>`;
+      if(!on.length){ cells+=`<div class="${cls.join(' ')}" style="grid-column:${i+1}">${n}</div>`; continue; }
+      const gs=dayGames(on,k);
+      // phones: one dot per game with its tone that day
+      const dots=gs.map(g=>`<span class="vg a-${g.a}" style="${gvars(g.c)}" title="${esc(GAME[g.c].name)}：${ATT[g.a].l}"><i></i><em class="am">${ATT[g.a].m}</em></span>`).join('');
+      const chips=bars1?'':`<span class="vchips">${gs.map(g=>`<button class="vchip a-${g.a}" style="${gvars(g.c)}" tabindex="-1" data-day="${k}" data-game="${g.c}" aria-label="${esc(`${md(k)} ${GAME[g.c].name}：話題${g.xs.length}件（${ATT[g.a].l}）`)}">${gi(GAME[g.c].name)}${esc(GAME[g.c].short)}<em class="am" aria-hidden="true">${ATT[g.a].m}</em>${g.xs.length>1?`<span class="vn" aria-hidden="true">${g.xs.length}</span>`:''}</button>`).join('')}</span>`;
+      const label=`${md(k)} 話題${on.length}件（${gs.map(g=>GAME[g.c].name).join('・')}）`;
+      cells+=`<div class="${cls.join(' ')}" style="grid-column:${i+1}" data-day="${k}"><button class="vdn" data-day="${k}" aria-label="${esc(label)}">${n}</button><span class="vdots" aria-hidden="true">${dots}</span>${chips}${hidden[k]?`<span class="vmore" aria-hidden="true">ほか${hidden[k]}件</span>`:''}</div>`;
+    }
+    if(bars1) segs.filter(sg=>sg.lane<MAX_LANES).forEach(sg=>{
+      const x=sg.x, v=versionOn(x,sg.s), t=v.t, a=t.attitude, g=GAME[x.game];
+      const c0=diffD(ws,sg.s)+1, c1=diffD(ws,sg.e)+2;
+      const cl=x.first<ws?' cl':'', cr=x.last>we?' cr':'';
+      bars+=`<button class="vbar a-${a}${cl}${cr}" style="${gvars(x.game)};grid-column:${c0}/${c1};grid-row:${sg.lane+2}" data-topic="${esc(x.id)}" data-day="${sg.s}" tabindex="-1" aria-label="${esc(`${g.name}：${t.title}（${ATT[a].l}・${md(x.first)}〜${md(x.last)}）`)}">${gi(g.name)}<b>${esc(g.short)}</b><em class="am" aria-hidden="true">${ATT[a].m}</em><span class="tt">${esc(t.title)}</span></button>`;
+    });
+    const rows=bars1?`32px${L?` repeat(${L},26px)`:''} minmax(${Object.keys(hidden).length?24:8}px,1fr)`:'minmax(96px,auto)';
+    h+=`<div class="vwk" style="--rows:${rows}">${cells}${bars}</div>`;
+  }
+  // phones show dots only: a key of this month's games under the calendar
+  const mg=[...new Set(tps.filter(x=>inMonth(x,ym)).map(x=>x.game))].sort((a,b)=>gameOrd(a)-gameOrd(b));
+  $('calv').innerHTML=`<div class="vcal">${h}</div><p class="vgkey" aria-hidden="true">${mg.map(c=>`<span style="${gvars(c)}"><i></i>${esc(GAME[c].short)}</span>`).join('')}</p>`;
+}
+
+// ---- list
+function renderList(){
+  const es=listEntries().filter(e=>e.ts.length);
+  renderHead(es.reduce((t,e)=>t+e.ts.length,0));
+  if(!es.length){
+    $('list').innerHTML=`<div class="state"><b>${state.game.length||state.att?'この条件の話題はありません':'話題のデータはまだありません'}</b>${state.game.length||state.att?'<button class="sbtn ghost" id="resetAll2">条件をクリア</button>':''}</div>`;
+    return;
+  }
+  $('list').innerHTML=es.map(({snap,ts})=>`<section class="vsnap" aria-labelledby="s-${snap.date}"><h2 id="s-${snap.date}">${mdj(snap.date)} 時点<small>${md(snap.window.from)}〜${md(snap.window.to)} の X の投稿から・${ts.length}件${snap.sample?'・サンプル':''}</small>${snap.sample?'':`<a class="vsl" href="/voices/${snap.date}/">この日のまとめ</a>`}</h2>`
+    + `<div class="vcards">${ts.map(t=>card({snap,t},'h3')).join('')}</div></section>`).join('');
+}
+
+// ---- dialog: one day (calendar cell) or one topic (calendar bar)
+const dlg=$('vDlg');
+let dlgFrom=null;
+// the open dialog is in the URL hash (#d= / #t=, replaced, never a new history entry) so its address can be shared
+const setHash = h => { if(location.hash!==h) history.replaceState(history.state,'',location.pathname+location.search+h); };
+function openDlg(title, body){
+  if(!dlg.open) dlgFrom=document.activeElement;
+  $('vTitle').textContent=title; $('vBody').innerHTML=body; dlg.scrollTop=0;
+  if(!dlg.open){ if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open',''); }
+  $('vClose').focus();
+}
+// game = a calendar chip: only that game's topics, with a way back to the whole day
+function openDay(k, game){
+  const all=visible().filter(x=>activeOn(x,k)), gs=dayGames(all,k);
+  const sel=game&&gs.some(g=>g.c===game)?game:'';
+  const on=gs.filter(g=>!sel||g.c===sel).flatMap(g=>g.xs);
+  const hiddenN=ALL.filter(x=>activeOn(x,k)).length-all.length;
+  // the game filter inside the dialog: what the calendar chips do, also for keyboards and phones (no chips there)
+  const row=gs.length>1?`<div class="dgames" role="group" aria-label="タイトルで絞り込み">${chip('dgame','','すべて',!sel,' all')}${gs.map(g=>`<button class="chip g" style="${gvars(g.c)}" data-k="dgame" data-v="${g.c}" aria-pressed="${g.c===sel}">${gi(GAME[g.c].name)}${esc(GAME[g.c].short)} <em>${g.xs.length}</em></button>`).join('')}</div>`:'';
+  openDlg(sel?`${mdj(k)}の${GAME[sel].name}の話題`:`${mdj(k)}の話題`, row + (on.length?on.map(x=>card(versionOn(x,k))).join(''):'<p class="dl-note">この日の話題はありません。</p>')
+    + (sel&&all.length>on.length?`<button class="sbtn ghost" data-allday="${k}">この日のすべての話題を見る（${all.length}件）</button>`:'')
+    + (!sel&&hiddenN?`<p class="dl-note">絞り込み条件により、ほか${hiddenN}件を表示していません。</p>`:''));
+  dlg.dataset.day=k;
+  setHash(`#d=${k}`);
+  track('voices_open',{kind:sel?'day_game':'day'});
+}
+function openTopic(id,k){
+  const x=TOPICS.get(id); if(!x) return;
+  openDlg(`${GAME[x.game].name}の話題`, card(k?versionOn(x,k):latest(x)) + (x.vs.length>1?`<p class="dl-note">${md(x.first)}〜${md(x.last)}（${x.vs.length}回の集計で話題）</p>`:''));
+  setHash(`#t=${id}`);
+  track('voices_open',{kind:'topic'});
+}
+$('vClose').onclick=()=>dlg.close();
+$('vBody').addEventListener('click',e=>{
+  const b=e.target.closest('[data-allday]'); if(b){ openDay(b.dataset.allday); return; }
+  const g=e.target.closest('[data-k="dgame"]');
+  if(g){ openDay(dlg.dataset.day,g.dataset.v); const f=$('vBody').querySelector(`[data-k="dgame"][data-v="${CSS.escape(g.dataset.v)}"]`); if(f) f.focus(); return; }
+  const c=e.target.closest('[data-copy]'); if(c) copyLink(c);
+});
+$('list').addEventListener('click',e=>{ const c=e.target.closest('[data-copy]'); if(c) copyLink(c); });
+function copyText(text, host){
+  const old=()=>{ const ta=document.createElement('textarea'); ta.value=text; ta.setAttribute('readonly',''); ta.style.cssText='position:fixed;top:0;left:0;opacity:0';
+    host.appendChild(ta); ta.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(e){} ta.remove(); return ok; };
+  return navigator.clipboard&&window.isSecureContext ? navigator.clipboard.writeText(text).then(()=>true,()=>old()) : Promise.resolve(old());
+}
+function copyLink(b){
+  const url=location.origin+location.pathname+'#t='+b.dataset.copy;
+  copyText(url, b.closest('dialog')||document.body).then(ok=>{
+    const msg=ok?'コピーしました':'コピーできませんでした';
+    b.textContent=msg; $('vLive').textContent=ok?'リンクをコピーしました':'リンクをコピーできませんでした';
+    if(!ok) window.prompt('この話題へのリンク',url);
+    clearTimeout(b._t); b._t=setTimeout(()=>{ b.textContent='リンクをコピー'; },2000);
+  });
+  track('voices_copy_link',{game:(TOPICS.get(b.dataset.copy)||{}).game||''});
+}
+dlg.addEventListener('click',e=>{ if(e.target===dlg) dlg.close(); });
+dlg.addEventListener('close',()=>{ setHash(''); if(dlgFrom&&document.contains(dlgFrom)) dlgFrom.focus(); dlgFrom=null; });
+document.addEventListener('click',e=>{
+  const a=e.target.closest('a[data-x]'); if(a){ const tc=a.closest('[data-topic]'); track('click_voice_post',{kind:a.dataset.x, game:tc?(TOPICS.get(tc.dataset.topic)||{}).game:''}); }
+});
+$('results').addEventListener('click',e=>{
+  if(e.target.closest('#resetAll2')){ commit({game:[],att:''}); return; }
+  const bar=e.target.closest('button.vbar'); if(bar){ openTopic(bar.dataset.topic,bar.dataset.day); return; }
+  const ch=e.target.closest('button.vchip'); if(ch){ openDay(ch.dataset.day,ch.dataset.game); return; }
+  const d=e.target.closest('.vd[data-day]'); if(d){ openDay(d.dataset.day); return; }
+});
+
+// ---- freshness: the latest snapshot that has topics for each game
+function renderFresh(){
+  if(!SNAPS.length){ $('fresh').innerHTML='<span class="frl"><span class="lab">話題データ</span><span>準備中</span></span>'; return; }
+  // one line for the snapshot most titles share, then only the titles whose latest snapshot is another one
+  const per=dataGames.map(c=>[c,SNAPS.filter(x=>x.topics.some(t=>t.game===c)).pop()]);
+  const by=new Map(); per.forEach(([c,s])=>{ if(!by.has(s)) by.set(s,[]); by.get(s).push(c); });
+  const [main,mc]=[...by.entries()].sort((a,b)=>b[1].length-a[1].length||(a[0].date<b[0].date?1:-1))[0];
+  const at=s=>`${md(s.date)}時点<span class="win">（${md(s.window.from)}〜${md(s.window.to)}）</span>`;
+  $('fresh').innerHTML='<span class="frl"><span class="lab">話題データ</span>'
+    + `<span>${mc.length===per.length?'全':''}${mc.length}タイトル ${at(main)}</span>`
+    + per.filter(([,s])=>s!==main).map(([c,s])=>`<span>${esc(GAME[c].name)} ${at(s)}</span>`).join('')
+    + (SAMPLE?'<span class="smp">サンプル</span>':'')+'</span>';
+}
+
+function render(){
+  renderControls();
+  if(state.view==='cal') renderCal(); else renderList();
+}
+renderNotice();
+renderFresh();
+render();
+// Deep links (shared links, the home page later): #d=YYYY-MM-DD opens that day, #t=<topic id> one topic, also when the
+// hash is edited by hand. Others are dropped (and close the dialog).
+function fromHash(){
+  const deep=/^#(d|t)=([\w-]+)$/.exec(location.hash);
+  if(deep && deep[1]==='d' && realDay(deep[2])){
+    const ym=monthOf(deep[2]), [lo,hi]=bounds();
+    if(state.view==='cal' && ym>=lo && ym<=hi && ym!==state.month) commit({month:ym},{auto:true});
+    openDay(deep[2]);
+  } else if(deep && deep[1]==='t' && TOPICS.has(deep[2])) openTopic(deep[2]);
+  else { if(location.hash) setHash(''); if(dlg.open) dlg.close(); }
+}
+fromHash();
+window.addEventListener('hashchange',fromHash);
+</script>

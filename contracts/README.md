@@ -1,6 +1,7 @@
 # Event contracts
 
 Release-calendar collectors and merge have their own contract: `releases.md` (run end to end by `scripts/refresh.py`).
+The 話題カレンダー (`/voices/`) snapshots have theirs: `voices.md` + `voices.schema.json`.
 
 Shared by the collectors (`tools/`), the importer and Worker (`api/`) and the `/events/` page. Change only through the lead; every consumer reads from here.
 

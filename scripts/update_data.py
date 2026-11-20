@@ -45,6 +45,8 @@ DATA = os.path.join(ROOT, 'data')
 THUMBS = os.path.join(ROOT, 'public/thumbs')
 KEEP_PAST_DAYS = 30
 MIN_RATIO = 0.7
+# fields the pages show (scripts/build.py `keep`); a change to any of them moves the item's `changed` date
+SHOWN = ('date', 'game', 'name', 'pack', 'box', 'per_box', 'per_pack', 'url', 'thumb', 'approx')
 
 
 def norm(name):
@@ -226,6 +228,24 @@ def merge(existing, scraped, overrides, today, report, dry, checked=frozenset())
         if not i.get('thumb'):
             report['noimage'].append(f"{i['date']}  [{i['game']}] {i['name']}  ({i['id']})")
     return out
+
+
+def shown(x):
+    """What the item's pages show; prices by yen amount, so a change in writing only (6688円 / 6,688円) is no change."""
+    return tuple(yen_int(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN)
+
+
+def stamp_changed(items, existing, today, prev_updated):
+    """`changed` (contracts/releases.md): TODAY for new items and items whose shown fields differ from the run's
+    starting items.json, else kept. Items from before the field existed take the previous run's date (meta.json
+    `updated`, what the sitemap gave them until then) instead of a guess."""
+    old = {x['id']: x for x in existing}
+    for x in items:
+        e = old.get(x['id'])
+        if e is None or shown(e) != shown(x):
+            x['changed'] = today
+        else:
+            x['changed'] = e.get('changed') or prev_updated or today
 
 
 def today_iso():
@@ -612,6 +632,9 @@ def update(args, dry, data):
     report_path = os.path.join(data, 'update-report.md')
     write_report(report_path, report, counts, unknown, today, log)
     if not dry:
+        meta_path = os.path.join(data, 'meta.json')
+        prev_updated = json.load(open(meta_path)).get('updated') if os.path.exists(meta_path) else None
+        stamp_changed(items, existing, today.isoformat(), prev_updated)
         tmp = os.path.join(data, 'items.json.part')
         with open(tmp, 'w') as f:
             json.dump(items, f, ensure_ascii=False, indent=1)

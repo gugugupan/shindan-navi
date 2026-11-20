@@ -1,4 +1,4 @@
-<title>TCGイベント・大会カレンダー（ポケカ・ワンピ・ガンダム・デジモンほか）｜トレカカレンダー</title>
+<title>TCG大会・イベントカレンダー（ポケカ・ワンピ・ガンダムほか）｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
 <style>/*EVENT_FONTS*/</style>
 <style>
@@ -17,7 +17,6 @@
 .freset{border:0;background:none;color:var(--accent);font-size:12px;font-weight:700;padding:4px 6px}
 .fgrp{display:grid;gap:6px}
 .fgrp h3{margin:0;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
-.fgrp h3 i{width:8px;height:8px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
 .fg{display:grid;grid-template-columns:6em minmax(0,1fr);gap:6px 10px;align-items:start;margin:0;padding:0;border:0;min-width:0}
 .fl{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding-top:5px}
 .fc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
@@ -217,6 +216,7 @@ button.cd:hover{background:var(--surface-2)}
 <script>
 const API_BASE = /*API_BASE*/'/api/v1';
 // c / cd = light / dark colour from the game palette (CLAUDE.md), bit = meta's game mask
+/*GICON*/
 const GAMES = [
   {code:'OPCG', name:'ONE PIECE', c:'#be362d', cd:'#de837c', bit:1},
   {code:'UATCG', name:'UNION ARENA', c:'#7a2dbe', cd:'#b17cde', bit:2},
@@ -383,7 +383,7 @@ function renderControls(){
     GAMES.map(g=>{
       const m=metaGame(g.code), n=gc?gc[g.code]:null;
       const em = m&&!m.record_count ? ` <em class="none">準備中</em>` : n==null ? '' : ` <em>${n.toLocaleString('ja-JP')}</em>`;
-      return `<button class="chip g" style="${gvars(g)}" data-k="game" data-v="${g.code}" aria-pressed="${state.game.includes(g.code)}"><i></i>${esc(g.name)}${em}</button>`;
+      return `<button class="chip g" style="${gvars(g)}" data-k="game" data-v="${g.code}" aria-pressed="${state.game.includes(g.code)}">${gi(g.name)}${esc(g.name)}${em}</button>`;
     }).join('');
 
   const sum=(arr,lab)=>arr.length?lab(arr[0])+(arr.length>1?` ほか${arr.length-1}`:''):'';
@@ -449,7 +449,7 @@ function renderF(){
     body=games.map(g=>{
       const ts=(meta&&meta.types||[]).filter(t=>t.game_code===g.code);
       if(!ts.length) return '';
-      return `<div class="fgrp" style="${gvars(g)}"><h3><i></i>${esc(g.name)}</h3><div class="fc">${ts.map(t=>`<button class="chip k" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`;
+      return `<div class="fgrp" style="${gvars(g)}"><h3>${gi(g.name)}${esc(g.name)}</h3><div class="fc">${ts.map(t=>`<button class="chip k" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`;
     }).join('') || `<p class="note">${meta?'選べる形式がありません':'読み込み中…'}</p>`;
   } else if(k==='days') body=`<div class="fc">${chips(DAYS,false)}</div>`;
   const focusKey=document.activeElement&&fDlg.contains(document.activeElement)&&document.activeElement.dataset.k?[document.activeElement.dataset.k,document.activeElement.dataset.v]:null;
@@ -548,7 +548,7 @@ function card(e, day){
   const g=GAME[e.game_code]||{name:e.game_code,c:'#8a8f9e',cd:'#8a8f9e'};
   const mk=day&&e.venue?geoKey(e.venue.geo):null;
   const pin=!day||!e.venue ? '' : mk ? `<button type="button" class="ev-pin" aria-label="${esc(venueLabel(e.venue))}を地図で見る">地図</button>` : `<button type="button" class="nomapt" aria-expanded="false" data-why="${e.attendance_mode==='online'?'online':'geo'}">地図なし</button>`;
-  const tags=(Array.isArray(e.game_codes)&&e.game_codes.length?e.game_codes:[e.game_code]).map(c=>{ const x=GAME[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="${gvars(x)}"><i></i>${esc(x.name)}</span>`; }).join('');
+  const tags=(Array.isArray(e.game_codes)&&e.game_codes.length?e.game_codes:[e.game_code]).map(c=>{ const x=GAME[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="${gvars(x)}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
   const w=whenText(e), fee=feeText(e), reg=regText(e);
   const st = e.event_status==='cancelled' ? '<span class="st cancel">中止</span>' : e.event_status==='postponed' ? '<span class="st post">延期</span>' : '';
   const cat = CAT_LABEL[e.group&&e.group.category];
