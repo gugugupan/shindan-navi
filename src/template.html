@@ -934,7 +934,7 @@ function copyStars(btn){
   }
 }
 
-// Deep links from the today page (/): #d=YYYY-MM-DD opens that day, #i=<id> one item. The hash is dropped after use.
+// Deep links from the today page (/) and the product pages (/item/<id>/): #d=YYYY-MM-DD opens that day, #i=<id> one item. The hash is dropped after use.
 const deep=/^#(d|i)=([\w-]+)$/.exec(location.hash);
 const deepItems=deep?(deep[1]==='d'?DATA.filter(d=>d.date===deep[2]).sort(starFirst):DATA.filter(d=>d.id===deep[2])):[];
 if(deepItems.length&&months.includes(deepItems[0].date.slice(0,7))) state.month=deepItems[0].date.slice(0,7);

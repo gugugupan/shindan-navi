@@ -1,4 +1,6 @@
-import json,sys,os,urllib.parse,shutil,html,datetime,re,glob
+import json,sys,os,urllib.parse,shutil,html,datetime,re,glob,unicodedata
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+from sourcekey import product_code
 OFFICIAL={'遊戯王OCG':'https://www.yugioh-card.com/japan/','ヴァイスシュヴァルツ':'https://ws-tcg.com/','ヴァンガード':'https://cf-vanguard.com/tcg/',
 'MTG':'https://mtg-jp.com/','バトルスピリッツ':'https://www.battlespirits.com/','デュエル・マスターズ':'https://dm.takaratomy.co.jp/','リセ':'https://lycee-tcg.com/',
 'ポケモンカード':'https://www.pokemon-card.com/','FFTCG':'https://www.square-enix-shop.com/jp/ff-tcg/','Z/X':'https://www.zxtcg.com/',
@@ -82,7 +84,7 @@ def static_list(items,heading,note,show_game=True):
         for d in its:
             name=esc(d['name'])
             g=(f'<a class="sg" href="/{SLUG[d["game"]]}/">{esc(d["game"])}</a>' if d['game'] in SLUG else f'<span class="sg">{esc(d["game"])}</span>') if show_game else ''
-            a=f'<a href="{esc(d["url"])}" target="_blank" rel="noopener">{name}</a>' if d['url'] else name
+            a=f'<a href="/item/{d["id"]}/">{name}</a>'
             pr=f'<span class="sp">{esc(d["pack"])}</span>' if d['pack'] else ''
             out.append(f'<li>{g}{a}{pr}</li>')
         out.append('</ul></div>')
@@ -247,7 +249,7 @@ def render(pg):
     items=pg['ld_items']
     if items:
         ld.append({'@context':'https://schema.org','@type':'ItemList','name':pg['h1'],'numberOfItems':len(items),
-            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],**({'url':d['url']} if d['url'] else {})} for i,d in enumerate(items)]})
+            'itemListElement':[{'@type':'ListItem','position':i+1,'name':d['name'],'url':f'{SITE}/item/{d["id"]}/'} for i,d in enumerate(items)]})
     ldjs=''.join(f'<script type="application/ld+json">{json.dumps(x,ensure_ascii=False).replace("</","<\\/")}</script>' for x in ld)
     head=f"""<!doctype html>
 <html lang="ja">
@@ -644,6 +646,123 @@ def render_voices():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
+# ---- /item/<id>/: one static page per visible release, for searches like 「OP-15 発売日」. Every visible item gets one
+# (past ones are still searched); an item that leaves items.json loses its page. Only BreadcrumbList JSON-LD (see Data model).
+ITEM_SRC=open(os.path.join(ROOT,'src/item.html')).read()
+RAW={i['id']:i for i in it}
+PLACEHOLDER=re.search(r"const PLACEHOLDER = '(.*?)';",template).group(1)
+_cnt=__import__('collections').Counter(d['game'] for d in data)
+# same colours as the calendar (HUE in src/template.html; ties there sort by localeCompare('ja'), here by code point)
+HUE={g:round((i*137.508+230)%360) for i,g in enumerate(sorted(_cnt,key=lambda g:(-_cnt[g],g)))}
+ITEM_NEAR=3
+def item_code(d):
+    """Official product code: the official source key when it is a code, else a code in the name."""
+    src=RAW[d['id']].get('source') or {}
+    k=src.get('key','')
+    if src.get('site')=='official' and k and product_code(k)==k: return k
+    return product_code(d['name'])
+def jdate(s):
+    x=jd(s); return f'{x.year}年{x.month}月{x.day}日({DOW[x.weekday()]})'
+def item_page(d,by_game):
+    g=d['game']; slug=SLUG.get(g)
+    short=next((sh for s,k,n,sh in GAMES if k==g),g)
+    code=item_code(d)
+    in_name=code and code in re.sub(r'[‐‑‒–—―]','-',unicodedata.normalize('NFKC',d['name']).upper())
+    price=[f'価格は{d["pack"]}'] if d['pack'] else []
+    if d['box']: price.append(f'1BOX {d["box"]}')
+    desc=(f'{d["name"]}（{g}）の発売日は{jdate(d["date"])}。'+('、'.join(price)+'（税込）。' if price else '')
+          +(f'商品コード {code}。' if code else '')+f'{short}の新弾の発売日・価格をトレカカレンダーでチェック。')
+    crumbs=[('トップ','/'),('新弾カレンダー','/releases/')]+([(f'{short} 新弾',f'/{slug}/')] if slug else [])+[(d['name'],None)]
+    lst=by_game[g]; k=lst.index(d)
+    near=lst[max(0,k-ITEM_NEAR):k+ITEM_NEAR+1]
+    return dict(path=f'/item/{d["id"]}/',d=d,code=code,short=short,slug=slug,near=near,crumbs=crumbs,
+        title=f'{d["name"]}{"" if not code or in_name else f"【{code}】"} 発売日・価格｜トレカカレンダー',desc=desc,
+        keywords=[x for x in (code and f'{code} 発売日',f'{short} 新弾',f'{short} 発売日') if x]+['発売日','価格','トレカ','TCG'])
+def item_body(pg):
+    d=pg['d']; g=d['game']; ym=d['date'][:7]
+    img=(f'<img class="th" src="{esc(d["thumb"])}" alt="{esc(d["name"])}">' if d['thumb'] else
+         f'<span class="th none" role="img" aria-label="{esc(d["name"])}（画像準備中）">{PLACEHOLDER}<small>画像準備中</small></span>')
+    if d['approx']: img+='<p class="ap">参考画像（実際の商品と異なる場合あり）</p>'
+    row=lambda t,v:f'<dt>{t}</dt><dd>{v}</dd>'
+    title_dd=f'<a href="/{pg["slug"]}/">{esc(g)}</a>' if pg['slug'] else esc(g)
+    rows=[row('発売日',f'<time datetime="{d["date"]}">{jdate(d["date"])}</time>'),
+          row('価格',f'<span class="num">{esc(d["pack"])}</span>' if d['pack'] else '—')]
+    if d['box']: rows.append(row('1BOX',f'<span class="num">{esc(d["box"])}</span>'+(f'（{esc(d["per_box"])}パック入り）' if d['per_box'] else '')))
+    if d['per_pack']:
+        n=re.search(r'\d+',d['pack'].replace(',',''))
+        unit='1パック' if d['per_box'] or (int(n.group()) if n else 0)<1000 else '1セット'  # same rule as the calendar's detail dialog
+        rows.append(row('内容',f'{unit}{esc(d["per_pack"])}枚入り'))
+    if pg['code']: rows.append(row('商品コード',f'<span class="num">{esc(pg["code"])}</span>'))
+    rows.append(row('タイトル',title_dd))
+    rows.append(row('発売月',f'<a href="/{ym}/">{mlabel(ym)}のTCG新弾一覧</a>'))
+    links=[f'<a class="go" href="/releases/#i={d["id"]}">新弾カレンダーで見る</a>']
+    if d['url']: links.append(f'<a href="{esc(d["url"])}" target="_blank" rel="noopener">公式商品ページ ↗</a>')
+    if g in OFFICIAL: links.append(f'<a href="{esc(OFFICIAL[g])}" target="_blank" rel="noopener">{esc(g)} 公式サイト ↗</a>')
+    card=(f'<article class="pd-card" style="--h:{HUE[g]}"><div class="pd-img">{img}</div><div>'
+          f'<p class="pd-tag"><span class="tag"><i></i>{esc(g)}</span></p><h1>{esc(d["name"])}</h1>'
+          f'<dl>{"".join(rows)}</dl><p class="dl-links">{"".join(links)}</p></div></article>')
+    lis=''.join(f'<li><time datetime="{x["date"]}">{fmt(x["date"],True)}</time>'
+                +(f'<span aria-current="page">{esc(x["name"])}</span>' if x is d else f'<a href="/item/{x["id"]}/">{esc(x["name"])}</a>')+'</li>' for x in pg['near'])
+    more=(f'<a class="pd-more" href="/{pg["slug"]}/">{esc(pg["short"])}の新弾をすべて見る</a>' if pg['slug'] else
+          f'<a class="pd-more" href="/releases/">新弾カレンダーで{esc(g)}の発売日を見る</a>')
+    near=f'<section class="pd-near" aria-labelledby="near-h"><h2 id="near-h">同じタイトルの前後の新弾</h2><ol>{lis}</ol>{more}</section>' if len(pg['near'])>1 else ''
+    legend=f'<p class="legend">価格は税込。発売日・価格は変更されることがあるので、購入前に公式情報をご確認ください（{upd_label}更新）。</p>'
+    return card+near+legend
+def render_item(pg):
+    d=pg['d']
+    url=SITE+pg['path']
+    src=re.sub(r'\A<!--.*?-->\n','',ITEM_SRC,count=1,flags=re.S)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    crumbs='<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in pg['crumbs'])+'</nav>'
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav(pg['path'])),
+                     ('<!--CRUMBS-->',crumbs),('<!--ITEM-->',item_body(pg))):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    # our own thumbnail as the share image (portrait, so a small card); a stand-in (approx) or no image: the site default
+    if d['thumb'] and not d['approx']: og,ogm,card=SITE+d['thumb'],'','summary'
+    else: og,ogm,card=f'{SITE}/og/home.png','<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n','summary_large_image'
+    ld={'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
+        {'@type':'ListItem','position':i+1,'name':n,'item':SITE+h if h else url} for i,(n,h) in enumerate(pg['crumbs'])]}
+    ldjs=f'<script type="application/ld+json">{json.dumps(ld,ensure_ascii=False).replace("</","<\\/")}</script>'
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(pg['title'])}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="トレカカレンダー">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(pg['title'])}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+{ogm}<meta property="og:image:alt" content="{esc(d['name'])}">
+<meta name="twitter:card" content="{card}">
+<meta name="twitter:title" content="{esc(pg['title'])}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+<meta name="keywords" content="{esc(','.join(dict.fromkeys(pg['keywords'])))}">
+{ldjs}
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+def item_pages():
+    by_game={}
+    for d in data: by_game.setdefault(d['game'],[]).append(d)
+    return [item_page(d,by_game) for d in data]
+
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
 shutil.copytree(os.path.join(ROOT,'public'),dist)
@@ -655,6 +774,11 @@ for pg in pages:
     d=os.path.join(dist,pg['path'].strip('/'))
     os.makedirs(d,exist_ok=True)
     open(os.path.join(d,'index.html'),'w').write(render(pg))
+items=item_pages()
+for pg in items:
+    d=os.path.join(dist,pg['path'].strip('/'))
+    os.makedirs(d,exist_ok=True)
+    open(os.path.join(d,'index.html'),'w').write(render_item(pg))
 if BUILD_EVENTS:
     os.makedirs(os.path.join(dist,'events'),exist_ok=True)
     open(os.path.join(dist,'events/index.html'),'w').write(render_events())
@@ -670,6 +794,8 @@ if FEEDBACK_ENABLED:
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
+# item pages carry no change date of their own yet: like the calendar pages they are dated by the last data update
+for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
 if VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
@@ -682,5 +808,5 @@ if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
-print('pages',len(pages),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
+print('pages',len(pages),'| item pages',len(items),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
       '| voices',f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)

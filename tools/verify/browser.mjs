@@ -510,6 +510,66 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
+// /item/<id>/ product pages: a code + photo, a 参考画像 and a placeholder example at both widths (the first also dark):
+// they render without errors or horizontal scroll, every internal link answers 200, and 新弾カレンダーで見る opens the item.
+{
+  const items = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/items.json'), 'utf8'));
+  const ov = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/overrides.json'), 'utf8'));
+  const vis = items.map(i => ({ ...i, ...(ov[i.id] || {}) })).filter(i => !i.hide && fs.existsSync(path.join(DIST, 'item', i.id, 'index.html')));
+  const picks = [...new Map([
+    vis.find(i => i.thumb && !i.approx && /【[A-Z0-9-]+】/.test(i.name) && i.date >= TODAY) || vis.find(i => i.thumb && !i.approx),
+    vis.find(i => i.approx && i.thumb), vis.find(i => !i.thumb)].filter(Boolean).map(i => [i.id, i])).values()];
+  if (!picks.length) fail('/item/', 'no item pages built');
+  const checked = new Set();
+  for (const [vp, opt] of Object.entries(VIEWPORTS)) for (const [n, it] of picks.entries()) for (const dark of n === 0 ? [false, true] : [false]) {
+    const where = `${vp} /item/${it.id}/${dark ? ' dark' : ''}`;
+    const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+      hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', colorScheme: dark ? 'dark' : 'light' });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [];
+    page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    page.on('requestfailed', r => { if (r.url().startsWith(BASE)) bad.push(`request failed: ${r.url()}`); });
+    page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
+    try {
+      const res = await page.goto(`${BASE}/item/${it.id}/`, { waitUntil: 'networkidle' });
+      if (!res || res.status() !== 200) fail(where, `status ${res && res.status()}`);
+      const st = await page.evaluate(() => ({
+        h1: document.querySelector('h1')?.textContent, h1s: document.querySelectorAll('h1').length,
+        brokenImgs: [...document.images].filter(i => i.complete && i.naturalWidth === 0).map(i => i.getAttribute('src')),
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        ap: !!document.querySelector('.pd-img .ap'), ph: !!document.querySelector('.pd-img .th.none'),
+        links: [...new Set([...document.querySelectorAll('a[href^="/"]')].map(a => a.getAttribute('href').split('#')[0]))],
+        thW: document.querySelector('.pd-img .th')?.getBoundingClientRect().width }));
+      if (st.h1s !== 1 || st.h1 !== it.name) fail(where, `h1 ${JSON.stringify(st.h1)} != ${JSON.stringify(it.name)}`);
+      if (st.ap !== !!it.approx) fail(where, `参考画像 label ${st.ap ? 'shown' : 'missing'}`);
+      if (st.ph !== !it.thumb) fail(where, `placeholder ${st.ph ? 'shown' : 'missing'}`);
+      if (!st.thW) fail(where, 'no product image');
+      if (st.brokenImgs.length) fail(where, `broken images ${st.brokenImgs.join(', ')}`);
+      if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
+      const hdr = await headerProblem(page, opt.width);
+      if (hdr) fail(where, hdr);
+      for (const l of st.links) {
+        if (checked.has(l)) continue;
+        checked.add(l);
+        const r = await page.request.get(BASE + l);
+        if (r.status() !== 200) fail(where, `link ${l} answers ${r.status()}`);
+      }
+      await page.screenshot({ path: path.join(OUT, `${vp}-item-${it.id}${dark ? '-dark' : ''}.png`), fullPage: true });
+      if (!dark) {
+        await page.locator('.dl-links a.go').click();
+        await page.waitForURL(u => u.pathname === '/releases/');
+        await page.locator('#dlg[open] .dl-item h4').waitFor({ timeout: 5000 });
+        const h4 = await page.locator('#dlg .dl-item h4').allTextContents();
+        if (h4.length !== 1 || h4[0] !== it.name) fail(where, `新弾カレンダーで見る opened ${JSON.stringify(h4)}`);
+      }
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
+}
 // /voices/ (VOICES_ENABLED=1 builds only): the embedded snapshots on the calendar (a chip per game on desktop, bars when
 // one game is selected, a dot per game on phones) on the right days, the day, game and topic dialogs, the list view,
 // the filters and safe X links; shares that add up to 100%, one freshness line per snapshot, the dialog in the URL hash

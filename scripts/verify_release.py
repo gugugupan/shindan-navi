@@ -91,7 +91,7 @@ class PageParser(html.parser.HTMLParser):
     def __init__(self):
         super().__init__()
         self.ld, self.canonical = [], None
-        self.list_names, self.list_dates = [], []
+        self.list_names, self.list_dates, self.list_links = [], [], []
         self._stack, self._buf, self._in = [], [], None
         self._seo_depth = None
 
@@ -104,6 +104,7 @@ class PageParser(html.parser.HTMLParser):
             self._seo_depth = len(self._stack)
         elif self._seo_depth and tag == 'time': self.list_dates.append(a.get('datetime'))
         elif self._seo_depth and tag == 'li': self._in, self._buf = 'li', []
+        elif self._in == 'li' and tag == 'a' and (a.get('href') or '').startswith('/item/'): self.list_links.append(a['href'])
         elif self._in == 'li' and tag == 'a' and (a.get('class') == 'sg'): self._in = 'li-skip'
         elif self._in == 'li' and tag == 'span' and a.get('class') in ('sg', 'sp'): self._in = 'li-skip'
         if tag in ('link', 'meta', 'img', 'br', 'input'): self._stack.pop()
@@ -248,6 +249,61 @@ def check_voices():
     print(f'  /voices/     snapshots={len(got)} topics={sum(len(x["ids"]) for x in got)} sample_only={sample_only}')
 
 
+def check_items(head, ov):
+    """/item/<id>/: exactly one page per visible item (none for hidden ones), self-canonical, h1 = the shown name,
+    a unique title, only BreadcrumbList JSON-LD ending at the page, internal links that resolve, in the sitemap."""
+    visible = {i['id']: {**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('name', 'date', 'thumb')}}
+               for i in head if not ov.get(i['id'], {}).get('hide')}
+    built = {os.path.basename(os.path.dirname(f)) for f in glob.glob(os.path.join(DIST, 'item/*/index.html'))}
+    for k in sorted(set(visible) - built): fail(f'/item/{k}/: missing ({visible[k]["name"]})')
+    for k in sorted(built - set(visible)):
+        fail(f'/item/{k}/: built for a {"hidden" if k in ov and ov[k].get("hide") else "unknown"} item')
+    sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
+    titles, n_links = {}, 0
+    for k in sorted(built & set(visible)):
+        it = visible[k]
+        p = f'/item/{k}/'
+        src = open(os.path.join(DIST, 'item', k, 'index.html')).read()
+        pp = PageParser(); pp.feed(src)
+        if pp.canonical != SITE + p: fail(f'{p}: canonical {pp.canonical}')
+        if re.search(r'<meta name="robots"[^>]*noindex', src): fail(f'{p}: noindex')
+        if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
+        h1 = re.findall(r'<h1(?:\s[^>]*)?>(.*?)</h1>', src, re.S)
+        if len(h1) != 1 or html.unescape(re.sub(r'<[^>]+>', '', h1[0])) != it['name']:
+            fail(f'{p}: h1 {h1} != {it["name"]!r}')
+        title = html.unescape(re.search(r'<title>(.*?)</title>', src)[1])
+        if it['name'] not in title or not title.endswith('発売日・価格｜トレカカレンダー'): fail(f'{p}: title {title!r}')
+        titles.setdefault(title, []).append(k)
+        if not re.search(r'<meta name="description" content="[^"]{20,}">', src): fail(f'{p}: meta description missing')
+        if f'<time datetime="{it["date"]}">' not in src: fail(f'{p}: release date {it["date"]} not shown')
+        if 'class="seo' in src: fail(f'{p}: has a calendar-page static list')
+        blocks = []
+        for raw in pp.ld:
+            try: blocks.append(json.loads(raw))
+            except ValueError as e: fail(f'{p}: JSON-LD does not parse: {e}')
+        bad = []
+        for i, blk in enumerate(blocks): walk(blk, f'ld[{i}]', bad)
+        if bad: fail(f'{p}: forbidden structured data, e.g. {bad[0]}')
+        if [b.get('@type') for b in blocks] != ['BreadcrumbList']: fail(f'{p}: JSON-LD should be only BreadcrumbList, got {[b.get("@type") for b in blocks]}')
+        else:
+            el = blocks[0].get('itemListElement', [])
+            if [x.get('position') for x in el] != list(range(1, len(el) + 1)) or not el or el[0].get('item') != SITE + '/' \
+                    or el[-1].get('item') != SITE + p or el[-1].get('name') != it['name']:
+                fail(f'{p}: breadcrumbs should run from / to the page itself')
+        og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
+        if not og or not os.path.exists(os.path.join(DIST, og[1].replace(SITE + '/', '', 1))): fail(f'{p}: og:image {og and og[1]} is not a built file')
+        hrefs = set(re.findall(r'href="(/[^"#?]*)', src))
+        for h in hrefs:
+            if not os.path.exists(os.path.join(DIST, h.strip('/'), 'index.html') if h.endswith('/') else os.path.join(DIST, h.strip('/'))):
+                fail(f'{p}: link {h} does not resolve')
+        if f'href="/releases/#i={k}"' not in src: fail(f'{p}: no 新弾カレンダーで見る link')
+        if f'href="/{it["date"][:7]}/"' not in src: fail(f'{p}: no month page link')
+        n_links += sum(h.startswith('/item/') for h in hrefs)
+    for t, ks in titles.items():
+        if len(ks) > 1: fail(f'/item/: title {t!r} shared by {ks}')
+    print(f'  /item/       pages={len(built)} visible={len(visible)} cross-links={n_links}')
+
+
 def check_dist(today, head, ov):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
@@ -258,6 +314,7 @@ def check_dist(today, head, ov):
     if '/' in paths: fail('dist: / is built as a release calendar page')
     check_home(today, head, ov)
     check_voices()
+    check_items(head, ov)
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
     if not months: fail('dist: no month pages')
 
@@ -312,6 +369,10 @@ def check_dist(today, head, ov):
             bc = [blk for blk in blocks if blk.get('@type') == 'BreadcrumbList']
             if not bc: fail(f'{p}: BreadcrumbList missing')
             elif bc[0]['itemListElement'][-1].get('item') != SITE + p: fail(f'{p}: last breadcrumb is not the page itself')
+        # every static list entry links its own /item/<id>/ page
+        if len(pp.list_links) != len(pp.list_names): fail(f'{p}: {len(pp.list_names)} static list entries but {len(pp.list_links)} item links')
+        for h in pp.list_links:
+            if not os.path.exists(os.path.join(DIST, h.strip('/'), 'index.html')): fail(f'{p}: static list links missing page {h}')
         lists = [blk for blk in blocks if blk.get('@type') == 'ItemList']
         if len(lists) > 1: fail(f'{p}: {len(lists)} ItemList blocks')
         if pp.list_names:
@@ -321,6 +382,7 @@ def check_dist(today, head, ov):
                 names = [x.get('name') or (x.get('item') or {}).get('name') for x in el]
                 if lists[0].get('numberOfItems') not in (None, len(el)): fail(f'{p}: numberOfItems {lists[0]["numberOfItems"]} != {len(el)} elements')
                 if [x.get('position') for x in el] != list(range(1, len(el) + 1)): fail(f'{p}: ItemList positions are not 1..n')
+                if any(not str(x.get('url', '')).startswith(SITE + '/item/') for x in el): fail(f'{p}: ItemList entries should point at /item/<id>/ pages')
                 if names != pp.list_names:
                     miss = [n for n in pp.list_names if n not in names][:3]
                     extra = [n for n in names if n not in pp.list_names][:3]
