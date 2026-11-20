@@ -450,7 +450,7 @@ function wkDay(d,i,f,sel,ym){
     const ot = (hidden ? `<a class="rl" href="/releases/#d=${d}">ほかのタイトルの発売 <b>${hidden}</b>件 ›</a>` : '')
       + (otherEv ? `<a class="rl" href="${esc(dayLink(f,d))}">ほかのタイトルのイベント <b>${otherEv}</b>件 ›</a>` : '');
     top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>${ot}`
-      : chips ? ot : `<p class="q">${sel?'選択中のタイトルの予定なし':known?'発売・イベントなし':'発売なし'}</p>${ot}`;
+      : chips ? ot : `<p class="q">${sel&&known?'選択中のタイトルの予定なし':sel?'選択中のタイトルの発売なし':known?'発売・イベントなし':'発売なし'}</p>${ot}`;
   }
   return {has:!!rel||gs.length>0||evs.length>0||(anyChip&&!sel),
     html:`<div class="wd${all&&!rel&&chips?' norel':''}"><h3>${+d.slice(5,7)}/${+d.slice(8)}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${i===0?'<span class="lb">明日</span>':''}</h3>${top}${chips?`<div class="gcs">${chips}</div>`:''}</div>`};
