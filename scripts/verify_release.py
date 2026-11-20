@@ -3,7 +3,7 @@
 .venv/bin/python -I scripts/verify_release.py [--base main] [--today YYYY-MM-DD] [--skip-build]
 Exit code 1 if any FAIL. WARN lines are for the owner to review, not blockers.
 """
-import argparse, collections, datetime, hashlib, html.parser, json, os, re, subprocess, sys, unicodedata
+import argparse, collections, datetime, glob, hashlib, html.parser, json, os, re, subprocess, sys, unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, 'dist')
@@ -245,6 +245,9 @@ def check_dist(today, head, ov):
     for loc, lm in re.findall(r'<loc>(.*?)</loc><lastmod>(.*?)</lastmod>', sitemap):
         if loc == SITE + '/privacy/':  # dated by the policy's effective date in build.py, not by the data
             if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', lm) or lm > today: fail(f'sitemap: /privacy/ lastmod {lm}')
+        elif loc == SITE + '/voices/':  # dated by the newest real snapshot, not by the release data
+            real = [json.load(open(x))['date'] for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) if not json.load(open(x)).get('sample')]
+            if lm != max(real, default=None): fail(f'sitemap: /voices/ lastmod {lm} != newest snapshot {max(real, default=None)}')
         elif lm != meta['updated']: fail(f'sitemap: {loc} lastmod {lm} != meta.updated {meta["updated"]}')
 
     # /feedback/ exists only with FEEDBACK_ENABLED=1: then noindex, out of the sitemap and linked from every footer;

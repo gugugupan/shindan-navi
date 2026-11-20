@@ -2,8 +2,7 @@
   "version": 1,
   "date": "2026-11-20",
   "window": { "from": "2026-11-17", "to": "2026-11-20" },
-  "sample": true,
-  "note": "Sample for the UI: the 2026-11-20 results the owner checked in the Grok app. Summaries and voices are our own paraphrases.",
+  "note": "Grok app answers for 2026-11-17..20 JST, one prompt per game. Every post and reacting_to URL was checked via X oEmbed (exists, posted inside the window, on topic, not sales/video/tournament reports/shops); topics need 2+ distinct authors. Summaries and voices are our own paraphrases. share: Grok gave percentages for some games; those were turned into rough post counts (percentage x Grok's author estimate).",
   "topics": [
     {
       "id": "opcg-bonney-ban-pair-speed",
@@ -30,6 +29,457 @@
       "source": "grok-app"
     },
     {
+      "id": "bs-zekuga-standard-dominance",
+      "game": "BS",
+      "title": "ゼクーガ一強のスタンダード環境",
+      "summary": "スタンダードでゼクーガ一強の状態が続き、使いたいデッキを使えない不満や、制限せず同等のカードで対抗させる方針への懸念が出ている。",
+      "attitude": "mixed",
+      "share": { "positive": 2, "negative": 5, "neutral": 3 },
+      "volume": "high",
+      "voices": [
+        "制限せず同じ強さのカードで対抗させ始めたら終わりだという危機感",
+        "本当は別のデッキを使いたいが、一強なのでゼクーガを使うしかないという声",
+        "アイカツのカードにはゼクーガに勝てる強さを期待するという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/BS_Sagittarius/status/2123411229574082759",
+        "https://x.com/73exp_requiem/status/2123124730559660147",
+        "https://x.com/kazuki200027/status/2123359133605007538"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dcg-bt27-rare-card-art",
+      "game": "DCG",
+      "title": "BT-27希少カードのビジュアル",
+      "summary": "『IGNITION OF X【BT-27】』の希少カードのサンプル公開に、かっこいいという短い反応が多数寄せられている。",
+      "attitude": "positive",
+      "share": { "positive": 14, "negative": 0, "neutral": 2 },
+      "volume": "high",
+      "voices": [
+        "アルファモン：王竜剣の見た目がとにかくかっこいいという反応",
+        "金のアルファモンと並べて使えば映えそうだという声"
+      ],
+      "reacting_to": "https://x.com/digimon_tcg/status/2123394646206492812",
+      "posts": [
+        "https://x.com/Mu_ri_pomP/status/2123571401118642554",
+        "https://x.com/nengmian225286/status/2123429006204932412",
+        "https://x.com/d6lah2vyeBex0c3/status/2123399571166662781"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "vg-inflation-soft-rotation",
+      "game": "VG",
+      "title": "インフレと実質スタン落ちの懸念",
+      "summary": "新カードが旧エースの上位互換になりがちで、過去と同じインフレを繰り返しているという指摘や、実質的なスタン落ちになるとの見方が出ている。",
+      "attitude": "mixed",
+      "share": { "positive": 2, "negative": 6, "neutral": 4 },
+      "volume": "high",
+      "voices": [
+        "テキストが長く旧エースの上位互換ばかりで、過去と同じ流れだという不満",
+        "正式なスタン落ちがなくても、上位互換で事実上の入れ替えになるという見方",
+        "実質スタン落ちを恐れる声をネタにして笑い飛ばす投稿もある"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/nodata1213/status/2123533976694579443",
+        "https://x.com/1020Kadekaru/status/2123431262715281824",
+        "https://x.com/9UG4swedRVlDiDw/status/2123401962129703031"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "sve-granblue-collab-power",
+      "game": "SVE",
+      "title": "グラブルコラボ新カードの強さ",
+      "summary": "11/27発売のグラブルコラボの新カードに、0コストのディスカードなど強すぎるという反応が多く、インフレを心配する声も混じる。",
+      "attitude": "mixed",
+      "share": { "positive": 14, "negative": 11, "neutral": 6 },
+      "volume": "high",
+      "voices": [
+        "0コストで手札を捨てられるのはさすがに危ないという声",
+        "闇属性がいきなり強いデッキになりそうだと驚く声",
+        "過去の強力カードを思い出すほど強いという感想"
+      ],
+      "reacting_to": "https://x.com/shadowverse_ev/status/2123345579938034002",
+      "posts": [
+        "https://x.com/puyo_hobby/status/2123412391350427704",
+        "https://x.com/motti_niconico/status/2123356102892847362",
+        "https://x.com/duelst318ryu/status/2123345940140667101"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "llocg-sunshine-duo-art",
+      "game": "LLOCG",
+      "title": "サンシャイン!! DUOの描きおろしイラスト",
+      "summary": "12/19発売のプレミアムブースターの描きおろしイラスト公開に、可愛い、最高といった好意的な反応が集まっている。",
+      "attitude": "positive",
+      "share": { "positive": 9, "negative": 1, "neutral": 1 },
+      "volume": "high",
+      "voices": [
+        "黒澤ルビィの新規イラストがとても可愛いという声",
+        "一言で最高だと絶賛する反応が多い"
+      ],
+      "reacting_to": "https://x.com/LL_cardgame/status/2123355618715095369",
+      "posts": [
+        "https://x.com/f7hEjlT6i15ty7A/status/2123361342229029097",
+        "https://x.com/ED24700481/status/2123356413980561748",
+        "https://x.com/G_SEED_DESTINY/status/2123355704597885291"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "mtg-ban-culture-comparison",
+      "game": "MTG",
+      "title": "他TCGと比べたMTGの禁止文化",
+      "summary": "ワンピースの禁止発表を機に、禁止に慣れたMTGプレイヤーの反応を比べる投稿が広がり、他ゲームへのマウントだと批判する声も出ている。",
+      "attitude": "mixed",
+      "share": { "positive": 6, "negative": 3, "neutral": 6 },
+      "volume": "high",
+      "voices": [
+        "MTGでは禁止改定は日常で、またかと受け止める程度だという声",
+        "発売前の禁止もあったMTGと比べれば驚くことではないという見方",
+        "他のゲームの禁止にすぐマウントを取るのはやめるべきだという批判"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/kazuha0023/status/2123366155624841255",
+        "https://x.com/mgr_pkc/status/2123262227490984415",
+        "https://x.com/PokoLarko/status/2123388733496180853"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "uatcg-umamusume-power-meta",
+      "game": "UATCG",
+      "title": "ウマ娘新弾の強さ・環境影響懸念",
+      "summary": "ウマ娘の新弾について、カードの強さや環境への影響を心配する声と、前向きに受け止める声が入り混じっている。",
+      "attitude": "mixed",
+      "share": { "positive": 3, "negative": 4, "neutral": 2 },
+      "volume": "mid",
+      "voices": [
+        "強いのは嬉しいが、環境を取るほどだと推しキャラにヘイトが向くので程々にという声",
+        "出力が高いぶん、すぐ制限されて炎上しないか心配する声",
+        "12月のウマ娘弾のほうが強そうで、11月の弾に手を出すか迷うという声"
+      ],
+      "reacting_to": "https://x.com/UNION_ARENA_TCG/status/2123325415330844840",
+      "posts": [
+        "https://x.com/westmtshinji/status/2123423575969546725",
+        "https://x.com/2heartsww/status/2123346685850255763",
+        "https://x.com/onisama_hentai_/status/2123186431590056171"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "uatcg-new-set-illustrations",
+      "game": "UATCG",
+      "title": "新弾カードのイラスト・デザイン評価",
+      "summary": "新弾カードのイラストやデザインを褒める投稿が目立ち、反応は好意的なものが中心。",
+      "attitude": "positive",
+      "share": { "positive": 6, "negative": 0, "neutral": 0 },
+      "volume": "mid",
+      "voices": [
+        "パラレル版のカードデザインのセンスを褒める声",
+        "D.Gray-manの新弾はイラストの出来が良すぎるという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/CM_johnSV/status/2123408837923459534",
+        "https://x.com/onponpp03/status/2123265007832154375",
+        "https://x.com/izayoikaren/status/2123008174903226566"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "gcg-gd07-reveals-underpowered",
+      "game": "GCG",
+      "title": "GD07公開カードの性能不足への不満",
+      "summary": "『Blazing Fist（GD07）』の収録カード公開に対し、コストに見合わない性能やデザインを疑問視する反応が続いている。",
+      "attitude": "negative",
+      "share": { "positive": 1, "negative": 8, "neutral": 1 },
+      "volume": "mid",
+      "voices": [
+        "公開されるカードが弱いものばかりで、かえって笑えてしまうという皮肉",
+        "特定パイロットありきでコストを重くした設計はデザインミスではという指摘",
+        "7弾にもなってこの性能のカードを出すのかと開発に不満を向ける声"
+      ],
+      "reacting_to": "https://x.com/GUNDAM_GCG_JP/status/2123325410545209767",
+      "posts": [
+        "https://x.com/umeboshi_bs/status/2123402122477900198",
+        "https://x.com/ScrapShark21_0/status/2123354913862479973",
+        "https://x.com/raigugeiosu/status/2123453607823786239"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "gcg-gd07-nobel-gundam",
+      "game": "GCG",
+      "title": "ノーベルガンダム公開への反応",
+      "summary": "GD07収録のノーベルガンダム公開に、アレンビーの参戦やイラストを喜ぶ声がある一方、性能は平凡という冷静な見方もある。",
+      "attitude": "mixed",
+      "share": { "positive": 5, "negative": 2, "neutral": 2 },
+      "volume": "mid",
+      "voices": [
+        "アレンビーの登場を楽しみにする声",
+        "イラストの出来を高く評価する声",
+        "ガンダムファイターとしては性能が控えめだと受け止める声"
+      ],
+      "reacting_to": "https://x.com/GUNDAM_GCG_JP/status/2122963024978083880",
+      "posts": [
+        "https://x.com/Zero_one8323/status/2123074649185800237",
+        "https://x.com/iga1218/status/2123029335938621491",
+        "https://x.com/goldenballmasa/status/2123049352751137081"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dbfw-fb12-beerus",
+      "game": "DBFW",
+      "title": "FB12ビルスの評価",
+      "summary": "FB12収録のビルスは、リーダーを選ばず緑のデッキに入る点を強みと見る声が多い。KOするカードを相手が選ぶ点を弱みとする見方もある。",
+      "attitude": "mixed",
+      "share": { "positive": 6, "negative": 2, "neutral": 1 },
+      "volume": "mid",
+      "voices": [
+        "リーダー指定がないので、緑ベジータなどにも採用できそうだという期待",
+        "緑に久しぶりの強力カードが来たと喜ぶ声",
+        "KOするカードを相手が選ぶ仕様では物足りないという疑問"
+      ],
+      "reacting_to": "https://x.com/dbfw_cardgameJP/status/2123340560098615514",
+      "posts": [
+        "https://x.com/asokataraneba/status/2123374230175944895",
+        "https://x.com/12anubis25/status/2123407423969108393",
+        "https://x.com/yagionosasayaki/status/2123441081757167787"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dbfw-fb12-golden-frieza",
+      "game": "DBFW",
+      "title": "ゴールデンフリーザの登場条件",
+      "summary": "ゴールデンフリーザは性能を認める声が多いものの、「このターン中に登場していた場合」という条件を嫌う反応が目立つ。",
+      "attitude": "mixed",
+      "share": { "positive": 3, "negative": 4, "neutral": 2 },
+      "volume": "mid",
+      "voices": [
+        "性能は十分だが、登場したターン限定の条件は避けてほしいという声",
+        "起き上がらせる手段と組み合わせれば大化けしそうだと見る声",
+        "神龍の強化を待っていたので残念だが、カード単体は強いという声"
+      ],
+      "reacting_to": "https://x.com/dbfw_cardgameJP/status/2122615820107055510",
+      "posts": [
+        "https://x.com/fam_p0/status/2122684523779658122",
+        "https://x.com/pokeks0203/status/2122699004173840429",
+        "https://x.com/asokataraneba/status/2122631856529252453"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-17",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "bs-eternal-booster-anticipation",
+      "game": "BS",
+      "title": "新弾『戦神の轟臨』への期待",
+      "summary": "11/21発売のエターナルブースター新弾を前に、フラッグネクサスやインディーダ、手持ちデッキの強化を楽しみにする声が上がっている。",
+      "attitude": "positive",
+      "share": { "positive": 6, "negative": 0, "neutral": 1 },
+      "volume": "mid",
+      "voices": [
+        "強力な新カードが出るので、初めて旗の契約デッキを組むのが楽しみという声",
+        "インディーダの新しい契約カードを心待ちにする声",
+        "新弾で使っているデッキに強化が入りそうで嬉しいという声"
+      ],
+      "reacting_to": "https://x.com/bs_official/status/2123573067062620425",
+      "posts": [
+        "https://x.com/saiking319/status/2123572729450525074",
+        "https://x.com/HNniatori03/status/2123509934457581727",
+        "https://x.com/7n_7n7n/status/2123396477905223780"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "bs-aikatsu-collab-strength",
+      "game": "BS",
+      "title": "アイカツ！コラボカードの強さ",
+      "summary": "公開されたアイカツ！コラボの星宮いちごについて、BPでゼクーガを上回る点や効果の強さを評価する声が多い。",
+      "attitude": "positive",
+      "share": { "positive": 5, "negative": 0, "neutral": 1 },
+      "volume": "mid",
+      "voices": [
+        "単体で2点取れてBPもゼクーガを上回るのは良いという評価",
+        "BP勝負でゼクーガを倒せるうえ、効果自体も強そうだという声",
+        "次のキャラはさらに上からゼクーガを倒せるはずと期待する声"
+      ],
+      "reacting_to": "https://x.com/bs_official/status/2123370711804793182",
+      "posts": [
+        "https://x.com/MatoTsukimiya/status/2123417765482578376",
+        "https://x.com/takeken_23/status/2123377201798369577",
+        "https://x.com/yatsunise/status/2123375287929119223"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "vg-new-cards-strong",
+      "game": "VG",
+      "title": "新公開カードの強さへの好反応",
+      "summary": "最近公開されたカードを強いと見る声が多く、特定デッキへの期待や、発売されたデッキセットを組む意欲につながっている。",
+      "attitude": "positive",
+      "share": { "positive": 5, "negative": 0, "neutral": 1 },
+      "volume": "mid",
+      "voices": [
+        "配られるカードが想像以上に強く、遊ぶ意欲が戻ってきたという声",
+        "前日に公開されたカードも強く、特にグリードンが面白そうだという声",
+        "トリドラの新ユニットはオーダーを選ばない点が特に強力という評価"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/RARAMIA000/status/2123423098410307686",
+        "https://x.com/AKKI_AGE_VG/status/2123546285970161770",
+        "https://x.com/MTpH3v7s4UOn5Gr/status/2122672362470670632"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-17",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "sve-attribute-limit-break",
+      "game": "SVE",
+      "title": "新要素「属性」「上限解放」の評価",
+      "summary": "コラボで加わる新タイプ「属性」と「上限解放」について、ディスカードやエレメント生成と組み合わさる仕組みを面白いと見る声が多い。",
+      "attitude": "positive",
+      "share": { "positive": 11, "negative": 2, "neutral": 3 },
+      "volume": "mid",
+      "voices": [
+        "エレメントを作れる数が一気に増えるのは素晴らしいという評価",
+        "闇属性は手札を捨てて動く軸になり、墓場に送る手段が課題という分析",
+        "コストはかかるが、しっかりフィニッシャーとして働くという評価"
+      ],
+      "reacting_to": "https://x.com/shadowverse_ev/status/2122888397815681215",
+      "posts": [
+        "https://x.com/jgafyrkuYQM92Tz/status/2123344177744203986",
+        "https://x.com/onigiriTCG/status/2122994945904844805",
+        "https://x.com/Spacevespine/status/2123008803901931893"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "sve-shis-reactions",
+      "game": "SVE",
+      "title": "神狼・シスへの反応",
+      "summary": "神狼・シスの公開に、待っていたキャラの登場を喜ぶ声や、闇エレメントで大きな打点を出せる性能を評価する声が出ている。",
+      "attitude": "mixed",
+      "share": { "positive": 6, "negative": 2, "neutral": 2 },
+      "volume": "mid",
+      "voices": [
+        "待っていたシスの登場を喜ぶ声",
+        "似た効果のカードが以前にもあったと振り返る声",
+        "6コストで9点を狙える性能を評価する声"
+      ],
+      "reacting_to": "https://x.com/shadowverse_ev/status/2122983195859960071",
+      "posts": [
+        "https://x.com/minipo_chama/status/2123360822030434719",
+        "https://x.com/mizuki_duema/status/2122997431856230819",
+        "https://x.com/lokki48963591/status/2122991678747488755"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-inflation-fatigue",
+      "game": "DM",
+      "title": "インフレによるゲーム性への不満",
+      "summary": "カードパワーの上昇で、先に強いカードを出した方が勝つ展開になっているという指摘や、昔のほうが楽しかったという声が目立つ。",
+      "attitude": "negative",
+      "share": { "positive": 1, "negative": 7, "neutral": 1 },
+      "volume": "mid",
+      "voices": [
+        "インフレが激しすぎて、すぐに飽きてしまうという声",
+        "ドギラゴン逆を先に出した側が勝つほどで、ゲーム性が崩れているという指摘",
+        "昔のデュエマは面白かったが、今のインフレにはついていけないという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/WbqMdys/status/2123440934205759897",
+        "https://x.com/m09zin56/status/2123392911933071599",
+        "https://x.com/sid_thegazette/status/2123227091693113690"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-volmeteus-book",
+      "game": "DM",
+      "title": "『ボルメテウスの書』のカード評価",
+      "summary": "新商品『ボルメテウスの書』について、すでに豪華な収録内容にさらに強いカードが加わったと喜ぶ声が中心。",
+      "attitude": "positive",
+      "share": { "positive": 5, "negative": 0, "neutral": 1 },
+      "volume": "mid",
+      "voices": [
+        "豪華な収録なのに、さらに強烈なカードが来て嬉しいという声",
+        "ツインパクトで序盤も中盤も使える点が良いという評価"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/satiyobiyousitu/status/2122990659024134193",
+        "https://x.com/KiyuSakubu/status/2122991784863146354"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
       "id": "ptcg-current-regulation-deflation",
       "game": "PTCG",
       "title": "現レギュの物足りなさ・デフレ調整への不満",
@@ -49,44 +499,191 @@
         "https://x.com/YutR46684/status/2123560679143772214"
       ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
-      "first_seen": "2026-11-17",
+      "first_seen": "2026-11-19",
       "status": "new",
       "source": "grok-app"
     },
     {
-      "id": "uatcg-umamusume-power-meta",
-      "game": "UATCG",
-      "title": "ウマ娘新弾の強さ・環境影響懸念",
-      "summary": "ウマ娘の新弾について、カードの強さや環境への影響を心配する声と、前向きに受け止める声が入り混じっている。",
-      "attitude": "mixed",
-      "share": { "positive": 3, "negative": 4, "neutral": 2 },
-      "volume": "mid",
-      "voices": [],
-      "reacting_to": "https://x.com/UNION_ARENA_TCG/status/2123325415330844840",
+      "id": "dbfw-fb12-hakaishin-judgement",
+      "game": "DBFW",
+      "title": "除去カード「破壊神の審判」の弱さ",
+      "summary": "新弾の除去エクストラカード「破壊神の審判」が期待より弱いという反応が中心で、緑の除去が控えめすぎるという指摘もある。",
+      "attitude": "negative",
+      "share": { "positive": 0, "negative": 3, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "リーダー指定付きは覚悟していたが、それ以上に弱かったという落胆",
+        "緑の除去カードはなぜいつも控えめなのかという疑問",
+        "コストの重さに思わず読み間違えたかと驚く声"
+      ],
+      "reacting_to": "https://x.com/dbfw_cardgameJP/status/2122978146228322758",
       "posts": [
-        "https://x.com/westmtshinji/status/2123423575969546725",
-        "https://x.com/2heartsww/status/2123346685850255763",
-        "https://x.com/onisama_hentai_/status/2123186431590056171"
+        "https://x.com/ku6maku/status/2123423218170310840",
+        "https://x.com/Iamadamun/status/2122981989439709675",
+        "https://x.com/db_z903/status/2122986786792378464"
       ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
-      "first_seen": "2026-11-17",
+      "first_seen": "2026-11-18",
       "status": "new",
       "source": "grok-app"
     },
     {
-      "id": "uatcg-new-set-illustrations",
-      "game": "UATCG",
-      "title": "新弾カードのイラスト・デザイン評価",
-      "summary": "新弾カードのイラストやデザインを褒める投稿が目立ち、反応は好意的なものが中心。",
-      "attitude": "positive",
-      "share": { "positive": 6, "negative": 0, "neutral": 0 },
-      "volume": "mid",
-      "voices": [],
+      "id": "dbfw-fb12-meta-regulation",
+      "game": "DBFW",
+      "title": "FB12後の環境と規制への関心",
+      "summary": "FB12で環境に入るリーダーが出ないのではという不安や、黄ベジータの規制、ワンピース式のペア禁止を望む声が少数見られる。",
+      "attitude": "negative",
+      "share": { "positive": 0, "negative": 2, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "12弾で環境入りするリーダーがいないかもしれないと心配する声",
+        "黄ベジータが規制されても惜しむ人は少ないのではという見方",
+        "ワンピースのようなペア禁止の方式を取り入れてほしいという要望"
+      ],
       "reacting_to": null,
       "posts": [
-        "https://x.com/CM_johnSV/status/2123408837923459534",
-        "https://x.com/onponpp03/status/2123265007832154375",
-        "https://x.com/izayoikaren/status/2123008174903226566"
+        "https://x.com/MEGANEZARU_TUBE/status/2123557834713600400",
+        "https://x.com/tojiro02160216/status/2123330294807949458",
+        "https://x.com/2508sarada/status/2123059136657326331"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "bs-eternal-inflation",
+      "game": "BS",
+      "title": "エターナル環境のインフレ",
+      "summary": "エターナルはカードパワーが上がりきり、ごく序盤で勝負が決まるという指摘があり、これから始めるならスタンダードを勧める声もある。",
+      "attitude": "negative",
+      "share": { "positive": 0, "negative": 3, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "エターナルはインフレが行き着いて、何をすればいいか分からないという声",
+        "エターナルは極端に速く決着する環境になっているという指摘",
+        "ゼクーガの問題はあっても、始めるならスタンダードが良いという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/kuma8902rize/status/2122709362254971012",
+        "https://x.com/darumaruma1/status/2123364852249059357"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dcg-few-single-bans",
+      "game": "DCG",
+      "title": "単体禁止の少なさ",
+      "summary": "デジカは単体の禁止カードが他のTCGより少ないのではという投稿があり、ワンピースの禁止を機にバランスへの関心も見られる。",
+      "attitude": "neutral",
+      "share": { "positive": 1, "negative": 1, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "単体禁止は数枚だけで、他のTCGより少ないのではという指摘",
+        "ワンピースの禁止を見て、同じバンダイのデジカのバランスが気になるという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/digi_dru_dan_d/status/2123299138024718664",
+        "https://x.com/YutoMujou/status/2123390208087634072"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "ws-regulation-span",
+      "game": "WS",
+      "title": "規制の期間と厳しさへの不満",
+      "summary": "規制から解除までが長すぎる、規制が重くなってきたといった不満が複数あり、他TCGの早期規制と比べる声もある。",
+      "attitude": "negative",
+      "share": { "positive": 0, "negative": 5, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "規制してから解除するまでの周期をもっと短くしてほしいという声",
+        "発売から数か月で規制して手持ちのカードを無駄にさせる売り方への不満",
+        "規制が重くなってきたので、汎用の対策カードを配ってほしいという要望"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/rosokuthukihi/status/2123290798175498286",
+        "https://x.com/takko0330/status/2123078481387147340",
+        "https://x.com/shii_tcg/status/2123041189335269855"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-18",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "hocg-no-restriction-inflation",
+      "game": "HOCG",
+      "title": "制限改定のなさとインフレ",
+      "summary": "制限改定がほとんど行われない結果、新弾ごとにインフレが進んでいるという指摘があり、ワンピースの即時禁止と比べる声も出ている。",
+      "attitude": "mixed",
+      "share": { "positive": 1, "negative": 2, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "推し活重視で制限改定をしなくなり、新弾ごとにインフレが進んだという見方",
+        "おかしな環境を放置するより、すぐ禁止する運営のほうがましという声",
+        "強い環境でも規制せずに乗り切ったのは、信頼を守る意味で良かったという評価"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/namaka_w/status/2123441651360436315",
+        "https://x.com/saikakuseisya/status/2123387054759563742",
+        "https://x.com/PleasantCrowd/status/2123223082827710778"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-classic-format",
+      "game": "DM",
+      "title": "クラシックフォーマットの楽しさ",
+      "summary": "昔のカードで遊ぶクラシックについて、また組み直したい、ゲーム性のあるデッキテーマが良いといった好意的な声がある。",
+      "attitude": "positive",
+      "share": { "positive": 4, "negative": 0, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "久しぶりに遊んで楽しく、クラシックのデッキを組み直したくなったという声",
+        "あの頃のデュエマで遊ぶという趣旨が良く、人気のデッキにもゲーム性があるという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/In_0ther_vv0rds/status/2123424147640562059",
+        "https://x.com/ioh182018/status/2123299624744259655"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-19",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-official-management",
+      "game": "DM",
+      "title": "公式運営への比較と批判",
+      "summary": "他のTCGと比べてデュエマ公式への不満が多いという声や、デュエプレの新カードを通した紙の運営への批判がある一方、擁護する声もある。",
+      "attitude": "mixed",
+      "share": { "positive": 1, "negative": 3, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "ウィクロスはデュエマと違って公式への不満がなかったと比べる声",
+        "デュエプレの新カードの件は、許可した紙の運営に問題があるという指摘",
+        "デュエマの運営が無能でなくて良かったという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/yuzukosyou_rara/status/2123490279244353834",
+        "https://x.com/kariyakokoro/status/2123388227721805861",
+        "https://x.com/Orange_1295/status/2122704076941254732"
       ],
       "window": { "from": "2026-11-17", "to": "2026-11-20" },
       "first_seen": "2026-11-17",
