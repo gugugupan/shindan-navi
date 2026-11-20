@@ -408,8 +408,9 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
-// /voices/ (VOICES_ENABLED=1 builds only): the embedded snapshots on the calendar (bars on desktop, a dot per game on
-// phones) on the right days, the day and topic dialogs, the list view, the filters and safe X links.
+// /voices/ (VOICES_ENABLED=1 builds only): the embedded snapshots on the calendar (a chip per game on desktop, bars when
+// one game is selected, a dot per game on phones) on the right days, the day, game and topic dialogs, the list view,
+// the filters and safe X links.
 const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
 for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   const where = `${vp} /voices/`;
@@ -435,9 +436,15 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     }
     return out;
   }, filter || {});
-  const shown = () => page.evaluate(n => Object.fromEntries([...document.querySelectorAll('button.vd[data-day]')].map(b => [b.dataset.day,
-    n ? [...b.querySelectorAll('.vg')].length : [...document.querySelectorAll('.vbar')].filter(x => { const [c0, c1] = x.style.gridColumn.split('/').map(Number), c = [...b.parentNode.children].indexOf(b) + 1;
-      return x.parentNode === b.parentNode && c >= c0 && c < c1; }).length])), narrow);
+  // per day: the visible game marks (chips / dots) as [game, topic count], or the number of bars covering it
+  const shown = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.vd[data-day]')].map(b => [b.dataset.day,
+    [...b.querySelectorAll('.vchip,.vg')].filter(e => e.offsetParent).map(e => [e.dataset.game || '', +(e.querySelector('.vn')?.textContent || 1)])])));
+  const barsOn = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.vd[data-day]')].map(b => [b.dataset.day,
+    [...document.querySelectorAll('.vbar')].filter(x => { const [c0, c1] = x.style.gridColumn.split('/').map(Number), c = [...b.parentNode.children].indexOf(b) + 1;
+      return x.offsetParent && x.parentNode === b.parentNode && c >= c0 && c < c1; }).length])));
+  const perGame = xs => xs.reduce((m, x) => (m[x.game] = (m[x.game] || 0) + 1, m), {});
+  const marksOk = (got, xs) => { const pg = perGame(xs);
+    return got && got.length === Object.keys(pg).length && (narrow || got.every(([g, n]) => pg[g] === n)); };
   try {
     await page.goto(`${BASE}/voices/`, { waitUntil: 'networkidle' });
     const hdr = await headerProblem(page, opt.width);
@@ -448,15 +455,13 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     const inView = days.filter(d => month === `${+d.slice(0, 4)}年${+d.slice(5, 7)}月`);
     if (!inView.length) fail(where, `calendar opens on ${month} without topics`);
     const got = await shown();
-    for (const d of inView) {
-      const n = narrow ? new Set(want[d].map(x => x.game)).size : Math.min(want[d].length, 4);
-      if (got[d] !== n) fail(where, `${d}: ${got[d]} ${narrow ? 'game dots' : 'bars'}, expected ${n}`);
-    }
+    for (const d of inView) if (!marksOk(got[d], want[d])) fail(where, `${d}: ${JSON.stringify(got[d])} ${narrow ? 'game dots' : 'game chips'}, expected ${JSON.stringify(perGame(want[d]))}`);
+    if (!narrow && await page.locator('.vbar').count()) fail(where, 'topic bars without a single game selected');
     const extra = Object.keys(got).filter(d => !want[d]);
     if (extra.length) fail(where, `days with topics that have none: ${extra.join(' ')}`);
     // day dialog
     const d0 = inView[0];
-    await page.locator(`button.vd[data-day="${d0}"]`).click({ position: { x: 8, y: 8 } });
+    await page.locator(`.vd[data-day="${d0}"] .vdn`).click();
     await page.locator('#vDlg[open]').waitFor();
     const dl = await page.evaluate(() => ({ n: document.querySelectorAll('#vBody .tc').length, title: document.getElementById('vTitle').textContent,
       links: [...document.querySelectorAll('#vBody a[data-x]')].map(a => [a.href, a.target, a.rel]), ai: document.querySelectorAll('#vBody .ai').length }));
@@ -468,25 +473,41 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     await page.keyboard.press('Escape');
     if (await page.locator('#vDlg').evaluate(d => d.open)) fail(where, 'Escape did not close the day dialog');
     if (!narrow) {
-      await page.locator('.vbar').first().click();
-      if (await page.locator('#vBody .tc').count() !== 1) fail(where, 'topic bar did not open its topic');
-      await page.locator('#vClose').click();
+      // a game chip opens that day filtered to its game, with a button back to the whole day
+      const chipEl = page.locator(`.vd[data-day="${d0}"] .vchip`).first(), cg = await chipEl.getAttribute('data-game');
+      await chipEl.click();
+      const cd = await page.evaluate(() => [...document.querySelectorAll('#vBody .tc')].map(e => e.dataset.topic));
+      const wantG = want[d0].filter(x => x.game === cg).map(x => x.id);
+      if (cd.length !== wantG.length || cd.some(id => !wantG.includes(id))) fail(where, `chip ${cg} on ${d0}: ${cd.length} cards, expected ${wantG.length}`);
+      await page.screenshot({ path: path.join(OUT, `${vp}-voices-game.png`) });
+      if (want[d0].length > wantG.length) {
+        await page.locator('#vBody [data-allday]').click();
+        if (await page.locator('#vBody .tc').count() !== want[d0].length) fail(where, 'この日のすべての話題 did not show the whole day');
+      }
+      await page.keyboard.press('Escape');
     }
     // attitude filter
     if (narrow) await page.locator('#filterBtn').click();
     await page.locator('#frow [data-k="att"][data-v="negative"]').click();
     const wantN = await expect({ att: 'negative' }), gotN = await shown();
-    for (const d of inView) {
-      const n = !wantN[d] ? undefined : narrow ? new Set(wantN[d].map(x => x.game)).size : Math.min(wantN[d].length, 4);
-      if (gotN[d] !== n) fail(where, `negative filter ${d}: ${gotN[d]}, expected ${n}`);
-    }
+    for (const d of inView) if (wantN[d] ? !marksOk(gotN[d], wantN[d]) : gotN[d] !== undefined) fail(where, `negative filter ${d}: ${JSON.stringify(gotN[d])}, expected ${JSON.stringify(wantN[d] && perGame(wantN[d]))}`);
     if (JSON.parse(await page.evaluate(() => localStorage.getItem('tcg.voices'))).att !== 'negative') fail(where, 'attitude filter not saved');
     // game filter: one game's chip leaves only its topics
     const g = await page.locator('#games .chip.g').first().getAttribute('data-v');
     await page.locator(`#games .chip.g[data-v="${g}"]`).click();
-    const games = await page.evaluate(() => [...document.querySelectorAll('.vbar,.vg')].filter(e => e.offsetParent).map(e => e.getAttribute('style')));
+    const games = await page.evaluate(() => [...document.querySelectorAll('.vbar,.vg,.vchip')].filter(e => e.offsetParent).map(e => e.getAttribute('style')));
     const gs = await page.locator(`#games .chip.g[data-v="${g}"]`).getAttribute('style');
     if (!games.length || games.some(st => !st.startsWith(gs))) fail(where, `game filter ${g} shows other games`);
+    if (!narrow) {
+      // one game selected: its topics as bars over their days (at most 4 lanes), a bar opens its topic
+      const wantG = await expect({ att: 'negative' }), gotB = await barsOn();
+      for (const d of inView) { const n = (wantG[d] || []).filter(x => x.game === g).length;
+        if (n && gotB[d] !== Math.min(n, 4)) fail(where, `${g} bars on ${d}: ${gotB[d]}, expected ${Math.min(n, 4)}`); }
+      if (await page.locator('.vchip').count()) fail(where, 'game chips with one game selected');
+      await page.locator('.vbar').first().click();
+      if (await page.locator('#vBody .tc').count() !== 1) fail(where, 'topic bar did not open its topic');
+      await page.locator('#vClose').click();
+    }
     await page.locator('#resetAll').click();
     if (narrow) await page.locator('#filterBtn').click();
     const ov1 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

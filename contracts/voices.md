@@ -41,7 +41,7 @@ data/voices/<YYYY-MM-DD>.json   one snapshot (voices.schema.json); the name is i
 
 ## Game codes
 
-The `/events/` codes keep their colours from the event palette (CLAUDE.md › Event game palette): `OPCG`, `UATCG`,
+The `/events/` codes have a fixed light/dark colour pair in `GAMES` (the palette `/events/` uses for its games): `OPCG`, `UATCG`,
 `CONAN`, `PTCG`, `GCG`, `DBFW`, `BS`, `DCG`, `WS`, `VG`, `SVE`, `HOCG`, `LLOCG`. Titles without events use the release
 calendar's title colour (`--h`, computed from `data/items.json` as on `/releases/`): `MTG` (MTG), `YGO` (遊戯王OCG),
 `DM` (デュエル・マスターズ). The list lives in `GAMES` in `src/voices.html`; the build reads the codes from there and
@@ -49,8 +49,8 @@ refuses unknown ones. Add a code there (and here) before writing topics for a ne
 
 ## How the page reads it
 
-- A topic is active from `first_seen` to the date of the last snapshot that lists its id. The calendar draws it as a
-  span over those days (desktop) or a dot per game in each day (phones).
+- A topic is active from `first_seen` to the date of the last snapshot that lists its id. The calendar marks each of
+  those days with a chip per game (desktop; bars over the days when one game is selected) or a dot per game (phones).
 - For a given day the page shows the topic as the first snapshot on or after that day saw it (else the latest).
 - 🆕 新 = `new`; 🔥 n日連続 = `continuing`, n = days from `first_seen` to the snapshot date, inclusive; 📉 落ち着き = `cooling`.
 - The list view shows every snapshot, newest first, with its topics.
