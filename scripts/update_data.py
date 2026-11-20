@@ -1,5 +1,5 @@
 """Merge step of the release update (contracts/releases.md): the collectors' data/releases/ files plus
-data/items.json and data/overrides.json → items.json, meta.json, update-report.md and public/thumbs/.
+data/items.json and data/overrides.json → items.json, items-archive.json, meta.json, update-report.md and public/thumbs/.
 
 Normally run by scripts/refresh.py (collectors → this merge → build → verify, one TODAY). By hand: run the collectors
 first with the same TODAY (tools/release-collectors/{cardlabo,torecamap,official}/collect.py). Nothing is written when
@@ -44,9 +44,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'data')
 THUMBS = os.path.join(ROOT, 'public/thumbs')
 KEEP_PAST_DAYS = 30
+# items-archive.json keeps a released item's /item/<id>/ page this long after its release date
+KEEP_ARCHIVE_DAYS = 730
 MIN_RATIO = 0.7
 # fields the pages show (scripts/build.py `keep`); a change to any of them moves the item's `changed` date
 SHOWN = ('date', 'game', 'name', 'pack', 'box', 'per_box', 'per_pack', 'url', 'thumb', 'approx')
+# what items-archive.json keeps of an item (contracts/releases.md › Archive)
+ARCHIVE_KEYS = ('id', 'date', 'game', 'name', 'pack', 'box', 'per_box', 'per_pack', 'url', 'thumb', 'approx', 'source', 'changed')
 
 
 def norm(name):
@@ -246,6 +250,24 @@ def stamp_changed(items, existing, today, prev_updated):
             x['changed'] = today
         else:
             x['changed'] = e.get('changed') or prev_updated or today
+
+
+def update_archive(archive, existing, items, overrides, today):
+    """items-archive.json (contracts/releases.md › Archive): items of the run's starting items.json that left it because
+    their release date is past the KEEP_PAST_DAYS window are added, stamped `changed` = TODAY (their page turns into
+    発売済み). Hidden items (cancelled, duplicates) are not. Entries back in items.json leave the archive; entries
+    released over KEEP_ARCHIVE_DAYS ago are dropped. Returns (archive, ids added)."""
+    cutoff = (today - datetime.timedelta(days=KEEP_PAST_DAYS)).isoformat()
+    oldest = (today - datetime.timedelta(days=KEEP_ARCHIVE_DAYS)).isoformat()
+    live = {x['id'] for x in items}
+    out = {a['id']: a for a in archive if a['id'] not in live}
+    added = []
+    for e in existing:
+        if e['id'] in live or e['date'] >= cutoff or (overrides.get(e['id']) or {}).get('hide'):
+            continue
+        added.append(e['id'])
+        out[e['id']] = dict({k: e[k] for k in ARCHIVE_KEYS if k in e}, changed=today.isoformat())
+    return sorted((a for a in out.values() if a['date'] >= oldest), key=lambda r: (r['date'], r['game'], r['name'])), added
 
 
 def today_iso():
@@ -629,6 +651,9 @@ def update(args, dry, data):
         items.sort(key=lambda r: (r['date'], r['game'], r['name']))
         report['noimage'] = [f"{i['date']}  [{i['game']}] {i['name']}  ({i['id']})" for i in items if not i.get('thumb')]
     counts = dict(clabo=clabo_run['record_count'], torecamap=tm_run['record_count'], combined=len(scraped), before=len(existing), after=len(items))
+    archive_path = os.path.join(data, 'items-archive.json')
+    archive, archived = update_archive(json.load(open(archive_path)) if os.path.exists(archive_path) else [],
+                                       existing, items, overrides, today)
     report_path = os.path.join(data, 'update-report.md')
     write_report(report_path, report, counts, unknown, today, log)
     if not dry:
@@ -640,16 +665,21 @@ def update(args, dry, data):
             json.dump(items, f, ensure_ascii=False, indent=1)
         os.replace(tmp, os.path.join(data, 'items.json'))
         del NEW_THUMBS[:]
+        tmp = archive_path + '.part'
+        with open(tmp, 'w') as f:
+            json.dump(archive, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, archive_path)
         tmp = os.path.join(data, 'meta.json.part')
         with open(tmp, 'w') as f:
             json.dump({'updated': today.isoformat()}, f, indent=2)
         os.replace(tmp, os.path.join(data, 'meta.json'))
-        referenced = {i['thumb'].split('/')[-1] for i in items if i.get('thumb')}
+        referenced = {i['thumb'].split('/')[-1] for i in items + archive if i.get('thumb')}
         for f in os.listdir(THUMBS):
             if f.endswith('.jpg') and f not in referenced:
                 os.remove(os.path.join(THUMBS, f))
     print(open(report_path).read())
-    print('(dry run: nothing written)' if dry else f'wrote {os.path.join(data, "items.json")} ({len(items)} items) and update-report.md')
+    print(f'archive: {len(archived)} released items moved to items-archive.json, {len(archive)} archived in all')
+    print('(dry run: nothing written)' if dry else f'wrote {os.path.join(data, "items.json")} ({len(items)} items), items-archive.json and update-report.md')
     return items
 
 

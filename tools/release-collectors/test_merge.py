@@ -418,6 +418,37 @@ class Changed(MergeCase):
             self.assertEqual({x['id']: x['changed'] for x in json.load(f)}, got)
 
 
+class Archive(MergeCase):
+    def test_aged_out_items_are_archived(self):
+        old = dict(item('2026-10-10', OP, '発売済みの商品【OP-14】', pack='220円', thumb='thumbs/old.jpg'), changed='2026-10-01')
+        hidden = item('2026-10-11', OP, '中止になった商品')
+        recent = item('2026-11-01', OP, '先月の商品')
+        ancient = {'id': 'iancient000', 'date': '2024-10-01', 'game': OP, 'name': '二年以上前', 'thumb': 'thumbs/anc.jpg', 'changed': '2024-11-01'}
+        back = {'id': E1['id'], 'date': '2026-10-01', 'game': OP, 'name': E1['name'], 'thumb': '', 'changed': '2026-11-01'}
+        kept = {'id': 'ikept000000', 'date': '2025-06-01', 'game': OP, 'name': '去年の商品', 'thumb': '', 'changed': '2025-07-01'}
+        self.write_data([old, hidden, recent, E1, E2, E3], {hidden['id']: {'hide': True}})
+        with open(os.path.join(self.data, 'items-archive.json'), 'w') as f:
+            json.dump([ancient, back, kept], f, ensure_ascii=False)
+        for name in ('old.jpg', 'anc.jpg'):
+            open(os.path.join(self.thumbs, name), 'w').close()
+        self.write_source('cardlabo', CLABO)
+        self.write_source('torecamap', TORECAMAP)
+        self.run_merge('--no-official', '--dry-run')
+        with open(os.path.join(self.data, 'items-archive.json')) as f:
+            self.assertEqual(len(json.load(f)), 3)  # a dry run writes nothing
+        items = {x['id'] for x in self.run_merge('--no-official')}
+        self.assertNotIn(old['id'], items)
+        self.assertIn(recent['id'], items)
+        with open(os.path.join(self.data, 'items-archive.json')) as f:
+            archive = json.load(f)
+        # newly archived: TODAY; the hidden one is not archived; back in items.json or over two years old: dropped
+        self.assertEqual([a['id'] for a in archive], [kept['id'], old['id']])
+        self.assertEqual(archive[1], {'id': old['id'], 'date': old['date'], 'game': OP, 'name': old['name'], 'pack': '220円',
+                                      'box': '', 'url': '', 'thumb': 'thumbs/old.jpg', 'approx': False, 'source': old['source'],
+                                      'changed': TODAY})
+        self.assertEqual(sorted(os.listdir(self.thumbs)), ['old.jpg'])  # archive thumbs are kept, dropped ones pruned
+
+
 class Thumbs(MergeCase):
     def test_save_and_cleanup(self):
         pinned = item('2026-12-03', 'MTG', '固定画像の商品')
@@ -442,7 +473,7 @@ class Thumbs(MergeCase):
             self.assertEqual(len(json.load(f)), len(items))
         with open(os.path.join(self.data, 'meta.json')) as f:
             self.assertEqual(json.load(f), {'updated': TODAY})
-        self.assertEqual(sorted(os.listdir(self.data)), ['items.json', 'meta.json', 'overrides.json', 'update-report.md'])
+        self.assertEqual(sorted(os.listdir(self.data)), ['items-archive.json', 'items.json', 'meta.json', 'overrides.json', 'update-report.md'])
 
     def test_dry_run_writes_no_thumbs_or_data(self):
         open(os.path.join(self.thumbs, 'stale.jpg'), 'w').close()
