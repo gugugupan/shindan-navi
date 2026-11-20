@@ -478,6 +478,118 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
+// / 明日・今週の予定 follows the saved titles (tcg.voices with VOICES builds, else /events/' game filter; read only):
+// releases and event chips of those titles, a すべて表示 toggle for the visit, and every title with a note when the
+// chosen ones have nothing this week. Same 2 API requests as without the filter.
+for (const [vp, opt] of Object.entries(VIEWPORTS)) {
+  const where = `${vp} / week filter`;
+  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  const bad = [], api = [];
+  page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
+  // tomorrow: OPCG 2 + PTCG 1 events
+  await page.route('**/api/v1/**', route => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith('/days')
+    ? { days: [{ date: WEEK1, count: 3, by_game: { OPCG: 2, PTCG: 1 } }] } : { events: [], next_cursor: null } }));
+  const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
+  const state = () => page.evaluate(() => {
+    const f = document.getElementById('wkF');
+    return { shown: !f.hidden, text: f.textContent, btn: f.querySelector('button')?.textContent || null,
+      rels: [...document.querySelectorAll('#wkBody a[href^="/releases/#i="]')].map(a => a.getAttribute('title').split(' / ')[0]),
+      chips: [...document.querySelectorAll('#wkBody a.gc:not(.any)')].map(a => a.getAttribute('title').split('・')[0]),
+      others: [...document.querySelectorAll('#wkBody .rl')].filter(a => a.textContent.includes('ほか')).length,
+      saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')],
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  try {
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    const H = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]));
+    if (!H.titles || !H.titles.OPCG) throw new Error('no embedded title map');
+    const week = Array.from({ length: 6 }, (_, i) => new Date(Date.parse(`${TODAY}T00:00:00Z`) + (i + 1) * 864e5).toISOString().slice(0, 10));
+    const inWeek = H.items.filter(x => week.includes(x.date) && x.date >= H.from && x.date <= H.until);
+    const shown = games => week.reduce((n, d) => n + Math.min(3, inWeek.filter(x => x.date === d && (!games || games.includes(x.game))).length), 0);
+    const EVC = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG'];
+    // a title with releases this week (an /events/ game, so the /events/ filter can hold it too)
+    const code = EVC.find(c => inWeek.some(x => x.game === H.titles[c]));
+    // a title with nothing this week: no releases, no stubbed events
+    const none = EVC.find(c => c !== 'OPCG' && c !== 'PTCG' && !inWeek.some(x => x.game === H.titles[c]));
+    const short = c => ({ OPCG: 'ワンピ', UATCG: 'ユニアリ', CONAN: 'コナン', PTCG: 'ポケカ', GCG: 'ガンダム', DBFW: 'フュージョンワールド', BS: 'バトスピ', DCG: 'デジカ' })[c];
+    // nothing saved: every title, no sub-line
+    await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
+    await page.reload({ waitUntil: 'networkidle' });
+    let st = await state();
+    const all = st.rels.length;
+    if (st.shown) fail(where, `sub-line without a selection: ${st.text}`);
+    if (all !== shown(null)) fail(where, `all titles: ${all} releases listed, data has ${shown(null)}`);
+    if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'ポケモンカード'])) fail(where, `all titles: chips ${st.chips}`);
+    if (!code) console.log(`  ${where.padEnd(22)} no /events/ title with releases this week: filter checks skipped`);
+    else {
+      const name = H.titles[code];
+      const filtered = async label => {
+        st = await state();
+        if (!st.shown || st.text !== `選択中のタイトルのみ（${short(code)}）すべて表示` || st.btn !== 'すべて表示') fail(where, `${label}: sub-line "${st.text}"`);
+        if (st.rels.length !== shown([name]) || st.rels.some(g => g !== name)) fail(where, `${label}: releases ${st.rels}`);
+        if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(code === 'OPCG' || code === 'PTCG' ? [H.titles[code]] : [])) fail(where, `${label}: chips ${st.chips}`);
+        if (inWeek.some(x => x.game !== name) && !st.others) fail(where, `${label}: other titles' releases not mentioned`);
+        if (st.overflow > 1) fail(where, `${label}: page scrolls horizontally by ${st.overflow}px`);
+      };
+      // from /events/' saved game filter
+      const evf = { pref: 'JP-13', game: code };
+      await setStore({ 'tcg.ev.filters': evf });
+      await page.reload({ waitUntil: 'networkidle' });
+      await filtered('from /events/');
+      // tcg.voices wins over /events/ (VOICES builds); /events/' game left out of it here
+      if (HAS_VOICES) {
+        const other = EVC.find(c => c !== code);
+        await setStore({ 'tcg.voices': { game: code }, 'tcg.ev.filters': { pref: 'JP-13', game: other } });
+        await page.reload({ waitUntil: 'networkidle' });
+        await filtered('from /voices/');
+      }
+      await page.locator('#wkF').screenshot({ path: path.join(OUT, `${vp}-home-week-sub.png`) });
+      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-filtered.png`) });
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-filtered-dark.png`) });
+      await page.emulateMedia({ colorScheme: 'light' });
+      // すべて表示: every title for this visit, nothing saved; and back
+      const before = (await state()).saved;
+      await page.locator('#wkAll').click();
+      st = await state();
+      if (st.rels.length !== all || st.btn !== '選択中のタイトルのみ' || !st.text.startsWith('すべてのタイトルを表示中')) fail(where, `すべて表示: ${st.rels.length} releases, "${st.text}"`);
+      if (await page.evaluate(() => document.activeElement?.id) !== 'wkAll') fail(where, 'focus lost after すべて表示');
+      if (JSON.stringify(st.saved) !== JSON.stringify(before)) fail(where, `storage written: ${st.saved}`);
+      await page.locator('#wkAll').click();
+      st = await state();
+      if (st.rels.length !== shown([name]) || st.btn !== 'すべて表示') fail(where, `back to the selection: ${st.rels.length} releases, "${st.text}"`);
+      await page.reload({ waitUntil: 'networkidle' });
+      if ((await state()).btn !== 'すべて表示') fail(where, 'すべて表示 kept after a reload');
+    }
+    // the chosen titles have nothing this week: every title, with a note and no toggle
+    if (none) {
+      await setStore({ 'tcg.ev.filters': { pref: 'JP-13', game: none } });
+      await page.reload({ waitUntil: 'networkidle' });
+      st = await state();
+      if (!st.shown || st.text !== `選択中のタイトル（${short(none)}）の予定はありません。すべてのタイトルを表示しています。` || st.btn) fail(where, `empty after the filter: "${st.text}"`);
+      if (st.rels.length !== all) fail(where, `empty after the filter: ${st.rels.length} releases, want ${all}`);
+      if (st.saved[1] !== JSON.stringify({ pref: 'JP-13', game: none })) fail(where, `storage written: ${st.saved}`);
+      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-empty.png`) });
+    }
+    // no location, selection only: releases filtered, no API call
+    if (code) {
+      api.length = 0;
+      await setStore({ 'tcg.ev.filters': { game: code } });
+      await page.reload({ waitUntil: 'networkidle' });
+      st = await state();
+      if (st.rels.some(g => g !== H.titles[code]) || !st.shown) fail(where, `no location: releases ${st.rels}`);
+      if (api.length) fail(where, `API called without a location: ${api.join(' ')}`);
+    }
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} checked`);
+  await ctx.close();
+}
 // /events/ with a stubbed API: today's events in Tokyo. The day view's 今日 returns to the calendar without saving
 // リスト as the default view; phones show the count without opening 絞り込み.
 for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {

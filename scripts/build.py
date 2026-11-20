@@ -473,6 +473,8 @@ def render_home():
     home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
     if VOICES_ENABLED: home['voices']=home_voices()
+    # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (明日・今週の予定 filter)
+    home['titles']={g['code']:g['name'] for g in VOICE_GAME_INFO}
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
