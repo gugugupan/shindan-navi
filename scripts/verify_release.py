@@ -54,7 +54,7 @@ def load_archive():
     return json.load(open(p)) if os.path.exists(p) else []
 
 
-def check_archive(base, head, ov, old, meta):
+def check_archive(base, head, ov, old, meta, today):
     """data/items-archive.json (contracts/releases.md › Archive): released items that left items.json keep a slim
     record; an item the merge dropped for its date (not hidden) must be in it, and nothing in it is in items.json."""
     arch = load_archive()
@@ -70,8 +70,9 @@ def check_archive(base, head, ov, old, meta):
         if not all(a.get(f) for f in ('id', 'date', 'game', 'name')): fail(f'archive: entry without id / date / game / name: {a}'); continue
         if a['id'] in live: fail(f'archive: {a["id"]} {a["name"]} is also in items.json')
         c = a.get('changed')
-        if not (isinstance(c, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', c) and c <= meta['updated']):
-            fail(f'archive: {a["id"]} changed {c!r} is not a date on or before meta.updated {meta["updated"]}')
+        # a merge stamps meta.updated; a hand-added entry (the 2026-11-20 backfill) its publishing day: never after today
+        if not (isinstance(c, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', c) and c <= today):
+            fail(f'archive: {a["id"]} changed {c!r} is not a date on or before {today}')
         if a['date'] >= cutoff: fail(f'archive: {a["id"]} {a["name"]} released {a["date"]}, still inside the 30-day window')
         if a['date'] < oldest: warn(f'archive: {a["id"]} {a["name"]} released {a["date"]}, over two years before {meta["updated"]} (the next merge drops it)')
     have = set(ids)
@@ -166,7 +167,7 @@ def check_data(base, today):
     for i, d in sorted(changed, key=lambda x: x[0]['date']):
         print(f'  ~ {i["id"]} [{i["game"]}] {i["name"]}: ' + ', '.join(f'{f} {x!r} -> {y!r}' for f, (x, y) in d.items()))
     print(f'  - {len(removed)} removed ({sum(i["date"] < cutoff for i in removed)} released over 30 days ago)')
-    arch = check_archive(base, head, ov, old, meta)
+    arch = check_archive(base, head, ov, old, meta, today)
     return head, ov, arch
 
 

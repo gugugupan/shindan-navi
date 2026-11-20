@@ -176,7 +176,7 @@ only while one is built. Archived items never appear in the release calendar, ti
 `/`. 同じタイトルの前後の新弾 runs over calendar and archived items together, so archived pages stay linked.
 
 verify (`check_archive` / `check_items` in `verify_release.py`, `browser.mjs`): ids unique and not in `items.json`;
-`changed` a date on or before `meta.json` `updated`; released before the 30-day window; an item that left
+`changed` a date on or before `--today` (a merge stamps `meta.json` `updated`, a hand-added entry its publishing day); released before the 30-day window; an item that left
 `items.json` for its date and is not hidden must be archived (FAIL); entries removed from the archive, entries older
 than two years and new entries that were not in the base's `items.json` (backfill, hand edits) are WARNs; every
 archived page exists, shows 発売済み, does not link into the calendar, is in the sitemap with its `changed` and on no
@@ -185,10 +185,12 @@ calendar page or `/`.
 Backfill (2026-11-20, one-off script, not kept): seeded from the git history of `data/items.json` on `main` — every
 commit's items, the last record of each stable id (`i…`) that is not in today's `items.json`, archived when the
 commit that removed it was a merge run whose TODAY (`meta.json` `updated`) was more than 30 days after the release
-date and the id is not hidden; `changed` = that run's `updated`. Skipped: the first commit's positional ids
+date and the id is not hidden; `changed` = 2026-11-20, the day the pages are first published (none of them had a
+live `/item/` page before). Skipped: the first commit's positional ids
 (`p000`…, renumbered to stable ids in the next commit, which carry the same items) and the 2 hidden ids. Result: 36
-entries (10 dropped on 2026-11-02, 26 on 2026-11-17). Their thumbnails were already pruned from `public/thumbs`, so all
-36 show the placeholder (the files are still in git history; restoring them is an owner decision).
+entries (10 dropped on 2026-11-02, 26 on 2026-11-17). Their thumbnails, already pruned from `public/thumbs`, were
+restored from the item's last `items.json` commit (`git show`, no download; owner decision; 36 files, ~0.97 MB), with
+the item's `thumb` / `approx` from that commit.
 
 ## Product decisions kept
 
