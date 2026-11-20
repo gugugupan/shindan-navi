@@ -156,6 +156,7 @@
 /* toolbar text labels where the row has room (no ★ button here, unlike /releases/) */
 @media (min-width:344px) and (max-width:379px){.filterbtn{width:auto;padding:0 8px}.filterbtn span{display:inline}}
 @media (min-width:384px) and (max-width:760px){.seg button{width:auto;padding:0 8px;gap:4px}.seg button span{display:inline;font-size:12px}}
+@media (max-width:760px){.filterbtn:has(em:not([hidden])) span{display:none}}
 </style>
 
 <div class="wrap">
@@ -208,26 +209,26 @@
 
 <script>
 const V = /*VOICES*/null;
-// c / cd = light / dark colour (the /events/ game palette, except DBFW, SVE and MTG, changed here so that the phone
-// dots tell DBFW / ホロライブ, ヴァンガード / SVE and MTG / デュエマ apart); rel = release-calendar title whose hue
-// colours a game without a pair. build.py reads the codes from this list to check data/voices/.
+// c / cd = light / dark colour: the /events/ game palette (CLAUDE.md › Event game palette), MTG / DM / YGO on its
+// slots 14-16 (contracts/voices.md); rel = release-calendar title whose hue colours a game without a pair. build.py
+// reads the codes from this list to check data/voices/.
 const GAMES = [
   {code:'OPCG', name:'ONE PIECE', short:'ワンピ', c:'#be362d', cd:'#de837c'},
   {code:'UATCG', name:'UNION ARENA', short:'ユニアリ', c:'#7a2dbe', cd:'#b17cde'},
   {code:'CONAN', name:'名探偵コナン', short:'コナン', c:'#2d81be', cd:'#7cb6de'},
   {code:'PTCG', name:'ポケモンカード', short:'ポケカ', c:'#be972d', cd:'#dec47c'},
   {code:'GCG', name:'ガンダム', short:'ガンダム', c:'#1d357c', cd:'#3b60ce'},
-  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', c:'#c4580e', cd:'#f08a45'},
+  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', c:'#8a2e0f', cd:'#e45525'},
   {code:'BS', name:'バトルスピリッツ', short:'バトスピ', c:'#7c1d4d', cd:'#ce3b85'},
   {code:'DCG', name:'デジモン', short:'デジカ', c:'#12a581', cd:'#40e7be'},
   {code:'WS', name:'ヴァイスシュヴァルツ', short:'ヴァイス', c:'#d31785', cd:'#ed6eb8'},
   {code:'VG', name:'ヴァンガード', short:'ヴァンガ', c:'#808a0f', cd:'#d4e425'},
-  {code:'SVE', name:'Shadowverse EVOLVE', short:'シャドバ', c:'#2f8a3e', cd:'#6fd486'},
+  {code:'SVE', name:'Shadowverse EVOLVE', short:'シャドバ', c:'#4d6f2a', cd:'#85b950'},
   {code:'HOCG', name:'ホロライブ', short:'ホロカ', c:'#a96660', cd:'#cfadaa'},
   {code:'LLOCG', name:'ラブライブ！OCG', short:'ラブカ', c:'#366063', cd:'#62a1a7'},
-  {code:'MTG', name:'MTG', short:'MTG', c:'#454b57', cd:'#c3c9d4'},
-  {code:'YGO', name:'遊戯王OCG', short:'遊戯王', rel:'遊戯王OCG'},
-  {code:'DM', name:'デュエル・マスターズ', short:'デュエマ', rel:'デュエル・マスターズ'}
+  {code:'MTG', name:'MTG', short:'MTG', c:'#534077', cd:'#8a76b2'},
+  {code:'YGO', name:'遊戯王OCG', short:'遊戯王', c:'#562d29', cd:'#b46b64'},
+  {code:'DM', name:'デュエル・マスターズ', short:'デュエマ', c:'#4d19e6', cd:'#825eed'}
 ];
 const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
 // release titles: the same golden-angle hues as /releases/ (titles ordered by release count)
@@ -599,14 +600,17 @@ function render(){
 renderNotice();
 renderFresh();
 render();
-// Deep links (shared links, the home page later): #d=YYYY-MM-DD opens that day, #t=<topic id> one topic. Others are dropped.
-const deep=/^#(d|t)=([\w-]+)$/.exec(location.hash);
-if(location.hash && !(deep && (deep[1]==='d' ? realDay(deep[2]) : TOPICS.has(deep[2])))) setHash('');
-if(deep){
-  if(deep[1]==='d' && realDay(deep[2])){
+// Deep links (shared links, the home page later): #d=YYYY-MM-DD opens that day, #t=<topic id> one topic, also when the
+// hash is edited by hand. Others are dropped (and close the dialog).
+function fromHash(){
+  const deep=/^#(d|t)=([\w-]+)$/.exec(location.hash);
+  if(deep && deep[1]==='d' && realDay(deep[2])){
     const ym=monthOf(deep[2]), [lo,hi]=bounds();
     if(state.view==='cal' && ym>=lo && ym<=hi && ym!==state.month) commit({month:ym},{auto:true});
     openDay(deep[2]);
-  } else if(deep[1]==='t' && TOPICS.has(deep[2])) openTopic(deep[2]);
+  } else if(deep && deep[1]==='t' && TOPICS.has(deep[2])) openTopic(deep[2]);
+  else { if(location.hash) setHash(''); if(dlg.open) dlg.close(); }
 }
+fromHash();
+window.addEventListener('hashchange',fromHash);
 </script>

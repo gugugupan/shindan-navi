@@ -41,11 +41,19 @@ data/voices/<YYYY-MM-DD>.json   one snapshot (voices.schema.json); the name is i
 
 ## Game codes
 
-The `/events/` codes have a fixed light/dark colour pair in `GAMES` (the palette `/events/` uses for its games, except
-`DBFW` and `SVE`, changed here so the phone dots tell them from `HOCG` / `VG`): `OPCG`, `UATCG`, `CONAN`, `PTCG`, `GCG`,
-`DBFW`, `BS`, `DCG`, `WS`, `VG`, `SVE`, `HOCG`, `LLOCG`; `MTG` has its own neutral pair (its release-calendar hue was
-next to デュエマ's). `YGO` (遊戯王OCG) and `DM` (デュエル・マスターズ) use the release calendar's title colour (`--h`,
-computed from `data/items.json` as on `/releases/`). The list lives in `GAMES` in `src/voices.html`; the build reads the codes from there and
+Every code has a fixed light/dark colour pair in `GAMES`, from the `/events/` game palette (CLAUDE.md › Event game
+palette, slots 1-13: `OPCG`, `UATCG`, `CONAN`, `PTCG`, `GCG`, `BS`, `DCG`, `DBFW`, `WS`, `VG`, `SVE`, `HOCG`, `LLOCG`).
+The titles without events take the next slots, so `/events/` can adopt the same ones if it ever lists them:
+
+| # | Game | Light | Dark |
+| --- | --- | --- | --- |
+| 14 | `MTG` | `#534077` | `#8a76b2` |
+| 15 | `DM` (デュエル・マスターズ) | `#4d19e6` | `#825eed` |
+| 16 | `YGO` (遊戯王OCG) | `#562d29` | `#b46b64` |
+
+15 and 16 were picked (2026-11-20) the palette's way: greedily maximising the worst OKLab ΔE×100 against slots 1-14 in
+both themes (normal ≥10.0, simulated protan / deutan ≥5.4), ≥3:1 on white (light) and on `#181b27` (dark).
+The list lives in `GAMES` in `src/voices.html`; the build reads the codes from there and
 refuses unknown ones. Add a code there (and here) before writing topics for a new game.
 
 ## How the page reads it

@@ -544,6 +544,16 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
       if (await page.locator('#vBody .tc').count() !== 1) fail(where, 'topic bar did not open its topic');
       await page.locator('#vClose').click();
     }
+    // phone toolbar with an active filter (badge on 絞り込み): nothing past the panel edge at common widths
+    if (narrow) {
+      for (const w of [344, 360, 375, 384, 390, 393]) {
+        await page.setViewportSize({ width: w, height: opt.height });
+        const o = await page.evaluate(() => { const r = document.querySelector('.panel>.row'), last = [...r.children].filter(e => e.offsetParent).at(-1);
+          return Math.max(r.scrollWidth - r.clientWidth, last ? last.getBoundingClientRect().right - r.getBoundingClientRect().right : 0); });
+        if (o > 1) fail(where, `toolbar row with a filter overflows by ${Math.round(o)}px at ${w}px`);
+      }
+      await page.setViewportSize({ width: opt.width, height: opt.height });
+    }
     await page.locator('#resetAll').click();
     if (narrow) await page.locator('#filterBtn').click();
     const ov1 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
