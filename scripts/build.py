@@ -475,6 +475,10 @@ def render_home():
     if VOICES_ENABLED: home['voices']=home_voices()
     # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (明日・今週の予定 filter)
     home['titles']={g['code']:g['name'] for g in VOICE_GAME_INFO}
+    # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
+    if BUILD_EVENTS:
+        home['types']=dict(re.findall(r"^\s+(\w+): '([^']*)',$",open(os.path.join(ROOT,'api/src/constants.ts')).read().split('TYPE_LABELS: Record<string, string> = {',1)[1].split('};',1)[0],re.M))
+        assert home['types'],'TYPE_LABELS not found in api/src/constants.ts'
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):

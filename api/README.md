@@ -326,7 +326,8 @@ every scanned row twice). With eight games the busiest 東京都 day has 217 eve
 
 **Today page** (`/`, `src/home.html`): no request without a saved location. With one, 2-3 requests per visit, all
 keys the `/events/` page uses too, with the saved `game`/`type` (not `days`): `/events/days` for this month (calendar
-view; its `by_game` gives each game column's total and the week strip's per-game chips) and `/events` from today to
+view; its `by_game` gives each game column's total and the week strip's per-game chips, `by_game_type` the column's
+per-type line) and `/events` from today to
 the 1st of next month with `limit=50` (first list page). `limit` is fixed at 50 and the page runs in start order across
 all games, so on a busy day one game can fill it: then, and only then, the page asks for the next page with its
 `next_cursor` (the list's second page, same key) — at most one extra page; a column still short after it shows its
@@ -441,7 +442,10 @@ the first import.
 - `game` matches any member game; events carry `game_codes` (sorted alphabetically) and `game_code` = `game_codes[0]`.
   `/events/days` counts a shared event once in `count` and under each member game in `by_game` (only the selected
   games when `game=` is set).
-- `/events/days` lists only days with matches; `by_game` has only games with matches that day.
+- `/events/days` lists only days with matches; `by_game` has only games with matches that day. `by_game_type` splits
+  each game's count by `event_type_code` (`""` = none), counted like `by_game`. It groups the same `day_counts` rows by
+  type as well (the primary key's order, same index search; checked in tests/api.test.ts), so D1 reads are unchanged;
+  only the answer grows.
 - `days` uses the weekday of `starts_on` (already a Tokyo date).
 - All `event_status` values are returned and counted; the page marks cancelled/postponed events.
 - Type labels come from `TYPE_LABELS` in `src/constants.ts` (per `event_type_code`); codes without a label use the code itself.

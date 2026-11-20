@@ -46,6 +46,8 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .gcol h3 .c{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
 .gcol h3 .c b{font-family:var(--mono);color:var(--ink);font-size:13px}
 .gcol .more{align-self:flex-start;font-size:12.5px;padding:3px 10px}
+.gcol .ty{margin:-2px 2px 0;font-size:12px;line-height:1.4;color:var(--muted)}
+.gcol .ty b{font-family:var(--mono);font-weight:700;color:var(--ink)}
 .gcol .q{margin:2px;font-size:12px;color:var(--muted)}
 .evs{list-style:none;margin:0;padding:0;display:grid;gap:5px}
 .ev{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;background:var(--surface);border-radius:8px;padding:7px 9px}
@@ -129,6 +131,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
   .vt .gm{min-width:0}
   .vt .sm{display:block;white-space:nowrap;text-overflow:ellipsis}
   .gcols{grid-template-columns:minmax(0,1fr)}
+  .gcol .ty{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wk{grid-template-columns:minmax(0,1fr)}
   .wd{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 10px;align-items:start}
   .wd h3{grid-row:1/span 4;flex-direction:column;align-items:center;gap:2px;font-size:16px}
@@ -282,7 +285,7 @@ function q(f,extra){
 const dayLink = (f,d,game) => '/events/?'+q(game?{...f,game}:f,{tail:{range:'custom',from:d,to:d}});
 const monthLink = f => '/events/?'+q(f,{});
 const SHOW = n => n<=2 ? 5 : 3; // events listed per game column for n columns
-let evF=null, evKey=null, ev=null; // ev: {loading} | {error} | {counts, byGame, list}
+let evF=null, evKey=null, ev=null; // ev: {loading} | {error} | {counts, byGame, byGameType, list}
 async function api(path,query){
   const r=await fetch(`${API_BASE}${path}${query?'?'+query:''}`,{headers:{accept:'application/json'}});
   let body=null; try{ body=await r.json(); }catch(e){}
@@ -324,7 +327,8 @@ async function loadEvents(force){
       api('/events',q(f,{api:{from:TODAY,until:next},tail:{limit:50}}))]);
     if(key!==evKey) return;
     const ds=days.days||[];
-    ev={counts:Object.fromEntries(ds.map(d=>[d.date,d.count])), byGame:Object.fromEntries(ds.filter(d=>d.by_game).map(d=>[d.date,d.by_game])), list:page.events||[]};
+    ev={counts:Object.fromEntries(ds.map(d=>[d.date,d.count])), byGame:Object.fromEntries(ds.filter(d=>d.by_game).map(d=>[d.date,d.by_game])),
+      byGameType:Object.fromEntries(ds.filter(d=>d.by_game_type).map(d=>[d.date,d.by_game_type])), list:page.events||[]};
     renderEv(); renderWeek();
     // The page runs in start order across all games, so a busy game can fill it before the others start: one more
     // page (the /events/ list's second, same key) when a column would show fewer than it could.
@@ -353,6 +357,19 @@ function evRow(e,col){
   const st = e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st">延期</span>' : '';
   const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="${gvars(x)}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
   return `<li class="ev${e.event_status==='cancelled'?' off':started(e)?' done':''}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
+}
+// A column's types today, busiest first: up to 3 named, else 2 and ほか (no type, その他 and unknown codes go to ほか).
+// None when /days has no by_game_type (answers cached before it existed).
+const TYPES = H.types||{};
+function typeLine(code){
+  const bt=(ev.byGameType[TODAY]||{})[code];
+  if(!bt) return '';
+  const named=Object.entries(bt).filter(([t])=>TYPES[t]&&t!=='other').sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1));
+  const total=Object.values(bt).reduce((a,b)=>a+b,0);
+  const show=named.length<=3&&named.reduce((a,x)=>a+x[1],0)===total ? named : named.slice(0,2);
+  const rest=total-show.reduce((a,x)=>a+x[1],0);
+  const parts=show.map(([t,n])=>`${esc(TYPES[t])} <b>${n}</b>件`).concat(rest?[`ほか <b>${rest}</b>件`]:[]);
+  return show.length ? `<p class="ty" title="${parts.join('・').replace(/<\/?b>/g,'')}">${parts.join('・')}</p>` : '';
 }
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 function renderEv(){
@@ -386,7 +403,7 @@ function renderEv(){
     const list = rows.length ? `<ul class="evs">${rows.map(e=>evRow(e,g.code)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件 ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${list}${more}</section>`;
+    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${typeLine(g.code)}${list}${more}</section>`;
   }).join('')}</div>${others}`;
 }
 

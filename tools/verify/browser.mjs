@@ -264,7 +264,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
   page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
   // Stub API. Default: 7 OPCG events today, /days without by_game (the page then groups the list itself).
-  // scenario 'busy': 50 OPCG events fill the first page; PTCG's 3 come only on the cursor page.
+  // scenario 'busy': 50 OPCG events fill the first page; PTCG's 3 come only on the cursor page. by_game_type: OPCG has
+  // four named types and untyped ones (2 named + ほか), PTCG two (both named).
   // scenario 'many': seven games today; the five busiest get columns, the other two chips.
   let scenario = 'plain';
   const MANY = { GCG: 9, OPCG: 8, PTCG: 7, DCG: 6, BS: 5, UATCG: 2, DBFW: 1 };
@@ -277,13 +278,15 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [],
       loc_counts: { months: [TODAY.slice(0, 7)], types: ['x'], rows: { 'JP-13': [1, 0, 0, 3, 4], 'JP-27': [8, 0, 0, 1, 1] } } } });
     if (scenario === 'busy') {
-      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 53, by_game: { OPCG: 50, PTCG: 3 } },
+      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 53, by_game: { OPCG: 50, PTCG: 3 },
+        by_game_type: { OPCG: { '': 2, flagship_battle: 12, meetup: 5, other: 1, standard_battle: 30 }, PTCG: { city_league: 1, gym_battle: 2 } } },
         { date: WEEK1, count: 4, by_game: { UATCG: 1, CONAN: 3 } }] } });
       return route.fulfill({ json: u.searchParams.get('cursor') ? { events: [0, 1, 2].map(i => evt(i, 'PTCG', 20)), next_cursor: null }
         : { events: Array.from({ length: 50 }, (_, i) => evt(i, 'OPCG', 10 + (i % 9))), next_cursor: 'c1' } });
     }
     if (scenario === 'many') {
-      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 38, by_game: MANY }] } });
+      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 38, by_game: MANY,
+        by_game_type: Object.fromEntries(Object.entries(MANY).map(([c, n]) => [c, { standard_battle: n }])) }] } });
       return route.fulfill({ json: { events: Object.entries(MANY).flatMap(([code, n]) => Array.from({ length: n }, (_, i) => evt(i, code, 13 + (i % 6)))), next_cursor: null } });
     }
     const body = u.pathname.endsWith('/days') ? { days: [{ date: TODAY, count: 7 }] }
@@ -321,8 +324,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const want = [`/api/v1/events/days?from=${ym}-01&until=${next}&game=OPCG&pref=JP-13`, `/api/v1/events?from=${TODAY}&until=${next}&game=OPCG&pref=JP-13&limit=50`];
     if (JSON.stringify([...api].sort()) !== JSON.stringify(want.sort())) fail(where, `API requests ${api.join(' ')}`);
     const ev = await page.evaluate(() => ({ rows: document.querySelectorAll('#evBody .ev').length, more: document.querySelector('#evBody a.go')?.getAttribute('href'),
-      cols: document.querySelectorAll('#evBody .gcol').length, where: document.getElementById('evWhere').textContent }));
+      cols: document.querySelectorAll('#evBody .gcol').length, types: document.querySelectorAll('#evBody .ty').length, where: document.getElementById('evWhere').textContent }));
     if (ev.cols !== 1 || ev.rows !== 5) fail(where, `today's events show ${ev.cols} columns / ${ev.rows} rows`);
+    // /days without by_game_type (answers cached before it existed): no type line
+    if (ev.types) fail(where, `${ev.types} type lines without by_game_type`);
     if (ev.more !== `/events/?game=OPCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `day view link ${ev.more}`);
     if (!ev.where.startsWith('東京都')) fail(where, `location ${ev.where}`);
 
@@ -347,16 +352,21 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.reload({ waitUntil: 'networkidle' });
     const busy = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelectorAll('.ev').length,
       c.querySelector('a.go')?.textContent]), chips: [...document.querySelectorAll('#wkBody .wd')][0].querySelectorAll('a.gc').length,
+      types: [...document.querySelectorAll('#evBody .gcol')].map(c => c.querySelector('.ty')?.textContent || null),
+      tyLine: (() => { const t = document.querySelector('#evBody .gcol .ty'); return t ? { nowrap: getComputedStyle(t).whiteSpace === 'nowrap', h: t.getBoundingClientRect().height } : null; })(),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     if (JSON.stringify(busy.cols) !== JSON.stringify([['ONE PIECE', 5, 'ほか 45件 ›'], ['ポケモンカード', 3, '地図で見る ›']])) fail(where, `busy columns ${JSON.stringify(busy.cols)}`);
     if (api.length !== 3 || !api.some(a => a.includes('cursor=c1'))) fail(where, `busy: API requests ${api.join(' ')}`);
     if (busy.chips !== 2) fail(where, `tomorrow shows ${busy.chips} game chips`);
+    if (JSON.stringify(busy.types) !== JSON.stringify(['スタンダードバトル 30件・フラッグシップバトル 12件・ほか 8件', 'ジムバトル 2件・シティリーグ 1件'])) fail(where, `busy: type lines ${JSON.stringify(busy.types)}`);
+    if (opt.width <= 760 && !(busy.tyLine && busy.tyLine.nowrap && busy.tyLine.h < 24)) fail(where, `busy: type line not one line on phones ${JSON.stringify(busy.tyLine)}`);
     if (busy.overflow > 1) fail(where, `busy: page scrolls horizontally by ${busy.overflow}px`);
     await page.screenshot({ path: path.join(OUT, `${vp}-home-busy.png`), fullPage: true });
 
     scenario = 'many'; api.length = 0;
     await page.reload({ waitUntil: 'networkidle' });
     const many = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => c.getAttribute('aria-label')),
+      types: document.querySelectorAll('#evBody .ty').length,
       rest: [...document.querySelectorAll('#evBody .gmore a.gc')].map(a => [a.textContent, a.getAttribute('href')]),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     if (JSON.stringify(many.cols) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ガンダム', 'バトルスピリッツ', 'デジモン'])) fail(where, `many: columns ${JSON.stringify(many.cols)}`);
@@ -364,6 +374,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       ['DBフュージョンワールド1', `/events/?game=DBFW&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`]])) fail(where, `many: other titles ${JSON.stringify(many.rest)}`);
     if (api.length !== 2) fail(where, `many: API requests ${api.join(' ')}`);
     if (many.overflow > 1) fail(where, `many: page scrolls horizontally by ${many.overflow}px`);
+    // a type line per column; the ほかのタイトル chips carry totals only (checked above)
+    if (many.types !== 5) fail(where, `many: ${many.types} type lines for 5 columns`);
     await page.screenshot({ path: path.join(OUT, `${vp}-home-many.png`), fullPage: true });
   }
   await page.screenshot({ path: path.join(OUT, `${vp}-home.png`), fullPage: true });
