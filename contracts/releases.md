@@ -143,7 +143,9 @@ unaffected):
   starting `items.json`; else kept. `source.url`, `sources` and `official_name` are not shown and move no date.
 - Backfill, no invented dates: an item without `changed` (written before the field existed) takes the previous
   `meta.json` `updated`, the date the sitemap already gave it; the build uses `meta.json` `updated` until then.
-- An override committed without a merge rerun moves no date (verify WARNs); the next run stamps the change.
+- An override committed without a merge rerun moves no date: the build shows it at once, the item's sitemap
+  `lastmod` stays until the next run stamps the change. verify only lists every new or changed override as a WARN
+  (`overrides: entry … changed — review`); it has no separate check for the date.
 
 ## Product decisions kept
 
