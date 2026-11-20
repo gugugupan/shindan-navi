@@ -35,6 +35,21 @@ GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポ�
        ('dragonball','DBフュージョンワールド','ドラゴンボールスーパーカードゲーム フュージョンワールド','フュージョンワールド'),
        ('digimon','デジモン','デジモンカードゲーム','デジカ')]
 
+# Icon next to every game name on every page, by display name (owner decision 2026-11-20): `x.png` = official site
+# favicon kept in public/gi/ (identification only, never hotlinked), otherwise a one-character monogram tile in the
+# game's colour. Never a KONAMI asset for 遊戯王. Titles missing here get their first character.
+GAME_ICON={'UNION ARENA':'ua.png','DBフュージョンワールド':'dbfw.png','デジモン':'dcg.png','ヴァイスシュヴァルツ':'ws.png',
+    'ヴァンガード':'vg.png','ホロライブ':'hocg.png','ラブライブ！OCG':'llocg.png','MTG':'mtg.png',
+    'ONE PIECE':'ワ','ポケモンカード':'ポ','ガンダム':'ガ','バトルスピリッツ':'バ','Shadowverse EVOLVE':'シ','デュエル・マスターズ':'デ',
+    '遊戯王OCG':'遊','遊戯王ラッシュデュエル':'ラ','名探偵コナン':'コ','DIVINE CROSS':'D','Flesh and Blood':'F','ビルディバイド':'ビ',
+    'ウルトラマン':'ウ','KAMITSUBAKI':'K','アニマルカードゲーム':'ア','パルワールド':'パ','ゴジラ':'ゴ','FFTCG':'F','Xross Stars':'X',
+    'ホロビート':'ホ','Z/X':'Z','バボカ!!':'ボ','リセ':'リ','OSICA':'O','ファンスターズリーグ':'フ','Harry Potter':'H',
+    '五等分の花嫁':'五','WIXOSS':'W'}
+for _v in GAME_ICON.values(): assert not _v.endswith('.png') or os.path.exists(os.path.join(ROOT,'public/gi',_v)),_v
+# gi(name) in every page script (slot /*GICON*/); decorative, the name always sits next to it
+GICON_JS=('const GICON = '+json.dumps(GAME_ICON,ensure_ascii=False)+';\n'
+    "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.png$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };")
+
 # Prices come as 6600円(税込) / 6,050円 / 240円 depending on the source; pages say once that prices include tax.
 def price_label(s):
     s=re.sub(r'\s*[（(]税込み?\s*(?:\d+\s*[%％])?[)）]','',s or '').strip()
@@ -61,7 +76,7 @@ data.sort(key=lambda d:(d['date'],d['game']))
 used={d['game'] for d in data}
 off={k:v for k,v in OFFICIAL.items() if k in used}
 template=open(os.path.join(ROOT,'src/template.html')).read()
-template=template.replace('/*DATA*/',json.dumps(data,ensure_ascii=False).replace('</','<\\/')).replace('/*OFFICIAL*/',json.dumps(off,ensure_ascii=False))
+template=template.replace('/*GICON*/',GICON_JS).replace('/*DATA*/',json.dumps(data,ensure_ascii=False).replace('</','<\\/')).replace('/*OFFICIAL*/',json.dumps(off,ensure_ascii=False))
 months=sorted({d['date'][:7] for d in data})
 
 esc=lambda t: html.escape(str(t),quote=True)
@@ -305,7 +320,7 @@ def render_events():
     src=flags(open(os.path.join(ROOT,'src/events.html')).read())
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK)):
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK),('/*GICON*/',GICON_JS)):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--CORNER-->',corner('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}{siterow("/events/")}</nav>')
@@ -451,7 +466,7 @@ def render_home():
     if VOICES_ENABLED: home['voices']=home_voices()
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
-                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
+                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
@@ -599,7 +614,7 @@ def render_voices():
     v={'snapshots':VOICES,'counts':counts}
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
                      ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/voices/")}{siterow("/voices/")}</nav>'),
-                     ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/'))):
+                     ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/')),('/*GICON*/',GICON_JS)):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py

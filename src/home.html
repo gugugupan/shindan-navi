@@ -42,7 +42,6 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .gcol{border:1px solid var(--line);border-top:3px solid hsl(var(--h) var(--chip-s) var(--chip-l));border-radius:10px;background:var(--surface-2);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .gcol h3{margin:0 2px;display:flex;align-items:baseline;gap:8px;font-size:13.5px;line-height:1.35}
 .gcol h3 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%))}
-.gcol h3 i{width:9px;height:9px;border-radius:50%;flex:none;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
 .gcol h3 .c{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
 .gcol h3 .c b{font-family:var(--mono);color:var(--ink);font-size:13px}
 .gcol .more{align-self:flex-start;font-size:12.5px;padding:3px 10px}
@@ -54,7 +53,9 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .ev a{font-size:13px;font-weight:700;line-height:1.4;color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
 .ev a:hover{color:var(--accent);text-decoration:underline}
 .ev p{margin:0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
-.ev .tag{font-size:11px;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%));margin-right:6px}
+.ev .tag{font-size:11px;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%));margin-right:6px;gap:4px}
+.ev .tag .gi,.wd li .gi,.gc .gi{--gi:14px}
+.wd li .gi{margin-right:4px}
 .ev .st{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:6px;background:var(--sun);color:#fff}
 .ev.off a{text-decoration:line-through;color:var(--muted)}
 .ev.done .tm{color:var(--muted)}
@@ -84,8 +85,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .wd .rl:hover{text-decoration:underline}
 .gcs{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
 .gc{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid hsl(var(--h) var(--chip-s) var(--chip-l));background:hsl(var(--h) 70% var(--tint-l));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
-.gc span{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.gc i{width:7px;height:7px;border-radius:50%;flex:none;background:hsl(var(--h) var(--chip-s) var(--chip-l))}
+.gc>span{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .gc b{font-family:var(--mono)}
 .gc:hover{box-shadow:0 0 0 1px hsl(var(--h) var(--chip-s) var(--chip-l))}
 .gc.any{border-color:var(--line);background:var(--surface);color:var(--accent)}
@@ -106,7 +106,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .vts{list-style:none;margin:0;padding:0;display:grid;gap:5px}
 .vt{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:2px 10px;background:var(--surface-2);border-left:3px solid var(--g);border-radius:8px;padding:7px 10px 7px 9px;color:var(--ink);text-decoration:none}
 .vt:hover .tt{color:var(--accent);text-decoration:underline}
-.vt .gm{display:inline-flex;align-items:baseline;gap:4px;min-width:6.4em;font-size:11.5px;font-weight:700;color:var(--gt);white-space:nowrap}
+.vt .gm{display:inline-flex;align-items:center;gap:4px;min-width:6.4em;font-size:11.5px;font-weight:700;color:var(--gt);white-space:nowrap}
 .vt .am{font-style:normal;font-weight:700;color:var(--a)}
 .vt .tx{min-width:0;display:grid;gap:1px}
 .vt .tt{font-size:13.5px;font-weight:700;line-height:1.45;overflow-wrap:anywhere}
@@ -175,6 +175,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 (function(){
 const H = /*HOME*/null;
 const API_BASE = /*API_BASE*/'/api/v1';
+/*GICON*/
 const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store = { get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
@@ -227,7 +228,7 @@ function renderRel(){
   } else {
     body.innerHTML = `<div class="rels">${its.map(d=>{
       const pr = d.pack ? `<span class="pr">${esc(d.pack)}</span>` : '';
-      return `<a class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}" href="/releases/#i=${d.id}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></a>`;
+      return `<a class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}" href="/releases/#i=${d.id}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}${gi(d.game)}${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></a>`;
     }).join('')}</div>`;
   }
   const u=user(), nStar=its.filter(isStar).length;
@@ -328,7 +329,7 @@ function evRow(e,col){
   const tm = t ? `<span class="tm">${t}</span>` : '<span class="tm tbd">時刻未定</span>';
   const where = e.attendance_mode==='online' ? 'オンライン開催' : venueLabel(e.venue) || '会場は公式で確認';
   const st = e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st">延期</span>' : '';
-  const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,h:0}; return `<span class="tag" style="--h:${x.h}">${esc(x.name)}</span>`; }).join('');
+  const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,h:0}; return `<span class="tag" style="--h:${x.h}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
   return `<li class="ev${e.event_status==='cancelled'?' off':started(e)?' done':''}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
 }
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
@@ -362,7 +363,7 @@ function renderEv(){
     const list = rows.length ? `<ul class="evs">${rows.map(e=>evRow(e,g.code)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件 ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="--h:${g.h}" aria-label="${esc(g.name)}"><h3><span class="gn"><i aria-hidden="true"></i>${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${list}${more}</section>`;
+    return `<section class="gcol" style="--h:${g.h}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${list}${more}</section>`;
   }).join('')}</div>`;
 }
 
@@ -379,12 +380,12 @@ function renderWeek(){
     let chips='';
     if(f&&f.pref&&known){
       const gs=EV_GAMES.filter(g=>bg[g.code]>0);
-      chips = gs.length ? gs.map(g=>`<a class="gc" style="--h:${g.h}" href="${esc(dayLink(f,d,g.code))}" title="${esc(g.name)}・${bg[g.code]}件"><span><i aria-hidden="true"></i>${esc(rel?g.short:g.name)}</span><b>${bg[g.code]}</b></a>`).join('')
+      chips = gs.length ? gs.map(g=>`<a class="gc" style="--h:${g.h}" href="${esc(dayLink(f,d,g.code))}" title="${esc(g.name)}・${bg[g.code]}件"><span>${gi(g.name)}${esc(rel?g.short:g.name)}</span><b>${bg[g.code]}</b></a>`).join('')
         : total ? `<a class="gc any" href="${esc(dayLink(f,d))}">イベント <b>${total}</b></a>` : '';
     } else if(f&&f.pref&&!(ev&&ev.loading)) chips=`<a class="gc any" href="${esc(dayLink(f,d))}">イベント ›</a>`;
     let top;
     if(its==null) top='<p class="q">発売情報は新弾カレンダーで</p>';
-    else if(rel) top=`<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}"><i aria-hidden="true"></i><span class="gl">${esc(SHORT[x.game]||x.game)}</span>${esc(x.name)}</a></li>`).join('')}</ul><a class="rl" href="/releases/#d=${d}">発売 <b>${its.length}</b>件 ›</a>`;
+    else if(rel) top=`<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}">${gi(x.game)}<span class="gl">${esc(SHORT[x.game]||x.game)}</span>${esc(x.name)}</a></li>`).join('')}</ul><a class="rl" href="/releases/#d=${d}">発売 <b>${its.length}</b>件 ›</a>`;
     else {
       // no releases: a few of the day's events when the loaded pages reach it (start order), else just the counts
       const evs = known ? ev.list.filter(e=>e.starts_on===d).sort((a,b)=>dayRank(a)-dayRank(b)).slice(0,2) : [];
@@ -450,7 +451,7 @@ function renderVt(){
   for(const {t} of pool){ if(rows.length>=5) break; if((per[t.game]=(per[t.game]||0)+1)>cap) continue; rows.push(t); }
   $('vtBody').innerHTML = `<ul class="vts">${rows.map(t=>{
     const g=vtGame[t.game]||{name:t.game,short:t.game}, a=ATT[t.attitude]||ATT.neutral;
-    return `<li><a class="vt" style="${gvars(t.game)}" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}"><span class="gm"><span aria-hidden="true">${esc(g.short||g.name)}</span><span class="sr">${esc(g.name)}</span><em class="am a-${esc(t.attitude)}" aria-hidden="true">${a.m}</em><span class="sr">（${a.l}）</span></span><span class="tx"><span class="tt">${esc(t.title)}</span><span class="sm">${esc(t.summary)}</span></span></a></li>`;
+    return `<li><a class="vt" style="${gvars(t.game)}" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}"><span class="gm">${gi(g.name)}<span aria-hidden="true">${esc(g.short||g.name)}</span><span class="sr">${esc(g.name)}</span><em class="am a-${esc(t.attitude)}" aria-hidden="true">${a.m}</em><span class="sr">（${a.l}）</span></span><span class="tx"><span class="tt">${esc(t.title)}</span><span class="sm">${esc(t.summary)}</span></span></a></li>`;
   }).join('')}</ul>`;
   const [,m,d]=VT.date.split('-').map(Number);
   $('vtAsOf').textContent=`${m}/${d} 時点・AI要約`;
