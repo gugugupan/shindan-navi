@@ -410,15 +410,18 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
 }
 // /voices/ (VOICES_ENABLED=1 builds only): the embedded snapshots on the calendar (a chip per game on desktop, bars when
 // one game is selected, a dot per game on phones) on the right days, the day, game and topic dialogs, the list view,
-// the filters and safe X links.
+// the filters and safe X links; shares that add up to 100%, one freshness line per snapshot, the dialog in the URL hash
+// and the copied topic link, 🆕 only with an older snapshot, one tab stop per day.
 const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
 for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   const where = `${vp} /voices/`;
   const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
     hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   const page = await ctx.newPage();
   await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
   const bad = [], api = [];
+  page.on('dialog', d => { bad.push(`unexpected ${d.type()}: ${d.message()}`); d.dismiss(); });
   page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
   page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
@@ -459,6 +462,17 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (!narrow && await page.locator('.vbar').count()) fail(where, 'topic bars without a single game selected');
     const extra = Object.keys(got).filter(d => !want[d]);
     if (extra.length) fail(where, `days with topics that have none: ${extra.join(' ')}`);
+    // freshness: one entry for the snapshot most titles share, plus one per title on another snapshot
+    const fr = await page.evaluate(() => {
+      const last = {}; [...V.snapshots].sort((a, b) => a.date < b.date ? -1 : 1).forEach(s => s.topics.forEach(t => last[t.game] = s.date));
+      const n = {}; Object.values(last).forEach(d => n[d] = (n[d] || 0) + 1);
+      return { want: 1 + Object.values(last).length - Math.max(...Object.values(n)), got: document.querySelectorAll('#fresh .frl>span:not(.lab):not(.smp)').length };
+    });
+    if (fr.got !== fr.want) fail(where, `freshness line has ${fr.got} entries, expected ${fr.want}`);
+    // keyboard: one tab stop per day with topics (chips and bars are mouse / touch shortcuts)
+    const stops = await page.evaluate(() => ({ n: [...document.querySelectorAll('#calv button, #calv a, #calv [tabindex]')].filter(e => e.tabIndex >= 0 && e.offsetParent).length,
+      days: document.querySelectorAll('.vd[data-day]').length }));
+    if (stops.n !== stops.days) fail(where, `${stops.n} tab stops in the calendar for ${stops.days} days with topics`);
     // day dialog
     const d0 = inView[0];
     await page.locator(`.vd[data-day="${d0}"] .vdn`).click();
@@ -470,8 +484,30 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     const dlgOver = await page.evaluate(() => { const d = document.getElementById('vDlg'); return d.scrollWidth - d.clientWidth; });
     if (dlgOver > 1) fail(where, `day dialog scrolls horizontally by ${dlgOver}px`);
     await page.screenshot({ path: path.join(OUT, `${vp}-voices-day.png`) });
+    // the open dialog is in the hash without a history entry; the topic's copied link opens that topic
+    const hist0 = await page.evaluate(() => history.length);
+    if (await page.evaluate(() => location.hash) !== `#d=${d0}`) fail(where, `day dialog hash ${await page.evaluate(() => location.hash)}`);
+    const t0 = await page.locator('#vBody .tc').first().getAttribute('data-topic');
+    await page.locator('#vBody .tc').first().locator('[data-copy]').click();
+    await page.waitForFunction(() => document.getElementById('vLive').textContent);
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    if (copied !== `${BASE}/voices/#t=${t0}`) fail(where, `copied link ${copied}`);
+    // the game row in the day dialog filters it (keyboard and phones reach it here)
+    const dg = page.locator('#vBody .dgames [data-k="dgame"]');
+    if (new Set(want[d0].map(x => x.game)).size > 1) {
+      const g1 = await dg.nth(1).getAttribute('data-v');
+      await dg.nth(1).click();
+      if (await page.locator('#vBody .tc').count() !== want[d0].filter(x => x.game === g1).length) fail(where, `dialog game filter ${g1}`);
+    }
     await page.keyboard.press('Escape');
     if (await page.locator('#vDlg').evaluate(d => d.open)) fail(where, 'Escape did not close the day dialog');
+    const h1 = await page.evaluate(() => [location.hash, history.length]);
+    if (h1[0] !== '' || h1[1] !== hist0) fail(where, `after close: hash ${h1[0]}, history ${hist0} -> ${h1[1]}`);
+    // Enter on a focused day opens it
+    await page.locator(`.vd[data-day="${d0}"] .vdn`).focus();
+    await page.keyboard.press('Enter');
+    if (!await page.locator('#vDlg').evaluate(d => d.open)) fail(where, 'Enter on a day did not open it');
+    await page.keyboard.press('Escape');
     if (!narrow) {
       // a game chip opens that day filtered to its game, with a button back to the whole day
       const chipEl = page.locator(`.vd[data-day="${d0}"] .vchip`).first(), cg = await chipEl.getAttribute('data-game');
@@ -523,12 +559,19 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
       want: [...V.snapshots].filter(s => s.topics.length).map(s => s.date).sort().reverse(), n: V.snapshots.reduce((t, s) => t + s.topics.length, 0) }));
     if (JSON.stringify(li.heads) !== JSON.stringify(li.want) || li.cards !== li.n) fail(where, `list ${JSON.stringify(li)}`);
     if (li.overflow > 1) fail(where, `list scrolls horizontally by ${li.overflow}px`);
+    // shares in 10% steps adding up to 100% on every card; 🆕 only once an older snapshot exists
+    const sh = await page.evaluate(() => [...document.querySelectorAll('#list .tc .alg')].map(a => [...a.children].reduce((t, x) => t + (+(/約(\d+)%/.exec(x.textContent) || [0, 0])[1]), 0)));
+    if (sh.some(n => n !== 100)) fail(where, `share labels add up to ${[...new Set(sh.filter(n => n !== 100))].join('/')}%`);
+    if (await page.evaluate(() => V.snapshots.length === 1 && document.querySelectorAll('.badge.new').length)) fail(where, '🆕 shown with a single snapshot');
     await page.screenshot({ path: path.join(OUT, `${vp}-voices-list.png`), fullPage: true });
     // deep links: a real day opens its dialog, an impossible date is ignored
     for (const [i, [h, open]] of [[`#d=${d0}`, true], ['#d=2026-02-31', false], ['#d=2026-13-01', false]].entries()) {
       await page.goto(`${BASE}/voices/?view=list&r=${i}${h}`, { waitUntil: 'networkidle' });
       if (await page.locator('#vDlg').evaluate(d => d.open) !== open) fail(where, `deep link ${h}: dialog ${open ? 'not opened' : 'opened'}`);
+      if (await page.evaluate(() => location.hash) !== (open ? h : '')) fail(where, `deep link ${h}: hash ${await page.evaluate(() => location.hash)}`);
     }
+    await page.goto(`${BASE}/voices/#t=${t0}`, { waitUntil: 'networkidle' });
+    if (await page.locator('#vBody .tc').count() !== 1 || await page.locator('#vBody .tc').getAttribute('data-topic') !== t0) fail(where, `copied link #t=${t0} did not open its topic`);
     if (api.length) fail(where, `API requests from a static page: ${api.join(' ')}`);
   } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
   for (const b of [...new Set(bad)]) fail(where, b);

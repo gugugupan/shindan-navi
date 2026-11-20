@@ -41,10 +41,11 @@ data/voices/<YYYY-MM-DD>.json   one snapshot (voices.schema.json); the name is i
 
 ## Game codes
 
-The `/events/` codes have a fixed light/dark colour pair in `GAMES` (the palette `/events/` uses for its games): `OPCG`, `UATCG`,
-`CONAN`, `PTCG`, `GCG`, `DBFW`, `BS`, `DCG`, `WS`, `VG`, `SVE`, `HOCG`, `LLOCG`. Titles without events use the release
-calendar's title colour (`--h`, computed from `data/items.json` as on `/releases/`): `MTG` (MTG), `YGO` (遊戯王OCG),
-`DM` (デュエル・マスターズ). The list lives in `GAMES` in `src/voices.html`; the build reads the codes from there and
+The `/events/` codes have a fixed light/dark colour pair in `GAMES` (the palette `/events/` uses for its games, except
+`DBFW` and `SVE`, changed here so the phone dots tell them from `HOCG` / `VG`): `OPCG`, `UATCG`, `CONAN`, `PTCG`, `GCG`,
+`DBFW`, `BS`, `DCG`, `WS`, `VG`, `SVE`, `HOCG`, `LLOCG`; `MTG` has its own neutral pair (its release-calendar hue was
+next to デュエマ's). `YGO` (遊戯王OCG) and `DM` (デュエル・マスターズ) use the release calendar's title colour (`--h`,
+computed from `data/items.json` as on `/releases/`). The list lives in `GAMES` in `src/voices.html`; the build reads the codes from there and
 refuses unknown ones. Add a code there (and here) before writing topics for a new game.
 
 ## How the page reads it
@@ -52,7 +53,12 @@ refuses unknown ones. Add a code there (and here) before writing topics for a ne
 - A topic is active from `first_seen` to the date of the last snapshot that lists its id. The calendar marks each of
   those days with a chip per game (desktop; bars over the days when one game is selected) or a dot per game (phones).
 - For a given day the page shows the topic as the first snapshot on or after that day saw it (else the latest).
-- 🆕 新 = `new`; 🔥 n日連続 = `continuing`, n = days from `first_seen` to the snapshot date, inclusive; 📉 落ち着き = `cooling`.
+- 🆕 新 = `new` (hidden while there is only one snapshot, where every topic is new); 🔥 n日連続 = `continuing`, n = days
+  from `first_seen` to the snapshot date, inclusive; 📉 落ち着き = `cooling`.
+- Days before the earliest `window.from` / `first_seen` and after the latest snapshot are dimmed (話題データは M/D から).
+- `share` is shown as 約N% in 10% steps, rounded by largest remainder so a card's labels add up to 100%.
+- An open day / topic dialog is in the URL hash (`#d=YYYY-MM-DD` / `#t=<id>`, replaced, not a new history entry; cleared
+  on close); each card has リンクをコピー (`/voices/#t=<id>`).
 - The list view shows every snapshot, newest first, with its topics.
 - The page embeds `{snapshots, counts}` as `const V = …;` (`counts` = release counts per title, for the title colours).
   `voices_data()` in `scripts/build.py` returns the same snapshots for other pages (the home-page block comes later).
