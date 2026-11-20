@@ -1,7 +1,13 @@
 # Game hub: one calendar page per game (design)
 
-Status: design for owner review, 2026-11-20. Nothing here is built. Plan node `game-hub-design`
-(kb plan `2026-11-20-seo-1-4-for`).
+Status: design for owner review, 2026-11-20 (revised after review). Nothing here is built. Plan node
+`game-hub-design` (kb plan `2026-11-20-seo-1-4-for`).
+
+**Base.** `main` (bb0c86f) does not yet have the branches `ev-bushi-int` (5 commits: WS / VG / SVE / HOCG / LLOCG
+events, migration 0006) and `voices` (on top of it). Both touch the files the registry rewrites
+(`api/src/constants.ts`, `api/scripts/lib/importer.mjs`, `src/events.html`, `src/home.html`, `src/voices.html`).
+Implementation starts only after both are merged to `main` (or rebases on them); the registry is written against
+that state: 13 events games, WS / VG / SVE / HOCG / LLOCG at bits 256-4096 and `sort_order` 9-13 as in 0006.
 
 Owner's ask: "a calendar view per game showing all information related to it". Generic: every game has a code, one
 template, the game in the path, and switching to another game only loads that game's data.
@@ -11,14 +17,17 @@ template, the game in the path, and switching to another game only loads that ga
 - One **game registry** (`data/games.json`, committed) replaces the seven hand-kept lists. build.py, the Worker, the
   event importer and every page script read it.
 - The hub lives at the game's **slug**: the 10 existing title pages (`/pokemon/` …) become hubs at the same URLs
-  (no new duplicate page). `/<code>/` (for example `/opcg/`) answers 301 to the slug. New games get the slug D1
-  already has (`/conan/`, `/battlespirits/` …).
+  (no new duplicate page), first with their current `<title>`, h1 and ItemList unchanged. `/<code>/` (for example
+  `/opcg/`) answers 301 to the slug. New games (only after the owner's OK, Q2) get the slug D1 already has
+  (`/conan/`, `/battlespirits/` …).
 - Page: a month calendar for that game. Each day cell carries a release marker, the event count for the player's
   location, and a 話題 marker. A day opens that day's releases / events / topics. Below the calendar: 発売予定,
   今週のイベント, いま話題. A game without events or topics drops that layer and section.
 - Releases and topics are static (embedded in the page and in `/<slug>/data.json`). Events come from the existing
   `/api/v1/events/days` and `/events` endpoints, with no new parameter. The month cells use the **unfiltered**
   `/days` key that `/events/` and `/` already use, so switching games within a month costs no extra request.
+  今週のイベント loads lazily (when scrolled into view / expanded), not on page load. With `BUILD_EVENTS=0` (the
+  Pages build) the whole events layer is left out.
 - Switching games = fetch `/<slug>/data.json` + the new game's week list, then `history.pushState`. A direct load
   gets a full static page with its own title, canonical and JSON-LD.
 
@@ -36,7 +45,10 @@ template, the game in the path, and switching to another game only loads that ga
 
 They already disagree in small ways: the short name is ワンピカード on title pages and ワンピ on chips; VG is
 `ヴァンガード` (release label) and `カードファイト!! ヴァンガード` (API name). The registry keeps each of these as a
-named field rather than forcing one spelling.
+named field rather than forcing one spelling. One real conflict needs a pick: HOCG's chip is ホロライブ in
+`src/home.html` / `src/events.html` on `ev-bushi-int` and ホロカ in `src/voices.html`. Proposal: `chip: "ホロカ"`
+(short, like ラブカ / ヴァンガ), so M0 changes visible text on `/` and `/events/` for HOCG only; any other field the
+merge of lists changes is listed in the M0 PR and checked against the built pages.
 
 The 16 voices codes are exactly the 10 main titles + the 6 other event games (CONAN, BS, VG, SVE, HOCG, LLOCG). That
 set is the natural hub set (see Q2).
@@ -64,7 +76,8 @@ steps.
   "title_alt": "ワンピースカード",   // second name in <title>
   "aliases": ["ワンピースカード", "ワンピカード", "ワンピ"],
   "icon": "opcg.png",              // public/gi/ file or a 1-char monogram
-  "colour": { "slot": 1, "light": "#be362d", "dark": "#de837c" },  // null = computed release hue
+  "colour": { "slot": 1, "light": "#be362d", "dark": "#de837c" },  // null = computed release hue;
+                                   // slot may be null with a direct pair (YGO #562d29, DM #4d19e6: outside the 14 slots)
   "official_url": "https://www.onepiece-cardgame.com/",
   "sources": {
     "releases": ["ONE PIECE"],     // items.json `game` labels (normally just [label])
@@ -87,7 +100,7 @@ These codes are internal (not in any URL) until a title gets a hub.
   registry row's `code`, `slug`, `bit`, `sort_order`, `official` name, and every registry row with `events` to have
   one. Migrations stay hand-written; the test stops the two drifting.
 - `slug` must not collide with a built path (`releases`, `events`, `voices`, `item`, `privacy`, `feedback`, `YYYY-MM`,
-  `gi`, `og`, `fonts`, …), nor may any lowercased code.
+  `gi`, `og`, `fonts`, `api`, …), nor may any lowercased code.
 - Every `game` in `items.json` must map to a row through `sources.releases`: build.py warns (the data refresh must
   not break), `verify_release.py` fails. The update-data skill already has a "new title label" step; it gains "add a
   registry row".
@@ -112,10 +125,12 @@ These codes are internal (not in any URL) until a title gets a hub.
 | `/<code>/` | 301 → `/<slug>/` for every hub game whose lowercased code differs from its slug (`/opcg/`, `/ptcg/`, `/ygo/`, `/dm/`, `/ws/` …). |
 | `/events/<slug>/<pref>/` | Planned event landing pages (section 10). Same slug. |
 
-Redirects: build.py writes `dist/_redirects` (Workers static assets and Pages both honour it, static, no Worker
-code, no D1). Lines for `/opcg`, `/opcg/`, `/OPCG`, `/OPCG/` (matching is case-sensitive). `#hash` survives a 301 in
-browsers; if a platform drops `?m=` on the redirect the hub just opens on its default month (code URLs are typed,
-not shared).
+Redirects: build.py writes `dist/_redirects` (static, no Worker code, no D1). Workers static assets and Pages are
+both documented to read it; **to verify on a preview deploy** before relying on it: that both hosts apply it,
+whether matching is case-sensitive (if so, lines for `/opcg`, `/opcg/`, `/OPCG`, `/OPCG/`), and whether the query
+string survives. `#hash` survives a 301 in browsers. If `?m=` is dropped, the hub just opens on its default month
+(code URLs are typed, not shared). Fallback if a host ignores `_redirects`: tiny static `/<code>/index.html` pages
+with `<link rel=canonical>` + `<meta http-equiv=refresh>` (not a 301; acceptable for typed URLs).
 
 Month and day state live in the query and hash so a link is shareable: `/<slug>/?m=2026-12` (month; absent = the
 default month) and `#d=2026-12-05` (open day, `replaceState`, as on `/voices/`). Canonical is always `/<slug>/`
@@ -155,9 +170,8 @@ Top of page follows the owner rules: logo row (tool tabs, corner) and the toolba
  │ 12/5(金) 拡張パック「熱風の…」 ☆ │ │ 11/21(土) 13:00 ジムバトル      │ │ ◆ 新弾の当たり枠が話題 🔥3日 │
  │ 1/23(金) スタートデッキ…      ☆ │ │   カードショップ○○ 新宿店       │ │   好意的な声が多い            │
  │ （商品ページへのリンク）          │ │ 11/21(土) 18:00 シティリーグ…   │ │ → 11/20の話題まとめ           │
- │ 新弾カレンダーで見る →          │ │ … 東京都のポケカイベントをすべて → │ │ 話題カレンダーで見る →         │
+ │ 新弾カレンダーで見る →          │ │ 東京都のイベントを見る → (JS link)│ │ 話題カレンダーで見る →         │
  └─────────────────────────────┘ └──────────────────────────────┘ └──────────────────────────┘
- 都道府県別のポケカイベント: 北海道 青森県 … 沖縄県 オンライン        (static links, section 10)
  ポケカについて (about block, as the title page has today)
  ほかのタイトル: [▣ワンピ] [▣MTG] [▣遊戯王] …                         (static links to the other hubs)
  footer
@@ -199,9 +213,8 @@ The event rows reuse `/events/`' card markup (section 10: shared include). The m
 │ トップ › ポケカ                 │
 │ ポケモンカードゲーム（ポケカ）…    │  h1 (muted)
 │ ▸ 発売予定 (2)                 │
-│ ▸ 今週のイベント・東京都 (57)     │
+│ ▸ 今週のイベント・東京都        │  loads on expand
 │ ▸ いま話題 (2)                 │
-│ 都道府県別のイベント ▸           │  <details>
 │ ほかのタイトル ▸                │
 ├──────────────────────────────┤
 │  新弾   │ イベント │  話題        │  bottom tool bar (unchanged)
@@ -210,6 +223,12 @@ The event rows reuse `/events/`' card markup (section 10: shared include). The m
 
 A day tap opens the day dialog as a full-height sheet with 閉じる at the top and bottom (as `/releases/`). Sections
 are open by default; the count is in the heading.
+
+### Tablet (761-900px)
+
+As the desktop grid with the release calendar's tablet rules: tool tabs show the short names 新弾 / イベント / 話題,
+cells show one release name (`+N` for more), `● N` and `◆` without the word 話題; the three sections below the
+calendar stack in one column instead of three.
 
 ### Game switcher
 
@@ -221,6 +240,8 @@ no-JS visitors reach every hub.
 
 | State | Behaviour |
 | --- | --- |
+| Built with `BUILD_EVENTS=0` (Pages host before cutover) | The hub honours `<!--EVENTS-->` like the other pages: no location control, no event counts or legend entry, no events section or dialog part, no `snLoc`, no `/api` call of any kind. |
+| Built with `VOICES_ENABLED` off | No topics in `HUB`, `data.json` or the static HTML; no ◆ markers or いま話題 section; no link to `/voices/`. |
 | No location saved | Same as `/events/`: ask `/api/v1/geo` (no D1) and preselect the guess, else show 「地域を選ぶと…のイベント数を表示します」 + 都道府県を選ぶ (`snLoc`). No events request until a location exists. The hub writes `pref` to `tcg.ev.filters` only when the player picks (as `/` does). |
 | Game without events (MTG, 遊戯王, デュエマ, release-only) | No location control, no event counts, no events section, no events request. 遊戯王 shows the KONAMI official search link-out from `ev-bushi-int` in place of the section. |
 | Game without releases in the data window | 発売予定 shows 「現在、発売予定の新弾は掲載していません」 + the latest past release (title-page rule today); the calendar opens on the current month. |
@@ -228,10 +249,12 @@ no-JS visitors reach every hub.
 | No topics for the game / voices disabled | No ◆ markers, no いま話題 section. Hidden as the home block does once the latest snapshot is > 7 days old (markers on past days stay). |
 | Month outside the event window | Cells show no counts; a muted line 「イベント情報は M/D〜M/D」 from the `/days` response being empty and the data window in meta. |
 | Location with 0 events this month | Section shows 「東京都のポケカイベントは見つかりませんでした」 + オンライン を見る. |
-| API error / rate limited | Releases and topics stay; events area shows 「イベント情報を読み込めませんでした」 + 再読み込み. |
+| API error | Releases and topics stay; events area shows 「イベント情報を読み込めませんでした」 + 再読み込み. |
+| 429 (`API_LIMIT`: 20 uncached requests / min per client) | Not an error: 「しばらくしてから再度お試しください」 + a retry after 60 s, as the account code pauses after a 429. |
 
-Default month: today's month; if the game has no release, event or topic in it and has a release later, the next
-month with a release (title-page rule), with the same note the title pages show today.
+Default month: today's month; if the game has no release and no topic in it and has a release later, the next
+month with a release (title-page rule), with the same note the title pages show today. Events do not count here:
+the build cannot see them, and the static page must match what the script shows.
 
 ## 6. Data loading per source
 
@@ -249,31 +272,67 @@ build.py writes one object per hub game:
 Embedded in the page as `const HUB = …;` and published as `/<slug>/data.json` (same bytes; ~2-12 KB). Topics carry
 our own text only (no post text, no X URLs, not even `reacting_to`: cards link `/voices/<date>/#topic-<id>`, where
 the rules for that link already live). A topic marks days `first_seen`..`last_seen` as on `/voices/`. Sample
-snapshots never reach the hub.
+snapshots never reach the hub. Takedowns: a removed topic leaves `HUB` and `data.json` on the next build, but a
+browser may keep the old `data.json` until its cache expires (`public/_headers` sets no long cache rule, so minutes);
+the takedown rule in `contracts/voices.md` gets that sentence, next to the existing "search caches may lag".
 
 ### Events (API, unchanged endpoints and parameters)
 
-| Request | When | Cache key shared with | Uncached D1 rows (東京都 / smallest prefs) |
+Only with `BUILD_EVENTS=1`, an events game, and a location. Rows are rows stepped per uncached request, measured
+numbers from `api/README.md` › D1 budget (8 games, 東京都) and an estimate for 13 games (day_counts grows with the
+game masks); D1 may count index entries too, so the budget below doubles them.
+
+| Request | When | Cache key shared with | Uncached rows, 東京都 (8 games / 13 est.) |
 | --- | --- | --- | --- |
-| `/events/days?from=M-01&until=M+1-01&pref=P` (no `game`) | load, month change | `/events/` and `/` without a saved game / type filter | ≤ 636 with 8 games (≤ ~1,000 est. with 13) / tens |
-| `/events?from=TODAY&until=M+1-01&game=G&pref=P&limit=50` | load (今週のイベント) | `/events/` list and `/` with exactly this one game filtered | ≤ 636 day lookup + ≤ 200 scan ≈ 840 / < 100 |
-| + one `/events?from=M+1-01&…` | only when this week crosses the month end and page 1 did not reach day 7 | same | ≈ 840 |
-| `/events?from=D&until=M+1-01&game=G&pref=P` (+cursor pages, stop at the day's `by_game[G]`, ≤ 4 pages then link to `/events/`) | day dialog | `/events/` day view with this game | ≤ 840 + 200 per page |
-| `/events/meta` | location picker opens (picker counts), freshness line | everyone | 1 |
+| `/events/days?from=M-01&until=M+1-01&pref=P` (no `game`) | load, month change | `/events/` and `/` without a saved game / type filter | ≤ 636 / ≤ ~1,000 |
+| `/events?from=TODAY&until=M+1-01&game=G&pref=P&limit=50` | **lazily**: when 今週のイベント scrolls into view (IntersectionObserver) on desktop, when expanded on phones | `/events/` list and `/` with exactly this one game filtered | day lookup ≤ 636 + scan ≤ 200 + ~50 ≈ 890 / ≈ 1,250 |
+| + one `/events?from=M+1-01&…` | only when the week crosses the month end and page 1 did not reach day 7 | same | ≈ 890 / ≈ 1,250 |
+| `/events?from=D&until=M+1-01&game=G&pref=P` (+ at most 1 cursor page, then 「すべて見る」 → `/events/` day view) | day dialog | `/events/` day view with this game | ≈ 890 + ~200 / ≈ 1,250 + ~200 |
+| `/events/meta` | location picker opens, freshness line | everyone | 1 |
 
-The cells take `by_game[G]` from the unfiltered `/days` answer. Using `game=G` would read the same day_counts rows
-(the index is by location and day) but would create 13× more cache keys and lose the sharing; switching games in the
-same month then needs **no** new `/days` request.
+The cells take `by_game[G]` from the unfiltered `/days` answer. `game=G` would read the same day_counts rows (the
+index is by location and day) but would create 13× more cache keys and lose the sharing; switching games in the same
+month then needs **no** new `/days` request.
 
-Per page view (one location, events game): 2 requests on load, 0 D1 rows when both keys are warm at that colo.
-Fully uncached worst case (東京都): ≈ 1,500-1,850 rows. 5M/day allows ~2,700 such views per day even if nothing ever
-hit the edge cache; in practice the cache bound applies: per colo and data version at most 48 locations × (≤ 3
-months of `/days` + 13 games × 1 week key) ≈ 770 distinct keys, mostly small prefectures; the week key's `from=TODAY`
-renews daily. Rough ceiling ~0.3-0.5M rows/day per colo at full key coverage, realistic far less. Section 10 replaces
-the week request with 1 row once landing pages exist. Releases-only games: 0 API requests.
+**Key space** (per colo, per data version; every import bumps the version, so all keys start cold after an import;
+Japanese traffic lands on several colos, at least NRT and KIX, each with its own cache):
 
-`api/README.md` › D1 budget gets a **Game hub** paragraph with these numbers when the events layer ships
-(CLAUDE.md: a new page request pattern changes the budget).
+| Key family | Keys |
+| --- | ---: |
+| `/days` (shared) | 48 locations × ≤ 3 months ≈ 144 |
+| week list (`from=TODAY`, renews daily) | 48 × 13 games ≈ 624 per day |
+| day dialog (`from=D`, ≤ 2 pages) | 48 × 13 × ~30 days × 2 ≈ 37,000 (≈ 75,000 at the 4 pages of the first draft) |
+
+The day-dialog family is far too large for the cache to bound reads (37k keys × even 200 rows × 2 ≈ 15M per colo),
+so the budget is governed by traffic and the guards below, not by key coverage.
+
+**All-miss cost per visit** (×2 index factor, 13 games, 東京都; a median prefecture is roughly a fifth):
+
+| Action | Rows |
+| --- | ---: |
+| Load (`/days`) | ≈ 2,000 |
+| 今週のイベント opened | + ≈ 2,500 |
+| Each day dialog (first page / + cursor page) | + ≈ 2,500 / + ≈ 400 |
+| Tokyo visitor: load + week + 2 days | ≈ 9,500 (median prefecture ≈ 2,000) |
+
+**Shared 5M rows/day.** The hub shares the Free-plan budget with `/events/` (worst-case day views ≈ 7,100 rows,
+api/README), `/` (2-3 requests per visit), the accounts API and import days (~43k state read + 1 per written row).
+Gate for M2: read the 7-day maximum of D1 rows read in the Cloudflare dashboard (the owner or the lead with the
+owner's access); ship only if that maximum + projected hub traffic × ~3,000 rows (all-miss, mixed prefectures)
+stays under 2.5M (half the limit); re-check daily for the first week.
+
+**Guards.**
+- No events request without a location; `/geo` costs no D1. Crawlers render from outside Japan (`/geo` → null) and
+  have no saved location, so a rendered hub costs them 0 D1 rows.
+- No static links with API-shaped parameters anywhere on a hub (section 10): crawlers never fan out over
+  `/events/?game=…&pref=…`.
+- 今週のイベント is lazy; the day dialog reads at most 2 pages, then hands over to `/events/`.
+- `API_LIMIT` (20 misses / min per client) and `API_BREAKER` (300 / min per location) stay as they are; a 429 is
+  shown as 「しばらくしてから再度お試しください」 (section 5).
+- Section 10 replaces the week request with 1 row once landing pages exist. Releases-only games: 0 API requests.
+
+`api/README.md` › D1 budget gets a **Game hub** paragraph with these numbers in M2 (CLAUDE.md: a new page request
+pattern changes the budget).
 
 ## 7. Switching games
 
@@ -294,20 +353,24 @@ would give. GA: a `page_view` with the new path.
 
 - **One page per game.** The hub replaces the title page at the same URL, so there is no second page competing for
   「ポケカ 新弾 発売日」. Month pages `/YYYY-MM/` and `/releases/` stay release-only and unchanged.
-- **Title / description** keep the release search terms first (they are what the URL ranks for today) and add the
-  new content: 「ポケカ 新弾 発売日・イベント・話題カレンダー（ポケモンカード）｜トレカカレンダー」; description: next
-  release + 「店舗大会・ジムバトルの開催日と、プレイヤーの話題もまとめてチェック」 (only the parts the game has).
-  h1 「ポケモンカードゲーム（ポケカ）新弾・イベントカレンダー」 (no イベント for games without events).
+- **Title / description / h1 unchanged in M1.** The 10 existing pages keep their current `<title>`, description,
+  h1, crumbs and static ItemList byte for byte; only the body (calendar, sections) changes, so ranking signals are
+  not mixed with a template change. Retitling is a separate later step (M5), shipped alone and watched in Search
+  Console for 2-4 weeks: 「ポケカ 新弾 発売日・イベント・話題カレンダー（ポケモンカード）｜トレカカレンダー」, h1
+  「ポケモンカードゲーム（ポケカ）新弾・イベントカレンダー」 (only the parts the game has). New hubs (M3) start with
+  the same pattern as the title pages.
 - **Static HTML** (what a crawler gets): crumbs, h1, lead, the release list with item links (ItemList as now), the
-  latest real snapshot's topic titles for the game (as `/voices/`' static list, linking archive cards), 都道府県別
-  event links, about block, other hubs. Events stay client-side (location-specific, never in git or the build).
+  latest real snapshot's topic titles for the game (as `/voices/`' static list, linking archive cards), about block,
+  other hubs. No per-prefecture links until the landing pages exist (M4). Events stay client-side (location-specific, never in git or the build).
 - **JSON-LD**: BreadcrumbList (トップ › ポケカ) + ItemList of releases, exactly the title page's rules (no
   Product / Offer, no Event: Event markup belongs on `/events/<slug>/<pref>/`, which has a fixed location).
 - **Canonical** `/<slug>/` always; `?m=` pages are the same document (canonical without query). `/<code>/` 301s.
 - **Sitemap**: every indexable hub, `lastmod` = max(newest `changed` of its items, newest real snapshot with a topic
   for the game). Item pages' crumb and "…の新弾をすべて見る" keep pointing at `/<slug>/`.
 - **Thin pages**: a hub is indexable only with ≥ 3 releases in the data or a topic in the latest real snapshot or
-  events collected for the game; otherwise `noindex,follow` and out of the sitemap (re-evaluated every build).
+  events collected for the game; otherwise `noindex,follow` and out of the sitemap. Hysteresis: the state flips only
+  after two consecutive builds on the other side of the threshold; build.py keeps the last state per hub in a small
+  committed file (`data/hub-index.json`) so a one-off dip in the data does not drop a page from the index.
   CONAN today (1 release, events, 0 topics) passes on events; a hub with nothing but 1 release would not.
 - **Internal links**: `/events/` title chips' day lists, `/voices/` cards and archive sections, the home page's
   game columns, and item pages link the game name to its hub.
@@ -331,15 +394,17 @@ Planned (`event-design`, approved scope 2026-11-20): Worker-rendered `/events/<g
 locations = 624), from precomputed `landing_pages` rows (migration **0007**, written by the importer, ≤ 624 writes
 per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data > 14 days old. Not built.
 
-- **Links.** Hub → landing: the 都道府県別 link row (48 static links, all of them since the build cannot see counts;
-  the landing page's own noindex handles empty ones) and 「東京都のポケカイベントをすべて →」 in the week section.
-  Landing → hub: breadcrumb トップ › ポケカ › 東京都のイベント, plus 「ポケカの新弾・話題を見る」. Until landing
-  pages exist the same links go to `/events/?game=G&pref=P`.
+- **Links, M1-M3.** No static per-prefecture links (48 per hub × 16 hubs ≈ 768 parameter URLs into `/events/`, which
+  crawlers render and which would read D1 on every miss). Only one script-generated link, for the visitor's own
+  location: 「東京都のイベントを見る →」 → `/events/?game=G&pref=P`.
+- **Links, M4.** Hub → landing: a static 都道府県別 row of `/events/<slug>/<pref>/` links (the landing pages read 1
+  precomputed row per miss and are noindex when empty), and the week section's link points there. Landing → hub:
+  breadcrumb トップ › ポケカ › 東京都のイベント, plus 「ポケカの新弾・話題を見る」.
 - **Shared data.** Both key on the registry slug; the Worker renderer imports the same `data/games.json` (names,
   colours, icon). The importer that writes `landing_pages` uses registry `bit` / `slug`.
 - **Shared read.** A landing row already holds a location's upcoming events for one game. Once it exists, the hub's
   今週のイベント can read it through a strict endpoint (`/api/v1/events/landing?game=G&pref=P`, exactly those two
-  params, same version-keyed edge cache): **1 row per miss instead of ≈ 840**. The row must then carry ≥ 7 days of
+  params, same version-keyed edge cache): **1 row per miss instead of ≈ 890-1,250**. The row must then carry ≥ 7 days of
   events (or the first 50), which the event-build node should design for.
 - **Shared code.** The event card markup moves from `src/events.html` into an include (`src/evcard.html`, slot like
   `<!--LOCPICK-->`) used by `/events/`, `/`, the hub, and mirrored in the Worker renderer's TS (one fixture test that
@@ -356,7 +421,12 @@ per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data >
   `shadowverse-evolve`); title / description unique; canonical; BreadcrumbList + ItemList only, no Event; static
   release list = the game's visible items; `data.json` equals the embedded `HUB`; topics only from real snapshots,
   no X URL at all on hubs; noindex hubs out of the sitemap and indexable ones in it with the lastmod rule above.
-- `_redirects`: one 301 per code spelling to an existing hub, no chains, no target outside the hubs.
+- `_redirects` (static check): one 301 per code spelling to an existing hub, no chains, no target outside the hubs.
+  The live behaviour (applied on both hosts, case, query) is checked by hand with `curl -sI` on the preview URL in
+  M1, because `npm run dev:node` serves `dist/` without `_redirects` and `wrangler dev` does not run on this macOS.
+- Build flags: the gate builds and checks the four combinations of `BUILD_EVENTS` × `VOICES_ENABLED`. Events off:
+  no location control, no events markup, no `/api` string in the hub script path that can run. Voices off: no
+  topic in `HUB`, `data.json` or the static HTML, no `/voices/` link.
 
 `tools/verify/browser.mjs` (desktop 1280 and mobile 390, plus the 344-393 width sweep):
 - An events game with the dev mock API and a saved location: counts in cells match the mock `by_game`; at most 2
@@ -365,17 +435,21 @@ per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data >
 - No location: `/geo` once, prompt when it returns null, no events request.
 - Switching: URL, `document.title`, canonical change; no new `/days` request within the month; Back restores the
   previous game; a modified click opens a new tab (no interception).
-- One tab stop per day; dialog focus return; no horizontal overflow; `/opcg/` lands on `/onepiece/`.
+- One tab stop per day; dialog focus return; no horizontal overflow at 344-393, 761-900 and 1280 widths.
+- 今週のイベント: no `/events` request before it is scrolled into view / expanded.
+- A `BUILD_EVENTS=0` build: no `/api` request on any hub.
+- Redirects are not driven here (see above).
 
 ## 12. Rollout (each milestone shippable)
 
 | # | Ships | Visible change | Needs |
 | --- | --- | --- | --- |
-| M0 | Registry: `data/games.json`, contract, build.py / Worker / importer / page scripts read it; migration test | None (dist identical apart from injected lists; gate compares) | — |
-| M1 | Hub template for the 10 existing slugs: releases + topics (static), calendar, day dialog, sections, switcher, `data.json`, `/<code>/` redirects, SEO + gates | Title pages become hubs (no events yet) | Owner OK on Q1 |
-| M2 | Events layer: location, `/days` counts, 今週のイベント, day events, `src/evcard.html`; D1 budget paragraph | Event counts on the 7 event-game hubs | — |
-| M3 | Hubs for CONAN, BS (+ VG, SVE, HOCG, LLOCG after `ev-bushi-int` is live), og images, thin-page rule live | New URLs in the sitemap | Owner OK on Q2; ev-bushi-int merged and imported |
-| M4 | Landing-page links both ways; week block from the landing row | 都道府県 links resolve to landing pages | event-build (migration 0007) live |
+| M0 | Registry: `data/games.json` (13 events games, bits / sort from 0005-0006), contract, build.py / Worker / importer / page scripts read it; migration test | None but the HOCG chip name (section 2); the gate diffs dist against the previous build | `ev-bushi-int` and `voices` merged to `main` (or M0 rebased on them) |
+| M1 | Hub template for the 10 existing slugs: releases + topics (static), calendar, day dialog, sections, switcher, `data.json`, `/<code>/` redirects, gates; titles / h1 / ItemList unchanged | Title pages get the hub body (no events yet) | Owner OK on Q1; redirect check on the preview URL |
+| M2 | Events layer: location, `/days` counts, lazy 今週のイベント, day events, `src/evcard.html`; D1 budget paragraph | Event counts on the 6 event-game hubs of `main` (OPCG, UATCG, PTCG, GCG, DBFW, DCG), plus WS once its Bushi Navi data is imported | M2 D1 gate (section 6) |
+| M3 | Hubs beyond the 10: CONAN, BS, VG, SVE, HOCG, LLOCG; og images; thin-page rule with hysteresis | New URLs in the sitemap | Explicit owner answer to Q2 and the CLAUDE.md line "Only the 10 main titles get landing pages for now" updated in the same PR; Bushi Navi games imported |
+| M4 | Landing-page links both ways (static 都道府県 row); week block from the landing row | 都道府県 links to `/events/<slug>/<pref>/` | event-build (migration 0007) live |
+| M5 | Retitle hubs to 発売日・イベント・話題カレンダー (title, description, h1) | Search snippets | Owner OK; Search Console watched before and after |
 
 Each milestone is a worktree branch through the verify-release gate and the ship gate; nothing in M0-M3 writes
 to D1 or needs a migration.
@@ -385,7 +459,8 @@ to D1 or needs a migration.
 1. **Replace the 10 title pages with hubs at the same URLs?** Recommendation: yes. A second per-game page next to
    `/pokemon/` would split the same searches, and the hub keeps everything the title page has (release list, item
    links, ItemList, the release-first title). The full release app with all titles stays at `/releases/`.
-2. **Which games get hubs?** CLAUDE.md says only the 10 main titles get landing pages. Recommendation: the 16 games
+2. **Which games get hubs?** CLAUDE.md says "Only the 10 main titles get landing pages for now"; M3 waits for your
+   answer and updates that line. Recommendation: the 16 games
    with events or topics today (10 main + CONAN, BS, VG, SVE, HOCG, LLOCG, which have events and topics), each indexable only
    past the thin-page rule. Release-only titles (DIVINE CROSS has 19 releases, more than most main titles) stay
    without a hub for now.
