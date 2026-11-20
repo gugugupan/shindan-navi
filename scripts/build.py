@@ -76,8 +76,26 @@ for i in it:
     for k in ('pack','box'): d[k]=price_label(d[k])
     data.append(d)
 data.sort(key=lambda d:(d['date'],d['game']))
+# released items that left items.json (contracts/releases.md › Archive): only their /item/<id>/ page, marked 発売済み; never
+# in the calendars, title / month pages or /. A thumbnail no longer in public/ shows the placeholder (nothing is fetched).
+ap=os.path.join(ROOT,'data/items-archive.json')
+ARCHIVE=json.load(open(ap)) if os.path.exists(ap) else []
+_live={d['id'] for d in data}|{i['id'] for i in it}
+archived=[]
+for a in ARCHIVE:
+    ov=overrides.get(a['id'],{})
+    if ov.get('hide') or a['id'] in _live: continue
+    d={k:a.get(k,'') for k in keep}
+    d.update({k:v for k,v in ov.items() if k in keep})
+    if 'url' not in ov and not any(urllib.parse.urlparse(d['url']).netloc.replace('www.','').endswith(x) for x in OFFDOM): d['url']=''
+    if d['thumb'] and not os.path.exists(os.path.join(ROOT,'public',d['thumb'].lstrip('/'))): d['thumb'],d['approx']='',False
+    if d['thumb'] and not d['thumb'].startswith('/'): d['thumb']='/'+d['thumb']
+    for k in ('pack','box'): d[k]=price_label(d[k])
+    d['archived']=True
+    archived.append(d)
+archived.sort(key=lambda d:(d['date'],d['game']))
 # per-item change date for the sitemap (contracts/releases.md › changed); items the updater has not stamped yet: meta.updated
-CHANGED={i['id']:i.get('changed') or UPDATED for i in it}
+CHANGED={i['id']:i.get('changed') or UPDATED for i in it+ARCHIVE}
 def lastmod(items): return max((CHANGED[d['id']] for d in items),default=UPDATED)
 used={d['game'] for d in data}
 off={k:v for k,v in OFFICIAL.items() if k in used}
@@ -807,11 +825,11 @@ def voices_latest():
 # ---- /item/<id>/: one static page per visible release, for searches like 「OP-15 発売日」. Every visible item gets one
 # (past ones are still searched); an item that leaves items.json loses its page. Only BreadcrumbList JSON-LD (see Data model).
 ITEM_SRC=open(os.path.join(ROOT,'src/item.html')).read()
-RAW={i['id']:i for i in it}
+RAW={i['id']:i for i in ARCHIVE+it}
 PLACEHOLDER=re.search(r"const PLACEHOLDER = '(.*?)';",template).group(1)
 _cnt=__import__('collections').Counter(d['game'] for d in data)
 # same colours as the calendar (HUE in src/template.html; ties there sort by localeCompare('ja'), here by code point)
-HUE={g:round((i*137.508+230)%360) for i,g in enumerate(sorted(_cnt,key=lambda g:(-_cnt[g],g)))}
+HUE={g:round((i*137.508+230)%360) for i,g in enumerate(sorted(_cnt,key=lambda g:(-_cnt[g],g))+sorted({d['game'] for d in archived}-set(_cnt)))}
 ITEM_NEAR=3
 TITLE_MAX=60
 def norm_kw(t): return re.sub(r'[\s・･:：]','',unicodedata.normalize('NFKC',t)).lower()
@@ -830,8 +848,12 @@ def item_page(d,by_game):
     in_name=code and code in re.sub(r'[‐‑‒–—―]','-',unicodedata.normalize('NFKC',d['name']).upper())
     price=[f'価格は{d["pack"]}'] if d['pack'] else []
     if d['box']: price.append(f'1BOX {d["box"]}')
-    desc=(f'{d["name"]}（{g}）の発売日は{jdate(d["date"])}。'+('、'.join(price)+'（税込）。' if price else '')
-          +(f'商品コード {code}。' if code else '')+f'{short}の新弾の発売日・価格をトレカカレンダーでチェック。')
+    if d.get('archived'):
+        desc=(f'{d["name"]}（{g}）は{jdate(d["date"])}発売の発売済み商品。'+('、'.join(price)+'（税込・発売時）。' if price else '')
+              +(f'商品コード {code}。' if code else '')+f'{short}のこれからの新弾はトレカカレンダーでチェック。')
+    else:
+        desc=(f'{d["name"]}（{g}）の発売日は{jdate(d["date"])}。'+('、'.join(price)+'（税込）。' if price else '')
+              +(f'商品コード {code}。' if code else '')+f'{short}の新弾の発売日・価格をトレカカレンダーでチェック。')
     crumbs=[('トップ','/'),('新弾カレンダー','/releases/')]+([(f'{short} 新弾',f'/{slug}/')] if slug else [])+[(d['name'],None)]
     lst=by_game[g]; k=lst.index(d)
     near=lst[max(0,k-ITEM_NEAR):k+ITEM_NEAR+1]
@@ -846,14 +868,14 @@ def item_page(d,by_game):
         title=title,desc=desc,
         keywords=[x for x in (code and f'{code} 発売日',f'{short} 新弾',f'{short} 発売日') if x]+['発売日','価格','トレカ','TCG'])
 def item_body(pg):
-    d=pg['d']; g=d['game']; ym=d['date'][:7]
+    d=pg['d']; g=d['game']; ym=d['date'][:7]; sold=d.get('archived')
     img=(f'<img class="th" src="{esc(d["thumb"])}" alt="{esc(d["name"])}">' if d['thumb'] else
          f'<span class="th none" role="img" aria-label="{esc(d["name"])}（画像準備中）">{PLACEHOLDER}<small>画像準備中</small></span>')
     if d['approx']: img+='<p class="ap">参考画像（実際の商品と異なる場合あり）</p>'
     row=lambda t,v:f'<dt>{t}</dt><dd>{v}</dd>'
     title_dd=f'<a href="/{pg["slug"]}/">{esc(g)}</a>' if pg['slug'] else esc(g)
-    rows=[row('発売日',f'<time datetime="{d["date"]}">{jdate(d["date"])}</time>'),
-          row('価格',f'<span class="num">{esc(d["pack"])}</span>' if d['pack'] else '—')]
+    rows=[row('発売日',f'<time datetime="{d["date"]}">{jdate(d["date"])}</time>'+('（発売済み）' if sold else '')),
+          row('発売時の価格' if sold else '価格',f'<span class="num">{esc(d["pack"])}</span>' if d['pack'] else '—')]
     if d['box']: rows.append(row('1BOX',f'<span class="num">{esc(d["box"])}</span>'+(f'（{esc(d["per_box"])}パック入り）' if d['per_box'] else '')))
     if d['per_pack']:
         n=re.search(r'\d+',d['pack'].replace(',',''))
@@ -861,19 +883,24 @@ def item_body(pg):
         rows.append(row('内容',f'{unit}{esc(d["per_pack"])}枚入り'))
     if pg['code']: rows.append(row('商品コード',f'<span class="num">{esc(pg["code"])}</span>'))
     rows.append(row('タイトル',title_dd))
-    rows.append(row('発売月',f'<a href="/{ym}/">{mlabel(ym)}のTCG新弾一覧</a>'))
-    links=[f'<a class="go" href="/releases/#i={d["id"]}">新弾カレンダーで見る</a>']
+    rows.append(row('発売月',f'<a href="/{ym}/">{mlabel(ym)}のTCG新弾一覧</a>' if ym in months else mlabel(ym)))
+    # an archived item is in no calendar: the call to action is the title's upcoming releases instead
+    links=[(f'<a class="go" href="/{pg["slug"]}/">{esc(pg["short"])}のこれからの新弾</a>' if pg['slug'] else
+            '<a class="go" href="/releases/">これからの新弾を見る</a>') if sold else
+           f'<a class="go" href="/releases/#i={d["id"]}">新弾カレンダーで見る</a>']
     if d['url']: links.append(f'<a href="{esc(d["url"])}" target="_blank" rel="noopener">公式商品ページ ↗</a>')
     if g in OFFICIAL: links.append(f'<a href="{esc(OFFICIAL[g])}" target="_blank" rel="noopener">{esc(g)} 公式サイト ↗</a>')
+    sold_tag='<span class="pd-sold">発売済み</span>'
     card=(f'<article class="pd-card" style="--h:{HUE[g]}"><div class="pd-img">{img}</div><div>'
-          f'<p class="pd-tag"><span class="tag"><i></i>{esc(g)}</span></p><h1>{esc(d["name"])}</h1>'
+          f'<p class="pd-tag"><span class="tag"><i></i>{esc(g)}</span>{sold_tag if sold else ""}</p><h1>{esc(d["name"])}</h1>'
           f'<dl>{"".join(rows)}</dl><p class="dl-links">{"".join(links)}</p></div></article>')
     lis=''.join(f'<li><time datetime="{x["date"]}">{fmt(x["date"],True)}</time>'
                 +(f'<span aria-current="page">{esc(x["name"])}</span>' if x is d else f'<a href="/item/{x["id"]}/">{esc(x["name"])}</a>')+'</li>' for x in pg['near'])
     more=(f'<a class="pd-more" href="/{pg["slug"]}/">{esc(pg["short"])}の新弾をすべて見る</a>' if pg['slug'] else
           f'<a class="pd-more" href="/releases/">新弾カレンダーで{esc(g)}の発売日を見る</a>')
     near=f'<section class="pd-near" aria-labelledby="near-h"><h2 id="near-h">同じタイトルの前後の新弾</h2><ol>{lis}</ol>{more}</section>' if len(pg['near'])>1 else ''
-    legend=f'<p class="legend">価格は税込。発売日・価格は変更されることがあるので、購入前に公式情報をご確認ください（{upd_label}更新）。</p>'
+    legend=(f'<p class="legend">発売済みの商品です（新弾カレンダーには載っていません）。価格は発売時の税込価格で、現在の販売状況・価格は公式情報や販売店でご確認ください。</p>' if sold else
+            f'<p class="legend">価格は税込。発売日・価格は変更されることがあるので、購入前に公式情報をご確認ください（{upd_label}更新）。</p>')
     return card+near+legend
 def render_item(pg):
     d=pg['d']
@@ -926,9 +953,10 @@ def render_item(pg):
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 def item_pages():
+    """Calendar items, then archived ones; 同じタイトルの前後の新弾 runs over both, so archived pages stay linked."""
     by_game={}
-    for d in data: by_game.setdefault(d['game'],[]).append(d)
-    return [item_page(d,by_game) for d in data]
+    for d in sorted(data+archived,key=lambda d:(d['date'],d['game'])): by_game.setdefault(d['game'],[]).append(d)
+    return [item_page(d,by_game) for d in data+archived]
 
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
@@ -979,5 +1007,5 @@ if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
-print('pages',len(pages),'| item pages',len(items),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
+print('pages',len(pages),'| item pages',len(items),f'({len(archived)} archived)','| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
       '| voices',f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}, {len(VOICES_DAYS)} archive pages' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)

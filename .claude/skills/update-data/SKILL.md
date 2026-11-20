@@ -62,7 +62,7 @@ If the set of main-title pages or their lead images changed a lot, rerun `python
 Commit in the worktree (only these paths; never `git add -A`):
 
 ```bash
-git add data/items.json data/meta.json data/update-report.md data/overrides.json public/thumbs public/og scripts tools/release-collectors/lib/common.py
+git add data/items.json data/items-archive.json data/meta.json data/update-report.md data/overrides.json public/thumbs public/og scripts tools/release-collectors/lib/common.py
 git commit -m "Data update YYYY-MM-DD"
 ```
 
@@ -72,6 +72,6 @@ After the push, watch the Deploy run (`gh run watch`), wait ~15 s, then check `h
 
 ## Notes
 
-- Items released more than 30 days ago are dropped automatically (and leave the sitemap).
-- The merge deletes thumbnails no item references any more; images set through overrides stay referenced.
+- Items released more than 30 days ago leave the calendar automatically and move to `data/items-archive.json`: their `/item/<id>/` page stays (発売済み) for ~2 years; hidden items are not archived. The packet counts archived / dropped entries.
+- The merge deletes thumbnails no item or archive entry references any more; images set through overrides stay referenced.
 - After a big update, Search Console → Sitemaps → resubmit is optional; Google rereads the sitemap on its own.

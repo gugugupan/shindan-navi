@@ -39,11 +39,55 @@ def shown(x):  # = update_data.shown (with shown_code)
     return tuple(yen(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN) + (code,)
 
 
-def git_json(ref, path):
+def git_json(ref, path, missing=None):
+    """path at ref; `missing` (when given) stands in for a file ref does not have."""
+    if missing is not None and subprocess.run(['git', '-C', ROOT, 'cat-file', '-e', f'{ref}:{path}'], capture_output=True).returncode:
+        return missing
     out = subprocess.run(['git', '-C', ROOT, 'show', f'{ref}:{path}'], capture_output=True, text=True)
     if out.returncode:
         sys.exit(f'cannot read {path} at {ref}: {out.stderr.strip()}')
     return json.loads(out.stdout)
+
+
+def load_archive():
+    p = os.path.join(ROOT, 'data/items-archive.json')
+    return json.load(open(p)) if os.path.exists(p) else []
+
+
+def check_archive(base, head, ov, old, meta):
+    """data/items-archive.json (contracts/releases.md › Archive): released items that left items.json keep a slim
+    record; an item the merge dropped for its date (not hidden) must be in it, and nothing in it is in items.json."""
+    arch = load_archive()
+    old_arch = git_json(base, 'data/items-archive.json', missing=[])
+    upd = datetime.date.fromisoformat(meta['updated'])
+    cutoff = (upd - datetime.timedelta(days=30)).isoformat()
+    oldest = (upd - datetime.timedelta(days=730)).isoformat()
+    live = {i['id'] for i in head}
+    ids = collections.Counter(a.get('id') for a in arch)
+    for k, n in ids.items():
+        if n > 1: fail(f'archive: id {k} appears {n} times')
+    for a in arch:
+        if not all(a.get(f) for f in ('id', 'date', 'game', 'name')): fail(f'archive: entry without id / date / game / name: {a}'); continue
+        if a['id'] in live: fail(f'archive: {a["id"]} {a["name"]} is also in items.json')
+        c = a.get('changed')
+        if not (isinstance(c, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', c) and c <= meta['updated']):
+            fail(f'archive: {a["id"]} changed {c!r} is not a date on or before meta.updated {meta["updated"]}')
+        if a['date'] >= cutoff: fail(f'archive: {a["id"]} {a["name"]} released {a["date"]}, still inside the 30-day window')
+        if a['date'] < oldest: warn(f'archive: {a["id"]} {a["name"]} released {a["date"]}, over two years before {meta["updated"]} (the next merge drops it)')
+    have = set(ids)
+    for i in old:
+        if i['id'] not in live and i['id'] not in have and oldest <= i['date'] < cutoff and not ov.get(i['id'], {}).get('hide'):
+            fail(f'archive: {i["id"]} {i["date"]} {i["name"]} left items.json after its release but is not archived')
+    was = {a['id'] for a in old_arch}
+    for a in old_arch:
+        if a['id'] not in have and a['id'] not in live and a['date'] >= oldest and not ov.get(a['id'], {}).get('hide'):
+            warn(f'archive: entry {a["id"]} {a["name"]} was removed')
+    from_base = {i['id'] for i in old}
+    other = [a for a in arch if a['id'] not in was and a['id'] not in from_base]
+    if other:
+        warn(f'archive: {len(other)} new entries were not in {base}\'s items.json (backfill or hand edit — review), e.g. {other[0]["id"]} {other[0]["name"]}')
+    print(f'## archive: {len(old_arch)} -> {len(arch)} entries, +{len(have - was)} / -{len(was - have)}')
+    return arch
 
 
 def check_data(base, today):
@@ -122,7 +166,8 @@ def check_data(base, today):
     for i, d in sorted(changed, key=lambda x: x[0]['date']):
         print(f'  ~ {i["id"]} [{i["game"]}] {i["name"]}: ' + ', '.join(f'{f} {x!r} -> {y!r}' for f, (x, y) in d.items()))
     print(f'  - {len(removed)} removed ({sum(i["date"] < cutoff for i in removed)} released over 30 days ago)')
-    return head, ov
+    arch = check_archive(base, head, ov, old, meta)
+    return head, ov, arch
 
 
 class PageParser(html.parser.HTMLParser):
@@ -405,11 +450,21 @@ def check_voice_days(sitemap):
         print(f'  {p:<22} topics={len(got)} games={len(secs)} prev={prev} next={nxt}')
 
 
-def check_items(head, ov):
-    """/item/<id>/: exactly one page per visible item (none for hidden ones), self-canonical, h1 = the shown name,
-    a unique title, only BreadcrumbList JSON-LD ending at the page, internal links that resolve, in the sitemap."""
+def check_items(head, ov, arch, calendar_pages):
+    """/item/<id>/: exactly one page per visible or archived item (none for hidden ones), self-canonical, h1 = the shown
+    name, a unique title, only BreadcrumbList JSON-LD ending at the page, internal links that resolve, in the sitemap.
+    Archived items: marked 発売済み, no link into the calendar, and in no calendar page, title / month page or /."""
     visible = {i['id']: {**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('name', 'date', 'thumb')}}
                for i in head if not ov.get(i['id'], {}).get('hide')}
+    sold = {a['id']: {**a, **{k: v for k, v in ov.get(a['id'], {}).items() if k in ('name', 'date', 'thumb')}}
+            for a in arch if not ov.get(a['id'], {}).get('hide') and a['id'] not in visible}
+    visible.update(sold)
+    for p in calendar_pages:
+        f = os.path.join(DIST, p.strip('/'), 'index.html')
+        if not os.path.exists(f): continue
+        src = open(f).read()
+        for k in sold:
+            if k in src: fail(f'{p}: archived item {k} ({sold[k]["name"]}) is on the page'); break
     built = {os.path.basename(os.path.dirname(f)) for f in glob.glob(os.path.join(DIST, 'item/*/index.html'))}
     for k in sorted(set(visible) - built): fail(f'/item/{k}/: missing ({visible[k]["name"]})')
     for k in sorted(built - set(visible)):
@@ -452,12 +507,18 @@ def check_items(head, ov):
         for h in hrefs:
             if not os.path.exists(os.path.join(DIST, h.strip('/'), 'index.html') if h.endswith('/') else os.path.join(DIST, h.strip('/'))):
                 fail(f'{p}: link {h} does not resolve')
-        if f'href="/releases/#i={k}"' not in src: fail(f'{p}: no 新弾カレンダーで見る link')
-        if f'href="/{it["date"][:7]}/"' not in src: fail(f'{p}: no month page link')
+        if k in sold:
+            if '<span class="pd-sold">発売済み</span>' not in src or '（発売済み）' not in src: fail(f'{p}: archived item not marked 発売済み')
+            if 'href="/releases/#i=' in src: fail(f'{p}: archived item links into the calendar')
+            if f'<loc>{SITE}{p}</loc><lastmod>{it.get("changed")}</lastmod>' not in sitemap: fail(f'sitemap: {p} not dated by its archived changed {it.get("changed")}')
+        else:
+            if f'href="/releases/#i={k}"' not in src: fail(f'{p}: no 新弾カレンダーで見る link')
+            if f'href="/{it["date"][:7]}/"' not in src: fail(f'{p}: no month page link')
+            if 'class="pd-sold"' in src: fail(f'{p}: calendar item marked 発売済み')
         n_links += sum(h.startswith('/item/') for h in hrefs)
     for t, ks in titles.items():
         if len(ks) > 1: fail(f'/item/: title {t!r} shared by {ks}')
-    print(f'  /item/       pages={len(built)} visible={len(visible)} cross-links={n_links}')
+    print(f'  /item/       pages={len(built)} visible={len(visible)} (archived {len(sold)}) cross-links={n_links}')
 
 
 def check_index(sitemap, today):
@@ -501,7 +562,7 @@ def check_index(sitemap, today):
     print(f'  index        sitemap={len(locs)} indexable={len(indexable)} titles={len(titles)} long item titles={len(long_items)}')
 
 
-def check_dist(today, head, ov):
+def check_dist(today, head, ov, arch):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
     paths = [p['path'] for p in pages]
@@ -511,7 +572,7 @@ def check_dist(today, head, ov):
     if '/' in paths: fail('dist: / is built as a release calendar page')
     check_home(today, head, ov)
     check_voices()
-    check_items(head, ov)
+    check_items(head, ov, arch, ['/'] + paths)
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
     if not months: fail('dist: no month pages')
 
@@ -524,7 +585,7 @@ def check_dist(today, head, ov):
     # of their items', / meta.updated
     vis = [{**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date',)}} for i in head if not ov.get(i['id'], {}).get('hide')]
     ch = lambda xs: max((x.get('changed') or meta['updated'] for x in xs), default=meta['updated'])
-    want_lastmod = {f'{SITE}/item/{i["id"]}/': i.get('changed') or meta['updated'] for i in vis}
+    want_lastmod = {f'{SITE}/item/{i["id"]}/': i.get('changed') or meta['updated'] for i in arch + vis}
     for pg in pages:
         js = pg.get('js') or {}
         sel = [i for i in vis if (js.get('game') in (None, i['game'])) and i['date'].startswith(js.get('month', ''))]
@@ -626,7 +687,7 @@ def main():
     ap.add_argument('--skip-build', action='store_true')
     args = ap.parse_args()
 
-    head, ov = check_data(args.base, args.today)
+    head, ov, arch = check_data(args.base, args.today)
     if not args.skip_build:
         env = dict(os.environ, BUILD_TODAY=args.today)
         r = subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'scripts/build.py')], env=env, capture_output=True, text=True)
@@ -636,7 +697,7 @@ def main():
             print('## build:', r.stdout.strip().splitlines()[-1])
     if os.path.isdir(DIST):
         print(f'## dist (today {args.today})')
-        check_dist(args.today, head, ov)
+        check_dist(args.today, head, ov, arch)
     else:
         fail('dist/ missing')
 

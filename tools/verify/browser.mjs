@@ -599,6 +599,69 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
     await ctx.close();
   }
 }
+// archived /item/<id>/ pages (data/items-archive.json): released items out of the calendar keep their page, marked
+// 発売済み, with no link into the calendar; listed in the sitemap, absent from /releases/ and /.
+{
+  const ap = path.join(ROOT, 'data/items-archive.json');
+  const items = new Set(JSON.parse(fs.readFileSync(path.join(ROOT, 'data/items.json'), 'utf8')).map(i => i.id));
+  const ov = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/overrides.json'), 'utf8'));
+  const arch = (fs.existsSync(ap) ? JSON.parse(fs.readFileSync(ap, 'utf8')) : []).filter(a => !items.has(a.id) && !(ov[a.id] || {}).hide)
+    .map(a => ({ ...a, ...(ov[a.id] || {}) }));
+  const sitemap = fs.readFileSync(path.join(DIST, 'sitemap.xml'), 'utf8');
+  const cal = ['/', '/releases/'].map(p => fs.readFileSync(path.join(DIST, p.slice(1), 'index.html'), 'utf8'));
+  for (const a of arch) {
+    if (!fs.existsSync(path.join(DIST, 'item', a.id, 'index.html'))) fail(`/item/${a.id}/`, 'archived item has no page');
+    if (!sitemap.includes(`<loc>https://shindan-navi.app/item/${a.id}/</loc>`)) fail(`/item/${a.id}/`, 'archived page not in the sitemap');
+    if (cal.some(t => t.includes(a.id))) fail(`/item/${a.id}/`, 'archived item is on / or /releases/');
+  }
+  const picks = [...new Map([arch.find(a => a.thumb && fs.existsSync(path.join(DIST, a.thumb))), arch[arch.length - 1]].filter(Boolean).map(a => [a.id, a])).values()];
+  const checked = new Set();
+  for (const [vp, opt] of picks.length ? Object.entries(VIEWPORTS) : []) for (const it of picks) {
+    const where = `${vp} /item/${it.id}/ archived`;
+    const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+      hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [];
+    page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    page.on('requestfailed', r => { if (r.url().startsWith(BASE)) bad.push(`request failed: ${r.url()}`); });
+    page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
+    try {
+      const res = await page.goto(`${BASE}/item/${it.id}/`, { waitUntil: 'networkidle' });
+      if (!res || res.status() !== 200) fail(where, `status ${res && res.status()}`);
+      const st = await page.evaluate(() => {
+        const sold = document.querySelector('.pd-tag .pd-sold'), r = sold && sold.getBoundingClientRect();
+        return { h1: document.querySelector('h1')?.textContent, sold: sold && sold.textContent, soldShown: !!(r && r.width && r.height),
+          cal: document.querySelectorAll('a[href^="/releases/#"]').length, go: document.querySelector('.dl-links a.go')?.getAttribute('href'),
+          brokenImgs: [...document.images].filter(i => i.complete && i.naturalWidth === 0).map(i => i.getAttribute('src')),
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          ph: !!document.querySelector('.pd-img .th.none'),
+          links: [...new Set([...document.querySelectorAll('a[href^="/"]')].map(a => a.getAttribute('href').split('#')[0]))] };
+      });
+      if (st.h1 !== it.name) fail(where, `h1 ${JSON.stringify(st.h1)} != ${JSON.stringify(it.name)}`);
+      if (st.sold !== '発売済み' || !st.soldShown) fail(where, '発売済み not shown');
+      if (st.cal) fail(where, `${st.cal} links into the calendar`);
+      if (!st.go || st.go.startsWith('/releases/#')) fail(where, `call to action ${st.go}`);
+      if (st.ph !== !(it.thumb && fs.existsSync(path.join(DIST, it.thumb)))) fail(where, `placeholder ${st.ph ? 'shown' : 'missing'}`);
+      if (st.brokenImgs.length) fail(where, `broken images ${st.brokenImgs.join(', ')}`);
+      if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
+      const hdr = await headerProblem(page, opt.width);
+      if (hdr) fail(where, hdr);
+      for (const l of st.links) {
+        if (checked.has(l)) continue;
+        checked.add(l);
+        const r = await page.request.get(BASE + l);
+        if (r.status() !== 200) fail(where, `link ${l} answers ${r.status()}`);
+      }
+      await page.screenshot({ path: path.join(OUT, `${vp}-item-archived-${it.id}.png`), fullPage: true });
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
+  console.log(`  /item/ archived       ${arch.length} pages`);
+}
 // /voices/ (VOICES_ENABLED=1 builds only): the embedded snapshots on the calendar (a chip per game on desktop, bars when
 // one game is selected, a dot per game on phones) on the right days, the day, game and topic dialogs, the list view,
 // the filters and safe X links; shares that add up to 100%, one freshness line per snapshot, the dialog in the URL hash
