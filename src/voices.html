@@ -1,0 +1,491 @@
+<!--
+  /voices/ 話題カレンダー (contracts/voices.md): what players on X talk about, per game. Built only with VOICES_ENABLED=1
+  by render_voices() in build.py, which fills SITE_CSS, BRAND, CORNER, SITENAV and the VOICES data (snapshots from
+  data/voices/). Static: the page makes no /api calls. Toolbar, filters and freshness line mirror /events/.
+-->
+<title>TCG話題カレンダー（ポケカ・ワンピ・ユニアリほか X の反応まとめ）｜トレカカレンダー</title>
+<style>/*SITE_CSS*/</style>
+<style>/*PAGE_FONTS*/</style>
+<style>
+/* attitude colours; never the only cue (every marker has a glyph and a label or tooltip) */
+:root{--pos:#1d7f4c;--mix:#94580a;--neg:var(--sun);--neu:var(--faint)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--pos:#5fd39a;--mix:#f0b44c}}
+:root[data-theme="dark"]{--pos:#5fd39a;--mix:#f0b44c}
+.a-positive{--a:var(--pos)} .a-negative{--a:var(--neg)} .a-mixed{--a:var(--mix)} .a-neutral{--a:var(--neu)}
+.chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.chip.k[aria-pressed="true"] .am{color:inherit}
+.filters{flex-wrap:wrap}
+.filters>.frow{order:3;flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:10px;border-top:1px solid var(--line)}
+.frow .fl{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-right:4px}
+.freset{border:0;background:none;color:var(--accent);font-size:12px;font-weight:700;padding:4px 6px}
+.rhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:14px 2px 0}
+.rhead:empty{display:none}
+.rhead .count{margin-left:0;font-size:13px}
+.rhead .mcount{display:none}
+.notice{margin:8px 0 0;font-size:12.5px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px 12px}
+.notice b{color:var(--ink)}
+.fresh{margin:4px 0 0;font-size:12px;color:var(--faint);overflow:hidden}
+.fresh span{white-space:nowrap}
+.fresh .frl{display:flex;flex-wrap:wrap;margin-left:-1.2em}
+.fresh .frl>span::before{content:"・";display:inline-block;width:1.2em;text-align:center}
+.fresh .frl>.lab+span::before{content:"";width:.5em}
+.fresh .smp{color:var(--muted);font-weight:700}
+.state{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:32px 16px;text-align:center;color:var(--muted);display:grid;gap:12px;justify-items:center;margin-top:8px}
+.state b{color:var(--ink);font-size:15px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.am{font-style:normal;font-weight:700;color:var(--a)}
+
+/* month calendar: one grid per week; topics are bars spanning their days (phones: a dot per game) */
+.vcal{margin-top:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+.vhead,.vwk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.vwk{grid-template-rows:var(--rows);min-height:96px;border-top:1px solid var(--line)}
+.vd{grid-row:1/-1;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:6px 8px;border:0;border-right:1px solid var(--line);background:none;text-align:left;font:inherit;color:inherit;min-width:0}
+.vd:nth-child(7){border-right:0}
+button.vd:hover{background:var(--surface-2)}
+.vd.out{background:var(--surface-2)}
+.vd.out .n{opacity:.4}
+.vd .n{font-family:var(--mono);font-size:13px;font-weight:700;min-width:26px;height:26px;display:inline-grid;place-items:center;border-radius:50%}
+.vd.sat .n{color:var(--sat)} .vd.sun .n{color:var(--sun)}
+.vd.today{background:var(--foil-soft);box-shadow:inset 0 0 0 2px var(--foil)}
+.vd.today .n{background:var(--foil);color:var(--foil-ink)}
+.vd .vmore{margin-top:auto;font-size:11px;font-weight:700;color:var(--accent)}
+.vdots{display:none}
+.vbar{position:relative;z-index:1;align-self:center;margin:0 5px;min-width:0;height:22px;display:flex;align-items:center;gap:5px;padding:0 8px 0 6px;border:0;border-left:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:6px;background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));font-size:12px;line-height:1;text-align:left;color:var(--ink);white-space:nowrap;overflow:hidden}
+.vbar:hover{box-shadow:inset 0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+.vbar.cl{margin-left:0;border-radius:0 6px 6px 0;border-left-style:dotted}
+.vbar.cr{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.vbar b{flex:none;font-size:11px;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)))}
+.vbar .tt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vg{display:inline-flex;align-items:center;gap:1px;font-size:10px;line-height:1}
+.vg i{width:8px;height:8px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+
+/* topic cards (day dialog, list view) */
+.vcards{display:grid;gap:10px;min-width:0}
+.tc{position:relative;display:grid;gap:7px;min-width:0;background:var(--surface-2);border-radius:12px;padding:12px 14px 12px 16px}
+.tc::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+.tc-top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px}
+.tc .tag{color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)))}
+.badge{font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
+.badge.new{border-color:transparent;background:var(--accent-soft);color:var(--accent)}
+.badge.hot{border-color:var(--foil);background:var(--foil-soft);color:var(--foil-ink)}
+.badge.cool{color:var(--muted)}
+.ai{margin-left:auto;font-size:10.5px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 7px;white-space:nowrap}
+.tc h3{margin:0;font-size:15px;line-height:1.45;overflow-wrap:anywhere}
+.tc .sum{margin:0;font-size:13px;line-height:1.7}
+.att{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:4px 10px;font-size:12px}
+.att .attl{font-weight:700;color:var(--a);white-space:nowrap}
+.abar{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--line);min-width:40px}
+.abar span{display:block;height:100%}
+.abar span+span{border-left:2px solid var(--surface-2)}
+.abar .p{background:var(--pos)} .abar .n{background:var(--neg)} .abar .u{background:var(--neu)}
+.att .vol{color:var(--muted);white-space:nowrap}
+.att .vol b{color:var(--ink)}
+.alg{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;color:var(--muted)}
+.alg span{display:inline-flex;align-items:center;gap:4px}
+.alg i{width:8px;height:8px;border-radius:2px;background:var(--a)}
+.voices{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.voices li{font-size:12.5px;line-height:1.6;background:var(--surface);border-radius:8px;padding:4px 10px}
+.tc-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;font-size:12px}
+.tc-links .lab{color:var(--muted);font-weight:700}
+.tc-links a{font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface);white-space:nowrap}
+.tc-links a:hover{border-color:var(--accent)}
+.tc-win{margin:0;font-size:11px;color:var(--faint)}
+
+/* list view: snapshots, newest first */
+#list{margin-top:8px;display:flex;flex-direction:column;gap:12px}
+.vsnap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.vsnap h2{margin:0 0 10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-family:var(--display);font-weight:400;font-size:18px}
+.vsnap h2 small{font-family:var(--body);font-size:12px;font-weight:700;color:var(--muted)}
+.vsnap .vcards{grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}
+.vdlg{width:min(640px,calc(100vw - 32px));overflow:auto}
+.vdlg .dl-note{margin:0;font-size:12px;color:var(--muted)}
+
+@media (max-width:760px){
+  .filters>.frow{flex:none;padding-top:8px}
+  .rhead .mcount{display:inline}
+  .fresh .win{display:none}
+  .vwk{grid-template-rows:auto;min-height:64px}
+  .vd{padding:4px 3px;align-items:center;gap:3px}
+  .vd .n{font-size:12px;min-width:22px;height:22px}
+  .vbar,.vd .vmore{display:none}
+  .vdots{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 3px}
+  .tc{padding:10px 10px 10px 13px}
+  .vsnap{padding:10px}
+  .vsnap .vcards{grid-template-columns:minmax(0,1fr)}
+  .att{grid-template-columns:auto minmax(0,1fr)}
+  .att .vol{grid-column:1/-1}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <!--BRAND-->
+    <!--CORNER-->
+  </header>
+
+  <div class="bar"><div class="panel">
+    <div class="row">
+      <div class="month" id="monthNav">
+        <button class="ib" id="prev" aria-label="前月">‹</button>
+        <b id="monthLabel"></b>
+        <button class="ib" id="nextM" aria-label="翌月">›</button>
+      </div>
+      <button class="todaybtn" id="goToday">今日</button>
+      <div class="seg" role="group" aria-label="表示">
+        <button id="vCal" aria-pressed="true" aria-label="カレンダー"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>カレンダー</span></button>
+        <button id="vList" aria-pressed="false" aria-label="リスト"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>リスト</span></button>
+      </div>
+      <button class="filterbtn" id="filterBtn" aria-expanded="false" aria-controls="filters" aria-label="絞り込み"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg><span>絞り込み</span><em id="filterBadge" hidden></em></button>
+    </div>
+    <div class="filters" id="filters">
+      <div class="row"><span class="count" id="count" aria-live="polite"></span></div>
+      <div class="chips" id="games" role="group" aria-label="タイトルで絞り込み"></div>
+      <div class="frow" id="frow" role="group" aria-label="反応で絞り込み"></div>
+    </div>
+  </div></div>
+
+  <div class="rhead" id="rhead"></div>
+  <div id="notice"></div>
+  <main id="results">
+    <h2 class="sr">話題</h2>
+    <div id="calv"></div>
+    <div id="list" hidden></div>
+  </main>
+
+  <div class="pageinfo"><div class="ptitle"><h1>TCG 話題カレンダー（X のプレイヤーの反応）</h1><p>タイトルごとに X で話題になっていることを AI が要約し、日付ごとに振り返れます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
+  <p class="legend">話題は X（旧Twitter）で公開されている投稿をもとに AI が要約したものです。投稿の本文は掲載せず、要約・意見の言い換えと、もとの投稿へのリンクだけを載せています。反応の割合は集めた投稿のおおまかな傾向で、プレイヤー全体の意見を表すものではありません。公式の発表内容は各タイトルの公式サイト・公式アカウントでご確認ください。</p>
+  <p class="legend">絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
+  <!--SITENAV-->
+</div>
+
+<dialog id="vDlg" class="vdlg" aria-labelledby="vTitle"><div class="dlg"><button class="ib close" id="vClose" aria-label="閉じる">×</button><h2 class="dl-day" id="vTitle"></h2><div id="vBody" class="vcards"></div></div></dialog>
+
+<script>
+const V = /*VOICES*/null;
+// c / cd = light / dark colour from the event palette (CLAUDE.md); rel = release-calendar title whose hue colours a game
+// without events. build.py reads the codes from this list to check data/voices/.
+const GAMES = [
+  {code:'OPCG', name:'ONE PIECE', short:'ワンピ', c:'#be362d', cd:'#de837c'},
+  {code:'UATCG', name:'UNION ARENA', short:'ユニアリ', c:'#7a2dbe', cd:'#b17cde'},
+  {code:'CONAN', name:'名探偵コナン', short:'コナン', c:'#2d81be', cd:'#7cb6de'},
+  {code:'PTCG', name:'ポケモンカード', short:'ポケカ', c:'#be972d', cd:'#dec47c'},
+  {code:'GCG', name:'ガンダム', short:'ガンダム', c:'#1d357c', cd:'#3b60ce'},
+  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', c:'#8a2e0f', cd:'#e45525'},
+  {code:'BS', name:'バトルスピリッツ', short:'バトスピ', c:'#7c1d4d', cd:'#ce3b85'},
+  {code:'DCG', name:'デジモン', short:'デジカ', c:'#12a581', cd:'#40e7be'},
+  {code:'WS', name:'ヴァイスシュヴァルツ', short:'ヴァイス', c:'#d31785', cd:'#ed6eb8'},
+  {code:'VG', name:'ヴァンガード', short:'ヴァンガ', c:'#808a0f', cd:'#d4e425'},
+  {code:'SVE', name:'Shadowverse EVOLVE', short:'シャドバ', c:'#4d6f2a', cd:'#85b950'},
+  {code:'HOCG', name:'ホロライブ', short:'ホロカ', c:'#a96660', cd:'#cfadaa'},
+  {code:'LLOCG', name:'ラブライブ！OCG', short:'ラブカ', c:'#366063', cd:'#62a1a7'},
+  {code:'MTG', name:'MTG', short:'MTG', rel:'MTG'},
+  {code:'YGO', name:'遊戯王OCG', short:'遊戯王', rel:'遊戯王OCG'},
+  {code:'DM', name:'デュエル・マスターズ', short:'デュエマ', rel:'デュエル・マスターズ'}
+];
+const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
+// release titles: the same golden-angle hues as /releases/ (titles ordered by release count)
+const relTitles = Object.keys(V.counts).sort((a,b)=>V.counts[b]-V.counts[a]||a.localeCompare(b,'ja'));
+const HUE = {}; relTitles.forEach((g,i)=>HUE[g]=Math.round((i*137.508+230)%360));
+const gvars = c => { const g=GAME[c]; return g&&g.c ? `--gl:${g.c};--gd:${g.cd}` : `--h:${g&&HUE[g.rel]!=null?HUE[g.rel]:220}`; };
+const ATT = {positive:{l:'好意的',m:'＋'}, negative:{l:'否定的',m:'－'}, mixed:{l:'賛否両論',m:'±'}, neutral:{l:'中立',m:'・'}};
+const ATTS = Object.keys(ATT);
+const VOL = {high:'多', mid:'中', low:'少'};
+const DOW = ['日','月','火','水','木','金','土'];
+
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
+const track = (name, params) => { try { if (window.gtag) window.gtag('event', name, params || {}); } catch (e) {} };
+const $ = id => document.getElementById(id);
+
+// Japan dates as YYYY-MM-DD strings
+const TODAY = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const addD = (s,n) => { const d=new Date(s+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+const dowOf = s => new Date(s+'T00:00:00Z').getUTCDay();
+const diffD = (a,b) => Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/864e5);
+const md = s => { const [,m,d]=s.split('-').map(Number); return `${m}/${d}(${DOW[dowOf(s)]})`; };
+const mdj = s => { const [,m,d]=s.split('-').map(Number); return `${m}月${d}日(${DOW[dowOf(s)]})`; };
+const monthOf = s => s.slice(0,7);
+const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m<1){m+=12;y--} while(m>12){m-=12;y++} return y+'-'+String(m).padStart(2,'0'); };
+const maxS = (a,b) => a>b?a:b, minS = (a,b) => a<b?a:b;
+
+// ---- topics across snapshots: one entry per id, active from first_seen to the last snapshot that lists it
+const SNAPS = [...V.snapshots].sort((a,b)=>a.date<b.date?-1:1);
+const SAMPLE = SNAPS.some(s=>s.sample);
+const TOPICS = new Map();
+SNAPS.forEach(s=>s.topics.forEach((t,i)=>{
+  let x=TOPICS.get(t.id);
+  if(!x){ x={id:t.id, game:t.game, first:t.first_seen, last:s.date, vs:[], rank:i}; TOPICS.set(t.id,x); }
+  x.vs.push({snap:s, t}); x.last=s.date; x.game=t.game; if(t.first_seen<x.first) x.first=t.first_seen;
+}));
+const ALL = [...TOPICS.values()];
+// what the topic looked like on day k: the first snapshot on or after k, else the latest
+const versionOn = (x,k) => x.vs.find(v=>v.snap.date>=k) || x.vs[x.vs.length-1];
+const latest = x => x.vs[x.vs.length-1];
+const dataGames = GAMES.filter(g=>ALL.some(x=>x.game===g.code)).map(g=>g.code);
+const gameOrd = c => GAMES.findIndex(g=>g.code===c);
+const dataMonths = (() => { const out=new Set(); ALL.forEach(x=>{ for(let m=monthOf(x.first); m<=monthOf(x.last); m=addM(m,1)) out.add(m); }); return [...out].sort(); })();
+const bounds = () => [minS(dataMonths[0]||monthOf(TODAY),monthOf(TODAY)), maxS(dataMonths[dataMonths.length-1]||monthOf(TODAY),monthOf(TODAY))];
+const homeMonth = () => dataMonths.includes(monthOf(TODAY)) || !dataMonths.length ? monthOf(TODAY) : dataMonths.filter(m=>m<monthOf(TODAY)).pop() || dataMonths[0];
+
+// ---- state <-> URL; filters and view are saved in tcg.voices. Without a saved choice the game filter starts from the
+// /events/ saved one (tcg.ev.filters), keeping only games that have topics here. Nothing is written back to /events/.
+const SAVED_KEY = 'tcg.voices', EV_KEY = 'tcg.ev.filters';
+function parse(q){
+  const games=(q.get('game')||'').split(',').filter(c=>GAME[c]);
+  return {game:[...new Set(games)], att:ATT[q.get('att')]?q.get('att'):'', view:q.get('view')==='list'?'list':'cal',
+    month:/^\d{4}-\d{2}$/.test(q.get('month')||'')?q.get('month'):null};
+}
+function readURL(){
+  const q=new URLSearchParams(location.search);
+  let s;
+  if(q.toString()) s=parse(q);
+  else {
+    const saved=store.get(SAVED_KEY,null);
+    if(saved&&typeof saved==='object') s=parse(new URLSearchParams(Object.entries(saved).filter(([,v])=>typeof v==='string'&&v)));
+    else {
+      const ev=store.get(EV_KEY,null), g=ev&&typeof ev.game==='string'?ev.game.split(',').filter(c=>dataGames.includes(c)):[];
+      s=parse(new URLSearchParams(g.length?{game:g.join(',')}:{}));
+    }
+  }
+  const [lo,hi]=bounds();
+  if(!s.month||s.month<lo||s.month>hi) s.month=homeMonth();
+  return s;
+}
+function toQuery(s){
+  const q=new URLSearchParams();
+  if(s.game.length) q.set('game',s.game.join(','));
+  if(s.att) q.set('att',s.att);
+  if(s.view==='list') q.set('view','list');
+  if(s.view==='cal' && s.month!==homeMonth()) q.set('month',s.month);
+  return q.toString().replace(/%2C/g,',');
+}
+let state = readURL();
+history.replaceState(null,'',location.pathname+(toQuery(state)?'?'+toQuery(state):'')+location.hash);
+function commit(ch, opts={}){
+  Object.assign(state,ch);
+  if(!opts.auto){
+    const o={}; if(state.game.length) o.game=state.game.join(','); if(state.att) o.att=state.att; if(state.view==='list') o.view='list';
+    store.set(SAVED_KEY,o);
+  }
+  const qs=toQuery(state), url=location.pathname+(qs?'?'+qs:'');
+  if(url!==location.pathname+location.search) history.pushState(null,'',url);
+  render();
+}
+window.addEventListener('popstate',()=>{ state=readURL(); render(); });
+
+// ---- filtering
+const inGame = x => !state.game.length || state.game.includes(x.game);
+const attOf = (x,k) => (k ? versionOn(x,k) : latest(x)).t.attitude;
+const visible = () => ALL.filter(inGame).filter(x=>!state.att||attOf(x)===state.att);
+const inMonth = (x,ym) => monthOf(x.first)<=ym && monthOf(x.last)>=ym;
+const activeOn = (x,k) => x.first<=k && k<=x.last;
+const byOrder = (a,b) => a.first<b.first?-1:a.first>b.first?1:(diffD(b.first,b.last)-diffD(a.first,a.last))||(gameOrd(a.game)-gameOrd(b.game))||(a.rank-b.rank);
+// list entries: one per (snapshot, topic)
+const listEntries = () => SNAPS.slice().reverse().map(s=>({snap:s, ts:s.topics.filter(t=>(!state.game.length||state.game.includes(t.game))&&(!state.att||t.attitude===state.att))}));
+
+// ---- controls
+const chip = (key,val,label,on,extra='',style='') => `<button class="chip${extra}" data-k="${key}" data-v="${esc(val)}" aria-pressed="${on}"${style?` style="${style}"`:''}>${label}</button>`;
+function renderControls(){
+  const fk=document.activeElement&&document.activeElement.dataset&&document.activeElement.dataset.k?[document.activeElement.dataset.k,document.activeElement.dataset.v]:null;
+  const cal=state.view==='cal';
+  // numbers: this month's topics (calendar) or all entries (list) under the attitude filter
+  const n=c=>cal ? ALL.filter(x=>x.game===c&&inMonth(x,state.month)&&(!state.att||attOf(x)===state.att)).length
+    : SNAPS.reduce((t,s)=>t+s.topics.filter(x=>x.game===c&&(!state.att||x.attitude===state.att)).length,0);
+  $('games').innerHTML = chip('game','','すべて',!state.game.length,' all') +
+    dataGames.map(c=>`<button class="chip g" style="${gvars(c)}" data-k="game" data-v="${c}" aria-pressed="${state.game.includes(c)}"><i></i>${esc(GAME[c].name)} <em>${n(c)}</em></button>`).join('');
+  $('frow').innerHTML = `<span class="fl" aria-hidden="true">反応</span>` + chip('att','','すべて',!state.att,' k') +
+    ATTS.map(a=>chip('att',a,`<span class="am a-${a}" aria-hidden="true">${ATT[a].m}</span>${ATT[a].l}`,state.att===a,` k a-${a}`)).join('') +
+    (state.att||state.game.length?`<button class="freset" id="resetAll">条件をクリア</button>`:'');
+  $('vList').setAttribute('aria-pressed',!cal);
+  $('vCal').setAttribute('aria-pressed',cal);
+  const [lo,hi]=bounds(), [y,m]=state.month.split('-').map(Number);
+  $('monthNav').hidden=!cal;
+  $('monthLabel').innerHTML=`<small>${y}年</small>${m}月`;
+  $('prev').disabled=state.month<=lo;
+  $('nextM').disabled=state.month>=hi;
+  const nf=state.game.length+(state.att?1:0), badge=$('filterBadge');
+  badge.hidden=!nf; badge.textContent=nf;
+  $('filterBtn').setAttribute('aria-label',nf?`絞り込み（${nf}件の条件）`:'絞り込み');
+  $('calv').hidden=!cal; $('list').hidden=cal;
+  if(fk){ const el=document.querySelector(`.panel [data-k="${fk[0]}"][data-v="${CSS.escape(fk[1])}"]`); if(el) el.focus(); }
+}
+function renderHead(total){
+  const t=`${state.view==='cal'?'この月 ':''}<b>${total.toLocaleString('ja-JP')}</b> 件`;
+  $('count').innerHTML=t;
+  // phones: the toolbar count sits behind 絞り込み, so the head repeats it
+  $('rhead').innerHTML=`<span class="count mcount">${t}</span>`;
+}
+function renderNotice(){
+  $('notice').innerHTML = SAMPLE ? '<p class="notice"><b>サンプルデータを表示しています。</b>話題カレンダーは準備中で、内容は表示確認用の見本です。</p>' : '';
+}
+document.querySelector('.panel').addEventListener('click',e=>{
+  if(e.target.closest('#resetAll')){ commit({game:[],att:''}); return; }
+  const b=e.target.closest('[data-k]'); if(!b) return;
+  const k=b.dataset.k, v=b.dataset.v;
+  if(k==='game'){ commit({game: v ? (state.game.includes(v)?state.game.filter(x=>x!==v):[...state.game,v]) : []}); track('voices_filter',{key:'game',value:v||'all'}); }
+  if(k==='att'){ commit({att: v===state.att ? '' : v}); track('voices_filter',{key:'att',value:v||'all'}); }
+});
+$('prev').onclick=()=>commit({month:addM(state.month,-1)});
+$('nextM').onclick=()=>commit({month:addM(state.month,1)});
+$('goToday').onclick=()=>{
+  if(state.view==='cal'){ const [lo,hi]=bounds(), ym=monthOf(TODAY); if(ym!==state.month && ym>=lo && ym<=hi) commit({month:ym}); }
+  requestAnimationFrame(()=>{ const el=state.view==='cal'&&document.querySelector('.vd.today'); if(el) el.scrollIntoView({block:'center'}); else window.scrollTo({top:0}); });
+};
+$('filterBtn').onclick=e=>{ const bar=document.querySelector('.bar'), open=!bar.classList.contains('open'); bar.classList.toggle('open',open); e.currentTarget.setAttribute('aria-expanded',open); };
+$('vList').onclick=()=>{ commit({view:'list'}); track('switch_view',{view:'voices_list'}); };
+$('vCal').onclick=()=>{ commit({view:'cal'}); track('switch_view',{view:'voices_calendar'}); };
+
+// ---- topic card
+function badge(v){
+  const st=v.t.status;
+  if(st==='continuing') return `<span class="badge hot">🔥 ${diffD(v.t.first_seen,v.snap.date)+1}日連続</span>`;
+  if(st==='cooling') return '<span class="badge cool">📉 落ち着き</span>';
+  return '<span class="badge new">🆕 新</span>';
+}
+function attBlock(t){
+  const s=t.share, tot=s.positive+s.negative+s.neutral, a=ATT[t.attitude];
+  const seg=(k,c)=>s[k]?`<span class="${c}" style="flex:${s[k]}"></span>`:'';
+  const lab=`好意的 ${s.positive}・否定的 ${s.negative}・中立 ${s.neutral}`;
+  return `<div class="att a-${t.attitude}"><span class="attl"><span aria-hidden="true">${a.m} </span>${a.l}</span>`
+    + `<span class="abar" role="img" aria-label="反応の内訳 ${lab}（${tot}件中）">${seg('positive','p')}${seg('negative','n')}${seg('neutral','u')}</span>`
+    + `<span class="vol">話題量 <b>${VOL[t.volume]}</b></span>`
+    + `<span class="alg" aria-hidden="true"><span class="a-positive"><i></i>好意的 ${s.positive}</span><span class="a-negative"><i></i>否定的 ${s.negative}</span><span class="a-neutral"><i></i>中立 ${s.neutral}</span></span></div>`;
+}
+const ext = '<span class="sr">（外部サイト・X）</span>';
+function card(v, hx='h3'){
+  const t=v.t, g=GAME[t.game];
+  const voices=t.voices.length?`<ul class="voices" aria-label="おもな意見（要約）">${t.voices.map(x=>`<li><span aria-hidden="true">💬 </span>${esc(x)}</li>`).join('')}</ul>`:'';
+  const links=(t.reacting_to?`<a href="${esc(t.reacting_to)}" target="_blank" rel="noopener noreferrer" data-x="reacting">反応元の公式投稿 ↗${ext}</a>`:'')
+    + `<span class="lab">Xで見る</span>` + t.posts.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-x="post" aria-label="Xで投稿${i+1}を見る（外部サイト）">投稿${i+1} ↗</a>`).join('');
+  return `<article class="tc" style="${gvars(t.game)}" data-topic="${esc(t.id)}">
+    <div class="tc-top"><span class="tag"><i></i>${esc(g.name)}</span>${badge(v)}<span class="ai">AIによる要約</span></div>
+    <${hx}>${esc(t.title)}</${hx}>
+    <p class="sum">${esc(t.summary)}</p>
+    ${attBlock(t)}
+    ${voices}
+    <p class="tc-links">${links}</p>
+    <p class="tc-win">${md(t.window.from)}〜${md(t.window.to)} の投稿から（${md(v.snap.date)} 時点${v.snap.sample?'・サンプル':''}）</p>
+  </article>`;
+}
+
+// ---- calendar
+const MAX_LANES = 4;
+function renderCal(){
+  const ym=state.month, first=ym+'-01', start=addD(first,-dowOf(first)), days=diffD(first,addM(ym,1)+'-01');
+  const weeks=Math.ceil((dowOf(first)+days)/7);
+  // topics on any cell shown, including the neighbouring months' days in the first and last week
+  const tps=visible().filter(x=>x.first<=addD(start,weeks*7-1)&&x.last>=start).sort(byOrder);
+  const monthN=tps.filter(x=>inMonth(x,ym)).length;
+  renderHead(monthN);
+  if(!monthN){
+    $('calv').innerHTML=`<div class="state"><b>${state.game.length||state.att?'この条件の話題はありません':'この月の話題はまだありません'}</b><span>${dataMonths.length?'ほかの月を見るか、絞り込み条件をゆるめてみてください。':'話題のデータは準備中です。'}</span>${state.game.length||state.att?'<button class="sbtn ghost" id="resetAll2">条件をクリア</button>':''}</div>`;
+    return;
+  }
+  let h=`<div class="vhead">${DOW.map((w,i)=>`<div class="dow ${i==0?'sun':i==6?'sat':''}">${w}</div>`).join('')}</div>`;
+  for(let w=0; w<weeks; w++){
+    const ws=addD(start,w*7), we=addD(ws,6);
+    const segs=tps.filter(x=>x.first<=we&&x.last>=ws).map(x=>({x, s:maxS(x.first,ws), e:minS(x.last,we)}));
+    const laneEnd=[], hidden={};
+    segs.forEach(sg=>{
+      let l=laneEnd.findIndex(e=>e<sg.s); if(l<0){ l=laneEnd.length; laneEnd.push(''); }
+      laneEnd[l]=sg.e; sg.lane=l;
+      if(l>=MAX_LANES) for(let k=sg.s; k<=sg.e; k=addD(k,1)) hidden[k]=(hidden[k]||0)+1;
+    });
+    const L=Math.min(laneEnd.length,MAX_LANES);
+    let cells='', bars='';
+    for(let i=0;i<7;i++){
+      const k=addD(ws,i), wd=dowOf(k), on=segs.filter(sg=>activeOn(sg.x,k)).map(sg=>sg.x);
+      const cls=['vd', wd==0?'sun':wd==6?'sat':'']; if(monthOf(k)!==ym) cls.push('out'); if(k===TODAY) cls.push('today');
+      const n=`<span class="n">${+k.slice(8)}</span>`;
+      if(!on.length){ cells+=`<div class="${cls.join(' ')}" style="grid-column:${i+1}">${n}</div>`; continue; }
+      // phones: one dot per game with the tone of its topics that day (several tones = 賛否両論)
+      const gs=[...new Set(on.map(x=>x.game))].sort((a,b)=>gameOrd(a)-gameOrd(b));
+      const dots=gs.map(c=>{ const as=[...new Set(on.filter(x=>x.game===c).map(x=>attOf(x,k)))], a=as.length>1?'mixed':as[0];
+        return `<span class="vg a-${a}" style="${gvars(c)}" title="${esc(GAME[c].name)}：${ATT[a].l}"><i></i><em class="am">${ATT[a].m}</em></span>`; }).join('');
+      const label=`${md(k)} 話題${on.length}件（${gs.map(c=>GAME[c].name).join('・')}）`;
+      cells+=`<button class="${cls.join(' ')}" style="grid-column:${i+1}" data-day="${k}" aria-label="${esc(label)}">${n}<span class="vdots" aria-hidden="true">${dots}</span>${hidden[k]?`<span class="vmore" aria-hidden="true">ほか${hidden[k]}件</span>`:''}</button>`;
+    }
+    segs.filter(sg=>sg.lane<MAX_LANES).forEach(sg=>{
+      const x=sg.x, v=versionOn(x,sg.s), t=v.t, a=t.attitude, g=GAME[x.game];
+      const c0=diffD(ws,sg.s)+1, c1=diffD(ws,sg.e)+2;
+      const cl=x.first<ws?' cl':'', cr=x.last>we?' cr':'';
+      bars+=`<button class="vbar a-${a}${cl}${cr}" style="${gvars(x.game)};grid-column:${c0}/${c1};grid-row:${sg.lane+2}" data-topic="${esc(x.id)}" data-day="${sg.s}" aria-label="${esc(`${g.name}：${t.title}（${ATT[a].l}・${md(x.first)}〜${md(x.last)}）`)}"><b>${esc(g.short)}</b><em class="am" aria-hidden="true">${ATT[a].m}</em><span class="tt">${esc(t.title)}</span></button>`;
+    });
+    const rows=`32px${L?` repeat(${L},26px)`:''} minmax(${Object.keys(hidden).length?24:8}px,1fr)`;
+    h+=`<div class="vwk" style="--rows:${rows}">${cells}${bars}</div>`;
+  }
+  $('calv').innerHTML=`<div class="vcal">${h}</div>`;
+}
+
+// ---- list
+function renderList(){
+  const es=listEntries().filter(e=>e.ts.length);
+  renderHead(es.reduce((t,e)=>t+e.ts.length,0));
+  if(!es.length){
+    $('list').innerHTML=`<div class="state"><b>${state.game.length||state.att?'この条件の話題はありません':'話題のデータはまだありません'}</b>${state.game.length||state.att?'<button class="sbtn ghost" id="resetAll2">条件をクリア</button>':''}</div>`;
+    return;
+  }
+  $('list').innerHTML=es.map(({snap,ts})=>`<section class="vsnap" aria-labelledby="s-${snap.date}"><h2 id="s-${snap.date}">${mdj(snap.date)} 時点<small>${md(snap.window.from)}〜${md(snap.window.to)} の X の投稿から・${ts.length}件${snap.sample?'・サンプル':''}</small></h2>`
+    + `<div class="vcards">${ts.map(t=>card({snap,t},'h3')).join('')}</div></section>`).join('');
+}
+
+// ---- dialog: one day (calendar cell) or one topic (calendar bar)
+const dlg=$('vDlg');
+let dlgFrom=null;
+function openDlg(title, body){
+  dlgFrom=document.activeElement;
+  $('vTitle').textContent=title; $('vBody').innerHTML=body;
+  if(!dlg.open){ if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open',''); }
+  $('vClose').focus();
+}
+function openDay(k){
+  const on=visible().filter(x=>activeOn(x,k)).sort(byOrder);
+  const hiddenN=ALL.filter(x=>activeOn(x,k)).length-on.length;
+  openDlg(`${mdj(k)}の話題`, (on.length?on.map(x=>card(versionOn(x,k))).join(''):'<p class="dl-note">この日の話題はありません。</p>')
+    + (hiddenN?`<p class="dl-note">絞り込み条件により、ほか${hiddenN}件を表示していません。</p>`:''));
+  track('voices_open',{kind:'day'});
+}
+function openTopic(id,k){
+  const x=TOPICS.get(id); if(!x) return;
+  openDlg(`${GAME[x.game].name}の話題`, card(k?versionOn(x,k):latest(x)) + (x.vs.length>1?`<p class="dl-note">${md(x.first)}〜${md(x.last)}（${x.vs.length}回の集計で話題）</p>`:''));
+  track('voices_open',{kind:'topic'});
+}
+$('vClose').onclick=()=>dlg.close();
+dlg.addEventListener('click',e=>{ if(e.target===dlg) dlg.close(); });
+dlg.addEventListener('close',()=>{ if(dlgFrom&&document.contains(dlgFrom)) dlgFrom.focus(); dlgFrom=null; });
+document.addEventListener('click',e=>{
+  const a=e.target.closest('a[data-x]'); if(a){ const tc=a.closest('[data-topic]'); track('click_voice_post',{kind:a.dataset.x, game:tc?(TOPICS.get(tc.dataset.topic)||{}).game:''}); }
+});
+$('results').addEventListener('click',e=>{
+  if(e.target.closest('#resetAll2')){ commit({game:[],att:''}); return; }
+  const bar=e.target.closest('button.vbar'); if(bar){ openTopic(bar.dataset.topic,bar.dataset.day); return; }
+  const d=e.target.closest('button.vd[data-day]'); if(d){ openDay(d.dataset.day); return; }
+});
+
+// ---- freshness: the latest snapshot that has topics for each game
+function renderFresh(){
+  if(!SNAPS.length){ $('fresh').innerHTML='<span class="frl"><span class="lab">話題データ</span><span>準備中</span></span>'; return; }
+  $('fresh').innerHTML='<span class="frl"><span class="lab">話題データ</span>'+dataGames.map(c=>{
+    const s=SNAPS.filter(x=>x.topics.some(t=>t.game===c)).pop();
+    return `<span>${esc(GAME[c].name)} ${md(s.date)}時点<span class="win">（${md(s.window.from)}〜${md(s.window.to)}）</span></span>`;
+  }).join('')+(SAMPLE?'<span class="smp">サンプル</span>':'')+'</span>';
+}
+
+function render(){
+  renderControls();
+  if(state.view==='cal') renderCal(); else renderList();
+}
+renderNotice();
+renderFresh();
+render();
+// Deep links (for the home page later): #d=YYYY-MM-DD opens that day, #t=<topic id> one topic. The hash is dropped after use.
+const deep=/^#(d|t)=([\w-]+)$/.exec(location.hash);
+if(deep){
+  history.replaceState(null,'',location.pathname+location.search);
+  if(deep[1]==='d' && /^\d{4}-\d{2}-\d{2}$/.test(deep[2])){
+    const ym=monthOf(deep[2]), [lo,hi]=bounds();
+    if(state.view==='cal' && ym>=lo && ym<=hi && ym!==state.month) commit({month:ym},{auto:true});
+    openDay(deep[2]);
+  } else if(deep[1]==='t' && TOPICS.has(deep[2])) openTopic(deep[2]);
+}
+</script>

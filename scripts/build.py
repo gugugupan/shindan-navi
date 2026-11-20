@@ -1,4 +1,4 @@
-import json,sys,os,urllib.parse,shutil,html,datetime,re
+import json,sys,os,urllib.parse,shutil,html,datetime,re,glob
 OFFICIAL={'遊戯王OCG':'https://www.yugioh-card.com/japan/','ヴァイスシュヴァルツ':'https://ws-tcg.com/','ヴァンガード':'https://cf-vanguard.com/tcg/',
 'MTG':'https://mtg-jp.com/','バトルスピリッツ':'https://www.battlespirits.com/','デュエル・マスターズ':'https://dm.takaratomy.co.jp/','リセ':'https://lycee-tcg.com/',
 'ポケモンカード':'https://www.pokemon-card.com/','FFTCG':'https://www.square-enix-shop.com/jp/ff-tcg/','Z/X':'https://www.zxtcg.com/',
@@ -178,8 +178,13 @@ ICO=lambda d:f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 # BUILD_EVENTS=0 leaves /events/ out entirely (page, sitemap, tool tabs): hosts without the /api/ Worker (the Pages site before cutover).
 BUILD_EVENTS=os.environ.get('BUILD_EVENTS','1')!='0'
 TOOLS=[('/releases/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
-       ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>'))]
+       ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>')),
+       ('/voices/','話題','カレンダー',ICO('<path d="M4 5h16v11H9l-4 4v-4H4z"/><path d="M8 9h8M8 12h5"/>'))]
 if not BUILD_EVENTS: TOOLS=[t for t in TOOLS if t[0]!='/events/']
+# 話題カレンダー (/voices/, contracts/voices.md): VOICES_ENABLED=1 builds the page, its tool tab and the VOICES parts of
+# /privacy/; off by default. Its data is static, so unlike login / feedback it does not need the Worker.
+VOICES_ENABLED=os.environ.get('VOICES_ENABLED','')=='1'
+if not VOICES_ENABLED: TOOLS=[t for t in TOOLS if t[0]!='/voices/']
 # Login UI (user control in the corner, sync wording in the legends, LOGIN parts of /privacy/): LOGIN_ENABLED=1, a repo
 # variable passed to the Worker build only; always off with BUILD_EVENTS=0 (no Worker behind that build).
 LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
@@ -192,13 +197,13 @@ if FEEDBACK_ENABLED and not re.fullmatch(r'[0-9A-Za-z_-]{10,100}',TURNSTILE_SITE
 def flags(src):
     # STORE: parts about data kept on the server (login or feedback)
     for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED),
-                     ('FEEDBACK',FEEDBACK_ENABLED),('STORE',LOGIN_ENABLED or FEEDBACK_ENABLED),('NOSTORE',not (LOGIN_ENABLED or FEEDBACK_ENABLED))):
+                     ('FEEDBACK',FEEDBACK_ENABLED),('VOICES',VOICES_ENABLED),('STORE',LOGIN_ENABLED or FEEDBACK_ENABLED),('NOSTORE',not (LOGIN_ENABLED or FEEDBACK_ENABLED))):
         src=re.sub(rf'<!--{tag}-->(.*?)<!--/{tag}-->\n?',(lambda m:m.group(1)) if keep else '',src,flags=re.S)
     return src
 def tooltabs(tool):
     if len(TOOLS)<2: return ''
     return '<nav class="tooltabs" aria-label="ツール">'+''.join(
-        f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}{b}</span></a>' for p,a,b,ic in TOOLS)+'</nav>'
+        f'<a href="{p}" aria-label="{a}{b}"{" aria-current=\"true\"" if p==tool else ""}>{ic}<span>{a}<span class="tl2">{b}</span></span></a>' for p,a,b,ic in TOOLS)+'</nav>'
 CORNER_SRC=open(os.path.join(ROOT,'src/corner.html')).read()
 # location picker of /events/ and / (src/locpick.html), inserted before the page script at the LOCPICK slot
 LOCPICK=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/locpick.html')).read(),count=1,flags=re.S).strip()
@@ -347,16 +352,19 @@ def render_events():
 
 # Privacy policy (/privacy/). Each date is the day that variant first went live, set by hand: BASE = 制定 (the policy
 # without login), LOGIN = the revision that adds login, published only with LOGIN_ENABLED=1, FEEDBACK = the revision
-# that adds the feedback form, published only with FEEDBACK_ENABLED=1. Leave a date None until the day its feature
+# that adds the feedback form, published only with FEEDBACK_ENABLED=1, VOICES = the one that adds /voices/ (VOICES_ENABLED=1). Leave a date None until the day its feature
 # is enabled. 最終改定日 and the sitemap lastmod are the latest date among the enabled revisions.
 PRIVACY_EFFECTIVE_BASE='2026-11-19'
 PRIVACY_EFFECTIVE_LOGIN='2026-11-19'
 PRIVACY_EFFECTIVE_FEEDBACK='2026-11-19'
+PRIVACY_EFFECTIVE_VOICES='2026-11-20'
 if LOGIN_ENABLED and not PRIVACY_EFFECTIVE_LOGIN:
     sys.exit('LOGIN_ENABLED=1 needs PRIVACY_EFFECTIVE_LOGIN in scripts/build.py: set it to the date login goes live (YYYY-MM-DD)')
 if FEEDBACK_ENABLED and not PRIVACY_EFFECTIVE_FEEDBACK:
     sys.exit('FEEDBACK_ENABLED=1 needs PRIVACY_EFFECTIVE_FEEDBACK in scripts/build.py: set it to the date the feedback form goes live (YYYY-MM-DD)')
-PRIVACY_REVISIONS=[d for d,on in ((PRIVACY_EFFECTIVE_LOGIN,LOGIN_ENABLED),(PRIVACY_EFFECTIVE_FEEDBACK,FEEDBACK_ENABLED)) if on]
+if VOICES_ENABLED and not PRIVACY_EFFECTIVE_VOICES:
+    sys.exit('VOICES_ENABLED=1 needs PRIVACY_EFFECTIVE_VOICES in scripts/build.py: set it to the date /voices/ goes live (YYYY-MM-DD)')
+PRIVACY_REVISIONS=[d for d,on in ((PRIVACY_EFFECTIVE_LOGIN,LOGIN_ENABLED),(PRIVACY_EFFECTIVE_FEEDBACK,FEEDBACK_ENABLED),(PRIVACY_EFFECTIVE_VOICES,VOICES_ENABLED)) if on]
 PRIVACY_LASTMOD=max(PRIVACY_REVISIONS,default=PRIVACY_EFFECTIVE_BASE)
 PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
     desc='トレカカレンダーのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
@@ -378,6 +386,7 @@ def render_privacy():
     src=src.replace('<!--REVISED-->',f'（最終改定日：{day(PRIVACY_LASTMOD)}）' if PRIVACY_REVISIONS else '')
     if LOGIN_ENABLED: src=src.replace('<!--REVISED_LOGIN-->',day(PRIVACY_EFFECTIVE_LOGIN))
     if FEEDBACK_ENABLED: src=src.replace('<!--REVISED_FEEDBACK-->',day(PRIVACY_EFFECTIVE_FEEDBACK))
+    if VOICES_ENABLED: src=src.replace('<!--REVISED_VOICES-->',day(PRIVACY_EFFECTIVE_VOICES))
     assert '<!--REVISED' not in src
     assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
     title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
@@ -523,6 +532,107 @@ def render_feedback():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
+# ---- 話題カレンダー (/voices/): snapshots from data/voices/ (contracts/voices.md), checked here and embedded in the page
+VOICES_SRC=open(os.path.join(ROOT,'src/voices.html')).read()
+VOICE_GAMES=re.findall(r"\{code:'([A-Z]+)'",VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])
+def voices_data():
+    """All snapshots, oldest first. Sample snapshots only while no real one exists (then they are dropped)."""
+    snaps=[]
+    xpost=re.compile(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/\d{1,20}')
+    isdate=lambda v:isinstance(v,str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}',v) and jd(v)
+    TOPIC={'id','game','title','summary','attitude','share','volume','voices','reacting_to','posts','window','first_seen','status','source'}
+    for f in sorted(glob.glob(os.path.join(ROOT,'data/voices/*.json'))):
+        name=os.path.relpath(f,ROOT)
+        def bad(msg): sys.exit(f'{name}: {msg} (contracts/voices.md)')
+        s=json.load(open(f))
+        if set(s)-{'version','date','window','sample','note','topics'} or not {'version','date','window','topics'}<=set(s): bad('wrong top-level fields')
+        if s['version']!=1: bad('version must be 1')
+        w=s['window']
+        if not (isinstance(w,dict) and set(w)=={'from','to'} and isdate(w['from']) and isdate(w['to']) and w['from']<=w['to']): bad('bad window')
+        if not (isdate(s['date']) and s['date']==w['to']==os.path.basename(f)[:-5]): bad('file name, date and window.to must match')
+        if 'sample' in s and not isinstance(s['sample'],bool): bad('sample must be true/false')
+        ids=set()
+        for t in s['topics']:
+            tid=t.get('id','?')
+            def tbad(msg): bad(f'topic {tid}: {msg}')
+            if set(t)!=TOPIC: tbad(f'fields {sorted(set(t)^TOPIC)}')
+            if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,63}',str(tid)) or tid in ids: tbad('bad or duplicate id')
+            ids.add(tid)
+            if t['game'] not in VOICE_GAMES: tbad(f'unknown game {t["game"]} (GAMES in src/voices.html)')
+            for k,n in (('title',40),('summary',160)):
+                if not isinstance(t[k],str) or not t[k].strip() or len(t[k])>n: tbad(f'{k} empty or over {n} characters')
+            if t['attitude'] not in ('positive','negative','mixed','neutral'): tbad('attitude')
+            sh=t['share']
+            if not (isinstance(sh,dict) and set(sh)=={'positive','negative','neutral'} and all(isinstance(v,int) and not isinstance(v,bool) and v>=0 for v in sh.values()) and sum(sh.values())>0): tbad('share')
+            if t['volume'] not in ('high','mid','low'): tbad('volume')
+            if not (isinstance(t['voices'],list) and len(t['voices'])<=3 and all(isinstance(v,str) and 0<len(v.strip())<=80 for v in t['voices'])): tbad('voices: at most 3 strings of 1-80 characters')
+            if t['reacting_to'] is not None and not (isinstance(t['reacting_to'],str) and xpost.fullmatch(t['reacting_to'])): tbad('reacting_to must be an x.com status URL or null')
+            if not (isinstance(t['posts'],list) and 1<=len(t['posts'])<=3 and len(set(t['posts']))==len(t['posts']) and all(isinstance(u,str) and xpost.fullmatch(u) for u in t['posts'])): tbad('posts: 1-3 distinct x.com status URLs')
+            if t['window']!=w: tbad('window differs from the snapshot window')
+            if not isdate(t['first_seen']) or t['first_seen']>s['date']: tbad('first_seen after the snapshot date')
+            if t['status'] not in ('new','continuing','cooling'): tbad('status')
+            if t['source'] not in ('grok-app','openrouter','x-api'): tbad('source')
+        snaps.append({k:s[k] for k in ('date','window','topics')}|{'sample':bool(s.get('sample'))})
+    if any(not x['sample'] for x in snaps): snaps=[x for x in snaps if not x['sample']]
+    return snaps
+VOICES=voices_data() if VOICES_ENABLED else []
+# sample-only data stays out of search: noindex and no sitemap entry until a real snapshot exists
+VOICES_INDEX=bool(VOICES) and not any(x['sample'] for x in VOICES)
+VOICES_PAGE=dict(path='/voices/',og='home',
+    desc='ポケカ・ワンピ・ユニアリなどTCGのタイトルごとに、X（旧Twitter）のプレイヤーのあいだで話題になっていることをAIが要約。好意的・否定的な反応の割合や代表的な意見をカレンダーで振り返れます。')
+def render_voices():
+    src=re.sub(r'\A<!--.*?-->\n','',VOICES_SRC,count=1,flags=re.S)
+    src=flags(src)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    counts=__import__('collections').Counter(d['game'] for d in data)
+    v={'snapshots':VOICES,'counts':counts}
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
+                     ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/voices/")}{siterow("/voices/")}</nav>'),
+                     ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/'))):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
+    title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    pg=VOICES_PAGE
+    url=SITE+pg['path']
+    og=f'{SITE}/og/{pg["og"]}.png'
+    robots='' if VOICES_INDEX else '<meta name="robots" content="noindex">\n'
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+{robots}<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="トレカカレンダー">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(title)}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+
 dist=os.path.join(ROOT,'dist')
 if os.path.isdir(dist): shutil.rmtree(dist)
 shutil.copytree(os.path.join(ROOT,'public'),dist)
@@ -540,6 +650,9 @@ if BUILD_EVENTS:
 open(os.path.join(dist,'index.html'),'w').write(render_home())
 os.makedirs(os.path.join(dist,'privacy'),exist_ok=True)
 open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
+if VOICES_ENABLED:
+    os.makedirs(os.path.join(dist,'voices'),exist_ok=True)
+    open(os.path.join(dist,'voices/index.html'),'w').write(render_voices())
 if FEEDBACK_ENABLED:
     os.makedirs(os.path.join(dist,'feedback'),exist_ok=True)
     open(os.path.join(dist,'feedback/index.html'),'w').write(render_feedback())
@@ -547,6 +660,7 @@ sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps
 sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
+if VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
@@ -557,4 +671,5 @@ if not os.path.exists(venv_py):
     sys.exit('missing .venv: python3 -m venv .venv && .venv/bin/pip install fonttools brotli')
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
-print('pages',len(pages),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+print('pages',len(pages),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
+      '| voices',f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)

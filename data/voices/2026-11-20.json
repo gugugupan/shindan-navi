@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "date": "2026-11-20",
+  "window": { "from": "2026-11-17", "to": "2026-11-20" },
+  "sample": true,
+  "note": "Sample for the UI: the 2026-11-20 results the owner checked in the Grok app. Summaries and voices are our own paraphrases.",
+  "topics": [
+    {
+      "id": "opcg-bonney-ban-pair-speed",
+      "game": "OPCG",
+      "title": "ボニー禁止ペアの速すぎる規制",
+      "summary": "公式が告知したボニー関連の禁止ペアについて、発売から間もない時期の規制を疑問視する反応が大半を占めている。",
+      "attitude": "negative",
+      "share": { "positive": 1, "negative": 15, "neutral": 3 },
+      "volume": "high",
+      "voices": [
+        "発売から2週間での禁止なので、開発側に経緯の説明を求めたいという声",
+        "ほかのTCGで最も早かった禁止の例と比べる声",
+        "環境が固まる前に早めに手を打った点は評価できるという声"
+      ],
+      "reacting_to": "https://x.com/ONEPIECE_tcg/status/2122649652109742321",
+      "posts": [
+        "https://x.com/boat1_23_234/status/2122654034523984097",
+        "https://x.com/reitsuki95/status/2123418501893525789",
+        "https://x.com/ikettitencho/status/2123350003741835535"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-17",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "ptcg-current-regulation-deflation",
+      "game": "PTCG",
+      "title": "現レギュの物足りなさ・デフレ調整への不満",
+      "summary": "現在のレギュレーションに物足りなさを感じる声や、カードパワーを抑える方向の調整への不満が少数ながら見られる。",
+      "attitude": "negative",
+      "share": { "positive": 0, "negative": 4, "neutral": 1 },
+      "volume": "low",
+      "voices": [
+        "パワーが上がり続けるより、環境をリセットする方向の調整が増えたと分析する声",
+        "強すぎるカードで盛り上がっていた頃のほうが楽しかったという声",
+        "シティリーグ以外は遊ぶ気が起きないという声"
+      ],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/pktorisky/status/2123421668316217741",
+        "https://x.com/Sigma_public/status/2123558452941468140",
+        "https://x.com/YutR46684/status/2123560679143772214"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-17",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "uatcg-umamusume-power-meta",
+      "game": "UATCG",
+      "title": "ウマ娘新弾の強さ・環境影響懸念",
+      "summary": "ウマ娘の新弾について、カードの強さや環境への影響を心配する声と、前向きに受け止める声が入り混じっている。",
+      "attitude": "mixed",
+      "share": { "positive": 3, "negative": 4, "neutral": 2 },
+      "volume": "mid",
+      "voices": [],
+      "reacting_to": "https://x.com/UNION_ARENA_TCG/status/2123325415330844840",
+      "posts": [
+        "https://x.com/westmtshinji/status/2123423575969546725",
+        "https://x.com/2heartsww/status/2123346685850255763",
+        "https://x.com/onisama_hentai_/status/2123186431590056171"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-17",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "uatcg-new-set-illustrations",
+      "game": "UATCG",
+      "title": "新弾カードのイラスト・デザイン評価",
+      "summary": "新弾カードのイラストやデザインを褒める投稿が目立ち、反応は好意的なものが中心。",
+      "attitude": "positive",
+      "share": { "positive": 6, "negative": 0, "neutral": 0 },
+      "volume": "mid",
+      "voices": [],
+      "reacting_to": null,
+      "posts": [
+        "https://x.com/CM_johnSV/status/2123408837923459534",
+        "https://x.com/onponpp03/status/2123265007832154375",
+        "https://x.com/izayoikaren/status/2123008174903226566"
+      ],
+      "window": { "from": "2026-11-17", "to": "2026-11-20" },
+      "first_seen": "2026-11-17",
+      "status": "new",
+      "source": "grok-app"
+    }
+  ]
+}

@@ -4,8 +4,8 @@
   Owner placeholders are span.todo elements carrying the owner-fill data attribute; build.py refuses
   LOGIN_ENABLED=1 while one is left. Dates: PRIVACY_EFFECTIVE_BASE (制定, EFFECTIVE), PRIVACY_EFFECTIVE_LOGIN and
   PRIVACY_EFFECTIVE_FEEDBACK (revisions, REVISED_*) in build.py; REVISED is the latest enabled revision.
-  Parts wrapped in the EVENTS / LOGIN / FEEDBACK marker comments are kept only with BUILD_EVENTS on / LOGIN_ENABLED=1 /
-  FEEDBACK_ENABLED=1; STORE / NOSTORE parts depend on whether either of the last two keeps data on the server.
+  Parts wrapped in the EVENTS / LOGIN / FEEDBACK / VOICES marker comments are kept only with BUILD_EVENTS on /
+  LOGIN_ENABLED=1 / FEEDBACK_ENABLED=1 / VOICES_ENABLED=1; STORE / NOSTORE parts depend on whether either of the last two keeps data on the server.
   Section numbers are CSS counters, so they stay in order when a LOGIN part is left out.
 -->
 <title>プライバシーポリシー｜トレカカレンダー</title>
@@ -86,6 +86,7 @@
           <tr><td><code>tcg.calAskOff</code></td><td>お気に入り登録時のカレンダー追加確認を表示しない設定</td></tr>
           <tr><td><code>tcg.theme</code></td><td>表示テーマ（自動・ライト・ダーク）</td></tr>
           <!--EVENTS--><tr><td><code>tcg.ev.filters</code></td><td>イベントカレンダーの絞り込み条件（選んだ都道府県を含む）</td></tr><!--/EVENTS-->
+          <!--VOICES--><tr><td><code>tcg.voices</code></td><td>話題カレンダーの絞り込み条件と表示形式</td></tr><!--/VOICES-->
           <!--LOGIN--><tr><td><code>tcg.sync.user</code></td><td>このブラウザのデータを同期したアカウントの ID（別のアカウントでログインしたときの判定用）。アカウントを削除すると消去します</td></tr>
           <tr><td><code>tcg.sync.base</code></td><td>このブラウザが最後に確認した、アカウントに保存されているお気に入りと設定（まだ同期していない変更を求めるために使います）。アカウントを削除すると消去します</td></tr><!--/LOGIN-->
         </tbody>
@@ -119,6 +120,11 @@
       <p>スパムなどの不正な送信を防ぐため、Cloudflare, Inc.（米国）の Cloudflare Turnstile を使っています。フォームを開くと、Turnstile が端末・ブラウザの情報や IP アドレスなどを Cloudflare に送信し、人による操作かどうかを確認します。送信時の IP アドレスは、この確認と短時間の送信回数の制限のためにその場で利用するだけで、本サイトでは保存しません。</p>
       <p>送信された内容は Cloudflare D1 に保存し、あわせて Cloudflare のメール配信機能（Email Routing）で運営者のメールアドレスに通知します。</p>
 <!--/FEEDBACK-->
+<!--VOICES-->
+      <h3>話題カレンダー</h3>
+      <p>話題カレンダー（/voices/）は、X（旧Twitter）で公開されている投稿をもとに、タイトルごとの話題を AI で要約して掲載しています。本サイトが保存・掲載するのは、運営者側で作成した要約・意見の言い換えと、もとになった投稿へのリンクだけです。投稿の本文や画像、投稿者のプロフィールなどは保存・転載しません。</p>
+      <p>掲載されている投稿の削除をご希望の場合は、1 のお問い合わせ先までご連絡ください。このページを閲覧しても、閲覧者の情報が X に送信されることはありません（投稿へのリンクを開いた場合を除きます）。</p>
+<!--/VOICES-->
       <h3>Cookie</h3>
       <div class="tw"><table>
         <thead><tr><th scope="col">名前</th><th scope="col">用途</th><th scope="col">有効期間</th></tr></thead>
@@ -147,7 +153,7 @@
           <tr><td>Google カレンダー（Google LLC）</td><td>「Google カレンダーに追加」を押したとき</td><td>商品名・発売日（リンクに含まれる内容）</td></tr>
         </tbody>
       </table></div>
-      <p>商品やイベントの公式ページへのリンクを開いた場合は、そのサイトのポリシーが適用されます。</p>
+      <p>商品やイベントの公式ページ<!--VOICES-->や X の投稿<!--/VOICES-->へのリンクを開いた場合は、そのサイトのポリシーが適用されます。</p>
     </section>
 
     <section class="seo about" aria-labelledby="p4">
@@ -197,6 +203,7 @@
         <li><!--EFFECTIVE-->：制定</li>
         <!--LOGIN--><li><!--REVISED_LOGIN-->：Google アカウントでのログインとお気に入り等の同期の開始にあわせて改定</li><!--/LOGIN-->
         <!--FEEDBACK--><li><!--REVISED_FEEDBACK-->：ご意見・ご要望フォームの開始にあわせて改定</li><!--/FEEDBACK-->
+        <!--VOICES--><li><!--REVISED_VOICES-->：話題カレンダーの開始にあわせて改定</li><!--/VOICES-->
       </ul>
     </section>
   </main>

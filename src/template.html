@@ -320,6 +320,8 @@ tbody tr.starred td.nm{font-weight:700}
 .tooltabs svg{width:16px;height:16px;flex:none}
 .panel>.row{flex-wrap:nowrap}
 @media (max-width:900px){.tooltabs a{padding:0 10px}}
+/* three tabs do not fit next to the logo on narrow tablets: short names there (the aria-label keeps the full one) */
+@media (min-width:761px) and (max-width:900px){.tooltabs:has(a:nth-child(3)) .tl2{display:none}}
 @media (max-width:900px){.seg button{padding:0 9px}.seg button span{display:none}}
 
 @media (max-width:760px){

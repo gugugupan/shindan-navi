@@ -175,6 +175,55 @@ def check_home(today, head, ov):
     print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events}')
 
 
+def check_voices():
+    """/voices/ (contracts/voices.md) exists only with VOICES_ENABLED=1: then it embeds every snapshot in data/voices/
+    (samples only while no real one exists), is noindex and out of the sitemap while sample-only, and every page's tool
+    tabs link it. Off, nothing may mention it."""
+    import glob
+    on = os.environ.get('VOICES_ENABLED', '') == '1'
+    f = os.path.join(DIST, 'voices/index.html')
+    pages = glob.glob(os.path.join(DIST, '**/*.html'), recursive=True)
+    sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
+    privacy = open(os.path.join(DIST, 'privacy/index.html')).read()
+    if not on:
+        if os.path.exists(f): fail('/voices/ built without VOICES_ENABLED=1')
+        for x in pages:
+            if 'href="/voices/' in open(x).read(): fail(f'{os.path.relpath(x, DIST)}: links /voices/ while it is off')
+        if '/voices/' in sitemap: fail('sitemap: /voices/ listed while it is off')
+        if 'tcg.voices' in privacy or '話題カレンダー' in privacy: fail('/privacy/: voices section while it is off')
+        print('  /voices/     off')
+        return
+    if not os.path.exists(f): fail('/voices/ missing with VOICES_ENABLED=1'); return
+    src = open(f).read()
+    snaps = []
+    for x in sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json'))):
+        d = json.load(open(x))
+        snaps.append({'date': d['date'], 'sample': bool(d.get('sample')), 'ids': [t['id'] for t in d['topics']]})
+    if any(not x['sample'] for x in snaps): snaps = [x for x in snaps if not x['sample']]
+    m = re.search(r'const V = (\{.*?\});\n', src)
+    if not m: fail('/voices/: embedded data missing'); return
+    v = json.loads(m[1])
+    got = [{'date': x['date'], 'sample': x['sample'], 'ids': [t['id'] for t in x['topics']]} for x in v['snapshots']]
+    if got != snaps: fail(f'/voices/: embedded snapshots {[x["date"] for x in got]} != data/voices {[x["date"] for x in snaps]}')
+    sample_only = not snaps or all(x['sample'] for x in snaps)
+    noindex = bool(re.search(r'<meta name="robots" content="noindex">', src))
+    listed = f'<loc>{SITE}/voices/</loc>' in sitemap
+    if noindex != sample_only or listed == sample_only:
+        fail(f'/voices/: sample_only={sample_only} but noindex={noindex} sitemap={listed}')
+    pp = PageParser(); pp.feed(src)
+    if pp.canonical != SITE + '/voices/': fail(f'/voices/: canonical {pp.canonical}')
+    if len(re.findall(r'<h1[ >]', src)) != 1: fail('/voices/: expected one h1')
+    if not re.search(r'<nav class="tooltabs"[^>]*>(?:(?!</nav>).)*<a href="/voices/"[^>]*aria-current="true"', src, re.S):
+        fail('/voices/: its tool tab is not current')
+    for x in pages:
+        t = open(x).read()
+        if '<nav class="tooltabs"' in t and 'href="/voices/"' not in t: fail(f'{os.path.relpath(x, DIST)}: tool tabs lack /voices/')
+    if 'tcg.voices' not in privacy or '話題カレンダー' not in privacy: fail('/privacy/: voices section missing')
+    for u in re.findall(r'https://x\.com/[^"\s]+', m[1]):
+        if not re.fullmatch(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/\d{1,20}', u): fail(f'/voices/: odd post URL {u}')
+    print(f'  /voices/     snapshots={len(got)} topics={sum(len(x["ids"]) for x in got)} sample_only={sample_only}')
+
+
 def check_dist(today, head, ov):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
@@ -184,6 +233,7 @@ def check_dist(today, head, ov):
     if '/releases/' not in paths: fail('dist: release calendar /releases/ missing')
     if '/' in paths: fail('dist: / is built as a release calendar page')
     check_home(today, head, ov)
+    check_voices()
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
     if not months: fail('dist: no month pages')
 

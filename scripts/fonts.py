@@ -12,7 +12,8 @@ SRC = os.path.join(ROOT, 'brand/fonts')
 # the fonts every other page downloads; each gets its own small faces for the glyphs the shared subsets lack.
 OWN = [(os.path.join(DIST, 'events/index.html'), '/*EVENT_FONTS*/', 'events'),
        (os.path.join(DIST, 'privacy/index.html'), '/*PAGE_FONTS*/', 'privacy'),
-       (os.path.join(DIST, 'feedback/index.html'), '/*PAGE_FONTS*/', 'feedback')]
+       (os.path.join(DIST, 'feedback/index.html'), '/*PAGE_FONTS*/', 'feedback'),
+       (os.path.join(DIST, 'voices/index.html'), '/*PAGE_FONTS*/', 'voices')]
 text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f not in [o[0] for o in OWN])
 # kana, ASCII and common punctuation are always kept so text that arrives with a data refresh still renders in the same face
 always = ''.join(chr(c) for c in range(0x20, 0x7f)) + ''.join(chr(c) for c in range(0x3000, 0x3100)) + \

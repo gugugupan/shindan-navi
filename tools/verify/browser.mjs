@@ -408,6 +408,107 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
+// /voices/ (VOICES_ENABLED=1 builds only): the embedded snapshots on the calendar (bars on desktop, a dot per game on
+// phones) on the right days, the day and topic dialogs, the list view, the filters and safe X links.
+const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
+for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
+  const where = `${vp} /voices/`;
+  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  const bad = [], api = [];
+  page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
+  const narrow = opt.width <= 760;
+  // topics per day as the page should show them: first_seen .. the last snapshot listing the id
+  const expect = filter => page.evaluate(f => {
+    const tp = new Map();
+    [...V.snapshots].sort((a, b) => a.date < b.date ? -1 : 1).forEach(s => s.topics.forEach(t => {
+      const x = tp.get(t.id) || { id: t.id, game: t.game, first: t.first_seen, att: t.attitude }; x.last = s.date; x.att = t.attitude;
+      if (t.first_seen < x.first) x.first = t.first_seen; tp.set(t.id, x); }));
+    const out = {};
+    for (const x of tp.values()) {
+      if (f.att && x.att !== f.att) continue;
+      for (let d = x.first; d <= x.last; d = new Date(Date.parse(d + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10)) (out[d] ||= []).push(x);
+    }
+    return out;
+  }, filter || {});
+  const shown = () => page.evaluate(n => Object.fromEntries([...document.querySelectorAll('button.vd[data-day]')].map(b => [b.dataset.day,
+    n ? [...b.querySelectorAll('.vg')].length : [...document.querySelectorAll('.vbar')].filter(x => { const [c0, c1] = x.style.gridColumn.split('/').map(Number), c = [...b.parentNode.children].indexOf(b) + 1;
+      return x.parentNode === b.parentNode && c >= c0 && c < c1; }).length])), narrow);
+  try {
+    await page.goto(`${BASE}/voices/`, { waitUntil: 'networkidle' });
+    const hdr = await headerProblem(page, opt.width);
+    if (hdr) fail(where, hdr);
+    const want = await expect();
+    const days = Object.keys(want).sort();
+    const month = await page.locator('#monthLabel').textContent();
+    const inView = days.filter(d => month === `${+d.slice(0, 4)}年${+d.slice(5, 7)}月`);
+    if (!inView.length) fail(where, `calendar opens on ${month} without topics`);
+    const got = await shown();
+    for (const d of inView) {
+      const n = narrow ? new Set(want[d].map(x => x.game)).size : Math.min(want[d].length, 4);
+      if (got[d] !== n) fail(where, `${d}: ${got[d]} ${narrow ? 'game dots' : 'bars'}, expected ${n}`);
+    }
+    const extra = Object.keys(got).filter(d => !want[d]);
+    if (extra.length) fail(where, `days with topics that have none: ${extra.join(' ')}`);
+    // day dialog
+    const d0 = inView[0];
+    await page.locator(`button.vd[data-day="${d0}"]`).click({ position: { x: 8, y: 8 } });
+    await page.locator('#vDlg[open]').waitFor();
+    const dl = await page.evaluate(() => ({ n: document.querySelectorAll('#vBody .tc').length, title: document.getElementById('vTitle').textContent,
+      links: [...document.querySelectorAll('#vBody a[data-x]')].map(a => [a.href, a.target, a.rel]), ai: document.querySelectorAll('#vBody .ai').length }));
+    if (dl.n !== want[d0].length || dl.ai !== dl.n) fail(where, `day dialog ${d0}: ${dl.n} cards (${dl.ai} AI labels), expected ${want[d0].length}`);
+    if (dl.links.some(([h, t, r]) => !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(h) || t !== '_blank' || !/noopener/.test(r) || !/noreferrer/.test(r))) fail(where, `unsafe X links ${JSON.stringify(dl.links.slice(0, 2))}`);
+    const dlgOver = await page.evaluate(() => { const d = document.getElementById('vDlg'); return d.scrollWidth - d.clientWidth; });
+    if (dlgOver > 1) fail(where, `day dialog scrolls horizontally by ${dlgOver}px`);
+    await page.screenshot({ path: path.join(OUT, `${vp}-voices-day.png`) });
+    await page.keyboard.press('Escape');
+    if (await page.locator('#vDlg').evaluate(d => d.open)) fail(where, 'Escape did not close the day dialog');
+    if (!narrow) {
+      await page.locator('.vbar').first().click();
+      if (await page.locator('#vBody .tc').count() !== 1) fail(where, 'topic bar did not open its topic');
+      await page.locator('#vClose').click();
+    }
+    // attitude filter
+    if (narrow) await page.locator('#filterBtn').click();
+    await page.locator('#frow [data-k="att"][data-v="negative"]').click();
+    const wantN = await expect({ att: 'negative' }), gotN = await shown();
+    for (const d of inView) {
+      const n = !wantN[d] ? undefined : narrow ? new Set(wantN[d].map(x => x.game)).size : Math.min(wantN[d].length, 4);
+      if (gotN[d] !== n) fail(where, `negative filter ${d}: ${gotN[d]}, expected ${n}`);
+    }
+    if (JSON.parse(await page.evaluate(() => localStorage.getItem('tcg.voices'))).att !== 'negative') fail(where, 'attitude filter not saved');
+    // game filter: one game's chip leaves only its topics
+    const g = await page.locator('#games .chip.g').first().getAttribute('data-v');
+    await page.locator(`#games .chip.g[data-v="${g}"]`).click();
+    const games = await page.evaluate(() => [...document.querySelectorAll('.vbar,.vg')].filter(e => e.offsetParent).map(e => e.getAttribute('style')));
+    const gs = await page.locator(`#games .chip.g[data-v="${g}"]`).getAttribute('style');
+    if (!games.length || games.some(st => !st.startsWith(gs))) fail(where, `game filter ${g} shows other games`);
+    await page.locator('#resetAll').click();
+    if (narrow) await page.locator('#filterBtn').click();
+    const ov1 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    if (ov1 > 1) fail(where, `calendar scrolls horizontally by ${ov1}px`);
+    const rowOver = await page.evaluate(() => { const r = document.querySelector('.panel>.row'), last = [...r.children].filter(e => e.offsetParent).at(-1);
+      return Math.max(r.scrollWidth - r.clientWidth, last ? last.getBoundingClientRect().right - r.getBoundingClientRect().right : 0); });
+    if (rowOver > 1) fail(where, `toolbar row overflows by ${Math.round(rowOver)}px`);
+    await page.screenshot({ path: path.join(OUT, `${vp}-voices.png`), fullPage: true });
+    // list view: snapshots newest first, every topic once per snapshot
+    await page.locator('#vList').click();
+    const li = await page.evaluate(() => ({ heads: [...document.querySelectorAll('#list .vsnap')].map(s => s.getAttribute('aria-labelledby').slice(2)),
+      cards: document.querySelectorAll('#list .tc').length, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      want: [...V.snapshots].filter(s => s.topics.length).map(s => s.date).sort().reverse(), n: V.snapshots.reduce((t, s) => t + s.topics.length, 0) }));
+    if (JSON.stringify(li.heads) !== JSON.stringify(li.want) || li.cards !== li.n) fail(where, `list ${JSON.stringify(li)}`);
+    if (li.overflow > 1) fail(where, `list scrolls horizontally by ${li.overflow}px`);
+    await page.screenshot({ path: path.join(OUT, `${vp}-voices-list.png`), fullPage: true });
+    if (api.length) fail(where, `API requests from a static page: ${api.join(' ')}`);
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} checked`);
+  await ctx.close();
+}
 // /events/ list at 20:00 with 100 started and 30 upcoming events today (50 per page): the list loads today's pages by
 // itself and puts the upcoming ones first, unless the reader already scrolled into today (then nothing above moves).
 const GSTUB = `(()=>{class E{addListener(){return{remove(){}}}}

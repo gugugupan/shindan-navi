@@ -75,6 +75,7 @@ Repo secrets and variables:
 - `CLOUDFLARE_ACCOUNT_ID`.
 - `D1_DATABASE_ID` — id of the `shindan-navi-events` D1 database. Never commit it.
 - Variable `LIVE_HOST` — see above.
+- Variable `VOICES_ENABLED` (`1` = build the 話題カレンダー `/voices/`, its tool tab and privacy section; static, both builds). Set `PRIVACY_EFFECTIVE_VOICES` in build.py to the go-live day first.
 - Variables `FEEDBACK_ENABLED` (`1` = build `/feedback/` and its links, add the send_email binding) and
   `TURNSTILE_SITE_KEY` (public widget key) — set only after the steps in `api/README.md` › Feedback › Owner setup.
 
@@ -143,6 +144,8 @@ A browser key is public by design; restrictions are what protect it. Owner check
 `favorite`, `filter_game`, `filter_favorites`, `switch_view`, `view_item`, `copy_favorites`, `change_theme`, `click_official`.
 
 `/feedback/`: `send_feedback` (`kind` only; never the text or the address).
+
+`/voices/`: `voices_filter` (`key` game / att), `switch_view`, `voices_open` (`kind` day / topic), `click_voice_post` (`kind` post / reacting, `game`).
 
 `/events/`: `events_filter`, `switch_view`, `change_theme`, `click_event_source`, `events_map` (`action`: `day` = a
 day view opened from the list or calendar, `open` = the map opened with 地図を表示).
