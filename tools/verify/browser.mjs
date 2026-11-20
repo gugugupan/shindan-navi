@@ -511,7 +511,8 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
   await ctx.close();
 }
 // /item/<id>/ product pages: a code + photo, a 参考画像 and a placeholder example at both widths (the first also dark):
-// they render without errors or horizontal scroll, every internal link answers 200, and 新弾カレンダーで見る opens the item.
+// they render without errors or horizontal scroll, every internal link answers 200, 新弾カレンダーで見る opens the item and
+// the detail dialog's 商品ページ link comes back.
 {
   const items = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/items.json'), 'utf8'));
   const ov = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/overrides.json'), 'utf8'));
@@ -563,6 +564,13 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
         await page.locator('#dlg[open] .dl-item h4').waitFor({ timeout: 5000 });
         const h4 = await page.locator('#dlg .dl-item h4').allTextContents();
         if (h4.length !== 1 || h4[0] !== it.name) fail(where, `新弾カレンダーで見る opened ${JSON.stringify(h4)}`);
+        // and back: the dialog's 商品ページ link leads to this page
+        const pl = page.locator('#dlg .dl-item a.itempg');
+        if (await pl.count() !== 1 || (await pl.textContent()) !== '商品ページ' || (await pl.getAttribute('href')) !== `/item/${it.id}/`) fail(where, 'detail dialog lacks its 商品ページ link');
+        else {
+          await pl.click();
+          await page.waitForURL(u => u.pathname === `/item/${it.id}/`, { timeout: 5000 });
+        }
       }
     } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
     for (const b of [...new Set(bad)]) fail(where, b);

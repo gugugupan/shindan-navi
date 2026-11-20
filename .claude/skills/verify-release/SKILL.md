@@ -26,7 +26,9 @@ uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0
 
 - Rebuilds `dist/` with `BUILD_TODAY` set, so results are reproducible; use today's date unless checking how the site will look on a later day.
 - Data: ids unique and unchanged for the same title + name, new ids match `item_id`, no override removed (changed / new overrides are WARN to read), no visible duplicates by name or source key, recent / upcoming items that disappeared are WARN — check they were really cancelled.
-- Pages: `/releases/`, all 10 title pages and month pages exist and are in the sitemap with `lastmod` = `meta.json`; canonical is the page itself; hidden items are not in page data.
+- Pages: `/releases/`, all 10 title pages and month pages exist and are in the sitemap; `lastmod` = the newest `changed` of the page's items (item pages: their own, `/`: `meta.json`), never after `--today`; canonical is the page itself; hidden items are not in page data.
+- Index: the sitemap lists exactly the built pages without noindex, each self-canonical (trailing slash, og:url = canonical); `<title>`s are unique (FAIL) and over 60 characters is a WARN (item pages summed into one line); shared descriptions WARN; robots.txt names the sitemap.
+- `changed`: a date on or before `meta.json`; after a merge run every new or changed item carries that run's date (FAIL), after a hand edit of `items.json` it is a WARN.
 - Product pages: every visible item has `/item/<id>/` (hidden ones none), self-canonical, h1 = name, unique title, only BreadcrumbList JSON-LD, internal links resolve, in the sitemap; every static list entry links its item page.
 - JSON-LD: parses; only `WebSite`, `BreadcrumbList`, `ItemList`, `ListItem`; no `Product` / `Offer` / price / availability / rating / review / shipping / return policy; `ItemList` names and order equal the visible static list; breadcrumbs end at the page.
 - Next release: `/releases/` and title-page lists show no past dates, and each title page's 次の発売 is the first upcoming date. A FAIL here usually means a main title has no upcoming items — fix the data, not the check.

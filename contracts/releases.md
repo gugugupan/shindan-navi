@@ -131,6 +131,18 @@ Merge (refuses to write anything):
 Enrich (`fill_box_info`) runs after the merge's official step, may use network and the LLM, is skipped without
 `OPENROUTER_API_KEY`, and is followed by `apply_overrides`, sort and the 画像なし list, as in today's `main()`.
 
+## `changed` (items.json)
+
+Each item's last-changed date (`YYYY-MM-DD`), the sitemap `lastmod` of its `/item/<id>/` page; calendar pages take the
+newest of their items'. Written by `stamp_changed()` just before `items.json` (not in a dry run, so the golden replay is
+unaffected):
+
+- TODAY when the item is new or any shown field (`SHOWN`: date, game, name, pack, box, per_box, per_pack, url, thumb,
+  approx, after overrides; prices compared by yen amount) differs from the run's starting `items.json`; else kept.
+- Backfill, no invented dates: an item without `changed` (written before the field existed) takes the previous
+  `meta.json` `updated`, the date the sitemap already gave it; the build uses `meta.json` `updated` until then.
+- An override committed without a merge rerun moves no date (verify WARNs); the next run stamps the change.
+
 ## Product decisions kept
 
 Stable ids (`item_id`, never renumbered), `overrides.json` applied but never written, de-duplication by source

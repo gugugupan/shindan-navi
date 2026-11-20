@@ -815,7 +815,7 @@ function openDetail(items,title,keepOpen){
     ${d.box?`<dt>1BOX</dt><dd>${esc(d.box)}${d.per_box?`（${d.per_box}パック入り）`:''}</dd>`:''}
     ${d.per_pack?`<dt>内容</dt><dd>${d.per_box||(d.packN||0)<1000?'1パック':'1セット'}${d.per_pack}枚入り</dd>`:''}</dl>
     ${d.approx?'<p class="ap" style="display:inline-block;margin:8px 0 0">参考画像（実際の商品と異なる場合あり）</p>':''}
-    <p class="dl-links">${d.date>=TODAY?`<button class="calbtn" data-cal-id="${d.id}">📅 カレンダーに追加</button>`:''}${linkList(d).join('')}</p>
+    <p class="dl-links">${d.date>=TODAY?`<button class="calbtn" data-cal-id="${d.id}">📅 カレンダーに追加</button>`:''}<a class="itempg" href="/item/${d.id}/">商品ページ</a>${linkList(d).join('')}</p>
   </div></div>`).join('');
   if(keepOpen) return;
   if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open','');

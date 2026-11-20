@@ -75,6 +75,9 @@ for i in it:
     for k in ('pack','box'): d[k]=price_label(d[k])
     data.append(d)
 data.sort(key=lambda d:(d['date'],d['game']))
+# per-item change date for the sitemap (contracts/releases.md › changed); items the updater has not stamped yet: meta.updated
+CHANGED={i['id']:i.get('changed') or UPDATED for i in it}
+def lastmod(items): return max((CHANGED[d['id']] for d in items),default=UPDATED)
 used={d['game'] for d in data}
 off={k:v for k,v in OFFICIAL.items() if k in used}
 template=open(os.path.join(ROOT,'src/template.html')).read()
@@ -113,6 +116,10 @@ ALIAS={'pokemon':['ポケモンカード','ポケカ','PTCG'],'onepiece':['ワ�
        'gundam':['ガンダムカード','ガンダムTCG','GCG'],'dragonball':['フュージョンワールド','DBFW','ドラゴンボールカード'],
        'digimon':['デジカ','デジモンカード']}
 SLUG={k:s for s,k,n,sh in GAMES}
+# the second name in a title page's <title>: the full or other common name people search with next to the short one
+TITLE_ALT={'pokemon':'ポケモンカード','onepiece':'ワンピースカード','mtg':'マジック：ザ・ギャザリング','yugioh':'遊戯王OCG',
+           'duelmasters':'デュエル・マスターズ','weiss':'ヴァイスシュヴァルツ','unionarena':'UNION ARENA','gundam':'ガンダムカードゲーム',
+           'dragonball':'ドラゴンボール','digimon':'デジモンカード'}
 COMMON_KW=['TCG','トレカ','トレーディングカードゲーム','新弾','発売日','発売スケジュール','カレンダー','拡張パック','ブースターパック','スターターデッキ','予約']
 
 def about_block(heading,paras):
@@ -121,7 +128,6 @@ def about_block(heading,paras):
 
 def page_def():
     pages=[]
-    year=TODAY[:4]
     up=[d for d in data if d['date']>=TODAY]
     soon=[d for d in up if d['date']<=(jd(TODAY)+datetime.timedelta(days=30)).isoformat()]
     gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if k in used)
@@ -137,7 +143,7 @@ def page_def():
               f'トレカカレンダーの新弾カレンダーは、TCG（トレーディングカードゲーム）の新弾・新商品の発売日をひとつのカレンダーにまとめたページです。ポケモンカード、ONE PIECEカードゲーム、マジック：ザ・ギャザリング、遊戯王OCG、デュエル・マスターズ、ヴァイスシュヴァルツ、UNION ARENA など{len(used)}タイトルの拡張パック・ブースターパック・スターターデッキの発売日と価格（税込）を掲載しています。',
               'タイトルで絞り込んで推しのTCGだけを表示したり、☆でお気に入り登録した商品をまとめて確認・予算計算したりできます。お気に入りの商品は Google カレンダーや iPhone のカレンダーに追加でき、発売日の前日に通知を受け取れます。',
               f'タイトル別の発売日一覧：{gl}']),
-        ld_items=soon))
+        ld_items=soon,lastmod=lastmod(data)))
     for slug,key,name,short in GAMES:
         its=[d for d in data if d['game']==key]
         if not its: continue
@@ -159,8 +165,8 @@ def page_def():
             list_head,list_note=f'{short} 最近の発売',f'{name}の最近発売された商品 {len(lst)}件。新しい発売予定が発表され次第掲載します。価格は税込。'
             about_next=f'現在、発売予定の新弾は掲載していません。最近の発売は{fmt(last["date"])}「{esc(last["name"])}」です。'
         pages.append(dict(path=f'/{slug}/',slug=slug,og=slug,
-            title=f'{short}（{al[0] if al[0]!=short else name}）新弾 発売日一覧【{year}年最新】｜トレカカレンダー',
-            desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}{year}年の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
+            title=f'{short} 新弾 発売日一覧（{TITLE_ALT[slug]}）｜トレカカレンダー',
+            desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}今後の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
             keywords=names+[f'{short} 新弾',f'{short} 発売日']+COMMON_KW,
             h1=f'{name} 新弾 発売日カレンダー' if short in name else f'{name}（{short}）新弾 発売日カレンダー',
             lead=lead,
@@ -169,7 +175,7 @@ def page_def():
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
                   f'カレンダーでは{esc(short)}の発売予定だけを表示しています。タイトルの絞り込み（スマホでは「絞り込み」ボタンの中）で「すべて」を選ぶと、ほかのTCGの新弾もまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。']),
-            ld_items=lst))
+            ld_items=lst,lastmod=lastmod(its)))
     for ym in months:
         its=[d for d in data if d['date'].startswith(ym)]
         cnt=__import__('collections').Counter(d['game'] for d in its)
@@ -177,7 +183,7 @@ def page_def():
         main_links='・'.join(f'<a href="/{SLUG[g]}/">{esc(g)}</a>' if g in SLUG else esc(g) for g,_ in cnt.most_common(8))
         days=sorted({d['date'] for d in its})
         pages.append(dict(path=f'/{ym}/',slug=ym,og='home',
-            title=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧｜トレカカレンダー',
+            title=f'{mlabel(ym)}発売のTCG・トレカ新弾一覧｜トレカカレンダー',
             desc=f'{mlabel(ym)}発売のTCG・トレカ新弾{len(its)}件（{top}ほか）の発売日と価格を一覧でチェック。拡張パック・スターターデッキの発売スケジュールをカレンダーで確認できます。',
             keywords=[f'{mlabel(ym)} 新弾',f'{int(ym[5:])}月 トレカ 発売',f'{int(ym[5:])}月 TCG 新弾']+COMMON_KW,
             h1=f'{mlabel(ym)} TCG・トレカ新弾 発売日一覧',
@@ -187,7 +193,7 @@ def page_def():
                 +about_block(f'{mlabel(ym)}のTCG新弾について',[
                   f'{mlabel(ym)}は{len(cnt)}タイトル・{len(its)}件の新弾・新商品が発売予定です（{fmt(days[0])}〜{fmt(days[-1])}）。発売件数が多いのは {main_links} です。',
                   'タイトルで絞り込むと、推しのTCGの発売日だけを確認できます。お気に入り登録した商品は、まとめて Google カレンダーやスマホのカレンダーに追加できます。']),
-            ld_items=its))
+            ld_items=its,lastmod=lastmod(its)))
     return pages
 
 ICO=lambda d:f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg>'
@@ -807,6 +813,8 @@ _cnt=__import__('collections').Counter(d['game'] for d in data)
 # same colours as the calendar (HUE in src/template.html; ties there sort by localeCompare('ja'), here by code point)
 HUE={g:round((i*137.508+230)%360) for i,g in enumerate(sorted(_cnt,key=lambda g:(-_cnt[g],g)))}
 ITEM_NEAR=3
+TITLE_MAX=60
+def norm_kw(t): return re.sub(r'[\s・･:：]','',unicodedata.normalize('NFKC',t)).lower()
 def item_code(d):
     """Official product code: the official source key when it is a code, else a code in the name."""
     src=RAW[d['id']].get('source') or {}
@@ -827,8 +835,15 @@ def item_page(d,by_game):
     crumbs=[('トップ','/'),('新弾カレンダー','/releases/')]+([(f'{short} 新弾',f'/{slug}/')] if slug else [])+[(d['name'],None)]
     lst=by_game[g]; k=lst.index(d)
     near=lst[max(0,k-ITEM_NEAR):k+ITEM_NEAR+1]
+    # the title names the game unless the product name already does (「グローリー・エコー」 alone could be any TCG);
+    # past ~60 characters the game, then the brand go first, so the product name and 発売日 stay visible in results
+    nn=norm_kw(d['name'])
+    tag='' if any(norm_kw(x) in nn for x in [g,short,*ALIAS.get(slug,[])]) else f'（{short}）'
+    head=f'{d["name"]}{"" if not code or in_name else f"【{code}】"}'
+    cands=[f'{head}{tag} 発売日・価格｜トレカカレンダー',f'{head} 発売日・価格｜トレカカレンダー',f'{head} 発売日・価格']
+    title=next((t for t in cands if len(t)<=TITLE_MAX),cands[-1])
     return dict(path=f'/item/{d["id"]}/',d=d,code=code,short=short,slug=slug,near=near,crumbs=crumbs,
-        title=f'{d["name"]}{"" if not code or in_name else f"【{code}】"} 発売日・価格｜トレカカレンダー',desc=desc,
+        title=title,desc=desc,
         keywords=[x for x in (code and f'{code} 発売日',f'{short} 新弾',f'{short} 発売日') if x]+['発売日','価格','トレカ','TCG'])
 def item_body(pg):
     d=pg['d']; g=d['game']; ym=d['date'][:7]
@@ -948,9 +963,9 @@ if FEEDBACK_ENABLED:
     open(os.path.join(dist,'feedback/index.html'),'w').write(render_feedback())
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
-for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
-# item pages carry no change date of their own yet: like the calendar pages they are dated by the last data update
-for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
+# calendar pages: the newest change among their items; item pages: their own (contracts/releases.md › changed)
+for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{pg["lastmod"]}</lastmod></url>')
+for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{CHANGED[pg["d"]["id"]]}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
 if VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
 for x in VOICES_DAYS: sm.append(f'<url><loc>{SITE}{vday_path(x["date"])}</loc><lastmod>{x["date"]}</lastmod></url>')

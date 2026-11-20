@@ -22,6 +22,18 @@ def norm(name):
     return re.sub(r'\s+', '', unicodedata.normalize('NFKC', name)).lower()
 
 
+SHOWN = ('date', 'game', 'name', 'pack', 'box', 'per_box', 'per_pack', 'url', 'thumb', 'approx')  # = update_data.SHOWN
+
+
+def yen(t):
+    m = re.search(r'(\d[\d,]*)\s*円', t or '')
+    return int(m[1].replace(',', '')) if m else None
+
+
+def shown(x):
+    return tuple(yen(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN)
+
+
 def git_json(ref, path):
     out = subprocess.run(['git', '-C', ROOT, 'show', f'{ref}:{path}'], capture_output=True, text=True)
     if out.returncode:
@@ -77,6 +89,22 @@ def check_data(base, today):
     for k in set(a) & set(b):
         d = {f: (a[k].get(f), b[k].get(f)) for f in ('date', 'name', 'pack', 'box') if a[k].get(f) != b[k].get(f)}
         if d: changed.append((b[k], d))
+
+    # `changed` (contracts/releases.md): a date no later than the data update; a merge run moves it for every new item
+    # and every item whose shown fields changed
+    meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
+    old_meta = git_json(base, 'data/meta.json')
+    stale = []
+    for i in head:
+        c = i.get('changed')
+        if c is not None and not (isinstance(c, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', c) and c <= meta['updated']):
+            fail(f'data: {i["id"]} changed {c!r} is not a date on or before meta.updated {meta["updated"]}')
+        if (i['id'] not in a or shown(a[i['id']]) != shown(i)) and i.get('changed', meta['updated']) != meta['updated']:
+            stale.append(i)
+    for i in stale:
+        msg = f'data: {i["id"]} {i["name"]} is new or changed but its changed date is {i.get("changed")}'
+        if meta['updated'] != old_meta['updated']: fail(msg + f' (merge ran on {meta["updated"]})')
+        else: warn(msg + ' (items.json edited without a merge run: its sitemap lastmod stays old)')
 
     print(f'## data vs {base}: {len(old)} -> {len(head)} items, +{len(added)} / -{len(removed)} / ~{len(changed)}')
     for i in sorted(added, key=lambda x: x['date']):
@@ -382,7 +410,7 @@ def check_items(head, ov):
         if len(h1) != 1 or html.unescape(re.sub(r'<[^>]+>', '', h1[0])) != it['name']:
             fail(f'{p}: h1 {h1} != {it["name"]!r}')
         title = html.unescape(re.search(r'<title>(.*?)</title>', src)[1])
-        if it['name'] not in title or not title.endswith('発売日・価格｜トレカカレンダー'): fail(f'{p}: title {title!r}')
+        if it['name'] not in title or not re.search(r' 発売日・価格(｜トレカカレンダー)?$', title): fail(f'{p}: title {title!r}')
         titles.setdefault(title, []).append(k)
         if not re.search(r'<meta name="description" content="[^"]{20,}">', src): fail(f'{p}: meta description missing')
         if f'<time datetime="{it["date"]}">' not in src: fail(f'{p}: release date {it["date"]} not shown')
@@ -414,6 +442,47 @@ def check_items(head, ov):
     print(f'  /item/       pages={len(built)} visible={len(visible)} cross-links={n_links}')
 
 
+def check_index(sitemap, today):
+    """Search basics over every built page: the sitemap lists exactly the indexable pages (no noindex), each
+    self-canonical with a trailing slash and og:url = canonical; <title>s unique (FAIL) and at most 60 characters (WARN);
+    descriptions unique (WARN); robots.txt allows crawling and names the sitemap."""
+    locs = re.findall(r'<loc>(.*?)</loc>', sitemap)
+    if len(locs) != len(set(locs)): fail('sitemap: duplicate <loc>')
+    titles, descs, long_items, indexable = collections.defaultdict(list), collections.defaultdict(list), [], set()
+    for f in sorted(glob.glob(os.path.join(DIST, '**/index.html'), recursive=True)):
+        rel = os.path.relpath(os.path.dirname(f), DIST)
+        p = '/' if rel == '.' else f'/{rel}/'
+        src = open(f).read()
+        noindex = bool(re.search(r'<meta name="robots"[^>]*noindex', src))
+        canon = re.search(r'<link rel="canonical" href="([^"]+)"', src)
+        if not noindex:
+            indexable.add(SITE + p)
+            if not canon or canon[1] != SITE + p: fail(f'{p}: canonical {canon and canon[1]} != {SITE + p}')
+            ogu = re.search(r'<meta property="og:url" content="([^"]+)"', src)
+            if ogu and canon and ogu[1] != canon[1]: fail(f'{p}: og:url {ogu[1]} != canonical')
+        t = re.search(r'<title>(.*?)</title>', src)
+        if not t: fail(f'{p}: no <title>'); continue
+        title = html.unescape(t[1])
+        titles[title].append(p)
+        if len(title) > 60:
+            if p.startswith('/item/'): long_items.append((len(title), p))
+            else: warn(f'{p}: <title> is {len(title)} characters (over 60): {title}')
+        d = re.search(r'<meta name="description" content="([^"]*)"', src)
+        if d and not noindex: descs[d[1]].append(p)
+    for t, ps in titles.items():
+        if len(ps) > 1: fail(f'<title> {t!r} shared by {ps[:4]}')
+    for d, ps in descs.items():
+        if len(ps) > 1: warn(f'meta description shared by {ps[:4]}')
+    if long_items:
+        warn(f'/item/: {len(long_items)} <title>s over 60 characters even without the game / brand (product names), longest {max(long_items)[0]}: {max(long_items)[1]}')
+    if set(locs) != indexable:
+        for x in sorted(indexable - set(locs)): fail(f'sitemap: indexable page {x} missing')
+        for x in sorted(set(locs) - indexable): fail(f'sitemap: {x} is not an indexable built page')
+    robots = open(os.path.join(DIST, 'robots.txt')).read()
+    if f'Sitemap: {SITE}/sitemap.xml' not in robots or re.search(r'^Disallow:\s*/\s*$', robots, re.M): fail(f'robots.txt: {robots!r}')
+    print(f'  index        sitemap={len(locs)} indexable={len(indexable)} titles={len(titles)} long item titles={len(long_items)}')
+
+
 def check_dist(today, head, ov):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
@@ -433,6 +502,16 @@ def check_dist(today, head, ov):
     paths = ['/'] + paths
     for p in paths:
         if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
+    # lastmod: item pages their item's `changed` (meta.updated until the updater stamps one), calendar pages the newest
+    # of their items', / meta.updated
+    vis = [{**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date',)}} for i in head if not ov.get(i['id'], {}).get('hide')]
+    ch = lambda xs: max((x.get('changed') or meta['updated'] for x in xs), default=meta['updated'])
+    want_lastmod = {f'{SITE}/item/{i["id"]}/': i.get('changed') or meta['updated'] for i in vis}
+    for pg in pages:
+        js = pg.get('js') or {}
+        sel = [i for i in vis if (js.get('game') in (None, i['game'])) and i['date'].startswith(js.get('month', ''))]
+        if pg['path'] != '/events/': want_lastmod[SITE + pg['path']] = ch(sel)
+    check_index(sitemap, today)
     for loc, lm in re.findall(r'<loc>(.*?)</loc><lastmod>(.*?)</lastmod>', sitemap):
         if loc == SITE + '/privacy/':  # dated by the policy's effective date in build.py, not by the data
             if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', lm) or lm > today: fail(f'sitemap: /privacy/ lastmod {lm}')
@@ -441,7 +520,9 @@ def check_dist(today, head, ov):
             if lm != max(real, default=None): fail(f'sitemap: /voices/ lastmod {lm} != newest snapshot {max(real, default=None)}')
         elif re.fullmatch(re.escape(SITE) + r'/voices/\d{4}-\d{2}-\d{2}/', loc):  # archive pages: checked in check_voice_days
             pass
-        elif lm != meta['updated']: fail(f'sitemap: {loc} lastmod {lm} != meta.updated {meta["updated"]}')
+        elif lm != want_lastmod.get(loc, meta['updated']):
+            fail(f'sitemap: {loc} lastmod {lm} != {want_lastmod.get(loc, meta["updated"])} ({"newest changed of its items" if loc in want_lastmod else "meta.updated"})')
+        if lm > today: fail(f'sitemap: {loc} lastmod {lm} is after {today}')
 
     # /feedback/ exists only with FEEDBACK_ENABLED=1: then noindex, out of the sitemap and linked from every footer;
     # otherwise nothing may link to it.
