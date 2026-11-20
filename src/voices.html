@@ -11,7 +11,7 @@
 :root{--pos:#1d7f4c;--mix:#94580a;--neg:var(--sun);--neu:var(--faint)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--pos:#5fd39a;--mix:#f0b44c}}
 :root[data-theme="dark"]{--pos:#5fd39a;--mix:#f0b44c}
-.a-positive{--a:var(--pos)} .a-negative{--a:var(--neg)} .a-mixed{--a:var(--mix)} .a-neutral{--a:var(--neu)}
+.a-positive{--a:var(--pos)} .a-negative{--a:var(--neg)} .a-mixed{--a:var(--mix)} .a-neutral{--a:var(--muted)}
 .chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .chip.k[aria-pressed="true"] .am{color:inherit}
 .filters{flex-wrap:wrap}
@@ -35,10 +35,11 @@
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .am{font-style:normal;font-weight:700;color:var(--a)}
 /* games with a fixed light/dark colour pair (GAMES: c/cd, set inline as --gl/--gd) get --g (marks), --gt (text) and
-   --gtint (tints) per theme; the rest fall back to their release-calendar hue (--h) */
-[style*="--gl"]{--g:var(--gl);--gt:color-mix(in oklab,var(--gl) 80%,#000);--gtint:color-mix(in oklab,var(--gl) 12%,var(--surface))}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) [style*="--gl"]{--g:var(--gd);--gt:var(--gd);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}}
-:root[data-theme="dark"] [style*="--gl"]{--g:var(--gd);--gt:var(--gd);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}
+   --gtint (tints) per theme. --gt is mixed towards black / white so game-coloured text keeps >=4.5:1 on the tints
+   and cards in both themes for every pair in GAMES and every release-title hue. */
+[style*="--gl"]{--g:var(--gl);--gt:color-mix(in oklab,var(--gl) 65%,#000);--gtint:color-mix(in oklab,var(--gl) 12%,var(--surface))}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}}
+:root[data-theme="dark"] [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff);--gtint:color-mix(in oklab,var(--gd) 20%,var(--surface))}
 .chip i,.tag i{background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
 .chip[aria-pressed="true"]{border-color:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)))}
 
@@ -86,6 +87,7 @@
 .ai{margin-left:auto;font-size:10.5px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:0 7px;white-space:nowrap}
 .tc h3{margin:0;font-size:15px;line-height:1.45;overflow-wrap:anywhere}
 .tc .sum{margin:0;font-size:13px;line-height:1.7}
+.atth{grid-column:1/-1;font-size:11.5px;font-weight:700;color:var(--muted)}
 .att{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:4px 10px;font-size:12px}
 .att .attl{font-weight:700;color:var(--a);white-space:nowrap}
 .abar{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--line);min-width:40px}
@@ -97,13 +99,14 @@
 .alg{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;color:var(--muted)}
 .alg span{display:inline-flex;align-items:center;gap:4px}
 .alg i{width:8px;height:8px;border-radius:2px;background:var(--a)}
+.vlab{margin:0;font-size:11.5px;font-weight:700;color:var(--muted)}
 .voices{list-style:none;margin:0;padding:0;display:grid;gap:4px}
 .voices li{font-size:12.5px;line-height:1.6;background:var(--surface);border-radius:8px;padding:4px 10px}
 .tc-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;font-size:12px}
 .tc-links .lab{color:var(--muted);font-weight:700}
 .tc-links a{font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface);white-space:nowrap}
 .tc-links a:hover{border-color:var(--accent)}
-.tc-win{margin:0;font-size:11px;color:var(--faint)}
+.tc-win{margin:0;font-size:11px;color:var(--muted)}
 
 /* list view: snapshots, newest first */
 #list{margin-top:8px;display:flex;flex-direction:column;gap:12px}
@@ -201,7 +204,8 @@ const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
 // release titles: the same golden-angle hues as /releases/ (titles ordered by release count)
 const relTitles = Object.keys(V.counts).sort((a,b)=>V.counts[b]-V.counts[a]||a.localeCompare(b,'ja'));
 const HUE = {}; relTitles.forEach((g,i)=>HUE[g]=Math.round((i*137.508+230)%360));
-const gvars = c => { const g=GAME[c]; return g&&g.c ? `--gl:${g.c};--gd:${g.cd}` : `--h:${g&&HUE[g.rel]!=null?HUE[g.rel]:220}`; };
+// titles without a pair get one from their hue, at the release calendar's chip lightness per theme
+const gvars = c => { const g=GAME[c], h=g&&HUE[g.rel]!=null?HUE[g.rel]:220; return g&&g.c ? `--gl:${g.c};--gd:${g.cd}` : `--gl:hsl(${h} 62% 46%);--gd:hsl(${h} 60% 68%)`; };
 const ATT = {positive:{l:'好意的',m:'＋'}, negative:{l:'否定的',m:'－'}, mixed:{l:'賛否両論',m:'±'}, neutral:{l:'中立',m:'・'}};
 const ATTS = Object.keys(ATT);
 const VOL = {high:'多', mid:'中', low:'少'}, VOLW = {high:3, mid:2, low:1};
@@ -215,6 +219,7 @@ const $ = id => document.getElementById(id);
 // Japan dates as YYYY-MM-DD strings
 const TODAY = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const addD = (s,n) => { const d=new Date(s+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+const realDay = s => { const d=/^\d{4}-\d{2}-\d{2}$/.test(s)&&new Date(s+'T00:00:00Z'); return !!d&&!isNaN(d)&&d.toISOString().slice(0,10)===s; };
 const dowOf = s => new Date(s+'T00:00:00Z').getUTCDay();
 const diffD = (a,b) => Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/864e5);
 const md = s => { const [,m,d]=s.split('-').map(Number); return `${m}/${d}(${DOW[dowOf(s)]})`; };
@@ -367,21 +372,25 @@ function badge(v){
   if(st==='cooling') return '<span class="badge cool">📉 落ち着き</span>';
   return '<span class="badge new">🆕 新</span>';
 }
+// share is a rough estimate from the posts we read: shown as proportions, never as counts
+const approx = (v,tot) => { const p=v/tot*100; return p<5?'わずか':`約${Math.round(p/10)*10}%`; };
 function attBlock(t){
   const s=t.share, tot=s.positive+s.negative+s.neutral, a=ATT[t.attitude];
   const seg=(k,c)=>s[k]?`<span class="${c}" style="flex:${s[k]}"></span>`:'';
-  const lab=`好意的 ${s.positive}・否定的 ${s.negative}・中立 ${s.neutral}`;
-  return `<div class="att a-${t.attitude}"><span class="attl"><span aria-hidden="true">${a.m} </span>${a.l}</span>`
-    + `<span class="abar" role="img" aria-label="反応の内訳 ${lab}（${tot}件中）">${seg('positive','p')}${seg('negative','n')}${seg('neutral','u')}</span>`
+  const parts=[['positive','好意的'],['negative','否定的'],['neutral','中立']].filter(([k])=>s[k]);
+  const lab=parts.map(([k,l])=>`${l} ${approx(s[k],tot)}`).join('・');
+  return `<div class="att a-${t.attitude}"><span class="atth">反応の傾向（推定）</span><span class="attl"><span aria-hidden="true">${a.m} </span>${a.l}</span>`
+    + `<span class="abar" role="img" aria-label="反応の傾向（推定） ${lab}">${seg('positive','p')}${seg('negative','n')}${seg('neutral','u')}</span>`
     + `<span class="vol">話題量 <b>${VOL[t.volume]}</b></span>`
-    + `<span class="alg" aria-hidden="true"><span class="a-positive"><i></i>好意的 ${s.positive}</span><span class="a-negative"><i></i>否定的 ${s.negative}</span><span class="a-neutral"><i></i>中立 ${s.neutral}</span></span></div>`;
+    + `<span class="alg" aria-hidden="true">${parts.map(([k,l])=>`<span class="a-${k}"><i></i>${l} ${approx(s[k],tot)}</span>`).join('')}</span></div>`;
 }
 const ext = '<span class="sr">（外部サイト・X）</span>';
 function card(v, hx='h3'){
   const t=v.t, g=GAME[t.game];
-  const voices=t.voices.length?`<ul class="voices" aria-label="おもな意見（要約）">${t.voices.map(x=>`<li><span aria-hidden="true">💬 </span>${esc(x)}</li>`).join('')}</ul>`:'';
+  // the voices paraphrase the topic as a whole: they are not matched to the posts below, which are listed apart
+  const voices=t.voices.length?`<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">${t.voices.map(x=>`<li><span aria-hidden="true">💬 </span>${esc(x)}</li>`).join('')}</ul>`:'';
   const links=(t.reacting_to?`<a href="${esc(t.reacting_to)}" target="_blank" rel="noopener noreferrer" data-x="reacting">反応元の公式投稿 ↗${ext}</a>`:'')
-    + `<span class="lab">Xで見る</span>` + t.posts.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-x="post" aria-label="Xで投稿${i+1}を見る（外部サイト）">投稿${i+1} ↗</a>`).join('');
+    + `<span class="lab">関連する投稿 ↗</span>` + t.posts.map((u,i)=>`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-x="post" aria-label="関連する投稿${i+1}をXで見る（外部サイト）">${i+1}</a>`).join('');
   return `<article class="tc" style="${gvars(t.game)}" data-topic="${esc(t.id)}">
     <div class="tc-top"><span class="tag"><i></i>${esc(g.name)}</span>${badge(v)}<span class="ai">AIによる要約</span></div>
     <${hx}>${esc(t.title)}</${hx}>
@@ -515,7 +524,7 @@ render();
 const deep=/^#(d|t)=([\w-]+)$/.exec(location.hash);
 if(deep){
   history.replaceState(null,'',location.pathname+location.search);
-  if(deep[1]==='d' && /^\d{4}-\d{2}-\d{2}$/.test(deep[2])){
+  if(deep[1]==='d' && realDay(deep[2])){
     const ym=monthOf(deep[2]), [lo,hi]=bounds();
     if(state.view==='cal' && ym>=lo && ym<=hi && ym!==state.month) commit({month:ym},{auto:true});
     openDay(deep[2]);

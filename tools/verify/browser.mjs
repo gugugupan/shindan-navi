@@ -524,6 +524,11 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (JSON.stringify(li.heads) !== JSON.stringify(li.want) || li.cards !== li.n) fail(where, `list ${JSON.stringify(li)}`);
     if (li.overflow > 1) fail(where, `list scrolls horizontally by ${li.overflow}px`);
     await page.screenshot({ path: path.join(OUT, `${vp}-voices-list.png`), fullPage: true });
+    // deep links: a real day opens its dialog, an impossible date is ignored
+    for (const [i, [h, open]] of [[`#d=${d0}`, true], ['#d=2026-02-31', false], ['#d=2026-13-01', false]].entries()) {
+      await page.goto(`${BASE}/voices/?view=list&r=${i}${h}`, { waitUntil: 'networkidle' });
+      if (await page.locator('#vDlg').evaluate(d => d.open) !== open) fail(where, `deep link ${h}: dialog ${open ? 'not opened' : 'opened'}`);
+    }
     if (api.length) fail(where, `API requests from a static page: ${api.join(' ')}`);
   } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
   for (const b of [...new Set(bad)]) fail(where, b);
