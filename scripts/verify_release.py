@@ -213,6 +213,14 @@ def check_voices():
     pp = PageParser(); pp.feed(src)
     if pp.canonical != SITE + '/voices/': fail(f'/voices/: canonical {pp.canonical}')
     if len(re.findall(r'<h1[ >]', src)) != 1: fail('/voices/: expected one h1')
+    og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
+    ogf = og and os.path.join(DIST, og[1].replace(SITE + '/', '', 1))
+    if not og or og[1] != SITE + '/og/voices.png' or not os.path.exists(ogf): fail(f'/voices/: og:image {og and og[1]} missing')
+    elif open(ogf, 'rb').read(24)[16:24] != (1200).to_bytes(4, 'big') + (630).to_bytes(4, 'big'): fail('/voices/: og image is not 1200x630')
+    # topic text lives only in the embedded data (rendered by the page), never in the static HTML
+    static = src.replace(m[0], '') if m else src
+    leaked = [t['title'] for x in v['snapshots'] for t in x['topics'] if html.escape(t['title']) in static or t['title'] in static] if m else []
+    if leaked: fail(f'/voices/: topic text in the static HTML: {leaked[:2]}')
     if not re.search(r'<nav class="tooltabs"[^>]*>(?:(?!</nav>).)*<a href="/voices/"[^>]*aria-current="true"', src, re.S):
         fail('/voices/: its tool tab is not current')
     for x in pages:

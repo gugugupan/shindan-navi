@@ -578,7 +578,7 @@ def voices_data():
 VOICES=voices_data() if VOICES_ENABLED else []
 # sample-only data stays out of search: noindex and no sitemap entry until a real snapshot exists
 VOICES_INDEX=bool(VOICES) and not any(x['sample'] for x in VOICES)
-VOICES_PAGE=dict(path='/voices/',og='home',
+VOICES_PAGE=dict(path='/voices/',og='voices',
     desc='ポケカ・ワンピ・ユニアリなどTCGのタイトルごとに、X（旧Twitter）のプレイヤーのあいだで話題になっていることをAIが要約。好意的・否定的な反応の割合や代表的な意見をカレンダーで振り返れます。')
 def render_voices():
     src=re.sub(r'\A<!--.*?-->\n','',VOICES_SRC,count=1,flags=re.S)
@@ -623,6 +623,7 @@ def render_voices():
 <meta property="og:image" content="{og}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TCG 話題カレンダー｜トレカカレンダー">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{esc(title)}">
 <meta name="twitter:description" content="{esc(pg['desc'])}">

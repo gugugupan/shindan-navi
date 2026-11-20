@@ -29,7 +29,7 @@ data/voices/<YYYY-MM-DD>.json   one snapshot (voices.schema.json); the name is i
 | `title` | Short label (≤ 40 chars), our words. |
 | `summary` | 1-2 sentences in our own words (≤ 160 chars). |
 | `attitude` | `positive` / `negative` / `mixed` / `neutral`: the overall tone. |
-| `share` | `{positive, negative, neutral}` post counts behind the topic (relative weights are fine); the page draws them as a bar. |
+| `share` | `{positive, negative, neutral}` post counts behind the topic (counts, not weights); the page draws them as a bar. |
 | `volume` | `high` / `mid` / `low` (多 / 中 / 少): how much the topic is talked about, relative to the game's usual volume. |
 | `voices` | 2-3 short paraphrased opinions (≤ 80 chars each), **never verbatim post text**. May be empty (the sample's UNION ARENA topics have none). |
 | `reacting_to` | URL of the official post the topic reacts to, or `null`. |
@@ -65,6 +65,9 @@ refuses unknown ones. Add a code there (and here) before writing topics for a ne
   from `first_seen` to the snapshot date, inclusive; 📉 落ち着き = `cooling`.
 - Days before the earliest `window.from` / `first_seen` and after the latest snapshot are dimmed (話題データは M/D から).
 - `share` is shown as 約N% in 10% steps, rounded by largest remainder so a card's labels add up to 100%.
+- Small sample: when `positive + negative + neutral` < 5 (there is no author count in the data, so posts stand in for
+  it), the card shows no bar and no percentages, only a tendency phrase from `attitude` (好意的な声が多い / 否定的な声が多い /
+  賛否が分かれている / 目立った賛否はない) and 投稿が少ないため、割合は出していません.
 - An open day / topic dialog is in the URL hash (`#d=YYYY-MM-DD` / `#t=<id>`, replaced, not a new history entry; cleared
   on close); each card has リンクをコピー (`/voices/#t=<id>`).
 - The list view shows every snapshot, newest first, with its topics.

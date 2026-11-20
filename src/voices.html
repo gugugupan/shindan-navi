@@ -107,6 +107,7 @@
 .abar span+span{border-left:2px solid var(--surface-2)}
 .abar .p{background:var(--pos)} .abar .n{background:var(--neg)} .abar .u{background:var(--neu)}
 .att .vol{color:var(--muted);white-space:nowrap}
+.att .trend{font-weight:700;min-width:0}
 .att .vol b{color:var(--ink)}
 .alg{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;color:var(--muted)}
 .alg span{display:inline-flex;align-items:center;gap:4px}
@@ -417,8 +418,15 @@ function tenths(s, ks){
   return Object.fromEntries(ks.map((k,i)=>[k,fl[i]*10]));
 }
 const approx = p => p ? `約${p}%` : 'わずか';
+// fewer than SMALL posts behind a topic (share total, contracts/voices.md): a tendency phrase only, no bar or percentages
+const SMALL = 5;
+const TREND = {positive:'好意的な声が多い', negative:'否定的な声が多い', mixed:'賛否が分かれている', neutral:'目立った賛否はない'};
+const isSmall = t => t.share.positive+t.share.negative+t.share.neutral < SMALL;
 function attBlock(t){
   const s=t.share, a=ATT[t.attitude];
+  if(isSmall(t)) return `<div class="att a-${t.attitude}" data-small><span class="atth">反応の傾向（推定）</span><span class="attl"><span aria-hidden="true">${a.m} </span>${a.l}</span>`
+    + `<span class="trend">${TREND[t.attitude]}</span><span class="vol">話題量 <b>${VOL[t.volume]}</b></span>`
+    + `<span class="alg">投稿が少ないため、割合は出していません</span></div>`;
   const seg=(k,c)=>s[k]?`<span class="${c}" style="flex:${s[k]}"></span>`:'';
   const parts=[['positive','好意的'],['negative','否定的'],['neutral','中立']].filter(([k])=>s[k]);
   const pc=tenths(s,parts.map(([k])=>k));

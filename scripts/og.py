@@ -1,9 +1,11 @@
-"""Render 1200x630 OGP images into public/og/ with headless Chrome. Run after build.py (needs scripts/.pages.json)."""
+"""Render 1200x630 OGP images into public/og/ with headless Chrome. Run after build.py (needs scripts/.pages.json).
+python3 -I scripts/og.py [name ...]   (names = public/og/<name>.png to render; default all)"""
 import html
 import re
 import json
 import os
 import subprocess
+import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -77,7 +79,12 @@ h1 em{{font-style:normal;color:#3a43d0}}
 </body></html>"""
 
 
+ONLY = set(sys.argv[1:])
+
+
 def render(name, doc):
+    if ONLY and name not in ONLY:
+        return
     with tempfile.NamedTemporaryFile('w', suffix='.html', delete=False, dir=out_dir) as f:
         f.write(doc)
         tmp = f.name
@@ -90,6 +97,10 @@ def render(name, doc):
         os.remove(tmp)
     print('og', name, os.path.getsize(out) // 1024, 'KB')
 
+
+# /voices/ (built only with VOICES_ENABLED=1, so not in .pages.json): no topic text in the image, it would go stale
+thumbs = [t[0] for t in (thumbs_for(g) for g in ('ヴァイスシュヴァルツ', 'デュエル・マスターズ', 'ポケモンカード')) if t]
+render('voices', card_html('voices', 'TCG<em>話題</em>\nカレンダー', 'X のプレイヤーの反応をタイトルごとに', thumbs))
 
 done = set()
 for p in pages:

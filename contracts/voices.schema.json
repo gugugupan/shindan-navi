@@ -38,7 +38,7 @@
             "negative": { "type": "integer", "minimum": 0 },
             "neutral": { "type": "integer", "minimum": 0 }
           },
-          "description": "Counts (or relative weights) of the posts behind the topic; at least one is > 0."
+          "description": "Counts of the posts behind the topic (not weights: a total below 5 is shown as a small sample); at least one is > 0."
         },
         "volume": { "enum": ["high", "mid", "low"] },
         "voices": {

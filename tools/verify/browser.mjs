@@ -570,8 +570,15 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (JSON.stringify(li.heads) !== JSON.stringify(li.want) || li.cards !== li.n) fail(where, `list ${JSON.stringify(li)}`);
     if (li.overflow > 1) fail(where, `list scrolls horizontally by ${li.overflow}px`);
     // shares in 10% steps adding up to 100% on every card; 🆕 only once an older snapshot exists
-    const sh = await page.evaluate(() => [...document.querySelectorAll('#list .tc .alg')].map(a => [...a.children].reduce((t, x) => t + (+(/約(\d+)%/.exec(x.textContent) || [0, 0])[1]), 0)));
+    // (cards on fewer than 5 posts: no bar, no percentages, a tendency phrase)
+    const sh = await page.evaluate(() => [...document.querySelectorAll('#list .tc .att:not([data-small]) .alg')].map(a => [...a.children].reduce((t, x) => t + (+(/約(\d+)%/.exec(x.textContent) || [0, 0])[1]), 0)));
     if (sh.some(n => n !== 100)) fail(where, `share labels add up to ${[...new Set(sh.filter(n => n !== 100))].join('/')}%`);
+    const sm = await page.evaluate(() => [...document.querySelectorAll('#list .vsnap')].flatMap(sec => {
+      const snap = V.snapshots.find(x => x.date === sec.getAttribute('aria-labelledby').slice(2));
+      return [...sec.querySelectorAll('.tc')].map(tc => { const t = snap.topics.find(x => x.id === tc.dataset.topic), n = t.share.positive + t.share.negative + t.share.neutral;
+        const small = !!tc.querySelector('.att[data-small]'), pct = /\d+%/.test(tc.querySelector('.att').textContent) || !!tc.querySelector('.abar');
+        return (n < 5) !== small || (small && pct) ? `${t.id} n=${n} small=${small} pct=${pct}` : ''; }).filter(Boolean); }));
+    if (sm.length) fail(where, `small-sample cards: ${sm.slice(0, 3).join(', ')}`);
     if (await page.evaluate(() => V.snapshots.length === 1 && document.querySelectorAll('.badge.new').length)) fail(where, '🆕 shown with a single snapshot');
     await page.screenshot({ path: path.join(OUT, `${vp}-voices-list.png`), fullPage: true });
     // deep links: a real day opens its dialog, an impossible date is ignored
