@@ -6,6 +6,8 @@ Exit code 1 if any FAIL. WARN lines are for the owner to review, not blockers.
 import argparse, collections, datetime, glob, hashlib, html.parser, json, os, re, subprocess, sys, unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+from sourcekey import product_code  # noqa: E402
 DIST = os.path.join(ROOT, 'dist')
 SITE = 'https://shindan-navi.app'
 ALLOWED_TYPES = {'WebSite', 'BreadcrumbList', 'ItemList', 'ListItem'}
@@ -30,8 +32,11 @@ def yen(t):
     return int(m[1].replace(',', '')) if m else None
 
 
-def shown(x):
-    return tuple(yen(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN)
+def shown(x):  # = update_data.shown (with shown_code)
+    src = x.get('source') or {}
+    k = src.get('key') or ''
+    code = k if src.get('site') == 'official' and k and product_code(k) == k else product_code(x.get('name') or '') or ''
+    return tuple(yen(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN) + (code,)
 
 
 def git_json(ref, path):

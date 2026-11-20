@@ -417,6 +417,20 @@ class Changed(MergeCase):
         with open(os.path.join(self.data, 'items.json')) as f:
             self.assertEqual({x['id']: x['changed'] for x in json.load(f)}, got)
 
+    def test_code_change_moves_changed(self):
+        coded = dict(E2, changed='2026-11-02', source=make_source('https://example.test/eb02.html', 'EB-02', 'official'))
+        self.write_data([coded], {})
+        self.write_source('cardlabo', [agg(E2['date'], OP, E2['name'], 'clabo')])
+        self.write_source('torecamap', TORECAMAP)
+        self.assertEqual(ud.shown_code(coded), 'EB-02')
+        self.assertEqual(ud.shown_code(dict(coded, source={'url': '', 'key': 'x', 'site': 'aggregator'})), '')
+        before = ud.shown(coded)
+        self.assertNotEqual(before, ud.shown(dict(coded, source=dict(coded['source'], key='EB-03'))))
+        # the source page alone is not shown: no new date
+        self.assertEqual(before, ud.shown(dict(coded, source=dict(coded['source'], url='https://example.test/other.html'))))
+        got = {x['id']: x['changed'] for x in self.run_merge('--no-official')}
+        self.assertEqual(got[E2['id']], '2026-11-02')
+
 
 class Archive(MergeCase):
     def test_aged_out_items_are_archived(self):

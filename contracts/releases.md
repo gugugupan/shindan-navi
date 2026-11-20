@@ -138,7 +138,9 @@ newest of their items'. Written by `stamp_changed()` just before `items.json` (n
 unaffected):
 
 - TODAY when the item is new or any shown field (`SHOWN`: date, game, name, pack, box, per_box, per_pack, url, thumb,
-  approx, after overrides; prices compared by yen amount) differs from the run's starting `items.json`; else kept.
+  approx, after overrides; prices compared by yen amount) or the product code the page shows (`shown_code`: the
+  official `source.key` when it is a code, else a code in the name, as `item_code` in build.py) differs from the run's
+  starting `items.json`; else kept. `source.url`, `sources` and `official_name` are not shown and move no date.
 - Backfill, no invented dates: an item without `changed` (written before the field existed) takes the previous
   `meta.json` `updated`, the date the sitemap already gave it; the build uses `meta.json` `updated` until then.
 - An override committed without a merge rerun moves no date (verify WARNs); the next run stamps the change.

@@ -47,7 +47,8 @@ KEEP_PAST_DAYS = 30
 # items-archive.json keeps a released item's /item/<id>/ page this long after its release date
 KEEP_ARCHIVE_DAYS = 730
 MIN_RATIO = 0.7
-# fields the pages show (scripts/build.py `keep`); a change to any of them moves the item's `changed` date
+# fields the pages show (scripts/build.py `keep`); a change to any of them, or to the product code the page shows
+# (shown_code), moves the item's `changed` date
 SHOWN = ('date', 'game', 'name', 'pack', 'box', 'per_box', 'per_pack', 'url', 'thumb', 'approx')
 # what items-archive.json keeps of an item (contracts/releases.md › Archive)
 ARCHIVE_KEYS = ('id', 'date', 'game', 'name', 'pack', 'box', 'per_box', 'per_pack', 'url', 'thumb', 'approx', 'source', 'changed')
@@ -234,9 +235,19 @@ def merge(existing, scraped, overrides, today, report, dry, checked=frozenset())
     return out
 
 
+def shown_code(x):
+    """The product code the item page shows (build.py item_code): the official source key when it is a code, else a
+    code in the name."""
+    src = x.get('source') or {}
+    k = src.get('key') or ''
+    if src.get('site') == 'official' and k and product_code(k) == k:
+        return k
+    return product_code(x.get('name') or '') or ''
+
+
 def shown(x):
     """What the item's pages show; prices by yen amount, so a change in writing only (6688円 / 6,688円) is no change."""
-    return tuple(yen_int(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN)
+    return tuple(yen_int(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN) + (shown_code(x),)
 
 
 def stamp_changed(items, existing, today, prev_updated):
