@@ -26,7 +26,7 @@ template, the game in the path, and switching to another game only loads that ga
 - Releases and topics are static (embedded in the page and in `/<slug>/data.json`). Events come from the existing
   `/api/v1/events/days` and `/events` endpoints, with no new parameter. The month cells use the **unfiltered**
   `/days` key that `/events/` and `/` already use, so switching games within a month costs no extra request.
-  今週のイベント loads lazily (when scrolled into view / expanded), not on page load. With `BUILD_EVENTS=0` (the
+  今週のイベント loads lazily (scrolled into view with a confirmed location, or expanded), not on page load. With `BUILD_EVENTS=0` (the
   Pages build) the whole events layer is left out.
 - Switching games = fetch `/<slug>/data.json` + the new game's week list, then `history.pushState`. A direct load
   gets a full static page with its own title, canonical and JSON-LD.
@@ -250,7 +250,7 @@ no-JS visitors reach every hub.
 | Month outside the event window | Cells show no counts; a muted line 「イベント情報は M/D〜M/D」 from the `/days` response being empty and the data window in meta. |
 | Location with 0 events this month | Section shows 「東京都のポケカイベントは見つかりませんでした」 + オンライン を見る. |
 | API error | Releases and topics stay; events area shows 「イベント情報を読み込めませんでした」 + 再読み込み. |
-| 429 (`API_LIMIT`: 20 uncached requests / min per client) | Not an error: 「しばらくしてから再度お試しください」 + a retry after 60 s, as the account code pauses after a 429. |
+| 429 (`API_LIMIT`, 20 uncached requests / min per client) or 503 (`API_BREAKER`) | Not an error: reuse `/events/`' `busyText` / `errorState` busy branch (「アクセスが集中しています。N秒ほど待ってから…」, N from `Retry-After`, else 60), moved into the shared `src/evcard.html` include. |
 
 Default month: today's month; if the game has no release and no topic in it and has a release later, the next
 month with a release (title-page rule), with the same note the title pages show today. Events do not count here:
@@ -285,9 +285,9 @@ game masks); D1 may count index entries too, so the budget below doubles them.
 | Request | When | Cache key shared with | Uncached rows, 東京都 (8 games / 13 est.) |
 | --- | --- | --- | --- |
 | `/events/days?from=M-01&until=M+1-01&pref=P` (no `game`) | load, month change | `/events/` and `/` without a saved game / type filter | ≤ 636 / ≤ ~1,000 |
-| `/events?from=TODAY&until=M+1-01&game=G&pref=P&limit=50` | **lazily**: when 今週のイベント scrolls into view (IntersectionObserver) on desktop, when expanded on phones | `/events/` list and `/` with exactly this one game filtered | day lookup ≤ 636 + scan ≤ 200 + ~50 ≈ 890 / ≈ 1,250 |
+| `/events?from=TODAY&until=M+1-01&game=G&pref=P&limit=50` | **lazily**: with a saved (confirmed) location, when 今週のイベント scrolls into view (IntersectionObserver) on desktop or is expanded on phones; with only an IP-guessed location, not until the visitor confirms it or expands the section by hand | `/events/` list and `/` with exactly this one game filtered | day lookup ≤ 636 + scan ≤ 200 + ~50 ≈ 890 / ≈ 1,250 |
 | + one `/events?from=M+1-01&…` | only when the week crosses the month end and page 1 did not reach day 7 | same | ≈ 890 / ≈ 1,250 |
-| `/events?from=D&until=M+1-01&game=G&pref=P` (+ at most 1 cursor page, then 「すべて見る」 → `/events/` day view) | day dialog | `/events/` day view with this game | ≈ 890 + ~200 / ≈ 1,250 + ~200 |
+| `/events?from=D&until=M+1-01&game=G&pref=P` (+ at most 1 cursor page, then 「すべて見る」 → `/events/` day view) | day dialog | `/events/` day view with this game | ≈ 890 / ≈ 1,250 **per page**: a cursor page re-runs the day lookup (`matchingDaysSql` from the cursor day) before its scan, so page 2 costs about as much as page 1 |
 | `/events/meta` | location picker opens, freshness line | everyone | 1 |
 
 The cells take `by_game[G]` from the unfiltered `/days` answer. `game=G` would read the same day_counts rows (the
@@ -312,21 +312,26 @@ so the budget is governed by traffic and the guards below, not by key coverage.
 | --- | ---: |
 | Load (`/days`) | ≈ 2,000 |
 | 今週のイベント opened | + ≈ 2,500 |
-| Each day dialog (first page / + cursor page) | + ≈ 2,500 / + ≈ 400 |
-| Tokyo visitor: load + week + 2 days | ≈ 9,500 (median prefecture ≈ 2,000) |
+| Each day dialog page (first page, and again for the cursor page) | + ≈ 2,500 each |
+| Tokyo visitor: load + week + 2 days (first pages only) | ≈ 9,500; with both cursor pages ≈ 14,500 (median prefecture ≈ a fifth) |
 
-**Shared 5M rows/day.** The hub shares the Free-plan budget with `/events/` (worst-case day views ≈ 7,100 rows,
-api/README), `/` (2-3 requests per visit), the accounts API and import days (~43k state read + 1 per written row).
+**Shared 5M rows/day.** The hub shares the Free-plan budget with `/events/` (one location now: an uncached 東京都
+day view ≈ 1,000 rows, api/README), `/` (2-3 requests per visit), the accounts API and import days: with 13 games
+the state read is ~102k rows per import (`api/README.md` on `ev-bushi-int`) plus one lookup per written row, and
+each `--plan` run reads the same again.
 Gate for M2: read the 7-day maximum of D1 rows read in the Cloudflare dashboard (the owner or the lead with the
 owner's access); ship only if that maximum + projected hub traffic × ~3,000 rows (all-miss, mixed prefectures)
 stays under 2.5M (half the limit); re-check daily for the first week.
 
 **Guards.**
-- No events request without a location; `/geo` costs no D1. Crawlers render from outside Japan (`/geo` → null) and
-  have no saved location, so a rendered hub costs them 0 D1 rows.
+- No events request without a location; `/geo` costs no D1. Most crawlers render from outside Japan (`/geo` →
+  null) and have no saved location, so a rendered hub costs them 0 D1 rows. A crawler that does get a Japanese IP
+  guess triggers only the month `/days` request (the IP-guessed location drives `/days` alone): the week list waits
+  for a confirmed location or a manual expand, since a tall rendering viewport would fire the IntersectionObserver.
 - No static links with API-shaped parameters anywhere on a hub (section 10): crawlers never fan out over
   `/events/?game=…&pref=…`.
-- 今週のイベント is lazy; the day dialog reads at most 2 pages, then hands over to `/events/`.
+- 今週のイベント is lazy and needs a confirmed location; the day dialog reads at most 2 pages, then hands over to
+  `/events/`.
 - `API_LIMIT` (20 misses / min per client) and `API_BREAKER` (300 / min per location) stay as they are; a 429 is
   shown as 「しばらくしてから再度お試しください」 (section 5).
 - Section 10 replaces the week request with 1 row once landing pages exist. Releases-only games: 0 API requests.
@@ -368,9 +373,12 @@ would give. GA: a `page_view` with the new path.
 - **Sitemap**: every indexable hub, `lastmod` = max(newest `changed` of its items, newest real snapshot with a topic
   for the game). Item pages' crumb and "…の新弾をすべて見る" keep pointing at `/<slug>/`.
 - **Thin pages**: a hub is indexable only with ≥ 3 releases in the data or a topic in the latest real snapshot or
-  events collected for the game; otherwise `noindex,follow` and out of the sitemap. Hysteresis: the state flips only
-  after two consecutive builds on the other side of the threshold; build.py keeps the last state per hub in a small
-  committed file (`data/hub-index.json`) so a one-off dip in the data does not drop a page from the index.
+  events collected for the game; otherwise `noindex,follow` and out of the sitemap. To avoid flapping without any
+  stored state, the rule uses two thresholds and is a pure function of committed inputs (items.json, overrides,
+  voices snapshots, registry): **index** with ≥ 3 releases, a topic in the latest real snapshot, or events
+  collected (`sources.events`); **noindex** with < 2 releases and neither of the others; **in between** (exactly 2
+  releases, nothing else) the registry decides: the 10 former title pages stay indexed, other hubs stay noindex.
+  `verify_release.py` warns for every hub in the band, so a flip is seen before it ships.
   CONAN today (1 release, events, 0 topics) passes on events; a hub with nothing but 1 release would not.
 - **Internal links**: `/events/` title chips' day lists, `/voices/` cards and archive sections, the home page's
   game columns, and item pages link the game name to its hub.
@@ -447,7 +455,7 @@ per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data >
 | M0 | Registry: `data/games.json` (13 events games, bits / sort from 0005-0006), contract, build.py / Worker / importer / page scripts read it; migration test | None but the HOCG chip name (section 2); the gate diffs dist against the previous build | `ev-bushi-int` and `voices` merged to `main` (or M0 rebased on them) |
 | M1 | Hub template for the 10 existing slugs: releases + topics (static), calendar, day dialog, sections, switcher, `data.json`, `/<code>/` redirects, gates; titles / h1 / ItemList unchanged | Title pages get the hub body (no events yet) | Owner OK on Q1; redirect check on the preview URL |
 | M2 | Events layer: location, `/days` counts, lazy 今週のイベント, day events, `src/evcard.html`; D1 budget paragraph | Event counts on the 6 event-game hubs of `main` (OPCG, UATCG, PTCG, GCG, DBFW, DCG), plus WS once its Bushi Navi data is imported | M2 D1 gate (section 6) |
-| M3 | Hubs beyond the 10: CONAN, BS, VG, SVE, HOCG, LLOCG; og images; thin-page rule with hysteresis | New URLs in the sitemap | Explicit owner answer to Q2 and the CLAUDE.md line "Only the 10 main titles get landing pages for now" updated in the same PR; Bushi Navi games imported |
+| M3 | Hubs beyond the 10: CONAN, BS, VG, SVE, HOCG, LLOCG; og images; thin-page rule (two stateless thresholds) | New URLs in the sitemap | Explicit owner answer to Q2 and the CLAUDE.md line "Only the 10 main titles get landing pages for now" updated in the same PR; Bushi Navi games imported |
 | M4 | Landing-page links both ways (static 都道府県 row); week block from the landing row | 都道府県 links to `/events/<slug>/<pref>/` | event-build (migration 0007) live |
 | M5 | Retitle hubs to 発売日・イベント・話題カレンダー (title, description, h1) | Search snippets | Owner OK; Search Console watched before and after |
 
