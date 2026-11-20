@@ -336,6 +336,10 @@ total and a link. Uncached, one prefecture: ≤ ~290 + ~103 (+ ~103) rows (Tokyo
 and online do not. `/events/meta` (1 row, same key as `/events/`) only when the location picker is opened, for its
 counts; no `/geo`. Days of the next month in its week strip link without a count.
 
+`/events/days` answer size: `by_game_type` (2026-11-20) grows it but reads no more rows (same `day_counts` search, see
+above). Measured on 大阪府 (JP-27), December 2026: 2.3 → 9.6 KB raw, 0.44 → 1.2 KB gzip. Upper bound for Tokyo (636
+day_counts rows in a month, synthetic spread over 8 games): 3.6 → 17 KB raw, 0.8 → 2.5 KB gzip.
+
 **Worst case.** A miss costs at most ~3.8k rows with eight games (~2.3k with four): a filtered `/events` page on the
 5 largest prefectures reads the whole month's day_counts when matches are sparse (≤ 2,733), up to 200 rows per
 location and the ≤ 50 matches in full. ~1,300 distinct uncached requests use up 5M/day (~650 if D1 counts every

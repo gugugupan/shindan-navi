@@ -503,16 +503,26 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
   page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
-  // tomorrow: OPCG 2 + PTCG 1 events
-  await page.route('**/api/v1/**', route => route.fulfill({ json: new URL(route.request().url()).pathname.endsWith('/days')
-    ? { days: [{ date: WEEK1, count: 3, by_game: { OPCG: 2, PTCG: 1 } }] } : { events: [], next_cursor: null } }));
+  // tomorrow: OPCG 2 + PTCG 1 events, the day after: PTCG 4; the saved game filter applies as on the API
+  const WEEK2 = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 2 * 864e5).toISOString().slice(0, 10);
+  await page.route('**/api/v1/**', route => {
+    const u = new URL(route.request().url()), gf = (u.searchParams.get('game') || '').split(',').filter(Boolean);
+    if (!u.pathname.endsWith('/days')) return route.fulfill({ json: { events: [], next_cursor: null } });
+    const days = [[WEEK1, { OPCG: 2, PTCG: 1 }], [WEEK2, { PTCG: 4 }]].map(([date, bg]) => {
+      const by_game = Object.fromEntries(Object.entries(bg).filter(([g]) => !gf.length || gf.includes(g)));
+      return { date, count: Object.values(by_game).reduce((a, b) => a + b, 0), by_game };
+    }).filter(d => d.count);
+    route.fulfill({ json: { days } });
+  });
   const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
   const state = () => page.evaluate(() => {
     const f = document.getElementById('wkF');
-    return { shown: !f.hidden, text: f.textContent, btn: f.querySelector('button')?.textContent || null,
+    return { shown: !f.hidden, text: f.textContent, btn: f.querySelector('button')?.textContent || null, controls: f.querySelector('button')?.getAttribute('aria-controls') || null,
       rels: [...document.querySelectorAll('#wkBody a[href^="/releases/#i="]')].map(a => a.getAttribute('title').split(' / ')[0]),
       chips: [...document.querySelectorAll('#wkBody a.gc:not(.any)')].map(a => a.getAttribute('title').split('・')[0]),
       others: [...document.querySelectorAll('#wkBody .rl')].filter(a => a.textContent.includes('ほか')).length,
+      days: [...document.querySelectorAll('#wkBody .wd')].map(w => ({ q: w.querySelector('.q')?.textContent || null,
+        rl: [...w.querySelectorAll('.rl')].map(a => [a.textContent, a.getAttribute('href')]), any: [...w.querySelectorAll('a.gc.any')].map(a => a.getAttribute('href')) })),
       saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')],
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
   });
@@ -536,15 +546,22 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const all = st.rels.length;
     if (st.shown) fail(where, `sub-line without a selection: ${st.text}`);
     if (all !== shown(null)) fail(where, `all titles: ${all} releases listed, data has ${shown(null)}`);
-    if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'ポケモンカード'])) fail(where, `all titles: chips ${st.chips}`);
+    if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ポケモンカード'])) fail(where, `all titles: chips ${st.chips}`);
     if (!code) console.log(`  ${where.padEnd(22)} no /events/ title with releases this week: filter checks skipped`);
     else {
       const name = H.titles[code];
-      const filtered = async label => {
+      const dayRange = d => `range=custom&from=${d}&to=${d}`;
+      const filtered = async (label, evGame) => {
         st = await state();
-        if (!st.shown || st.text !== `選択中のタイトルのみ（${short(code)}）すべて表示` || st.btn !== 'すべて表示') fail(where, `${label}: sub-line "${st.text}"`);
+        if (!st.shown || st.text !== `選択中のタイトルのみ（${short(code)}）すべて表示` || st.btn !== 'すべて表示' || st.controls !== 'wkBody') fail(where, `${label}: sub-line "${st.text}" ${st.controls}`);
         if (st.rels.length !== shown([name]) || st.rels.some(g => g !== name)) fail(where, `${label}: releases ${st.rels}`);
-        if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(code === 'OPCG' || code === 'PTCG' ? [H.titles[code]] : [])) fail(where, `${label}: chips ${st.chips}`);
+        if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(code === 'OPCG' ? ['ONE PIECE'] : code === 'PTCG' ? ['ポケモンカード', 'ポケモンカード'] : [])) fail(where, `${label}: chips ${st.chips}`);
+        // the day after tomorrow: nothing of the chosen title, only other titles' events (when /events/' filter lets them through)
+        if (HAS_EVENTS && code !== 'PTCG' && !inWeek.some(x => x.date === WEEK2 && x.game === name)) {
+          const d2 = st.days[1], others = evGame.includes('PTCG') ? 4 : 0;
+          const want = others ? [[`ほかのタイトルのイベント ${others}件 ›`, `/events/?game=${evGame}&pref=JP-13&${dayRange(WEEK2)}`]] : [];
+          if (d2.q !== '選択中のタイトルの予定なし' || JSON.stringify(d2.rl.filter(r => r[0].includes('イベント'))) !== JSON.stringify(want)) fail(where, `${label}: ${WEEK2} ${JSON.stringify(d2)}`);
+        }
         if (inWeek.some(x => x.game !== name) && !st.others) fail(where, `${label}: other titles' releases not mentioned`);
         if (st.overflow > 1) fail(where, `${label}: page scrolls horizontally by ${st.overflow}px`);
       };
@@ -552,13 +569,13 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       const evf = { pref: 'JP-13', game: code };
       await setStore({ 'tcg.ev.filters': evf });
       await page.reload({ waitUntil: 'networkidle' });
-      await filtered('from /events/');
+      await filtered('from /events/', code);
       // tcg.voices wins over /events/ (VOICES builds); /events/' game left out of it here
       if (HAS_VOICES) {
-        const other = EVC.find(c => c !== code);
-        await setStore({ 'tcg.voices': { game: code }, 'tcg.ev.filters': { pref: 'JP-13', game: other } });
+        const evGame = code === 'PTCG' ? 'OPCG,PTCG' : `${code},PTCG`;
+        await setStore({ 'tcg.voices': { game: code }, 'tcg.ev.filters': { pref: 'JP-13', game: evGame } });
         await page.reload({ waitUntil: 'networkidle' });
-        await filtered('from /voices/');
+        await filtered('from /voices/', evGame);
       }
       await page.locator('#wkF').screenshot({ path: path.join(OUT, `${vp}-home-week-sub.png`) });
       await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-filtered.png`) });
@@ -587,6 +604,23 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (st.rels.length !== all) fail(where, `empty after the filter: ${st.rels.length} releases, want ${all}`);
       if (st.saved[1] !== JSON.stringify({ pref: 'JP-13', game: none })) fail(where, `storage written: ${st.saved}`);
       await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-week-empty.png`) });
+    }
+    // next month's days (no counts): one chosen /events/ game opens its day view, two keep the saved filter
+    const end = new Date(Date.UTC(+TODAY.slice(0, 4), +TODAY.slice(5, 7), 0)).toISOString().slice(0, 10);
+    const next = Array.from({ length: 6 }, (_, i) => new Date(Date.parse(`${end}T00:00:00Z`) + (i + 1) * 864e5).toISOString().slice(0, 10));
+    const code2 = EVC.find(c => H.items.some(x => next.includes(x.date) && x.date <= H.until && x.game === H.titles[c]));
+    if (HAS_EVENTS && HAS_VOICES && code2) {
+      const p2 = await ctx.newPage();
+      await p2.clock.setFixedTime(new Date(`${end}T12:00:00+09:00`));
+      await p2.route('**/api/v1/**', r => r.fulfill({ json: { days: [], events: [], next_cursor: null } }));
+      for (const [g, want] of [[code2, `game=${code2}&`], [[code2, code2 === 'PTCG' ? 'OPCG' : 'PTCG'].join(','), null]]) {
+        await p2.goto(`${BASE}/`, { waitUntil: 'load' });
+        await p2.evaluate(g => { localStorage.clear(); localStorage.setItem('tcg.voices', JSON.stringify({ game: g })); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); }, g);
+        await p2.reload({ waitUntil: 'networkidle' });
+        const links = await p2.evaluate(() => [...document.querySelectorAll('#wkBody a.gc.any')].map(a => a.getAttribute('href')));
+        if (!links.length || links.some(h => want ? !h.startsWith(`/events/?${want}pref=JP-13&range=custom`) : h.includes('game='))) fail(where, `next month, ${g}: ${links.join(' ')}`);
+      }
+      await p2.close();
     }
     // no location, selection only: releases filtered, no API call
     if (code) {

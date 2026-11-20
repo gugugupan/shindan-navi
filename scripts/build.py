@@ -477,8 +477,13 @@ def render_home():
     home['titles']={g['code']:g['name'] for g in VOICE_GAME_INFO}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
     if BUILD_EVENTS:
-        home['types']=dict(re.findall(r"^\s+(\w+): '([^']*)',$",open(os.path.join(ROOT,'api/src/constants.ts')).read().split('TYPE_LABELS: Record<string, string> = {',1)[1].split('};',1)[0],re.M))
-        assert home['types'],'TYPE_LABELS not found in api/src/constants.ts'
+        cts=open(os.path.join(ROOT,'api/src/constants.ts')).read()
+        assert 'TYPE_LABELS: Record<string, string> = {' in cts,'TYPE_LABELS not found in api/src/constants.ts'
+        block=cts.split('TYPE_LABELS: Record<string, string> = {',1)[1].split('};',1)[0]
+        home['types']=dict(re.findall(r"^\s+(\w+): '([^']*)',$",block,re.M))
+        lines=[l for l in block.splitlines() if l.strip()]
+        if not home['types'] or len(home['types'])!=len(lines):
+            sys.exit(f"api/src/constants.ts: parsed {len(home['types'])} of {len(lines)} TYPE_LABELS lines (one `code: 'name',` per line)")
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):

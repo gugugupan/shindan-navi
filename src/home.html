@@ -429,6 +429,8 @@ function wkDay(d,i,f,sel,ym){
   const its=all&&(sel?all.filter(x=>names.has(x.game)):all), rel=its&&its.length, hidden=all?all.length-its.length:0;
   const known = f&&f.pref&&ev&&ev.counts && d.slice(0,7)===ym;
   const bg = known ? ev.byGame[d]||{} : null, total = known ? ev.counts[d]||0 : 0;
+  // later days (next month, no counts): one chosen /events/ game opens its day view, several the saved filter's
+  const evSel=sel?sel.filter(c=>EVG[c]):[], one=evSel.length===1?evSel[0]:'';
   let chips='', gs=[], anyChip=false;
   if(known){
     gs=EV_GAMES.filter(g=>bg[g.code]>0&&keep(g.code));
@@ -436,16 +438,19 @@ function wkDay(d,i,f,sel,ym){
     anyChip=!gs.length&&!!total&&!ev.byGame[d];
     chips = gs.length ? gs.map(g=>`<a class="gc" style="${gvars(g)}" href="${esc(dayLink(f,d,g.code))}" title="${esc(g.name)}・${bg[g.code]}件"><span>${gi(g.name)}${esc(rel?g.short:g.name)}</span><b>${bg[g.code]}</b></a>`).join('')
       : anyChip ? `<a class="gc any" href="${esc(dayLink(f,d))}">イベント <b>${total}</b></a>` : '';
-  } else if(f&&f.pref&&!(ev&&ev.loading)) chips=`<a class="gc any" href="${esc(dayLink(f,d))}">イベント ›</a>`;
+  } else if(f&&f.pref&&!(ev&&ev.loading)) chips=`<a class="gc any" href="${esc(dayLink(f,d,one))}">イベント ›</a>`;
   let top, evs=[];
   if(all==null) top='<p class="q">発売情報は新弾カレンダーで</p>';
   else if(rel) top=`<ul>${its.slice(0,3).map(x=>`<li class="${isStar(x)?'st':''}"><a href="/releases/#i=${x.id}" style="--h:${HUE[x.game]||0}" title="${esc(x.game+' / '+x.name)}">${gi(x.game)}<span class="gl">${esc(SHORT[x.game]||x.game)}</span>${esc(x.name)}</a></li>`).join('')}</ul><a class="rl" href="/releases/#d=${d}">発売 <b>${its.length}</b>件${hidden?`<span class="ot">（ほか${hidden}）</span>`:''} ›</a>`;
   else {
     // no releases: a few of the day's events when the loaded pages reach it (start order), else just the counts
     evs = known ? ev.list.filter(e=>e.starts_on===d&&codesOf(e).some(keep)).sort((a,b)=>dayRank(a)-dayRank(b)).slice(0,2) : [];
-    const ot = hidden ? `<a class="rl" href="/releases/#d=${d}">ほかのタイトルの発売 <b>${hidden}</b>件 ›</a>` : '';
+    // filtered: what the other titles have that day (shared events may count under a kept game too)
+    const otherEv = sel&&known&&ev.byGame[d]&&!gs.length ? Math.max(0,total-gs.reduce((a,g)=>a+bg[g.code],0)) : 0;
+    const ot = (hidden ? `<a class="rl" href="/releases/#d=${d}">ほかのタイトルの発売 <b>${hidden}</b>件 ›</a>` : '')
+      + (otherEv ? `<a class="rl" href="${esc(dayLink(f,d))}">ほかのタイトルのイベント <b>${otherEv}</b>件 ›</a>` : '');
     top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>${ot}`
-      : chips ? ot : `<p class="q">${known?'発売・イベントなし':'発売なし'}</p>${ot}`;
+      : chips ? ot : `<p class="q">${sel?'選択中のタイトルの予定なし':known?'発売・イベントなし':'発売なし'}</p>${ot}`;
   }
   return {has:!!rel||gs.length>0||evs.length>0||(anyChip&&!sel),
     html:`<div class="wd${all&&!rel&&chips?' norel':''}"><h3>${+d.slice(5,7)}/${+d.slice(8)}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${i===0?'<span class="lb">明日</span>':''}</h3>${top}${chips?`<div class="gcs">${chips}</div>`:''}</div>`};
@@ -465,8 +470,8 @@ function renderWeek(){
   fl.hidden=!sel.length;
   fl.innerHTML = !sel.length ? ''
     : empty ? `<span>選択中のタイトル（${esc(shortList(sel))}）の予定はありません。すべてのタイトルを表示しています。</span>`
-    : filt ? `<span>選択中のタイトルのみ（${esc(shortList(sel))}）</span><button type="button" id="wkAll">すべて表示</button>`
-    : `<span>すべてのタイトルを表示中</span><button type="button" id="wkAll">選択中のタイトルのみ</button>`;
+    : filt ? `<span>選択中のタイトルのみ（${esc(shortList(sel))}）</span><button type="button" id="wkAll" aria-controls="wkBody">すべて表示</button>`
+    : `<span>すべてのタイトルを表示中</span><button type="button" id="wkAll" aria-controls="wkBody">選択中のタイトルのみ</button>`;
   $('wkBody').innerHTML = days.map(x=>x.html).join('');
 }
 
