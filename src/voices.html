@@ -1,7 +1,7 @@
 <!--
   /voices/ 話題カレンダー (contracts/voices.md): what players on X talk about, per game. Built only with VOICES_ENABLED=1
-  by render_voices() in build.py, which fills SITE_CSS, BRAND, CORNER, SITENAV and the VOICES data (snapshots from
-  data/voices/). Static: the page makes no /api calls. Toolbar, filters and freshness line mirror /events/.
+  by render_voices() in build.py, which fills SITE_CSS, BRAND, CORNER, SITENAV, VLATEST (the latest real snapshot's
+  titles, linking its archive page /voices/<date>/) and the VOICES data (snapshots from data/voices/). Static: the page makes no /api calls. Toolbar, filters and freshness line mirror /events/.
 -->
 <title>TCG話題カレンダー（ポケカ・ワンピ・ユニアリほか X の反応まとめ）｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
@@ -135,6 +135,16 @@
 .vdlg{width:min(640px,calc(100vw - 32px));overflow:auto}
 .vdlg .dl-note{margin:0;font-size:12px;color:var(--muted)}
 .vcards>.sbtn{justify-self:start}
+/* latest snapshot's titles as static links to its archive page (/voices/<date>/), muted like the release pages' lists */
+.vlatest{margin-top:14px}
+.vlatest h2{margin:0 0 6px;font-size:12.5px;font-weight:700}
+.vlatest h2 a{color:var(--muted)}
+.vlatest ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:2px 20px}
+.vlatest li{font-size:12px;line-height:1.5;min-width:0}
+.vlatest li a{color:var(--muted);text-decoration:none}
+.vlatest li a:hover{color:var(--accent);text-decoration:underline}
+.vlatest .vlg{font-weight:700;color:var(--gt);margin-right:6px}
+.vsnap h2 .vsl{font-family:var(--body);font-size:12px;font-weight:700;color:var(--accent)}
 
 @media (max-width:760px){
   .filters>.frow{flex:none;padding-top:8px}
@@ -200,7 +210,7 @@
     <div id="list" hidden></div>
   </main>
 
-  <div class="pageinfo"><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
+  <div class="pageinfo"><p class="fresh" id="fresh" aria-label="データの更新状況"></p><!--VLATEST--></div>
   <p class="legend">話題は X（旧Twitter）で公開されている投稿をもとに AI が要約したものです。投稿の本文は掲載せず、要約・意見の言い換えと、もとの投稿へのリンクだけを載せています。反応の割合は集めた投稿のおおまかな傾向で、プレイヤー全体の意見を表すものではありません。公式の発表内容は各タイトルの公式サイト・公式アカウントでご確認ください。</p>
   <p class="legend">絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
@@ -518,7 +528,7 @@ function renderList(){
     $('list').innerHTML=`<div class="state"><b>${state.game.length||state.att?'この条件の話題はありません':'話題のデータはまだありません'}</b>${state.game.length||state.att?'<button class="sbtn ghost" id="resetAll2">条件をクリア</button>':''}</div>`;
     return;
   }
-  $('list').innerHTML=es.map(({snap,ts})=>`<section class="vsnap" aria-labelledby="s-${snap.date}"><h2 id="s-${snap.date}">${mdj(snap.date)} 時点<small>${md(snap.window.from)}〜${md(snap.window.to)} の X の投稿から・${ts.length}件${snap.sample?'・サンプル':''}</small></h2>`
+  $('list').innerHTML=es.map(({snap,ts})=>`<section class="vsnap" aria-labelledby="s-${snap.date}"><h2 id="s-${snap.date}">${mdj(snap.date)} 時点<small>${md(snap.window.from)}〜${md(snap.window.to)} の X の投稿から・${ts.length}件${snap.sample?'・サンプル':''}</small>${snap.sample?'':`<a class="vsl" href="/voices/${snap.date}/">この日のまとめ</a>`}</h2>`
     + `<div class="vcards">${ts.map(t=>card({snap,t},'h3')).join('')}</div></section>`).join('');
 }
 

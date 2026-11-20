@@ -76,8 +76,29 @@ refuses unknown ones. Add a code there (and here) before writing topics for a ne
   `{id, game, title, summary, attitude, volume, first_seen}` plus its date and games (`home_voices()`). The block only reads the
   saved title filters (`tcg.voices`, else `tcg.ev.filters`) and never writes them.
 
+## Archive pages (`/voices/<YYYY-MM-DD>/`)
+
+Owner decision 2026-11-20: each real snapshot (not `sample`) gets an indexable static page with our own text, built by
+`render_voices_day()` (`src/voices-day.html`). It lists every topic of that snapshot, one section per game in GAMES
+order (snapshot order inside a game), as the same cards `/voices/` draws: title, summary, attitude, the estimated
+tendency (約N% / the small-sample phrase, rules above), the paraphrased voices and 関連する投稿 links
+(`rel="nofollow noopener noreferrer"`). Never post text, quotes or embeds. Each card links `/voices/#t=<id>`; the page
+links `/voices/#d=<date>`, the previous / next real snapshot and `/voices/`. Head: canonical, `og/voices.png`,
+BreadcrumbList JSON-LD only; sitemap lastmod = the snapshot date. `/voices/` carries the latest real snapshot's titles as a
+static list below the calendar, linking `/voices/<date>/#topic-<id>`. Title and h1 carry the year
+(「YYYY年M月D日のTCG話題…」).
+
+Snapshot dates are URLs: never rename a published snapshot file. A topic, or a whole snapshot, may still be removed on a
+takedown / deletion request (the privacy page promises deletion): delete the topic from every snapshot file that lists
+it (the same id runs across snapshots), or delete the whole file.
+The next build drops the card or the page (a removed snapshot answers 404) and its sitemap entry; a snapshot left
+without topics counts as removed, and prev / next links skip it.
+
 ## Build checks (scripts/build.py)
 
 Refuses: a file whose name, `date` and `window.to` differ; `window.from` > `window.to`; an unknown game code; a duplicate
 id inside one snapshot; a topic whose `first_seen` is after the snapshot date; post URLs that are not x.com status URLs;
-more than 3 voices or posts; `share` all zero; missing or extra fields. `verify_release.py` checks the built page.
+more than 3 voices or posts; `share` all zero; missing or extra fields. `verify_release.py` checks the built page and
+the archive pages (one per real snapshot, none for samples, cards in GAMES order matching the data, no post text or
+embeds, X links nofollow, canonical, BreadcrumbList only, prev / next, sitemap lastmod); `tools/verify/browser.mjs`
+renders each archive page at desktop and mobile width.

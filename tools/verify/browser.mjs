@@ -756,6 +756,78 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
+// /voices/<date>/ archive pages (one per real snapshot): static cards like /voices/ (shares adding up to 100%, the
+// small-sample rule), nofollow X links, no script errors or API calls, no horizontal scroll; the /voices/ latest list
+// points at cards that exist; the 🔗 to /voices/#t= opens that topic there.
+const VOICE_DAYS = HAS_VOICES ? fs.readdirSync(path.join(DIST, 'voices')).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort() : [];
+for (const [vp, opt] of VOICE_DAYS.length ? Object.entries(VIEWPORTS) : []) {
+  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  for (const d of VOICE_DAYS) {
+    const where = `${vp} /voices/${d}/`;
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [], api = [];
+    page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
+    page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
+    try {
+      const res = await page.goto(`${BASE}/voices/${d}/`, { waitUntil: 'networkidle' });
+      if (!res || res.status() !== 200) fail(where, `status ${res && res.status()}`);
+      const hdr = await headerProblem(page, opt.width);
+      if (hdr) fail(where, hdr);
+      const snap = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/voices', `${d}.json`), 'utf8'));
+      const st = await page.evaluate(() => ({
+        cards: [...document.querySelectorAll('article.tc')].map(e => e.dataset.topic),
+        visible: [...document.querySelectorAll('article.tc')].filter(e => e.offsetParent).length,
+        h1: [...document.querySelectorAll('h1')].map(h => h.textContent),
+        links: [...document.querySelectorAll('a[data-x]')].map(a => [a.href, a.target, a.rel]),
+        shares: [...document.querySelectorAll('.tc .att:not([data-small]) .alg')].map(a => [...a.children].reduce((t, x) => t + (+(/約(\d+)%/.exec(x.textContent) || [0, 0])[1]), 0)),
+        smallPct: [...document.querySelectorAll('.tc .att[data-small]')].filter(a => /\d+%/.test(a.textContent) || a.querySelector('.abar')).length,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        wide: [...document.querySelectorAll('main *')].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1).map(e => e.className || e.tagName).slice(0, 3),
+        scripts: [...document.scripts].filter(s => !s.type || s.type === 'text/javascript').length,
+        tags: [...new Set([...document.querySelectorAll('.tc .tag')].map(e => e.innerHTML))],
+        icons: [...document.querySelectorAll('.tc .tag .gi, .vtoc .gi, .vgsec h2 .gi')].filter(e => !e.getBoundingClientRect().width).length }));
+      if (st.icons) fail(where, `${st.icons} game icons not rendered`);
+      if (st.cards.length !== snap.topics.length || st.visible !== st.cards.length) fail(where, `${st.cards.length} cards (${st.visible} visible), expected ${snap.topics.length}`);
+      if (st.h1.length !== 1 || !st.h1[0].includes('のTCG話題まとめ')) fail(where, `h1 ${JSON.stringify(st.h1)}`);
+      if (st.links.some(([h, t, r]) => !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(h) || t !== '_blank' || !/nofollow/.test(r) || !/noopener/.test(r))) fail(where, `unsafe X links ${JSON.stringify(st.links.slice(0, 2))}`);
+      if (st.shares.some(n => n !== 100)) fail(where, `share labels add up to ${[...new Set(st.shares.filter(n => n !== 100))].join('/')}%`);
+      if (st.smallPct) fail(where, `${st.smallPct} small-sample cards show percentages`);
+      if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px (${st.wide.join(', ')})`);
+      if (api.length) fail(where, `API requests ${api.join(' ')}`);
+      await page.screenshot({ path: path.join(OUT, `${vp}-voices-${d}.png`), fullPage: true });
+      // a title chip jumps to its game section; a card's カレンダーで見る opens the topic on /voices/
+      const toc = page.locator('.vtoc a').nth(1);
+      if (await toc.count()) { const h = await toc.getAttribute('href'); await toc.click(); if (await page.evaluate(() => location.hash) !== h) fail(where, `toc ${h}`); }
+      const first = st.cards[0];
+      await page.locator(`#topic-${first} a.vopen`).click();
+      await page.waitForURL(u => u.pathname === '/voices/');
+      await page.locator('#vDlg[open]').waitFor();
+      if (await page.locator('#vBody .tc').getAttribute('data-topic') !== first) fail(where, `カレンダーで見る did not open ${first}`);
+      // card tags as the /voices/ card() draws them: gi(name) + name
+      const jsTags = await page.evaluate(() => GAMES.map(g => { const e = document.createElement('span'); e.innerHTML = `${gi(g.name)}${esc(g.name)}`; return e.innerHTML; }));
+      const odd = st.tags.filter(t => !jsTags.includes(t));
+      if (odd.length) fail(where, `card tags differ from /voices/ card(): ${odd[0]}`);
+      // /voices/: the latest list links cards on the latest archive page, the list view links each archive page
+      if (d === VOICE_DAYS.at(-1)) {
+        const rows = await page.evaluate(() => [...document.querySelectorAll('.vlatest li a')].map(a => a.getAttribute('href')));
+        const want = st.cards.map(id => `/voices/${d}/#topic-${id}`);
+        if (JSON.stringify([...rows].sort()) !== JSON.stringify([...want].sort())) fail(where, `/voices/ latest list ${rows.length} rows, expected ${want.length}`);
+        if (await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) > 1) fail(where, '/voices/ with the latest list scrolls horizontally');
+        await page.goto(`${BASE}/voices/?view=list`, { waitUntil: 'networkidle' });
+        const sl = await page.evaluate(() => [...document.querySelectorAll('#list .vsl')].map(a => a.getAttribute('href')));
+        if (JSON.stringify(sl) !== JSON.stringify(VOICE_DAYS.map(x => `/voices/${x}/`).reverse())) fail(where, `list view archive links ${JSON.stringify(sl)}`);
+      }
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await page.close();
+  }
+  await ctx.close();
+}
 // /events/ list at 20:00 with 100 started and 30 upcoming events today (50 per page): the list loads today's pages by
 // itself and puts the upcoming ones first, unless the reader already scrolled into today (then nothing above moves).
 const GSTUB = `(()=>{class E{addListener(){return{remove(){}}}}

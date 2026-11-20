@@ -556,7 +556,7 @@ VOICE_GAMES=re.findall(r"\{code:'([A-Z]+)'",VOICES_SRC.split('const GAMES = [',1
 def voices_data():
     """All snapshots, oldest first. Sample snapshots only while no real one exists (then they are dropped)."""
     snaps=[]
-    xpost=re.compile(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/\d{1,20}')
+    xpost=re.compile(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}')
     isdate=lambda v:isinstance(v,str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}',v) and jd(v)
     TOPIC={'id','game','title','summary','attitude','share','volume','voices','reacting_to','posts','window','first_seen','status','source'}
     for f in sorted(glob.glob(os.path.join(ROOT,'data/voices/*.json'))):
@@ -616,6 +616,7 @@ def render_voices():
     v={'snapshots':VOICES,'counts':counts}
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
                      ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/voices/")}{siterow("/voices/")}</nav>'),
+                     ('<!--VLATEST-->',voices_latest()),
                      ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/')),('/*GICON*/',GICON_JS)):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
@@ -660,6 +661,142 @@ def render_voices():
 """
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+
+# ---- 話題カレンダー archive (/voices/<date>/, owner decision 2026-11-20): one indexable static page per real snapshot,
+# none for samples. The cards follow card() / attBlock() in src/voices.html; keep the share and badge rules in step.
+# a snapshot left without topics (all removed on request) gets no page, like a deleted file; prev / next skip it
+VOICES_DAYS=[s for s in VOICES if not s['sample'] and s['topics']]
+VGAME={g['code']:g for g in VOICE_GAME_INFO}
+VOLW={'high':3,'mid':2,'low':1}
+VDOW='日月火水木金土'
+def vmd(d): x=jd(d); return f'{x.month}/{x.day}({VDOW[(x.weekday()+1)%7]})'
+def vmdj(d): x=jd(d); return f'{x.month}月{x.day}日'
+def vymd(d): x=jd(d); return f'{x.year}年{x.month}月{x.day}日'
+def vday_path(d): return f'/voices/{d}/'
+def gi(n):
+    # same markup as gi() in GICON_JS (the page scripts' game icon)
+    v=GAME_ICON.get(n) or str(n or '?')[0].upper()
+    return f'<img class="gi" src="/gi/{esc(v)}" width="16" height="16" alt="" aria-hidden="true">' if v.endswith('.png') else f'<span class="gi" aria-hidden="true">{esc(v)}</span>'
+def vgvars(c):
+    g=VGAME[c]; return f'--gl:{g["c"]};--gd:{g["cd"]}' if g.get('c') else '--gl:hsl(220 62% 46%);--gd:hsl(220 60% 68%)'
+def vtenths(s,ks):
+    tot=sum(s[k] for k in ks); u=[s[k]/tot*10 for k in ks]; fl=[int(x) for x in u]
+    left=10-sum(fl)
+    for i in sorted(range(len(ks)),key=lambda i:(-(u[i]-fl[i]),-s[ks[i]])):
+        if left>0: fl[i]+=1; left-=1
+    return {k:fl[i]*10 for i,k in enumerate(ks)}
+VATT={'positive':('好意的','＋'),'negative':('否定的','－'),'mixed':('賛否両論','±'),'neutral':('中立','・')}
+VTREND={'positive':'好意的な声が多い','negative':'否定的な声が多い','mixed':'賛否が分かれている','neutral':'目立った賛否はない'}
+VVOL={'high':'多','mid':'中','low':'少'}
+def vatt_block(t):
+    s=t['share']; l,m=VATT[t['attitude']]; a=t['attitude']
+    head=f'<span class="atth">反応の傾向（推定）</span><span class="attl"><span aria-hidden="true">{m} </span>{l}</span>'
+    vol=f'<span class="vol">話題量 <b>{VVOL[t["volume"]]}</b></span>'
+    if sum(s.values())<5:
+        return f'<div class="att a-{a}" data-small>{head}<span class="trend">{VTREND[a]}</span>{vol}<span class="alg">投稿が少ないため、割合は出していません</span></div>'
+    parts=[(k,n) for k,n in (('positive','好意的'),('negative','否定的'),('neutral','中立')) if s[k]]
+    pc=vtenths(s,[k for k,_ in parts])
+    ap=lambda p:f'約{p}%' if p else 'わずか'
+    lab='・'.join(f'{n} {ap(pc[k])}' for k,n in parts)
+    seg=''.join(f'<span class="{c}" style="flex:{s[k]}"></span>' for k,c in (('positive','p'),('negative','n'),('neutral','u')) if s[k])
+    return (f'<div class="att a-{a}">{head}<span class="abar" role="img" aria-label="反応の傾向（推定） {esc(lab)}">{seg}</span>{vol}'
+            f'<span class="alg" aria-hidden="true">{"".join(f"<span class=\"a-{k}\"><i></i>{n} {ap(pc[k])}</span>" for k,n in parts)}</span></div>')
+def vcard(t,snap):
+    st=t['status']
+    badge=(f'<span class="badge hot">🔥 {(jd(snap["date"])-jd(t["first_seen"])).days+1}日連続</span>' if st=='continuing' else
+           '<span class="badge cool">📉 落ち着き</span>' if st=='cooling' else '<span class="badge new">🆕 新</span>' if len(VOICES)>1 else '')
+    voices=(f'<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">'+''.join(f'<li><span aria-hidden="true">💬 </span>{esc(v)}</li>' for v in t['voices'])+'</ul>') if t['voices'] else ''
+    ext='<span class="sr">（外部サイト・X）</span>'
+    rel='nofollow noopener noreferrer'
+    links=(f'<a href="{esc(t["reacting_to"])}" target="_blank" rel="{rel}" data-x="reacting">反応元の公式投稿 ↗{ext}</a>' if t['reacting_to'] else '') \
+        +'<span class="lab">関連する投稿 ↗</span>'+''.join(f'<a href="{esc(u)}" target="_blank" rel="{rel}" data-x="post" aria-label="関連する投稿{i+1}をXで見る（外部サイト）">{i+1}</a>' for i,u in enumerate(t['posts']))
+    return (f'<article class="tc" style="{vgvars(t["game"])}" id="topic-{esc(t["id"])}" data-topic="{esc(t["id"])}">'
+            f'<div class="tc-top"><span class="tag">{gi(VGAME[t["game"]]["name"])}{esc(VGAME[t["game"]]["name"])}</span>{badge}<span class="ai">AIによる要約</span></div>'
+            f'<h3>{esc(t["title"])}</h3><p class="sum">{esc(t["summary"])}</p>{vatt_block(t)}{voices}'
+            f'<p class="tc-links">{links}<a class="vopen" href="/voices/#t={esc(t["id"])}">カレンダーで見る</a></p>'
+            f'<p class="tc-win">{vmd(t["window"]["from"])}〜{vmd(t["window"]["to"])} の投稿から（{vmd(snap["date"])} 時点）</p></article>')
+def vday_games(s):
+    """the snapshot's topics per game, in GAMES order (topics keep the snapshot's order)"""
+    return [(c,[t for t in s['topics'] if t['game']==c]) for c in VOICE_GAMES if any(t['game']==c for t in s['topics'])]
+def voices_day_page(s):
+    d=s['date']; x=jd(d); gs=vday_games(s); n=len(s['topics'])
+    top=[t['title'] for _,t in sorted(enumerate(s['topics']),key=lambda p:(-VOLW[p[1]['volume']],p[0]))[:2]]
+    names=[VGAME[c]['short'] for c,_ in gs]
+    gl='・'.join(names[:5])+('ほか' if len(names)>5 else '')
+    desc=(f'{x.year}年{x.month}月{x.day}日時点のTCGの話題を、X（旧Twitter）の{vmd(s["window"]["from"])}〜{vmd(s["window"]["to"])}の投稿から AI が要約。'
+          +''.join(f'「{t}」' for t in top)+f'など、{gl}の{len(gs)}タイトル・{n}件の話題と反応の傾向をまとめています。')
+    return dict(path=vday_path(d),title=f'{vymd(d)}のTCG話題｜話題カレンダー｜トレカカレンダー',h1=f'{vymd(d)}のTCG話題まとめ',
+                crumb=f'{vymd(d)}のTCG話題',desc=desc,games=gs)
+VOICES_DAY_SRC=open(os.path.join(ROOT,'src/voices-day.html')).read()
+def render_voices_day(i):
+    s=VOICES_DAYS[i]; d=s['date']; pg=voices_day_page(s); url=SITE+pg['path']; og=f'{SITE}/og/{VOICES_PAGE["og"]}.png'
+    prev=VOICES_DAYS[i-1] if i else None; nxt=VOICES_DAYS[i+1] if i+1<len(VOICES_DAYS) else None
+    x=jd(d)
+    crumbs=[('トップ','/'),('話題カレンダー','/voices/'),(pg['crumb'],None)]
+    ld={'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
+        {'@type':'ListItem','position':i+1,'name':n,'item':SITE+h if h else url} for i,(n,h) in enumerate(crumbs)]}
+    pn=lambda where: (f'<nav class="vpn" aria-label="ほかの日の話題（{where}）">'
+        +(f'<a href="{vday_path(prev["date"])}" rel="prev">‹ {vmdj(prev["date"])}の話題</a>' if prev else '')
+        +f'<a class="vpn-cal" href="/voices/#d={d}">話題カレンダーでこの日を見る</a>'
+        +(f'<a class="vpn-next" href="{vday_path(nxt["date"])}" rel="next">{vmdj(nxt["date"])}の話題 ›</a>' if nxt else '')+'</nav>')
+    body=('<main class="varc">'
+        +'<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in crumbs)+'</nav>'
+        +f'<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p><time datetime="{d}">{vmd(d)}</time>時点・{vmd(s["window"]["from"])}〜{vmd(s["window"]["to"])} の X の投稿から AI が要約（{len(pg["games"])}タイトル・{len(s["topics"])}件）</p></div>'
+        +pn('ページ上部')
+        +'<nav class="vtoc" aria-label="タイトル">'+''.join(f'<a class="chip g" style="{vgvars(c)}" href="#g-{c}">{gi(VGAME[c]["name"])}{esc(VGAME[c]["name"])} <em>{len(ts)}</em></a>' for c,ts in pg['games'])+'</nav>'
+        +''.join(f'<section class="vgsec" id="g-{c}" style="{vgvars(c)}" aria-labelledby="h-{c}"><h2 id="h-{c}">{gi(VGAME[c]["name"])}{esc(VGAME[c]["name"])}<small>{len(ts)}件</small></h2>'
+                 f'<div class="vcards">{"".join(vcard(t,s) for t in ts)}</div></section>' for c,ts in pg['games'])
+        +pn('ページ下部')+'</main>')
+    src=re.sub(r'\A<!--.*?-->\n','',VOICES_DAY_SRC,count=1,flags=re.S)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    voices_css=re.search(r'<style>\n(/\* attitude colours.*?)</style>',VOICES_SRC,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    for slot,val in (('/*SITE_CSS*/',site_css),('/*VOICES_CSS*/',voices_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
+                     ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(pg["path"])}{siterow(pg["path"])}</nav>'),('<!--BODY-->',body)):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{esc(pg['title'])}</title>
+<meta name="description" content="{esc(pg['desc'])}">
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="トレカカレンダー">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{esc(pg['title'])}">
+<meta property="og:description" content="{esc(pg['desc'])}">
+<meta property="og:url" content="{url}">
+<meta property="og:image" content="{og}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TCG 話題カレンダー｜トレカカレンダー">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{esc(pg['title'])}">
+<meta name="twitter:description" content="{esc(pg['desc'])}">
+<meta name="twitter:image" content="{og}">
+<script type="application/ld+json">{json.dumps(ld,ensure_ascii=False).replace('</','<\\/')}</script>
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
+def voices_latest():
+    """/voices/: the latest real snapshot's topic titles as a static list below the calendar, linking its archive page"""
+    if not VOICES_DAYS: return ''
+    s=VOICES_DAYS[-1]; p=vday_path(s['date'])
+    items=''.join(f'<li><a href="{p}#topic-{esc(t["id"])}"><span class="vlg" style="{vgvars(c)}">{esc(VGAME[c]["short"])}</span>{esc(t["title"])}</a></li>' for c,ts in vday_games(s) for t in ts)
+    return (f'<section class="vlatest" aria-labelledby="vl-h"><h2 id="vl-h"><a href="{p}">{vymd(s["date"])}のTCG話題まとめ</a></h2>'
+            f'<ul>{items}</ul></section>')
 
 # ---- /item/<id>/: one static page per visible release, for searches like 「OP-15 発売日」. Every visible item gets one
 # (past ones are still searched); an item that leaves items.json loses its page. Only BreadcrumbList JSON-LD (see Data model).
@@ -803,6 +940,9 @@ open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
 if VOICES_ENABLED:
     os.makedirs(os.path.join(dist,'voices'),exist_ok=True)
     open(os.path.join(dist,'voices/index.html'),'w').write(render_voices())
+    for i,x in enumerate(VOICES_DAYS):
+        os.makedirs(os.path.join(dist,'voices',x['date']),exist_ok=True)
+        open(os.path.join(dist,'voices',x['date'],'index.html'),'w').write(render_voices_day(i))
 if FEEDBACK_ENABLED:
     os.makedirs(os.path.join(dist,'feedback'),exist_ok=True)
     open(os.path.join(dist,'feedback/index.html'),'w').write(render_feedback())
@@ -813,6 +953,7 @@ for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED
 for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{UPDATED}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
 if VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
+for x in VOICES_DAYS: sm.append(f'<url><loc>{SITE}{vday_path(x["date"])}</loc><lastmod>{x["date"]}</lastmod></url>')
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
@@ -824,4 +965,4 @@ if not os.path.exists(venv_py):
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
 print('pages',len(pages),'| item pages',len(items),'| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
-      '| voices',f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+      '| voices',f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}, {len(VOICES_DAYS)} archive pages' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
