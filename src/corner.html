@@ -26,7 +26,6 @@
       <button class="mi" data-acct="settings">設定</button>
 <!--FEEDBACK-->      <a class="mi" href="/feedback/" data-feedback>ご意見・ご要望</a>
 <!--/FEEDBACK-->      <button class="mi" data-acct="logout">ログアウト</button>
-      <button class="mi danger" data-acct="delete">アカウント削除</button>
     </div>
   </div>
   <dialog id="acctDlg" class="acctdlg" aria-labelledby="acctTitle"><div class="dlg">
@@ -258,16 +257,14 @@
       sync.forget(); clearMark(); setUser(null); track('delete_account');
     }catch(e){ msg.textContent=e.message==='busy'?'混み合っています。1 分ほどおいてもう一度お試しください。':'アカウントを削除できませんでした。時間をおいてもう一度お試しください。'; }
   }
-  function openDlg(focusDel){
+  function openDlg(){
     closeMenus(); $('acctDelOk').checked=false; dlg.querySelector('[data-acct="delete-confirm"]').disabled=true;
     if(!dlg.open){ if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open',''); }
-    if(focusDel){ $('acctDel').scrollIntoView({block:'nearest'}); $('acctDelOk').focus(); }
   }
   document.addEventListener('click',e=>{
     const b=e.target.closest('[data-acct]'); if(!b) return;
     const a=b.dataset.acct;
-    if(a==='settings') openDlg(false);
-    else if(a==='delete') openDlg(true);
+    if(a==='settings') openDlg();
     else if(a==='logout'){ closeMenus(); logout(); }
     else if(a==='delete-confirm' && $('acctDelOk').checked) del();
   });
