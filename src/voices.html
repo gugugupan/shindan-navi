@@ -636,17 +636,30 @@ function fromHash(){
 fromHash();
 window.addEventListener('hashchange',fromHash);
 }
+// VOICES_SOURCE=d1: the snapshots come from the API. Its answer is checked against the contract shape (the fields the
+// render code reads, dates, ids, the reacting_to URL form) before boot(); anything else is a load failure.
+const isStr = v => typeof v==='string', isWin = w => !!w && realDay(w.from) && realDay(w.to) && w.from<=w.to;
+const okTopic = t => !!t && /^[a-z0-9][a-z0-9-]{2,63}$/.test(t.id) && !!GAME[t.game] && isStr(t.title) && isStr(t.summary)
+  && !!ATT[t.attitude] && !!VOL[t.volume] && ['new','continuing','cooling'].includes(t.status) && realDay(t.first_seen) && isWin(t.window)
+  && !!t.share && ['positive','negative','neutral'].every(k=>Number.isInteger(t.share[k])&&t.share[k]>=0)
+  && Array.isArray(t.voices) && t.voices.every(isStr)
+  && (t.reacting_to===null || /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/[0-9]{1,20}$/.test(t.reacting_to));
+const okSnaps = a => Array.isArray(a) && a.every(s=>!!s && realDay(s.date) && isWin(s.window) && s.window.to===s.date && Array.isArray(s.topics) && s.topics.every(okTopic));
 if(V.api){
+  const failed=(retry)=>{
+    $('calv').innerHTML='<div class="state" role="alert"><b>話題を読み込めませんでした</b><span>通信状況を確認して、もう一度お試しください。</span><button class="sbtn ghost" id="vRetry">再読み込み</button></div>';
+    $('vRetry').onclick=retry;
+  };
   const load=()=>{
     $('calv').innerHTML='<div class="state" role="status"><b>話題を読み込んでいます…</b></div>';
     fetch(V.api,{headers:{accept:'application/json'}})
       .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)))
-      .then(d=>Array.isArray(d&&d.snapshots)?d:Promise.reject(new Error('bad answer')))
-      // a throw inside boot is a page bug, not a load failure: it is not caught here, so 再読み込み never boots twice
-      .then(d=>{ $('calv').innerHTML=''; boot(d.snapshots); },()=>{
-        $('calv').innerHTML='<div class="state" role="alert"><b>話題を読み込めませんでした</b><span>通信状況を確認して、もう一度お試しください。</span><button class="sbtn ghost" id="vRetry">再読み込み</button></div>';
-        $('vRetry').onclick=load;
-      });
+      .then(d=>okSnaps(d&&d.snapshots)?d:Promise.reject(new Error('bad answer')))
+      .then(d=>{
+        $('calv').innerHTML='';
+        // boot() may have set up listeners before it threw: retry by reloading the page, never by booting twice
+        try{ boot(d.snapshots); }catch(e){ failed(()=>location.reload()); console.error(e); }
+      },()=>failed(load));
   };
   load();
 } else boot(V.snapshots);

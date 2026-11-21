@@ -508,7 +508,7 @@ async function loadVt(){
   try{
     const r=await fetch(H.voicesApi,{headers:{accept:'application/json'}});
     const s=r.ok?(await r.json()).snapshot:null;
-    if(!s||!Array.isArray(s.topics)) return;
+    if(!s||!/^\d{4}-\d{2}-\d{2}$/.test(s.date)||!Array.isArray(s.topics)||!s.topics.every(t=>t&&typeof t.id==='string'&&typeof t.game==='string'&&typeof t.title==='string'&&typeof t.summary==='string')) return;
     const used=new Set(s.topics.map(t=>t.game));
     VT={date:s.date, topics:s.topics, games:(H.voiceGames||[]).filter(g=>used.has(g.code))};
     vtGame=Object.fromEntries(VT.games.map(g=>[g.code,g]));

@@ -7,7 +7,7 @@
 //
 // Checks: one /api/v1/voices request; the list and calendar render exactly as the static page does for the same
 // snapshots (the d1 page against itself with the answer embedded), この日のまとめ → /voices/#d=, #t= deep links, loading
-// and error states with 再読み込み; the home block makes one /api/v1/voices/latest request and lists that snapshot's topics.
+// and error states (an HTTP error, a malformed answer) with 再読み込み; the home block makes one /api/v1/voices/latest request and lists that snapshot's topics.
 import { chromium } from 'playwright-core';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -125,6 +125,7 @@ try {
     await page.route('**/api/v1/voices', async (r) => {
       if (mode === 'slow') { await gate; return r.continue(); }
       if (mode === 'down') return r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"busy"}' });
+      if (mode === 'bad') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '1', snapshots: [{ date: '"><img src=x>', window: {}, topics: [] }] }) });
       return r.continue();
     });
     await page.goto(`${BASE}/voices/`, { waitUntil: 'domcontentloaded' });
@@ -137,6 +138,11 @@ try {
     await page.waitForSelector('#vRetry');
     if (!(await page.locator('#calv').textContent()).includes('読み込めませんでした')) fail(where, 'no error state');
     await shot(page, 'voices-error');
+    mode = 'bad';
+    await page.locator('#vRetry').click();
+    await page.waitForSelector('#vRetry');
+    if (!(await page.locator('#calv').textContent()).includes('読み込めませんでした')) fail(where, 'a malformed answer did not end in the error state');
+    if (await page.locator('#calv img').count()) fail(where, 'a malformed answer was rendered');
     mode = 'up';
     await page.locator('#vRetry').click();
     await page.waitForSelector('#calv [data-day]');
