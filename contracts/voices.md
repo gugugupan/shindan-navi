@@ -1,7 +1,8 @@
 # 話題カレンダー contract (`/voices/`)
 
-What TCG players on X talk about, per game, as a calendar. Static: `scripts/build.py` reads the snapshots and embeds
-them in `/voices/`; no Worker, no D1. The page is built only with `VOICES_ENABLED=1` (off by default: no page, no tool
+What TCG players on X talk about, per game, as a calendar. Static (default): `scripts/build.py` reads the snapshots and
+embeds them in `/voices/`; no Worker, no D1. With `VOICES_SOURCE=d1` (Worker build) the same snapshots live in D1
+instead: see "D1 mode" below. The page is built only with `VOICES_ENABLED=1` (off by default: no page, no tool
 tab, no privacy section, no link anywhere). The data pipeline that writes the snapshots comes later; until then the
 only file is a sample.
 
@@ -106,3 +107,13 @@ field (player post URLs are never committed); more than 3 voices; `share` all ze
 the archive pages (one per real snapshot, none for samples, cards in GAMES order matching the data, no post text or
 embeds, no X link but the topics' `reacting_to` on `/voices/` and the archive pages, X links nofollow, canonical, BreadcrumbList only, prev / next, sitemap lastmod); `tools/verify/browser.mjs`
 renders each archive page at desktop and mobile width.
+
+## D1 mode (`VOICES_SOURCE=d1`, docs/design/voices-db.md)
+
+Owner decision 2026-11-21. `api/scripts/import-voices.mjs` validates `data/voices/` (every build check above, the
+schema, no X URL outside `reacting_to`, and across snapshots: an id keeps `game` and `first_seen`, `new` only on its
+first appearance) and writes one D1 row per date (`voice_snapshots.body` = `{date, window, topics}`; samples are never
+imported). `/voices/` and the home block fetch `GET /api/v1/voices` / `/api/v1/voices/latest` and render as above;
+there are no archive pages in this mode (この日のまとめ opens `/voices/#d=<date>`), and the sitemap lists `/voices/`
+only. Takedowns: `import-voices.mjs --remove-topic ID` / `--remove-snapshot DATE` rewrites D1 and the local files.
+Data then lives in D1 and in the local files; the committed files are kept until the owner decides otherwise.
