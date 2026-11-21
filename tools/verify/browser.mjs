@@ -666,7 +666,7 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
     if (hdr) fail(where, hdr);
     await page.locator(`.cd[data-day="${TODAY}"]`).click();
     await page.locator('#list .ev').first().waitFor();
-    const order = await page.evaluate(() => [...document.querySelectorAll(`#list .list > *`)].map(e => e.classList.contains('evsep') ? '|' : e.querySelector('h4').textContent.replace('テスト大会 ', '')));
+    const order = await page.evaluate(() => [...document.querySelectorAll(`#list .list > *`)].map(e => e.classList.contains('evsep') ? '|' : e.querySelector('h4 .t').textContent.replace('テスト大会 ', '')));
     if (order.join(' ') !== '3 4 5 6 7 | 1 2') fail(where, `today's order ${order.join(' ')}`);
     const cl = await page.locator('#list .ev.off .ev-link').textContent();
     if (!cl.startsWith('公式で確認')) fail(where, `cancelled link reads ${cl}`);
@@ -1164,6 +1164,126 @@ if (HAS_EVENTS) {
   for (const b of [...new Set(bad)]) fail(where, b);
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
+}
+// Event rows (src/evrow.html) on /events/ day views and the home page's columns: display names without month markers,
+// identical events of a day as one row that expands to its stores (count from the loaded rows, 以上 while the day has
+// more), a map pick opening the group of its card, no game tag under a one-title filter; and no metadata under 12px
+// (event names 14-16px) on /events/, / and the /releases/ calendar.
+const smallText = (sels, skip = '.sr,.gi,.tbadge,.tb,.lb') => document.querySelectorAll(sels).length === 0 ? ['none of ' + sels]
+  : [...document.querySelectorAll(sels)].flatMap(el => [el, ...el.querySelectorAll('*')])
+    .filter(e => e.getClientRects().length && !e.closest(skip) && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())
+      && parseFloat(getComputedStyle(e).fontSize) < 12)
+    .map(e => `${e.className || e.tagName} ${getComputedStyle(e).fontSize} "${e.textContent.trim().slice(0, 20)}"`);
+if (HAS_EVENTS) {
+  const CITY = ['渋谷区', '新宿区', '豊島区', '八王子市'];
+  const rev = (i, code, name, type, hh, x = {}) => ({ id: `r${code}${i}`, name, game_code: code, game_codes: [code], starts_on: TODAY,
+    time_precision: 'datetime', starts_at: `${TODAY}T${String(hh).padStart(2, '0')}:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'in_person',
+    venue: { name: `店舗 ${code}${i}`, region_code: 'JP-13', region_name: '東京都', city: CITY[i % 4], geo: { lat: 35.6 + i / 100, lng: 139.7 + i / 1000 } },
+    group: { name, category: 'tournament', event_type_code: type }, registration_status: i % 3 ? 'open' : 'closed', registration_method: 'first_come',
+    source_url: 'https://example.com/', event_status: 'scheduled', ...x });
+  const REVS = [...Array.from({ length: 20 }, (_, i) => rev(i, 'OPCG', 'スタンダードバトル（11月開催）', 'standard_battle', 13 + (i % 6))),
+    ...Array.from({ length: 3 }, (_, i) => rev(30 + i, 'OPCG', '交流会（11月開催）', 'meetup', 14 + i)),
+    rev(40, 'OPCG', 'フラッグシップバトル（11月開催）', 'flagship_battle', 15),
+    ...Array.from({ length: 4 }, (_, i) => rev(50 + i, 'PTCG', '【26/11】ポケモンカードジム　ジムバトル', 'gym_battle', 16 + i)),
+    rev(60, 'CONAN', 'チャレンジ戦【2026年11月】', 'challenge', 18), rev(61, 'OPCG', 'スタンダードバトル（11月開催）', 'standard_battle', 19, { event_status: 'cancelled' })]
+    .sort((a, b) => a.starts_at < b.starts_at ? -1 : 1);
+  const MARK = /月開催|【26\/11】|【2026年/;
+  const until = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 92 * 864e5).toISOString().slice(0, 10);
+  for (const [vp, opt] of Object.entries(VIEWPORTS)) {
+    const where = `${vp} event rows`;
+    const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+      hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [];
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    // extra: what /days claims beyond the loaded rows (the home check's columns have more than one page holds)
+    let extra = 0;
+    await page.route('https://maps.googleapis.com/**', r => r.fulfill({ contentType: 'text/javascript', body: GSTUB }));
+    await page.route('**/api/v1/**', route => {
+      const u = new URL(route.request().url()), g = u.searchParams.get('game');
+      const evs = REVS.filter(e => !g || g.split(',').includes(e.game_code));
+      const bg = {}; evs.forEach(e => bg[e.game_code] = (bg[e.game_code] || 0) + 1); if (bg.OPCG) bg.OPCG += extra;
+      if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: ['OPCG', 'PTCG', 'CONAN'].map(code => ({ code, record_count: 9, complete: true,
+        fetched_at: `${TODAY}T06:00:00+09:00`, window: { from: TODAY, until } })), types: [], prefectures: [{ code: 'JP-13', count: 30 }] } });
+      if (u.pathname.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: evs.length + extra, by_game: bg }] } });
+      route.fulfill({ json: { events: u.searchParams.get('from') > TODAY ? [] : evs, next_cursor: null } });
+    });
+    try {
+      const day = `range=custom&from=${TODAY}&to=${TODAY}`;
+      await page.goto(`${BASE}/events/?pref=JP-13&${day}&__maps=1`, { waitUntil: 'networkidle' });
+      await page.locator('#list .evg').first().waitFor();
+      const r = await page.evaluate(() => ({ text: document.getElementById('list').textContent,
+        groups: [...document.querySelectorAll('#list .evg')].map(g => [g.querySelector(':scope>.ev-n').textContent, g.querySelector('.evg-tog').getAttribute('aria-expanded'),
+          g.querySelector('.evg-l').hidden, g.querySelectorAll('.evg-l .ev').length]),
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+      if (MARK.test(r.text)) fail(where, 'month marker left in an event name');
+      const want = [['スタンダードバトル — 20店舗', 'false', true, 20], ['交流会 — 3店舗', 'false', true, 3], ['ポケモンカードジム　ジムバトル — 4店舗', 'false', true, 4]];
+      if (JSON.stringify(r.groups.map(g => [g[0].replace(/大会$/, ''), g[1], g[2], g[3]]).sort()) !== JSON.stringify(want.sort())) fail(where, `/events/ groups ${JSON.stringify(r.groups)}`);
+      if (r.overflow > 1) fail(where, `/events/ scrolls horizontally by ${r.overflow}px`);
+      const tog = page.locator('#list .evg .evg-tog').first();
+      await tog.click();
+      const open = await page.evaluate(() => { const g = document.querySelector('#list .evg'); return [g.querySelector('.evg-tog').getAttribute('aria-expanded'),
+        [...g.querySelectorAll('.evg-l .ev')].filter(e => e.getClientRects().length).length, g.querySelectorAll('.evg-l .ev-m .tag, .evg-l .ev-n').length]; });
+      if (open[0] !== 'true' || open[1] !== 20 || open[2]) fail(where, `expand: ${JSON.stringify(open)}`);
+      if (await tog.getAttribute('aria-expanded') !== 'true') fail(where, 'expanded group closed again on its own');
+      await tog.click();
+      if (await tog.getAttribute('aria-expanded') !== 'false' || await page.locator('#list .evg-l').first().isVisible()) fail(where, 'collapse failed');
+      const small = await page.evaluate(smallText, '#list .ev, .rhead, .ag h3');
+      if (small.length) fail(where, `/events/ text under 12px: ${small.slice(0, 3).join(' | ')}`);
+      const names = await page.evaluate(() => [...document.querySelectorAll('#list .ev-n .t')].map(e => parseFloat(getComputedStyle(e).fontSize)));
+      if (!names.length || names.some(s => s < 14 || s > 16)) fail(where, `event name sizes ${[...new Set(names)].join(',')}`);
+      // a map pick on a store of a collapsed group opens the group and highlights the store
+      if (opt.width > 760) {
+        await page.locator('#mapv.open #gmap').waitFor();
+        const mk = await page.evaluate(() => { const c = document.querySelector('#list .evg .evg-l .ev[data-mk]'); selectVenue(c.dataset.mk, 'map'); return c.dataset.mk; });
+        const hl = await page.evaluate(k => { const c = document.querySelector(`#list .evg-l .ev[data-mk="${k}"]`); return [c.classList.contains('hl'), !!c.getClientRects().length]; }, mk);
+        if (!hl[0] || !hl[1]) fail(where, `map pick in a group: ${JSON.stringify(hl)}`);
+      }
+      await page.screenshot({ path: path.join(OUT, `${vp}-events-rows.png`), fullPage: true });
+      // one title chosen: its name is not on every row
+      await page.goto(`${BASE}/events/?game=OPCG&pref=JP-13&${day}`, { waitUntil: 'networkidle' });
+      await page.locator('#list .ev').first().waitFor();
+      if (await page.locator('#list .ev-m .tag').count()) fail(where, 'game tag repeated under a one-title filter');
+      // calendar cells and chips
+      await page.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'networkidle' });
+      await page.locator(`.cd[data-day="${TODAY}"]`).waitFor();
+      const smallCal = await page.evaluate(smallText, '.ecal, #games');
+      if (smallCal.length) fail(where, `/events/ calendar text under 12px: ${smallCal.slice(0, 3).join(' | ')}`);
+
+      // home: OPCG has 10 more events today than the page holds: the group count is a minimum, ほか counts the rest
+      extra = 10;
+      await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })));
+      await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+      await page.locator('#evBody .gcol').first().waitFor();
+      const h = await page.evaluate(() => { const c = document.querySelector('#evBody .gcol[aria-label="ONE PIECE"]');
+        return { text: document.getElementById('evBody').textContent, rows: [...c.querySelectorAll(':scope .evs>.ev')].map(e => e.querySelector(':scope>.ev-n').textContent.replace('（外部サイト）', '')),
+          more: c.querySelector('a.go.more')?.textContent, tags: c.querySelectorAll('.ev-m .tag').length,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }; });
+      if (MARK.test(h.text)) fail(where, 'home: month marker left in an event name');
+      // 24 OPCG rows loaded (one cancelled), 3 shown on 3 columns: the groups, then the flagship battle
+      if (h.rows[0] !== 'スタンダードバトル — 20店舗以上' || h.rows[1] !== '交流会 — 3店舗以上') fail(where, `home rows ${JSON.stringify(h.rows)}`);
+      if (h.more !== 'ほか 11件 ›') fail(where, `home: more link ${h.more}`);
+      if (h.tags) fail(where, 'home: the column game repeated on its rows');
+      if (h.overflow > 1) fail(where, `home scrolls horizontally by ${h.overflow}px`);
+      const ht = page.locator('#evBody .evg-tog').first();
+      await ht.click();
+      const ho = await page.evaluate(() => [...document.querySelectorAll('#evBody .evg')[0].querySelectorAll('.evg-l a.ev-venue')].filter(a => a.getClientRects().length).length);
+      if (await ht.getAttribute('aria-expanded') !== 'true' || ho !== 20) fail(where, `home expand: ${ho} store links`);
+      const hs = await page.evaluate(smallText, '#evBody, #wkBody');
+      if (hs.length) fail(where, `home text under 12px: ${hs.slice(0, 3).join(' | ')}`);
+      await page.screenshot({ path: path.join(OUT, `${vp}-home-rows.png`), fullPage: true });
+      await ht.click();
+      if (await ht.getAttribute('aria-expanded') !== 'false') fail(where, 'home collapse failed');
+
+      await page.goto(`${BASE}/releases/`, { waitUntil: 'networkidle' });
+      const rs = await page.evaluate(smallText, opt.width > 760 ? '.cal .dow, .cal .dn, .cal .pk, #chips, .chips' : '.agenda .ag, .chips');
+      if (rs.length) fail(where, `/releases/ text under 12px: ${rs.slice(0, 3).join(' | ')}`);
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
 }
 // game icons (gi() in build.py) next to game names in both themes: every one loaded and at its fixed size
 {
