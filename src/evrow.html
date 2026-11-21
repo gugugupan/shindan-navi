@@ -203,14 +203,31 @@ window.snEv=(function(){
   });
   // opens the group holding el (a map pin picked a member row)
   function reveal(el){ const g=el&&el.closest('.evg'); const b=g&&g.querySelector(':scope>.ev-s>.evg-tog'); if(b&&b.getAttribute('aria-expanded')!=='true') setOpen(b,true); }
-  // Re-rendering a list (auto-paging) replaces its nodes: keep(root) remembers the focused group toggle or row control
-  // by group / event id, restore(root, k) focuses its new copy.
+  // Re-rendering a list (auto-paging) replaces its nodes: keep(root) remembers the focused control by what it is (a group
+  // toggle by group id; in a row, its event id and the control: source link, map pin, 地図なし) and the game column it
+  // sat in (home: a shared event has a row per column). restore(root, k) focuses its new copy, opening the group a row
+  // was folded into meanwhile; a row that joined a group has its source link on another element (venue on home).
+  const LINK='a.ev-link,a.ev-n,a.ev-venue';
   function keep(root){
     const a=document.activeElement; if(!a||!root.contains(a)) return null;
-    const g=a.matches('.evg-tog')&&a.closest('.evg'); if(g) return {sel:`.evg[data-g="${CSS.escape(g.dataset.g)}"]>.ev-s>.evg-tog`};
-    const r=a.closest('[data-id]'), c=a.classList[0]; return r&&c ? {sel:`[data-id="${CSS.escape(r.dataset.id)}"] .${CSS.escape(c)}`} : null;
+    const c=a.closest('.gcol'), col=c&&c.getAttribute('aria-label');
+    const g=a.matches('.evg-tog')&&a.closest('.evg'); if(g) return {col, g:g.dataset.g};
+    const r=a.closest('[data-id]'); if(!r) return null;
+    return {col, id:r.dataset.id, ctl:a.matches(LINK)?'link':a.matches('.ev-pin')?'.ev-pin':a.matches('.nomapt')?'.nomapt':null};
   }
-  function restore(root,k){ const el=k&&root.querySelector(k.sel); if(el&&document.activeElement!==el) el.focus({preventScroll:true}); }
+  function restore(root,k){
+    if(!k) return;
+    const scope=k.col ? root.querySelector(`.gcol[aria-label="${CSS.escape(k.col)}"]`) : root;
+    if(!scope) return;
+    let el;
+    if(k.g) el=scope.querySelector(`.evg[data-g="${CSS.escape(k.g)}"]>.ev-s>.evg-tog`);
+    else {
+      const r=scope.querySelector(`[data-id="${CSS.escape(k.id)}"]`); if(!r) return;
+      el=k.ctl==='link' ? r.querySelector(LINK) : k.ctl ? r.querySelector(k.ctl) : null;
+      if(el && el.closest('.evg-l[hidden]')) reveal(r);
+    }
+    if(el && document.activeElement!==el) el.focus({preventScroll:true});
+  }
   // events the shown items cover (rows count once each)
   const covered = items => items.reduce((t,x)=>t+(x.rows?x.rows.length:1),0);
   return {init(o){ gi=o.gi||gi; GAMES=o.games||GAMES; }, name, row, grp, group, reveal, covered, keep, restore, safeUrl, venueLabel, timeOf, codesOf, open};

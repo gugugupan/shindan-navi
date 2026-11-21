@@ -1356,6 +1356,73 @@ if (HAS_EVENTS) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
+// Focus across a re-render where a row joins a group: on /events/ a focused source link of a page-1 row, on / a focused
+// name link; page 2 brings a second store of the same event, so the row moves into a new group: the group opens and the
+// row's source link (on / the venue link) keeps focus. On / a shared event has a row in two columns: a re-render keeps
+// focus in the column it was in.
+if (HAS_EVENTS) {
+  const SAME = { name: '交流会（11月開催）', group: { name: '交流会', category: 'casual', event_type_code: 'meetup' } };
+  {
+    const where = 'desktop event row joins group';
+    const mk = i => ({ id: `j${i}`, name: `S${i}`, game_code: 'OPCG', game_codes: ['OPCG'], starts_on: TODAY, time_precision: 'datetime',
+      starts_at: `${TODAY}T${i < 50 ? '10' : '21'}:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'in_person', venue: { name: `店 ${i}` },
+      source_url: 'https://example.com/', event_status: 'scheduled', ...(i === 3 || i === 55 ? { ...SAME, starts_at: `${TODAY}T10:00:00+09:00` } : {}) });
+    const { ctx, page, bad } = await eventsPage('desktop', 60, mk, 1500);
+    try {
+      await page.goto(`${BASE}/events/?pref=JP-13&view=list`, { waitUntil: 'load' });
+      const link = page.locator('#list [data-id="j3"] .ev-link');
+      await link.waitFor();
+      await link.focus();
+      await page.waitForFunction(() => !!document.querySelector('#list .evg [data-id="j3"]'), null, { timeout: 15000 });
+      await page.waitForTimeout(100);
+      const r = await page.evaluate(() => { const a = document.activeElement, g = document.querySelector('#list .evg');
+        return { focus: a && a.matches('.ev-link') ? a.closest('[data-id]').dataset.id : a && a.tagName, open: g.querySelector('.evg-tog').getAttribute('aria-expanded'), vis: !!a && !!a.getClientRects().length }; });
+      if (r.focus !== 'j3' || r.open !== 'true' || !r.vis) fail(where, `focus after the row joined a group ${JSON.stringify(r)}`);
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
+  {
+    const where = 'desktop / focus on re-render';
+    const ctx = await browser.newContext({ viewport: VIEWPORTS.desktop, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [];
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    const ev = (id, codes, hh, x = {}) => ({ id, name: id, game_code: codes[0], game_codes: codes, starts_on: TODAY, time_precision: 'datetime',
+      starts_at: `${TODAY}T${hh}:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'in_person', venue: { name: `店 ${id}` },
+      source_url: 'https://example.com/', event_status: 'scheduled', ...x });
+    const p1 = [ev('z', ['OPCG', 'PTCG'], 13), ev('y1', ['OPCG'], 14, SAME), ...Array.from({ length: 48 }, (_, i) => ev(`p${i}`, ['PTCG'], 15 + (i % 5)))];
+    await page.route('**/api/v1/**', async route => {
+      const u = new URL(route.request().url());
+      if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 51, by_game: { OPCG: 3, PTCG: 49 } }] } });
+      if (u.searchParams.get('cursor')) { await new Promise(r => setTimeout(r, 1500)); return route.fulfill({ json: { events: [ev('y2', ['OPCG'], 20, SAME)], next_cursor: null } }); }
+      route.fulfill({ json: { events: p1, next_cursor: 'c1' } });
+    });
+    try {
+      await page.goto(`${BASE}/`);
+      await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })));
+      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      const nm = page.locator('#evBody .gcol[aria-label="ONE PIECE"] [data-id="y1"] a.ev-n');
+      await nm.waitFor();
+      await nm.focus();
+      await page.waitForFunction(() => !!document.querySelector('#evBody .evg [data-id="y1"]'), null, { timeout: 15000 });
+      await page.waitForTimeout(100);
+      const r = await page.evaluate(() => { const a = document.activeElement;
+        return { focus: a && a.matches('a.ev-venue') ? a.closest('[data-id]').dataset.id : a && a.tagName, open: document.querySelector('#evBody .evg .evg-tog').getAttribute('aria-expanded') }; });
+      if (r.focus !== 'y1' || r.open !== 'true') fail(where, `focus after the row joined a group ${JSON.stringify(r)}`);
+      // the shared event: focused in the PTCG column, it stays there
+      await page.locator('#evBody .gcol[aria-label="ポケモンカード"] [data-id="z"] a.ev-n').focus();
+      await page.evaluate(() => document.dispatchEvent(new Event('sn:user')));
+      const col = await page.evaluate(() => document.activeElement?.closest('.gcol')?.getAttribute('aria-label'));
+      if (col !== 'ポケモンカード') fail(where, `shared event focus moved to ${col}`);
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
+}
 // game icons (gi() in build.py) next to game names in both themes: every one loaded and at its fixed size
 {
   const GC = ['OPCG', 'UATCG', 'CONAN', 'PTCG'];
