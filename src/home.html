@@ -66,7 +66,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .wd h3 .dw.sat{color:var(--sat)} .wd h3 .dw.sun{color:var(--sun)}
 .wd h3 .lb{font-family:var(--body);font-size:10px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px}
 .wd ul{list-style:none;margin:0;padding:0;display:grid;gap:3px}
-.wd li{font-size:12px;line-height:1.35;min-width:0}
+.wd li{font-size:14px;line-height:1.4;min-width:0}
 .wd li a{color:var(--ink);text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
 .wd li a:hover{color:var(--accent)}
 .wd li .gl{font-size:12px;font-weight:700;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)));margin-right:4px}
@@ -347,7 +347,7 @@ if(window.snEv) snEv.init({gi, games:EVG});
 // in a game's column (src/evrow.html): the column's game is not repeated; an event shared with other games names them.
 // Identical events of the column (same type and name at several stores) fold into one expandable row.
 const evRow = (e,col,f) => snEv.row(e,{compact:true, col, pref:f.pref, started:started(e)});
-const evItem = (x,col,f,more) => x.e ? evRow(x.e,col,f) : snEv.grp(x,{compact:true, col, pref:f.pref, day:TODAY+'-'+col, more});
+const evItem = (x,col,f,more) => x.e ? evRow(x.e,col,f) : snEv.grp(x,{compact:true, col, pref:f.pref, day:TODAY+'-'+col, more, started:started(x.rows[0])});
 // A column's types today, busiest first: up to 3 named, else 2 and ほか (no type, その他 and unknown codes go to ほか).
 // None when /days has no by_game_type (answers cached before it existed).
 const TYPES = H.types||{};
@@ -386,16 +386,20 @@ function renderEv(){
     body.innerHTML = `<p class="none"><b>今日、${esc(LOC.locName(f.pref))}で予定されているイベントはありません</b>${nx?`<a class="go" href="${esc(dayLink(f,nx))}">次は ${md(nx)}・${ev.counts[nx]}件 ›</a>`:''}</p>`;
     return;
   }
-  const cols=todayCols(), k=SHOW(cols.length), hidden=todayGames().filter(c=>!cols.some(x=>x.g===c.g));
+  const cols=todayCols(), k=SHOW(cols.length), loadedToday=ev.list.filter(e=>e.starts_on===TODAY).length, hidden=todayGames().filter(c=>!cols.some(x=>x.g===c.g));
   const others = hidden.length ? `<div class="gcs gmore"><span class="lab">ほかのタイトル</span>${hidden.map(({g,n})=>`<a class="gc" style="${gvars(g)}" href="${esc(dayLink(f,TODAY,g.code))}" title="${esc(g.name)}・${n}件"><span>${gi(g.name)}${esc(g.name)}</span><b>${n}</b></a>`).join('')}</div>` : '';
+  const kept=snEv.keep(body);
   body.innerHTML = `<div class="gcols" style="--n:${Math.max(cols.length,1)}">${cols.map(({g,n})=>{
     // loaded rows of the column; a group's count is a minimum while the column has more events than loaded
     const all=rowsFor(g.code,TODAY), rows=snEv.group(all,dayRank).slice(0,k), rest=n-snEv.covered(rows), href=esc(dayLink(f,TODAY,g.code));
-    const list = rows.length ? `<ul class="evs">${rows.map(x=>evItem(x,g.code,f,all.length<n)).join('')}</ul>` : '';
+    // a group's count is a minimum until the column's rows are all loaded (without by_game: today's rows of every game)
+    const partial = ev.byGame[TODAY] ? all.length<n : loadedToday<(ev.counts[TODAY]||0);
+    const list = rows.length ? `<ul class="evs">${rows.map(x=>evItem(x,g.code,f,partial)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件 ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
     return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${typeLine(g.code)}${list}${more}</section>`;
   }).join('')}</div>${others}`;
+  snEv.restore(body,kept);
 }
 
 // The player's titles, read only: the /voices/ saved title filter (tcg.voices; VOICES builds), else the /events/ one;
@@ -440,7 +444,7 @@ function wkDay(d,i,f,sel,ym){
     const otherEv = sel&&known&&ev.byGame[d]&&!gs.length ? Math.max(0,total-gs.reduce((a,g)=>a+bg[g.code],0)) : 0;
     const ot = (hidden ? `<a class="rl" href="/releases/#d=${d}">ほかのタイトルの発売 <b>${hidden}</b>件 ›</a>` : '')
       + (otherEv ? `<a class="rl" href="${esc(dayLink(f,d))}">ほかのタイトルのイベント <b>${otherEv}</b>件 ›</a>` : '');
-    top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(snEv.name(e))}</a></li>`; }).join('')}</ul>${ot}`
+    top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a${snEv.safeUrl(e.source_url)?` href="${esc(snEv.safeUrl(e.source_url))}" target="_blank" rel="noopener"`:''} style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(snEv.name(e))}</a></li>`; }).join('')}</ul>${ot}`
       : chips ? ot : `<p class="q">${sel&&known?'選択中のタイトルの予定なし':sel?'選択中のタイトルの発売なし':known?'発売・イベントなし':'発売なし'}</p>${ot}`;
   }
   return {has:!!rel||gs.length>0||evs.length>0||(anyChip&&!sel),

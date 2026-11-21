@@ -52,17 +52,21 @@ window.snEv=(function(){
   const REG_METHOD = {first_come:'先着',lottery:'抽選',walk_in:'当日参加OK',invitation:'招待制'};
 
   // Month markers many sources add to every month's copy of the same event: （11月開催） (12月開催) 【2026年12月】
-  // 【26/11】 【26/11-12月】 【10_11月開催】 and a standalone leading 「11月度」. Other dates (シーズン2, 26-27) stay.
+  // 【26/11】 【26/11-12月】 【10_11月開催】 and a standalone leading 「11月度」. Months must be 1-12; the bare 【YY/MM】 form
+  // only counts when YY is the event's year (else it is a day, as in 【10/30】). Other dates (シーズン2, 26-27) stay.
   const SEP = '[\\/_・〜~\\-－–]';
+  const okM = (...ms) => ms.every(m=>m==null||(+m>=1&&+m<=12));
   const MARKS = [
-    new RegExp(`[（(]\\s*(?:\\d{2,4}年)?\\d{1,2}(?:${SEP}\\d{1,2})?月(?:開催|度)?\\s*[）)]`,'g'),
-    new RegExp(`【\\s*(?:\\d{2,4}年)?\\d{1,2}(?:${SEP}\\d{1,2})?月(?:開催|度)?\\s*】`,'g'),
-    new RegExp(`【\\s*\\d{2}\\/\\d{1,2}(?:${SEP}\\d{1,2}月?)?\\s*】`,'g'),
-    /^\s*\d{1,2}月度[\s　]+/
+    [new RegExp(`[（(]\\s*(?:\\d{2,4}年)?(\\d{1,2})(?:${SEP}(\\d{1,2}))?月(?:開催|度)?\\s*[）)]`,'g'), (e,m,a,b)=>okM(a,b)],
+    [new RegExp(`【\\s*(?:\\d{2,4}年)?(\\d{1,2})(?:${SEP}(\\d{1,2}))?月(?:開催|度)?\\s*】`,'g'), (e,m,a,b)=>okM(a,b)],
+    [new RegExp(`【\\s*(\\d{2})\\/(\\d{1,2})(?:${SEP}(\\d{1,2})月?)?\\s*】`,'g'),
+      (e,m,y,a,b)=>okM(a,b) && /^\d{4}-/.test(e.starts_on||'') && +y===+e.starts_on.slice(2,4)],
+    [/^\s*(\d{1,2})月度[\s　]+/, (e,m,a)=>okM(a)]
   ];
+  // e: an event (its starts_on dates 【YY/MM】), or {name, starts_on}
   function name(e){
     const raw=String(e&&e.name||'');
-    let s=raw; for(const re of MARKS) s=s.replace(re,' ');
+    let s=raw; for(const [re,ok] of MARKS) s=s.replace(re,(...a)=>ok(e,...a)?' ':a[0]);
     s=s.replace(/[\s　]+/g,m=>m.includes('　')?'　':' ').replace(/^[\s　]+|[\s　]+$/g,'');
     return s||raw;
   }
@@ -103,6 +107,8 @@ window.snEv=(function(){
       default: return {cls:'unk', text:'受付状況は公式で確認'};
     }
   }
+  // source links only over https; anything else renders without a link
+  const safeUrl = u => /^https:\/\//i.test(String(u||'')) ? String(u) : '';
   const stBadge = e => e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st post">延期</span>' : '';
   function tags(e,col){
     return codesOf(e).filter(c=>c!==col).map(c=>{ const x=GAMES[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="--gl:${x.c};--gd:${x.cd}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
@@ -123,30 +129,31 @@ window.snEv=(function(){
       if(REG_METHOD[e.registration_method]) facts.push({cls:'', text:REG_METHOD[e.registration_method]});
     }
     if(o.compact && o.started) facts.push({cls:'done', text:'開始済み'});
-    const href=esc(e.source_url), ext=`<span class="sr">（${esc(nm)}・外部サイト）</span>`;
+    const url=safeUrl(e.source_url), href=esc(url), ext=`<span class="sr">（${esc(nm)}・外部サイト）</span>`;
     const tg=o.member?'':tags(e,col);
-    const grp=!o.compact && e.group && e.group.name && name({name:e.group.name})!==nm && !nm.includes(name({name:e.group.name})) ? `<span class="grp">${esc(name({name:e.group.name}))}</span>` : '';
+    const gn=e.group&&e.group.name ? name({name:e.group.name, starts_on:e.starts_on}) : '';
+    const grp=!o.compact && gn && gn!==nm && !nm.includes(gn) ? `<span class="grp">${esc(gn)}</span>` : '';
     const cat=o.compact?'':catOf(e,nm);
     const title=nm!==e.name?` title="${esc(e.name)}"`:'';
     let n='';
     if(!o.member) n = o.compact
-      ? `<a class="ev-n" href="${href}" target="_blank" rel="noopener"${title}>${stBadge(e)}<span class="t">${esc(nm)}</span>${ext}</a>`
+      ? (url ? `<a class="ev-n" href="${href}" target="_blank" rel="noopener"${title}>${stBadge(e)}<span class="t">${esc(nm)}</span>${ext}</a>` : `<p class="ev-n"${title}>${stBadge(e)}<span class="t">${esc(nm)}</span></p>`)
       : `<h4 class="ev-n"${title}>${stBadge(e)}<span class="t">${esc(nm)}</span>${cat?`<span class="cat">${cat}</span>`:''}${grp}</h4>`;
-    const venue = o.member&&o.compact ? `<a class="ev-venue" href="${href}" target="_blank" rel="noopener">${place(e,o.pref)}${ext}</a>` : `<span class="ev-venue">${place(e,o.pref)}</span>`;
+    const venue = o.member&&o.compact&&url ? `<a class="ev-venue" href="${href}" target="_blank" rel="noopener">${place(e,o.pref)}${ext}</a>` : `<span class="ev-venue">${place(e,o.pref)}</span>`;
     const m=`<p class="ev-m">${tg}${o.member?stBadge(e):''}<span class="ev-time ${w.cls}">${w.text}</span>${venue}${o.pin||''}</p>`;
-    const link = o.compact ? '' : `<a class="ev-link" href="${href}" target="_blank" rel="noopener" data-game="${esc(e.game_code)}">${cancelled?'公式で確認':'公式で詳細・申込'} ↗${ext}</a>`;
-    const s = facts.length||link ? `<div class="ev-s">${facts.length?`<ul class="ev-f">${facts.map(f=>`<li class="${f.cls}">${f.text}</li>`).join('')}</ul>`:''}${link}</div>` : '';
+    const link = o.compact||!url ? '' : `<a class="ev-link" href="${href}" target="_blank" rel="noopener" data-game="${esc(e.game_code)}">${cancelled?'公式で確認':'公式で詳細・申込'} ↗${ext}</a>`;
+    const s = facts.length||link ? `<div class="ev-s">${facts.length?`<ul class="ev-f">${facts.map(f=>`<li class="${f.cls}">${esc(f.text)}</li>`).join('')}</ul>`:''}${link}</div>` : '';
     const tag=o.compact?'li':'article';
-    return `<${tag} class="ev${cancelled?' off':''}${o.cls||''}" style="${gvars(e.game_code)}"${o.attrs||''}>${n}${m}${s}</${tag}>`;
+    return `<${tag} class="ev${cancelled?' off':''}${o.cls||''}" style="${gvars(e.game_code)}" data-id="${esc(e.id)}"${o.attrs||''}>${n}${m}${s}</${tag}>`;
   }
 
-  // Identical events of one day: same games, event type and display name (and the same rank, so 開始済み / 中止
-  // ordering holds); cancelled ones stay single. Returns rows and groups ({key, rows}) in first-appearance order.
-  function group(rows,rank=()=>0){
+  // Identical events of one day: same games, event type and display name, and the same part (part(e): 開始済み or
+  // not, fixed for the load so an open group keeps its id); cancelled and postponed ones stay single. Returns rows and groups ({key, rows}) in first-appearance order.
+  function group(rows,part=()=>0){
     const out=[], by=new Map();
     for(const e of rows){
-      if(e.event_status==='cancelled'){ out.push({e}); continue; }
-      const k=[rank(e),codesOf(e).join('+'),e.group&&e.group.event_type_code||'',norm(name(e))].join('|');
+      if(e.event_status==='cancelled'||e.event_status==='postponed'){ out.push({e}); continue; }
+      const k=[part(e),codesOf(e).join('+'),e.group&&e.group.event_type_code||'',norm(name(e))].join('|');
       let g=by.get(k);
       if(!g){ g={key:k, rows:[]}; by.set(k,g); out.push(g); }
       g.rows.push(e);
@@ -159,9 +166,10 @@ window.snEv=(function(){
   // member (o for each member row)
   function grp(g,o={}){
     const e=g.rows[0], nm=name(e), id=`evg-${o.day||''}-${hash(g.key)}`, isOpen=open.has(id);
-    const vs=new Set(g.rows.map(x=>x.venue?venueLabel(x.venue):'')), stores=vs.has('')?0:vs.size;
-    const n=g.rows.length, ge=o.more?'以上':'';
-    const cnt=stores ? (stores===n ? `${stores}店舗${ge}` : `${stores}店舗・${n}件${ge}`) : `${n}件${ge}`;
+    // a store: the source's venue id, else name + address / city; partial loads count events only (both would be minimums)
+    const vk=v=>!v?'':v.source_id?'id:'+v.source_id:[venueLabel(v),v.address||v.city||''].join('|');
+    const vs=new Set(g.rows.map(x=>vk(x.venue))), stores=vs.has('')?0:vs.size, n=g.rows.length;
+    const cnt=o.more ? (stores===n ? `${n}店舗以上` : `${n}件以上`) : stores ? (stores===n ? `${stores}店舗` : `${stores}店舗・${n}件`) : `${n}件`;
     const ts=g.rows.filter(hasTime).map(x=>[Date.parse(x.starts_at),timeOf(x)]).sort((a,b)=>a[0]-b[0]);
     const tbd=g.rows.length-ts.length;
     const rng=ts.length ? (ts[0][1]===ts[ts.length-1][1] ? `${ts[0][1]}〜` : `${ts[0][1]}〜${ts[ts.length-1][1]} 開始`)+(tbd?'・時刻未定あり':'') : '時刻未定';
@@ -171,14 +179,15 @@ window.snEv=(function(){
     const ks=Object.keys(st), facts=ks.length===1&&st[ks[0]].n===n ? [{cls:st[ks[0]].cls,text:ks[0]}] : ks.map(k=>({cls:st[k].cls,text:`${k} ${st[k].n}`}));
     const ms=new Set(g.rows.map(x=>REG_METHOD[x.registration_method]||''));
     if(ms.size===1&&!ms.has('')) facts.push({cls:'',text:[...ms][0]});
+    if(o.compact && o.started) facts.push({cls:'done', text:'開始済み'});
     const cat=o.compact?'':catOf(e,nm), title=nm!==e.name?` title="${esc(e.name)}"`:'';
     const label=`${esc(nm)}・${cnt}の${stores?'店舗':'イベント'}を表示`;
     const n1 = o.compact
       ? `<p class="ev-n"${title}><span class="t">${esc(nm)}</span> <span class="evg-c">— <b>${cnt.replace(/(\d+)/,'$1</b>')}</span></p>`
       : `<h4 class="ev-n"${title}><span class="t">${esc(nm)}</span> <span class="evg-c">— <b>${cnt.replace(/(\d+)/,'$1</b>')}</span>${cat?`<span class="cat">${cat}</span>`:''}</h4>`;
     const m=`<p class="ev-m">${tags(e,o.col)}<span class="ev-time">${rng}</span></p>`;
-    const tog=`<button type="button" class="evg-tog" aria-expanded="${isOpen}" aria-controls="${id}" aria-label="${label}">${stores?'店舗を表示':'一覧を表示'}</button>`;
-    const s=`<div class="ev-s">${facts.length?`<ul class="ev-f">${facts.map(f=>`<li class="${f.cls}">${f.text}</li>`).join('')}</ul>`:''}${tog}</div>`;
+    const tog=`<button type="button" class="evg-tog" aria-expanded="${isOpen}" aria-controls="${id}" aria-label="${label}">${stores&&!(o.more&&stores!==n)?'店舗を表示':'一覧を表示'}</button>`;
+    const s=`<div class="ev-s">${facts.length?`<ul class="ev-f">${facts.map(f=>`<li class="${f.cls}">${esc(f.text)}</li>`).join('')}</ul>`:''}${tog}</div>`;
     const tag=o.compact?'li':'article', lt=o.compact?'ul':'div';
     const mem=g.rows.map(x=>row(x,{...o,...(o.memberOpts?o.memberOpts(x):{}),member:true,compact:o.compact})).join('');
     return `<${tag} class="ev evg${o.cls||''}" style="${gvars(e.game_code)}" data-g="${id}">${n1}${m}${s}<${lt} class="evg-l" id="${id}"${isOpen?'':' hidden'}>${mem}</${lt}></${tag}>`;
@@ -194,8 +203,16 @@ window.snEv=(function(){
   });
   // opens the group holding el (a map pin picked a member row)
   function reveal(el){ const g=el&&el.closest('.evg'); const b=g&&g.querySelector(':scope>.ev-s>.evg-tog'); if(b&&b.getAttribute('aria-expanded')!=='true') setOpen(b,true); }
+  // Re-rendering a list (auto-paging) replaces its nodes: keep(root) remembers the focused group toggle or row control
+  // by group / event id, restore(root, k) focuses its new copy.
+  function keep(root){
+    const a=document.activeElement; if(!a||!root.contains(a)) return null;
+    const g=a.matches('.evg-tog')&&a.closest('.evg'); if(g) return {sel:`.evg[data-g="${CSS.escape(g.dataset.g)}"]>.ev-s>.evg-tog`};
+    const r=a.closest('[data-id]'), c=a.classList[0]; return r&&c ? {sel:`[data-id="${CSS.escape(r.dataset.id)}"] .${CSS.escape(c)}`} : null;
+  }
+  function restore(root,k){ const el=k&&root.querySelector(k.sel); if(el&&document.activeElement!==el) el.focus({preventScroll:true}); }
   // events the shown items cover (rows count once each)
   const covered = items => items.reduce((t,x)=>t+(x.rows?x.rows.length:1),0);
-  return {init(o){ gi=o.gi||gi; GAMES=o.games||GAMES; }, name, row, grp, group, reveal, covered, venueLabel, timeOf, codesOf, open};
+  return {init(o){ gi=o.gi||gi; GAMES=o.games||GAMES; }, name, row, grp, group, reveal, covered, keep, restore, safeUrl, venueLabel, timeOf, codesOf, open};
 })();
 </script>

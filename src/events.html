@@ -716,6 +716,10 @@ let dayBudget = DAY_AUTO_PAGES;
 // once today is complete: 'ranked' (upcoming first) unless the reader had scrolled into or past today, else 'start'.
 const TODAY_AUTO_PAGES = 4;
 let todayBudget = TODAY_AUTO_PAGES, todayOrder = null;
+// 開始済み or not per event, fixed for a load: groups (src/evrow.html) are split by it, so an open group keeps its id
+// when today's last page arrives and the order switches to upcoming-first
+const startedOf = new Map();
+const partOf = e => { if(!startedOf.has(e.id)) startedOf.set(e.id, started(e)?1:0); return startedOf.get(e.id); };
 const todayRows = () => events.filter(e=>e.starts_on===TODAY);
 const todayComplete = () => !!dayCounts && dayCounts[TODAY]!=null && todayRows().length>=dayCounts[TODAY];
 const needToday = () => { const t=todayRows(); return t.length>0 && !todayComplete() && !t.some(e=>dayRank(e)===0); };
@@ -736,7 +740,7 @@ function reload(){
   if(ctrl) ctrl.abort();
   ctrl=new AbortController(); gen++;
   events=[]; segs=segments(rangeOf(state)); seg=0; nextCursor=null; done=false; total=null; dayCounts=null; failed=false;
-  dayBudget=DAY_AUTO_PAGES; todayBudget=TODAY_AUTO_PAGES; todayOrder=null; resetMap(); syncMap();
+  dayBudget=DAY_AUTO_PAGES; todayBudget=TODAY_AUTO_PAGES; todayOrder=null; startedOf.clear(); resetMap(); syncMap();
   renderNotice(); renderHead();
   clearTimeout(reloadTimer);
   if(!state.pref.length){ renderPrompt(); return; }
@@ -848,19 +852,21 @@ function renderList(){
     todayOrder = !sec || sec.getBoundingClientRect().top >= document.querySelector('.bar').getBoundingClientRect().bottom-1 ? 'ranked' : 'start';
   }
   // other days (and today until its order is fixed) only move cancelled events to their end
-  const rank = (e,k) => k===TODAY&&todayOrder==='ranked' ? dayRank(e) : e.event_status==='cancelled' ? 2 : 0;
+  const rank = (e,k) => e.event_status==='cancelled' ? 2 : k===TODAY&&todayOrder==='ranked' ? partOf(e) : 0;
   let h='';
   const day=isDay();
   byDay.forEach((its,k)=>{
     const [,,dd]=k.split('-').map(Number), w=dowOf(k);
-    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${snEv.group([...its].sort((a,b)=>rank(a,k)-rank(b,k)),e=>rank(e,k)).map((x,i,a)=>{
+    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${snEv.group([...its].sort((a,b)=>rank(a,k)-rank(b,k)),partOf).map((x,i,a)=>{
       const r=rank(x.e||x.rows[0],k), p=i&&rank(a[i-1].e||a[i-1].rows[0],k);
       return (r===1&&(!i||p===0)?'<p class="evsep">開始済みのイベント</p>':'')+(x.e?card(x.e,day):groupCard(x,day,k,!(dayCounts&&dayCounts[k]!=null&&its.length>=dayCounts[k])));
     }).join('')}</div></section>`;
   });
   const rest = total!=null && segs.every(x=>x.count!=null) ? total-events.length : null;
   if(!done) h+=`<button class="loadmore" id="loadMore"${busy?' disabled':''}>${busy?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;
+  const kept=snEv.keep(listEl);
   tipBtn=null; listEl.innerHTML=h;
+  snEv.restore(listEl,kept);
   const lm=document.getElementById('loadMore'); if(lm && io && !failed) io.observe(lm);
   // Auto-paging re-renders under the pointer: keep the highlight while its venue still has a card (mouseleave clears it).
   if(hoverKey && !listEl.querySelector(`.ev[data-mk="${CSS.escape(hoverKey)}"]`)) hoverVenue(null);
