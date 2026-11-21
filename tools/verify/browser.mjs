@@ -621,6 +621,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         if (!links.length || links.some(h => want ? !h.startsWith(`/events/?${want}pref=JP-13&range=custom`) : h.includes('game='))) fail(where, `next month, ${g}: ${links.join(' ')}`);
       }
       await p2.close();
+      // the clock is the context's: p2 moved page to the month's end too
+      await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
     }
     // no location, selection only: releases filtered, no API call
     if (code) {
@@ -943,8 +945,8 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     const wantN = await expect({ att: 'negative' }), gotN = await shown();
     for (const d of inView) if (wantN[d] ? !marksOk(gotN[d], wantN[d]) : gotN[d] !== undefined) fail(where, `negative filter ${d}: ${JSON.stringify(gotN[d])}, expected ${JSON.stringify(wantN[d] && perGame(wantN[d]))}`);
     if (JSON.parse(await page.evaluate(() => localStorage.getItem('tcg.voices'))).att !== 'negative') fail(where, 'attitude filter not saved');
-    // game filter: one game's chip leaves only its topics
-    const g = await page.locator('#games .chip.g').first().getAttribute('data-v');
+    // game filter: one game's chip (the first with topics under the attitude filter) leaves only its topics
+    const g = await page.evaluate(() => [...document.querySelectorAll('#games .chip.g')].find(c => +c.querySelector('em').textContent > 0)?.dataset.v);
     await page.locator(`#games .chip.g[data-v="${g}"]`).click();
     const games = await page.evaluate(() => [...document.querySelectorAll('.vbar,.vg,.vchip')].filter(e => e.offsetParent).map(e => e.getAttribute('style')));
     const gs = await page.locator(`#games .chip.g[data-v="${g}"]`).getAttribute('style');
