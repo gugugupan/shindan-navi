@@ -1,10 +1,13 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from '../src/index';
 import { REPO_DIR } from '../scripts/lib/importer.mjs';
 import {
-  checkSnapshot, checkTimeline, hashOf, bodyOf, loadVoices, planVoices, removeTopics, voicesState, VOICES_STATE_SQL, DEFAULT_VOICES_DIR,
+  checkSnapshot, checkTimeline, hashOf, bodyOf, loadVoices, planVoices, removeTopics, voicesState, redact, todayJst,
+  VOICES_STATE_SQL, DEFAULT_VOICES_DIR,
 } from '../scripts/lib/voices.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 import { importDir, run, synthetic, writeDataDir } from './helpers';
@@ -19,10 +22,24 @@ const snap = (over: Record<string, unknown> = {}, topics: Record<string, unknown
   version: 1, date: '2026-11-20', window: { from: '2026-11-18', to: '2026-11-20' }, topics, ...over,
 });
 const check = (s: unknown, name = '2026-11-20.json') => checkSnapshot(name, JSON.stringify(s, null, 2), { today: TODAY });
+const API_DIR = join(REPO_DIR, 'api');
+
+/** Fixed fixture snapshots (not data/voices/, which keeps changing): 11-20 with two topics, 11-21 continuing one. */
+const FIXTURES = [
+  snap({}, [topic(), topic({ id: 'ptcg-fixture', game: 'PTCG', status: 'new', reacting_to: 'https://x.com/pokemon_cojp/status/123' })]),
+  snap({ date: '2026-11-21', window: { from: '2026-11-19', to: '2026-11-21' } }, [topic({ status: 'continuing', window: { from: '2026-11-19', to: '2026-11-21' } })]),
+];
+function fixtureDir(list: Record<string, any>[] = FIXTURES) {
+  const dir = mkdtempSync(join(tmpdir(), 'voices-fixture-'));
+  for (const s of list) writeFileSync(join(dir, `${s.date}.json`), JSON.stringify(s, null, 2) + '\n');
+  return dir;
+}
+const served = (list: Record<string, any>[] = FIXTURES) => list.map((s) => ({ date: s.date, window: s.window, topics: s.topics }));
 
 describe('voices validation (build.py voices_data rules)', () => {
   it('accepts the committed snapshots and keeps only date, window and topics', () => {
-    const r = loadVoices(DEFAULT_VOICES_DIR, { today: TODAY });
+    // the live files against the real date: only "not after today" depends on it
+    const r = loadVoices(DEFAULT_VOICES_DIR, { today: todayJst() });
     expect(r.errors).toEqual([]);
     expect(r.snapshots.size).toBe(readdirSync(DEFAULT_VOICES_DIR).filter((f) => f.endsWith('.json')).length);
     for (const s of r.snapshots.values()) expect(Object.keys(s)).toEqual(['date', 'window', 'topics']);
@@ -38,8 +55,11 @@ describe('voices validation (build.py voices_data rules)', () => {
 
   it.each([
     ['posts', snap({}, [{ ...topic(), posts: ['https://x.com/someone/status/1'] }]), /posts: player post URLs/],
-    ['an X URL outside reacting_to', snap({ note: 'see https://x.com/someone/status/12' }), /X URL that is not a topic's reacting_to/],
-    ['a twitter.com URL in a voice', snap({}, [topic({ voices: ['https://twitter.com/a/status/1'] })]), /X URL/],
+    ['an X URL in the note', snap({ note: 'see https://x.com/someone/status/12' }), /X URL outside a topic's reacting_to at \/note/],
+    ['a twitter.com URL in a voice', snap({}, [topic({ voices: ['https://twitter.com/a/status/1'] })]), /at \/topics\/0\/voices\/0/],
+    ['an official URL repeated in a summary', snap({}, [topic({ reacting_to: 'https://x.com/ONEPIECE_tcg/status/1', summary: 'https://x.com/ONEPIECE_tcg/status/1' })]), /at \/topics\/0\/summary/],
+    ['another topic\'s reacting_to in a title', snap({}, [topic({ reacting_to: 'https://x.com/a/status/1' }), topic({ id: 'opcg-two', title: 'x.com/a/status/1' })]), /at \/topics\/1\/title/],
+    ['a scheme-less X host', snap({}, [topic({ voices: ['mobile.x.com/someone'] })]), /X URL outside/],
     ['a non-status reacting_to', snap({}, [topic({ reacting_to: 'https://x.com/ONEPIECE_tcg' })]), /reacting_to must be/],
     ['a long title', snap({}, [topic({ title: 'あ'.repeat(41) })]), /title empty or over 40/],
     ['a long summary', snap({}, [topic({ summary: 'あ'.repeat(161) })]), /summary empty or over 160/],
@@ -57,6 +77,16 @@ describe('voices validation (build.py voices_data rules)', () => {
     const r = check(s, name);
     expect(r.snapshot).toBeNull();
     expect(r.errors.join('\n')).toMatch(re);
+  });
+
+  it('decodes escaped slashes before looking for X URLs', () => {
+    const text = JSON.stringify(snap({ note: 'NOTE' })).replace('"NOTE"', '"https:\\/\\/x.com\\/someone\\/status\\/1"');
+    expect(text).toContain('\\/x.com');
+    expect(checkSnapshot('2026-11-20.json', text, { today: TODAY }).errors.join()).toMatch(/at \/note/);
+  });
+
+  it('accepts a topic\'s own reacting_to and hosts that only end like x.com', () => {
+    expect(check(snap({ note: 'box.com, fax.company' }, [topic({ reacting_to: 'https://x.com/ONEPIECE_tcg/status/1' })])).errors).toEqual([]);
   });
 
   it('counts code points like Python', () => {
@@ -103,11 +133,33 @@ describe('voices plan', () => {
     expect(pruned.statements[0]).toBe("DELETE FROM voice_snapshots WHERE date IN ('2026-11-21')");
   });
 
-  it('removes a topic from every snapshot and drops a snapshot left empty', () => {
+  it('removes a topic from every snapshot; a snapshot left empty deletes its row', () => {
     const both = new Map([[s1.date, s1], [s2.date, { ...s2, topics: [...s2.topics, topic({ status: 'continuing', window: s2.window })] }]]);
     const out = removeTopics(both, ['opcg-test-topic']);
-    expect([...out.keys()]).toEqual(['2026-11-21']);
+    expect(out.get('2026-11-20')!.topics).toEqual([]);
     expect(out.get('2026-11-21')!.topics.map((t: { id: string }) => t.id)).toEqual(['opcg-other']);
+    const cur = new Map([[s1.date, { hash: hashOf(bodyOf(s1)) }], [s2.date, { hash: hashOf(bodyOf(both.get(s2.date)!)) }]]);
+    const plan = planVoices(out, cur, { now });
+    expect(plan.rows.map((r) => [r.date, r.action])).toEqual([['2026-11-20', 'delete'], ['2026-11-21', 'update']]);
+  });
+
+  it('a local file with topics [] deletes that date (and bumps the version); other D1-only dates stay', () => {
+    const s3 = { date: '2026-11-19', window: { from: '2026-11-17', to: '2026-11-19' }, topics: [] };
+    const cur = new Map([[s1.date, { hash: hashOf(bodyOf(s1)) }], [s3.date, { hash: 'y'.repeat(64) }], ['2026-11-18', { hash: 'z'.repeat(64) }]]);
+    const plan = planVoices(new Map<string, any>([[s1.date, s1], [s3.date, s3]]), cur, { now });
+    expect(plan.rows.map((r) => [r.date, r.action])).toEqual([['2026-11-18', 'kept (no local file; --prune deletes)'], ['2026-11-19', 'delete'], ['2026-11-20', 'unchanged']]);
+    expect(plan.statements).toEqual([
+      "DELETE FROM voice_snapshots WHERE date IN ('2026-11-19')",
+      "INSERT INTO voice_meta (key, value) VALUES ('version', '1000') ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    ]);
+    // a date with topics [] that D1 does not have: nothing to do
+    expect(planVoices(new Map<string, any>([[s3.date, s3]]), new Map(), { now }).statements).toEqual([]);
+  });
+
+  it('redacts every UUID and the database id from wrangler output', () => {
+    const id = '0badc0de-1234-4abc-8def-0123456789ab';
+    expect(redact(`Executing on remote database shindan-navi-events (${id}):\n${id.toUpperCase()}`, id)).toBe('Executing on remote database shindan-navi-events (<redacted>):\n<redacted>');
+    expect(redact('id=not-a-uuid-secret', 'not-a-uuid-secret')).toBe('id=<redacted>');
   });
 });
 
@@ -126,13 +178,11 @@ class FakeCache {
 }
 
 function seed(db: SqliteD1, now = 2_000) {
-  const r = loadVoices(DEFAULT_VOICES_DIR, { today: TODAY });
+  const r = loadVoices(fixtureDir(), { today: TODAY });
   const plan = planVoices(r.snapshots, voicesState(db.db.prepare(VOICES_STATE_SQL).all()).current, { now: new Date(now), hasVersion: false });
   db.execAll(plan.statements);
   return r.snapshots;
 }
-const files = () => readdirSync(DEFAULT_VOICES_DIR).filter((f) => f.endsWith('.json')).sort()
-  .map((f) => JSON.parse(readFileSync(join(DEFAULT_VOICES_DIR, f), 'utf8'))).filter((s) => !s.sample);
 
 describe('voices API', () => {
   let raw: SqliteD1;
@@ -168,7 +218,7 @@ describe('voices API', () => {
 
   it('serves every snapshot oldest first, and the latest one', async () => {
     seed(raw);
-    const want = files().map((s) => ({ date: s.date, window: s.window, topics: s.topics }));
+    const want = served();
     const all = await call('/api/v1/voices');
     expect(all.res.status).toBe(200);
     expect(all.res.headers.get('x-robots-tag')).toBe('noindex');
@@ -205,13 +255,13 @@ describe('voices API', () => {
     const snaps = seed(raw);
     await call('/api/v1/voices/latest');
     const [d, s] = [...snaps].at(-1)!;
-    const plan = planVoices(new Map([[d, { ...s, topics: s.topics.slice(1) }]]), voicesState(raw.db.prepare(VOICES_STATE_SQL).all()).current, { now: new Date(3_000) });
+    const plan = planVoices(new Map([[d, { ...s, topics: s.topics.map((t: any) => ({ ...t, title: '更新' })) }]]), voicesState(raw.db.prepare(VOICES_STATE_SQL).all()).current, { now: new Date(3_000) });
     raw.execAll(plan.statements);
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 61_000);
     const b = await call('/api/v1/voices/latest');
     expect(b.res.headers.get('x-edge-cache')).toBe('miss');
     expect(b.body.version).toBe('3000');
-    expect(b.body.snapshot.topics).toHaveLength(s.topics.length - 1);
+    expect(b.body.snapshot.topics.map((t: any) => t.title)).toEqual(s.topics.map(() => '更新'));
     vi.restoreAllMocks();
   });
 
@@ -225,7 +275,125 @@ describe('voices API', () => {
   });
 });
 
-it('the migration stays pending: not in api/migrations', () => {
-  expect(readdirSync(join(REPO_DIR, 'api/migrations')).some((f) => f.includes('voices'))).toBe(false);
-  expect(readdirSync(join(REPO_DIR, 'api/migrations-pending'))).toContain('0008_voices.sql');
+describe('migration 0008', () => {
+  const pendingDir = join(API_DIR, 'migrations-pending');
+  const where = () => ['migrations', 'migrations-pending'].filter((d) => existsSync(join(API_DIR, d, '0008_voices.sql')));
+  const hasTables = (db: SqliteD1) => db.db.prepare("SELECT name FROM sqlite_master WHERE name IN ('voice_snapshots', 'voice_meta')").all().length === 2;
+
+  it('lives in exactly one of migrations-pending/ (until the owner moves it) or migrations/', () => {
+    expect(where()).toHaveLength(1);
+  });
+
+  it('migratePending works before the move and after it (a copy of migrations/ holding 0008)', () => {
+    const before = new SqliteD1().migratePending();
+    expect(hasTables(before)).toBe(true);
+    const moved = mkdtempSync(join(tmpdir(), 'migrations-'));
+    for (const f of readdirSync(join(API_DIR, 'migrations'))) copyFileSync(join(API_DIR, 'migrations', f), join(moved, f));
+    copyFileSync(join(API_DIR, where()[0], '0008_voices.sql'), join(moved, '0008_voices.sql'));
+    const after = new SqliteD1().migrate(moved);
+    expect(hasTables(after)).toBe(true);
+    // the pending copy (same name) is then skipped, and running it twice is harmless anyway
+    expect(() => after.migratePending()).not.toThrow();
+    expect(() => after.db.exec(readFileSync(join(moved, '0008_voices.sql'), 'utf8'))).not.toThrow();
+    if (!existsSync(pendingDir)) expect(() => new SqliteD1().migratePending()).not.toThrow();
+  });
+});
+
+// ---- the CLI on a throwaway SQLite file
+describe('import-voices.mjs', () => {
+  const cli = (args: string[], env: Record<string, string> = {}) => spawnSync(process.execPath, ['scripts/import-voices.mjs', ...args], {
+    cwd: API_DIR, encoding: 'utf8', env: { ...process.env, ...env },
+  });
+  const sqliteArgs = (db: string) => ['--target', 'sqlite', '--sqlite', db];
+  const rows = (db: string) => {
+    const d = new SqliteD1(db);
+    const out = d.db.prepare('SELECT date, body FROM voice_snapshots ORDER BY date').all().map((r) => [r.date, JSON.parse(String(r.body)).topics.map((t: any) => t.id)]);
+    d.close();
+    return out;
+  };
+  const seeded = () => {
+    const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
+    const data = fixtureDir();
+    const r = cli([...sqliteArgs(db), '--data', data, '--apply-pending', '--yes']);
+    expect(r.status, r.stderr).toBe(0);
+    return { db, data };
+  };
+
+  it('refuses --plan with --yes before opening anything', () => {
+    const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
+    const r = cli([...sqliteArgs(db), '--data', fixtureDir(), '--plan', '--yes', '--apply-pending']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--plan and --yes/);
+    expect(existsSync(db)).toBe(false);
+  });
+
+  it('plans without creating or migrating the database file', () => {
+    const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
+    const missing = cli([...sqliteArgs(db), '--data', fixtureDir()]);
+    expect(missing.status).toBe(1);
+    expect(missing.stderr).toMatch(/no voice_snapshots \/ voice_meta table \(the file does not exist\)/);
+    const pending = cli([...sqliteArgs(db), '--data', fixtureDir(), '--plan', '--apply-pending']);
+    expect(pending.status, pending.stderr).toBe(0);
+    expect(pending.stdout).toMatch(/2026-11-20 {2}insert/);
+    expect(existsSync(db)).toBe(false);
+  });
+
+  it('refuses an empty --remove-topic / --remove-snapshot instead of importing', () => {
+    const { db, data } = seeded();
+    writeFileSync(join(data, '2026-11-21.json'), JSON.stringify(snap({ date: '2026-11-21', window: { from: '2026-11-19', to: '2026-11-21' } }, [topic({ id: 'opcg-new', window: { from: '2026-11-19', to: '2026-11-21' } })]), null, 2));
+    for (const flag of ['--remove-topic', '--remove-snapshot']) {
+      for (const v of ['', ' , ']) {
+        const r = cli([...sqliteArgs(db), '--data', data, flag, v, '--yes']);
+        expect(r.status).toBe(2);
+        expect(r.stderr).toMatch(/names no/);
+      }
+    }
+    expect(rows(db)).toEqual([['2026-11-20', ['opcg-test-topic', 'ptcg-fixture']], ['2026-11-21', ['opcg-test-topic']]]);
+  });
+
+  it('a takedown cleans every local file holding the id, also one that fails validation', () => {
+    const { db, data } = seeded();
+    // 11-21 made invalid (an unknown game on another topic): the import would reject it, the takedown still cleans it
+    const bad = JSON.parse(readFileSync(join(data, '2026-11-21.json'), 'utf8'));
+    bad.topics.push(topic({ id: 'zzz-other', game: 'ZZZ', window: bad.window }));
+    writeFileSync(join(data, '2026-11-21.json'), JSON.stringify(bad, null, 2));
+    const r = cli([...sqliteArgs(db), '--data', data, '--remove-topic', 'opcg-test-topic', '--yes']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(rows(db)).toEqual([['2026-11-20', ['ptcg-fixture']]]);
+    for (const f of readdirSync(data)) expect(readFileSync(join(data, f), 'utf8')).not.toMatch(/"opcg-test-topic"/);
+    expect(JSON.parse(readFileSync(join(data, '2026-11-21.json'), 'utf8')).topics.map((t: any) => t.id)).toEqual(['zzz-other']);
+  });
+
+  it('a takedown stops before writing when a file cannot be cleaned', () => {
+    const { db, data } = seeded();
+    writeFileSync(join(data, 'broken.json'), '{ "topics": [ "opcg-test-topic" ');
+    const r = cli([...sqliteArgs(db), '--data', data, '--remove-topic', 'opcg-test-topic', '--yes']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/broken\.json: names opcg-test-topic but is not a readable snapshot/);
+    expect(rows(db)).toEqual([['2026-11-20', ['opcg-test-topic', 'ptcg-fixture']], ['2026-11-21', ['opcg-test-topic']]]);
+    const noted = fixtureDir();
+    const s = JSON.parse(readFileSync(join(noted, '2026-11-20.json'), 'utf8'));
+    writeFileSync(join(noted, '2026-11-20.json'), JSON.stringify({ ...s, note: 'see opcg-test-topic' }, null, 2));
+    const r2 = cli([...sqliteArgs(db), '--data', noted, '--remove-topic', 'opcg-test-topic', '--yes']);
+    expect(r2.status).toBe(1);
+    expect(r2.stderr).toMatch(/still names opcg-test-topic outside its topics/);
+  });
+
+  it('a whole-snapshot takedown deletes the row and the file', () => {
+    const { db, data } = seeded();
+    const r = cli([...sqliteArgs(db), '--data', data, '--remove-snapshot', '2026-11-21', '--yes']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(rows(db).map((x) => x[0])).toEqual(['2026-11-20']);
+    expect(readdirSync(data)).toEqual(['2026-11-20.json']);
+  });
+
+  it('an emptied local file deletes its date on import', () => {
+    const { db, data } = seeded();
+    const s = JSON.parse(readFileSync(join(data, '2026-11-21.json'), 'utf8'));
+    writeFileSync(join(data, '2026-11-21.json'), JSON.stringify({ ...s, topics: [] }, null, 2));
+    const r = cli([...sqliteArgs(db), '--data', data, '--yes']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/2026-11-21 {2}delete/);
+    expect(rows(db).map((x) => x[0])).toEqual(['2026-11-20']);
+  });
 });

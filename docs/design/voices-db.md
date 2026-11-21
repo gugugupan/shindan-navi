@@ -52,20 +52,25 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node, applies
 
 - Validation = build.py `voices_data()` rules (fields, lengths in code points, game codes from `src/voices.html`,
   window / date / file name, share, voices, `reacting_to` as an x.com status URL), plus `contracts/voices.schema.json`
-  (ajv), plus: no `posts`, no X / Twitter URL anywhere in the file except a topic's `reacting_to`, no date after
+  (ajv), plus: no `posts`; every decoded string (by JSON path, keys and `note` included) is checked for an X /
+  Twitter host, allowed only as that topic's own `reacting_to`; no date after
   today (JST), each body under 90 KB (D1 statement limit). Samples are skipped with a warning, never imported.
 - Across snapshots (D1 rows not overridden + local files): an id keeps its `game` and `first_seen`; `new` only on its
   first appearance. A `continuing` / `cooling` id with no earlier snapshot is a warning (first snapshot, takedowns).
-- Plan: per date `insert` / `update` / `unchanged` by hash. A date in D1 without a local file is kept unless
-  `--prune` (then `delete`). Without `--yes` nothing is written (`--plan` is accepted and is the default).
+- Plan: per date `insert` / `update` / `unchanged` / `delete` by hash. A local file with `topics: []` deletes its date;
+  a date in D1 without any local file is kept unless `--prune`. Without `--yes` nothing is written, and a SQLite file
+  is opened read-only (never created or migrated). `--plan` with `--yes` is refused, as is an empty
+  `--remove-topic` / `--remove-snapshot` value (it would otherwise fall through to an import).
 - `--yes`: all statements in one `wrangler d1 execute --file` (or one SQLite transaction), last statement bumps
   `voice_meta.version` (= `Date.now()`), which is part of the API cache keys.
 - Takedown: starts from the D1 rows, removes the topic from every date that lists it (a date left empty is deleted) or
-  the whole date, writes D1, then applies the same removal to the files in `--data` (rewritten with 2-space JSON or
-  deleted; commit them). Continuity problems are warnings here.
+  the whole date, writes D1, then applies the same removal to every file in `--data` that holds the id or date, valid
+  or not (rewritten with 2-space JSON or deleted; commit them). A file it cannot clean (unparseable, or still naming
+  the id, e.g. in `note`) stops the run before anything is written; a final check fails the run if any file still
+  holds it. Continuity problems are warnings here.
 - Targets as `import-events.mjs`: `remote` needs `D1_DATABASE_ID` (written to the git-ignored `wrangler.remote.json`
-  by `remote-config.mjs`, never printed). The importer never migrates: if the tables are missing it stops and points
-  at the pending migration.
+  by `remote-config.mjs`). Wrangler's output is captured on every call and shown with each UUID and the id redacted.
+  The importer never migrates: if the tables are missing it stops and points at the pending migration.
 
 ## Read path: the Worker
 
@@ -82,7 +87,9 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node, applies
 ## Front end
 
 - `/voices/`: everything that depends on the snapshots moved into `boot(snapshots)`; static builds call it with the
-  embedded data, d1 builds after the fetch. Loading state 「話題を読み込んでいます…」, error state with 再読み込み.
+  embedded data, d1 builds after the fetch and a shape check of the answer (dates, ids, games, enums, the
+  `reacting_to` form). Loading state 「話題を読み込んでいます…」; a failed or malformed answer shows the error state with
+  再読み込み (a throw inside `boot()` too, whose 再読み込み reloads the page).
 - Home: いま話題 stays hidden until `/latest` answers, and on any failure (no retry: it is a teaser).
 
 ## Verification

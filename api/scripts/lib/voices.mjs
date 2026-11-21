@@ -13,7 +13,8 @@ export const MAX_BODY_BYTES = 90_000;
 const TOP = ['version', 'date', 'window', 'sample', 'note', 'topics'];
 const TOPIC = ['id', 'game', 'title', 'summary', 'attitude', 'share', 'volume', 'voices', 'reacting_to', 'window', 'first_seen', 'status', 'source'];
 const XPOST = /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/[0-9]{1,20}$/;
-const ANY_X = /https?:\/\/(?:[a-z0-9-]+\.)*(?:x|twitter)\.com\/[^\s"'<>\\]*/gi;
+// an X / Twitter host anywhere in a decoded string, with or without a scheme (box.com does not match)
+const ANY_X = /(?:^|[^a-z0-9-])(?:[a-z0-9-]+\.)*(?:x|twitter)\.com(?![a-z0-9-])/i;
 const ID = /^[a-z0-9][a-z0-9-]{2,63}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,6 +34,18 @@ const validateSchema = (s) => {
   schema ??= new Ajv({ allErrors: true, strict: false }).compile(JSON.parse(readFileSync(join(CONTRACTS_DIR, 'voices.schema.json'), 'utf8')));
   return schema(s) ? [] : schema.errors.slice(0, 10).map((e) => `schema: ${e.instancePath || '/'} ${e.message}`);
 };
+
+/** [JSON pointer, value] of every string in v; object keys come under their path + '#key'. */
+function* strings(v, p = '') {
+  if (typeof v === 'string') yield [p, v];
+  else if (Array.isArray(v)) for (let i = 0; i < v.length; i++) yield* strings(v[i], `${p}/${i}`);
+  else if (v && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) {
+      yield [`${p}/${k}#key`, k];
+      yield* strings(x, `${p}/${k}`);
+    }
+  }
+}
 
 /**
  * One snapshot file's text. Returns {date, sample, snapshot: {date, window, topics} | null, errors, warnings}.
@@ -68,7 +81,6 @@ export function checkSnapshot(name, text, { games = voiceGames(), today = todayJ
   }
   errors.push(...validateSchema(s).map((e) => `${name}: ${e}`));
   const ids = new Set();
-  const official = new Set();
   for (const t of s.topics) {
     const tid = t && typeof t === 'object' ? t.id : '?';
     const tbad = (m) => bad(`topic ${tid}: ${m}`);
@@ -97,15 +109,14 @@ export function checkSnapshot(name, text, { games = voiceGames(), today = todayJ
     if (!['high', 'mid', 'low'].includes(t.volume)) tbad('volume');
     if (!(Array.isArray(t.voices) && t.voices.length <= 3 && t.voices.every((v) => typeof v === 'string' && v.trim() && len(v) <= 80))) tbad('voices: at most 3 strings of 1-80 characters');
     if (t.reacting_to !== null && !(typeof t.reacting_to === 'string' && XPOST.test(t.reacting_to))) tbad('reacting_to must be an x.com status URL or null');
-    if (t.reacting_to) official.add(t.reacting_to);
     const tw = t.window;
     if (!(tw && typeof tw === 'object' && Object.keys(tw).length === 2 && w && tw.from === w.from && tw.to === w.to)) tbad('window differs from the snapshot window');
     if (!realDate(t.first_seen) || t.first_seen > s.date) tbad('first_seen after the snapshot date');
     if (!['new', 'continuing', 'cooling'].includes(t.status)) tbad('status');
     if (!['grok-app', 'openrouter', 'x-api'].includes(t.source)) tbad('source');
   }
-  // anywhere in the file (note included): an X / Twitter URL is only ever a topic's official reacting_to post
-  for (const u of new Set(text.match(ANY_X) ?? [])) if (!official.has(u)) bad(`X URL that is not a topic's reacting_to: ${u}`);
+  // every decoded string (note and keys included): an X / Twitter URL is only ever a topic's own reacting_to, checked above
+  for (const [p, v] of strings(s)) if (!/^\/topics\/\d+\/reacting_to$/.test(p) && ANY_X.test(v)) bad(`X URL outside a topic's reacting_to at ${p}: ${v.slice(0, 80)}`);
   if (errors.length) return { date: s.date, sample: false, snapshot: null, errors, warnings: [] };
   return { date: s.date, sample: false, snapshot: { date: s.date, window: s.window, topics: s.topics }, errors, warnings: [] };
 }
@@ -155,19 +166,19 @@ export function checkTimeline(snapshots) {
 export const bodyOf = (snapshot) => JSON.stringify({ date: snapshot.date, window: snapshot.window, topics: snapshot.topics });
 export const hashOf = (body) => createHash('sha256').update(body).digest('hex');
 
-/** Removes topic ids from every snapshot; a snapshot left without topics is dropped (it counts as removed). */
+/** Removes topic ids from every snapshot; a snapshot left without topics keeps topics [] (planVoices deletes its row). */
 export function removeTopics(snapshots, ids) {
   const out = new Map();
   for (const [d, s] of snapshots) {
     const topics = s.topics.filter((t) => !ids.includes(t.id));
-    if (topics.length) out.set(d, topics.length === s.topics.length ? s : { ...s, topics });
+    out.set(d, topics.length === s.topics.length ? s : { ...s, topics });
   }
   return out;
 }
 
 /**
- * desired: Map date → snapshot (dates without topics are left out); current: Map date → {hash}. Rows in current
- * but not in desired are deleted only with prune (a takedown always prunes what it removed).
+ * desired: Map date → snapshot; current: Map date → {hash}. A desired date with topics [] (an emptied local file, a
+ * takedown) deletes its row. A row whose date is not in desired at all is deleted only with prune.
  * Returns {rows: [{date, action, topics}], statements, writes}.
  */
 export function planVoices(desired, current, { prune = false, now = new Date(), hasVersion = true } = {}) {
@@ -175,7 +186,13 @@ export function planVoices(desired, current, { prune = false, now = new Date(), 
   const upserts = [];
   const deletes = [];
   for (const [date, s] of [...desired].sort()) {
-    if (!s.topics.length) continue;
+    if (!s.topics.length) {
+      if (current.has(date)) {
+        rows.push({ date, action: 'delete', topics: null });
+        deletes.push(date);
+      }
+      continue;
+    }
     const body = bodyOf(s);
     const hash = hashOf(body);
     const cur = current.get(date);
@@ -184,7 +201,7 @@ export function planVoices(desired, current, { prune = false, now = new Date(), 
     if (action !== 'unchanged') upserts.push({ date, body, hash });
   }
   for (const date of [...current.keys()].sort()) {
-    if (desired.has(date) && desired.get(date).topics.length) continue;
+    if (desired.has(date)) continue;
     rows.push({ date, action: prune ? 'delete' : 'kept (no local file; --prune deletes)', topics: null });
     if (prune) deletes.push(date);
   }
@@ -217,4 +234,13 @@ export function voicesState(rows) {
     snapshots.set(r.date, JSON.parse(r.body));
   }
   return { current, snapshots };
+}
+
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+/** Wrangler output with every UUID and the D1_DATABASE_ID value replaced: the database id is never printed. */
+export function redact(text, secret = process.env.D1_DATABASE_ID) {
+  let out = String(text ?? '').replace(UUID, '<redacted>');
+  const id = (secret ?? '').trim();
+  if (id) out = out.split(id).join('<redacted>');
+  return out;
 }
