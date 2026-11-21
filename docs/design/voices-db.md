@@ -110,8 +110,8 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node, applies
 2. Migration: `git mv api/migrations-pending/0008_voices.sql api/migrations/` (commit), then
    `cd api && node scripts/remote-config.mjs && npx wrangler d1 migrations list shindan-navi-events --remote --config ../wrangler.remote.json`
    (expect 0008 as the only unapplied one; 0006 / 0007 must not appear unapplied unless intended), then apply with
-   `! npx wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json`.
-3. Import: `D1_DATABASE_ID=… npm run import:voices -- --target remote` (read the plan), then `-- --yes`.
+   `npx wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json` (in Claude Code, prefix the line with `!`; in a plain shell a leading `!` inverts the exit status).
+3. Import: `D1_DATABASE_ID=… npm run import:voices -- --target remote` (read the plan), then `D1_DATABASE_ID=… npm run import:voices -- --target remote --yes`. Then check `/api/v1/voices/latest` shows a non-null version and the expected latest snapshot before step 4.
    Check `https://shindan-navi.app/api/v1/voices/latest`.
 4. Set the repo variable `VOICES_SOURCE=d1` and push (or re-run the deploy): `/voices/` and the home block read D1;
    the archive pages disappear.

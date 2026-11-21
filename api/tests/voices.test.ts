@@ -388,6 +388,9 @@ describe('import-voices.mjs', () => {
     const missing = cli([...sqliteArgs(db), '--data', join(data, 'nope'), '--remove-topic', 'opcg-test-topic', '--yes']);
     expect(missing.status).toBe(2);
     expect(missing.stderr).toMatch(/does not exist/);
+    const blank = cli([...sqliteArgs(db), '--data', ' ', '--remove-topic', 'opcg-test-topic', '--yes']);
+    expect(blank.status).toBe(2);
+    expect(blank.stderr).toMatch(/--data is empty/);
     expect(rows(db)).toEqual([['2026-11-20', ['opcg-test-topic', 'ptcg-fixture']], ['2026-11-21', ['opcg-test-topic']]]);
     const r = cli([...sqliteArgs(db), '--data', data, '--remove-topic', 'opcg-test-topic', '--yes']);
     expect(r.status, r.stderr).toBe(0);

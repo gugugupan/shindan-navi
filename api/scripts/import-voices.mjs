@@ -61,6 +61,8 @@ if (opts['remove-snapshot'] !== undefined && !dropDates.length) fail('--remove-s
 if (dropIds.some((id) => !/^[a-z0-9][a-z0-9-]{2,63}$/.test(id))) fail('--remove-topic takes topic ids (a-z, 0-9, -)', 2);
 if (dropDates.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) fail('--remove-snapshot takes YYYY-MM-DD dates', 2);
 const takedown = dropIds.length > 0 || dropDates.length > 0;
+// An empty --data (an unset shell variable) would resolve to the current directory.
+if (!opts.data.trim()) fail('--data is empty', 2);
 // A takedown also cleans --data: a mistyped directory must not let it succeed on D1 alone.
 if (takedown && !existsSync(resolve(opts.data))) fail(`${resolve(opts.data)} does not exist (a takedown also removes the topic or date from the local files)`, 2);
 // ids are [a-z0-9-], so a match needs no such character on either side (opcg-x is not inside opcg-x-2)
