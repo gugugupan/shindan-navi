@@ -125,6 +125,11 @@ try {
     await page.route('**/api/v1/voices', async (r) => {
       if (mode === 'slow') { await gate; return r.continue(); }
       if (mode === 'down') return r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"busy"}' });
+      if (mode === 'noid') {
+        const one = structuredClone(want.snapshots.at(-1));
+        delete one.topics[0].id;
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '1', snapshots: [one] }) });
+      }
       if (mode === 'bad') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '1', snapshots: [{ date: '"><img src=x>', window: {}, topics: [] }] }) });
       return r.continue();
     });
@@ -143,8 +148,15 @@ try {
     await page.waitForSelector('#vRetry');
     if (!(await page.locator('#calv').textContent()).includes('読み込めませんでした')) fail(where, 'a malformed answer did not end in the error state');
     if (await page.locator('#calv img').count()) fail(where, 'a malformed answer was rendered');
+    // a topic without an id, opened in list view: the error state still shows
+    mode = 'noid';
+    await page.goto(`${BASE}/voices/?view=list`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('#vRetry', { state: 'visible' });
+    if (await page.locator('#list article.tc').count()) fail(where, 'a topic without an id was rendered');
     mode = 'up';
     await page.locator('#vRetry').click();
+    await page.waitForSelector('#list article.tc');
+    await page.goto(`${BASE}/voices/?view=cal`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#calv [data-day]');
     await page.close();
 
