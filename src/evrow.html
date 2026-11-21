@@ -161,14 +161,21 @@ window.snEv=(function(){
     return out.map(x=>x.rows&&x.rows.length===1?{e:x.rows[0]}:x);
   }
   const open=new Set();
-  const hash = s => { let h=5381; for(let i=0;i<s.length;i++) h=(h*33+s.charCodeAt(i))|0; return (h>>>0).toString(36); };
+  // one DOM id per day + group key for the page's lifetime, so an open group keeps its id across re-renders
+  const ids=new Map();
+  const gid = k => { let v=ids.get(k); if(!v){ v=`evg${ids.size+1}`; ids.set(k,v); } return v; };
   // o: as row(), plus day (part of the id), more (the day may hold more of them than loaded: count is a minimum) and
   // member (o for each member row)
   function grp(g,o={}){
-    const e=g.rows[0], nm=name(e), id=`evg-${o.day||''}-${hash(g.key)}`, isOpen=open.has(id);
-    // a store: the source's venue id, else name + address / city; partial loads count events only (both would be minimums)
-    const vk=v=>!v?'':v.source_id?'id:'+v.source_id:[venueLabel(v),v.address||v.city||''].join('|');
-    const vs=new Set(g.rows.map(x=>vk(x.venue))), stores=vs.has('')?0:vs.size, n=g.rows.length;
+    const e=g.rows[0], nm=name(e), id=gid(`${o.day||''}|${g.key}`), isOpen=open.has(id);
+    // a store: the source's venue id, else name + address / city. A venue without an id takes the id of one with the same
+    // name + address; when one is left unmatched beside ids, stores are unknown (count events only).
+    const na=v=>[venueLabel(v),v.address||v.city||''].join('|'), byNa=new Map();
+    g.rows.forEach(x=>{ const v=x.venue; if(v&&v.source_id&&!byNa.has(na(v))) byNa.set(na(v),'id:'+v.source_id); });
+    const vk=v=>!v?'':v.source_id?'id:'+v.source_id:byNa.get(na(v))||'na:'+na(v);
+    const vks=g.rows.map(x=>vk(x.venue)), vs=new Set(vks), n=g.rows.length;
+    const mixed=vks.some(k=>k.startsWith('id:'))&&vks.some(k=>k.startsWith('na:'));
+    const stores=vs.has('')||mixed?0:vs.size;
     const cnt=o.more ? (stores===n ? `${n}店舗以上` : `${n}件以上`) : stores ? (stores===n ? `${stores}店舗` : `${stores}店舗・${n}件`) : `${n}件`;
     const ts=g.rows.filter(hasTime).map(x=>[Date.parse(x.starts_at),timeOf(x)]).sort((a,b)=>a[0]-b[0]);
     const tbd=g.rows.length-ts.length;
@@ -181,12 +188,12 @@ window.snEv=(function(){
     if(ms.size===1&&!ms.has('')) facts.push({cls:'',text:[...ms][0]});
     if(o.compact && o.started) facts.push({cls:'done', text:'開始済み'});
     const cat=o.compact?'':catOf(e,nm), title=nm!==e.name?` title="${esc(e.name)}"`:'';
-    const label=`${esc(nm)}・${cnt}の${stores?'店舗':'イベント'}を表示`;
+    const act=stores&&!(o.more&&stores!==n)?'店舗を表示':'一覧を表示', label=`${act}（${esc(nm)}・${cnt}）`;
     const n1 = o.compact
       ? `<p class="ev-n"${title}><span class="t">${esc(nm)}</span> <span class="evg-c">— <b>${cnt.replace(/(\d+)/,'$1</b>')}</span></p>`
       : `<h4 class="ev-n"${title}><span class="t">${esc(nm)}</span> <span class="evg-c">— <b>${cnt.replace(/(\d+)/,'$1</b>')}</span>${cat?`<span class="cat">${cat}</span>`:''}</h4>`;
     const m=`<p class="ev-m">${tags(e,o.col)}<span class="ev-time">${rng}</span></p>`;
-    const tog=`<button type="button" class="evg-tog" aria-expanded="${isOpen}" aria-controls="${id}" aria-label="${label}">${stores&&!(o.more&&stores!==n)?'店舗を表示':'一覧を表示'}</button>`;
+    const tog=`<button type="button" class="evg-tog" aria-expanded="${isOpen}" aria-controls="${id}" aria-label="${label}">${act}</button>`;
     const s=`<div class="ev-s">${facts.length?`<ul class="ev-f">${facts.map(f=>`<li class="${f.cls}">${esc(f.text)}</li>`).join('')}</ul>`:''}${tog}</div>`;
     const tag=o.compact?'li':'article', lt=o.compact?'ul':'div';
     const mem=g.rows.map(x=>row(x,{...o,...(o.memberOpts?o.memberOpts(x):{}),member:true,compact:o.compact})).join('');
