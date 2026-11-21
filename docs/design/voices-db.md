@@ -1,473 +1,461 @@
 # 話題カレンダー data in D1 (design)
 
-Status: design for owner review, 2026-11-21. Nothing here is built. Plan `2026-11-21-voices-data-in-d1-instead-of-static-json`,
-node `design`.
+Status: design for owner review, 2026-11-21. Revision 2, after GPT gpt-6.2-astra's review of 0da9014 (hold:
+5 high, 7 medium). Nothing here is built. Plan `2026-11-21-voices-data-in-d1-instead-of-static-json`.
 
 Owner's ask (2026-11-21): "the generation process can touch the database directly instead of changing the page every
-time". Today every snapshot is a committed `data/voices/<date>.json`, embedded by `scripts/build.py`, so a new snapshot
-means commit, push and a deploy. After this change the importer writes D1 and the Worker serves `/voices/`, the archive
-pages, the sitemap entries and the home block from D1. No commit, no deploy.
+time". Today every snapshot is a committed `data/voices/<date>.json` that `scripts/build.py` embeds, so a new
+snapshot means a commit, a push and a deploy. After this change an importer publishes to D1 and the Worker serves
+`/voices/`, the archive pages, a voices sitemap and the home block from it. No commit and no deploy.
 
-**Base.** `main` at 1c444a8 (two real snapshots: 2026-11-20 with 29 topics, 27.7 KB; 2026-11-21 with 2 topics). The
-Worker serves `shindan-navi.app` (login is live on it), so `LIVE_HOST=worker` is assumed. Migration numbers: 0006 is on
-the unmerged `ev-bushi-int` branch (games rows), 0007 is reserved for the event landing pages, so this design takes
-**0008**.
+**Base.** `main` at 9007429. It has two real snapshots: 2026-11-20 with 29 topics and 2026-11-21 with 4 (OPCG and
+CONAN). The data will keep moving until cutover, so the seed is taken from the cutover revision (section 4.5).
+`LIVE_HOST` is believed to be `worker` (login is live there), but M4 verifies the serving host rather than assuming it.
+Migration numbers: 0006 is on unmerged `ev-bushi-int` and 0007 is reserved for event landing pages, so this design
+uses **0008**.
 
 ## 1. Summary
 
-- Two tables, `voice_snapshots` and `voice_topics`. Each snapshot keeps its own version of each topic (key
-  `(snapshot_date, topic_id)`), because a day shows a topic "as the first snapshot on or after that day saw it". A
-  small `voice_removed` tombstone table stops a removed topic or snapshot coming back from a stale local file. The
-  voices data version lives in its own `site_meta` key, `voices_state`. It is separate from the events version, so a
-  voices import does not empty the events cache.
-- Writer: `api/scripts/import-voices.mjs` works like the events importer (`--plan` / `--yes`, targets `sqlite` /
-  `wrangler` / `remote`). It validates against the schema and the contract, plus checks that only make sense against
-  D1: id stability, a fixed `first_seen`, tombstones, and official X accounts confirmed through oEmbed. It writes only
-  the diff and bumps `voices_state`. Takedowns go through the same importer (`--remove-topic`, `--remove-snapshot`).
-- Read path: one Worker module, `api/src/voices.ts`. It renders the archive pages `/voices/<date>/` in TypeScript into
-  a build-time shell, so their text stays server-side and indexable. It fills `/voices/` by injecting the snapshot
-  JSON and the static latest list into the built page. It serves `/sitemap-voices.xml` (listed in `robots.txt`) and
-  `GET /api/v1/voices/latest`, which feeds the home いま話題 block and later the game hubs. Everything is edge-cached
-  under the voices version, like `/api/v1/events*`.
-- Rollout behind the build and Worker flag `VOICES_SOURCE=static|d1`. Each snapshot is written to both stores until the
-  cutover has been stable for 2 weeks. After that the committed JSON and the Python renderer are removed, and local
-  files plus D1 are the only copies, as with event data.
+- **Storage.** D1 holds one validated JSON document per snapshot date (the current contract shape), a single
+  publication manifest row, and a deletion ledger. There are no normalized topic rows. The importer validates across
+  snapshots, and on a takedown it rewrites every affected date document. A new manifest revision is published with one
+  compare-and-swap statement, so readers see either the old revision or the new one, never a mix.
+- **Writer.** `api/scripts/import-voices.mjs`. `--plan` writes a plan file. `--yes --plan-file` applies exactly that
+  plan, or aborts if the inputs, the ledger or the manifest version changed since the plan was made.
+- **Readers.**
+  - The archive pages `/voices/<date>/` are rendered by the Worker into a build-time shell.
+  - `/voices/` is the built page with the snapshot JSON and the server-rendered latest list injected.
+  - `/sitemap-voices.xml` is a separate sitemap.
+  - `GET /api/v1/voices/latest` feeds the home block and, later, the game hubs.
+- **One server renderer.** The card rules live in one pure module used by the browser, the Worker and the static
+  fallback build (rendered on Node). The Python renderer goes away.
+- **Freshness and failure.** Voices responses are served only against a manifest verified within the last 60 s.
+  Otherwise the response is an uncached 503. A 404 is returned only when a fresh manifest says the page is absent.
+- **Rollout and rollback.** `VOICES_SOURCE=static|d1`. Rollback never needs D1: the static build renders from a
+  sanitized local export through the same renderer.
 
-## 2. Today
+## 2. Today (what moves)
 
-| Piece | Where | Reads |
+| Piece | Now | After |
 | --- | --- | --- |
-| Snapshots | `data/voices/<date>.json`, committed, `contracts/voices.schema.json` | build.py `voices_data()` (checks, drops samples once a real one exists) |
-| `/voices/` | `render_voices()` → `const V = {snapshots, counts}` + `<!--VLATEST-->` static list | the page script computes topics and versions |
-| `/voices/<date>/` | `render_voices_day()`: Python `vcard()` / `vatt_block()` mirror the page's `card()` / `attBlock()` | none (no script) |
-| Home いま話題 | `home_voices()` → `H.voices` (latest real snapshot, 7 fields per topic) | none |
-| Sitemap | `/voices/` (lastmod = latest) + one entry per archive page | static `sitemap.xml` |
-| Fonts | `scripts/fonts.py`: `/voices/` and the archive pages get their own faces for the glyphs their text adds | build time |
-| Gates | `verify_release.py` `check_voices()` and the home check; `browser.mjs` (`OFFICIAL_X` from `data/voices`) | the files |
+| Snapshots | committed `data/voices/*.json`, checked by build.py `voices_data()` | local, git-ignored input → importer → D1 `voice_docs` |
+| `/voices/` | `render_voices()` embeds every snapshot as `const V` + `<!--VLATEST-->` | Worker injects into the built shell (5.3) |
+| `/voices/<date>/` | `render_voices_day()`, Python port of `card()` / `attBlock()` | Worker, shared card module (5.2) |
+| Home いま話題 | `home_voices()` → `H.voices` at build | `GET /api/v1/voices/latest` (5.6) |
+| Sitemap | `/voices/` + archive URLs in `sitemap.xml` | `/sitemap-voices.xml` from the manifest (5.5) |
+| Fonts | per-page voices faces from the built text | shared faces + Japanese system fallback (5.7) |
+| Gates | `verify_release.py` / `browser.mjs` read `data/voices` | the same checks against a fixture database (7) |
 
-Two facts shape the design. **Fonts**: topic text written after a deploy would contain kanji that are missing from
-the subsets (section 5.5). **The game list** lives in `GAMES` in `src/voices.html`, and build.py parses it with a regex
-(section 5.6).
-
-## 3. D1 schema (migration `0008_voices.sql`)
+## 3. D1 storage (migration 0008)
 
 ```sql
--- One row per published snapshot (samples are never imported remotely). note: provenance for people (how the
--- snapshot was made), never served. n_topics is kept by the importer so the sitemap and prev/next need no topic scan.
-CREATE TABLE voice_snapshots (
-  date TEXT PRIMARY KEY CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
-  window_from TEXT NOT NULL CHECK (window_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' AND window_from <= date),
-  sample INTEGER NOT NULL DEFAULT 0 CHECK (sample IN (0, 1)),
-  n_topics INTEGER NOT NULL CHECK (n_topics >= 0),
-  note TEXT,
-  content_hash TEXT NOT NULL,
-  imported_at TEXT NOT NULL
+-- One row per published document revision. body = the snapshot JSON exactly as validated (contract shape, minus
+-- `note`), hash = sha256(body). Only rows named by the manifest are served; others are staged or awaiting GC.
+CREATE TABLE voice_docs (
+  date TEXT NOT NULL CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]'),
+  rev INTEGER NOT NULL CHECK (rev > 0),
+  body TEXT NOT NULL CHECK (json_valid(body)),
+  hash TEXT NOT NULL CHECK (length(hash) = 64),
+  note TEXT,                                     -- provenance for people; never served
+  PRIMARY KEY (date, rev)
 ) WITHOUT ROWID;
 
--- One row per topic per snapshot (the version that snapshot saw). Topic window = the snapshot window (contract).
-CREATE TABLE voice_topics (
-  snapshot_date TEXT NOT NULL REFERENCES voice_snapshots(date) ON DELETE CASCADE,
-  id TEXT NOT NULL CHECK (length(id) BETWEEN 3 AND 64 AND id GLOB '[a-z0-9]*' AND id NOT GLOB '*[^a-z0-9-]*'),
-  pos INTEGER NOT NULL CHECK (pos >= 0),                       -- order in the snapshot (busiest first)
-  game TEXT NOT NULL CHECK (length(game) BETWEEN 2 AND 6 AND game NOT GLOB '*[^A-Z]*'),
-  title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 40),
-  summary TEXT NOT NULL CHECK (length(trim(summary)) BETWEEN 1 AND 160),
-  attitude TEXT NOT NULL CHECK (attitude IN ('positive', 'negative', 'mixed', 'neutral')),
-  share_pos INTEGER NOT NULL CHECK (share_pos >= 0),
-  share_neg INTEGER NOT NULL CHECK (share_neg >= 0),
-  share_neu INTEGER NOT NULL CHECK (share_neu >= 0),
-  volume TEXT NOT NULL CHECK (volume IN ('high', 'mid', 'low')),
-  voices_json TEXT NOT NULL CHECK (json_valid(voices_json) AND json_type(voices_json) = 'array' AND json_array_length(voices_json) <= 3),
-  reacting_to TEXT CHECK (reacting_to IS NULL OR reacting_to GLOB 'https://x.com/*/status/[0-9]*'),
-  first_seen TEXT NOT NULL CHECK (first_seen <= snapshot_date),
-  status TEXT NOT NULL CHECK (status IN ('new', 'continuing', 'cooling')),
-  source TEXT NOT NULL CHECK (source IN ('grok-app', 'openrouter', 'x-api')),
-  CHECK (share_pos + share_neg + share_neu > 0),
-  PRIMARY KEY (snapshot_date, id)
-) WITHOUT ROWID;
-CREATE INDEX idx_voice_topics_id ON voice_topics (id);        -- takedown by id, continuity checks
-
--- Takedowns: identifiers only (our own ids / dates, no content). The importer refuses to re-add them.
-CREATE TABLE voice_removed (
+-- Deletion ledger: identifiers only (our ids / dates), never content. Exported with every backup, replayed on restore.
+CREATE TABLE voice_ledger (
   kind TEXT NOT NULL CHECK (kind IN ('topic', 'snapshot')),
   key TEXT NOT NULL,
   removed_at TEXT NOT NULL,
   PRIMARY KEY (kind, key)
 ) WITHOUT ROWID;
+
+-- Publication manifest: exactly one row.
+CREATE TABLE voice_manifest (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  version INTEGER NOT NULL,
+  value TEXT NOT NULL CHECK (json_valid(value))
+);
 ```
 
-- **Per-snapshot versions** (recommended) rather than storing only the latest version. Rejected: latest only (it
-  breaks `versionOn()` and the archive pages, which must show what that day's snapshot said), and one JSON blob per
-  snapshot (it cannot take down a topic across snapshots in one statement, and has no CHECKs).
-- CHECKs mirror the contract where SQLite can express it. SQLite's `length()` counts characters, as Python's `len()`
-  does; JS `.length` counts UTF-16 units, so the importer counts with `[...s].length`. The importer checks everything
-  else: exact URL regex, game codes against the list, each voice ≤ 80 characters, `window.to = date`. Foreign keys
-  are enforced on D1, so a snapshot delete cascades to its topics.
-- **Removal is a hard delete** plus a tombstone. To take down a topic, delete it from every snapshot that has its id
-  and decrement each snapshot's `n_topics`. To take down a snapshot, delete it (the cascade removes its topics). A
-  snapshot with `n_topics = 0` counts as removed, as today: 404, out of the sitemap, skipped by prev / next. Rejected:
-  a `removed_at` soft delete. The privacy page promises deletion, and a soft-deleted row is still stored content.
-- `voices_state` (`site_meta` key): `{version, dates: [live real snapshot dates, ascending], updated}`. That is one row,
-  about 11 bytes per date (≈ 4 KB a year), and it answers 404, prev / next and the whole sitemap without touching the
-  topic tables.
-- **Size.** A topic row is ≈ 0.9 KB on average (title, summary and 3 voices in UTF-8) and 1.5 KB at most, plus about
-  80 B for the id index entry. A heavy day (16 games × 2 topics) is ≈ 30 KB, about 11 MB a year. The Free plan allows
-  500 MB per database, and the events tables are far larger.
+`voice_manifest.value` = `{dates: {"2026-11-20": {rev, hash, n, modified}, …}, latest, updated}`.
+- `n` is the topic count. A date with `n = 0` is never listed. It is dropped from the manifest, which makes it
+  removed (5.4).
+- `modified` is the JST day the document last changed (import, edit or takedown). It drives the sitemap `lastmod`.
 
-### Budget (Free plan: 100,000 rows written, 5,000,000 read per UTC day)
-
-| Operation | Rows written | Rows read |
-| --- | ---: | ---: |
-| Import a new snapshot of N topics | N × 2 (row + id index) + 1 snapshot + 1 `voices_state` ≈ 2N + 2 (30 topics ≈ 62) | state read: every snapshot row + every topic's `(snapshot_date, id, game, first_seen, content hash)` ≈ all topic rows (≈ 11k after a year), then 1 lookup per written row |
-| Re-import unchanged | 0 | the same state read |
-| Edit one snapshot | 2 per changed topic + 2 | same |
-| Take down a topic seen in k snapshots | 2k + k (`n_topics`) + 1 tombstone + 1 state | ≈ k |
-| One-time migration of today's files | 31 topics → ≈ 66 | ≈ 0 |
-
-Reads per uncached request (all cached per colo for 24 h under the voices version, browsers for 5 min):
-
-| Request | Rows per miss |
-| --- | ---: |
-| `voices_state` (memoised per isolate for 60 s, like the events state) | 1 |
-| `/voices/<date>/` | 1 snapshot + its topics (≤ ~32) |
-| `/voices/` (all snapshots, until section 5.4's month split) | all topic rows: ~30 now, ≈ 5-11k after a year |
-| `/api/v1/voices/latest` | latest snapshot's topics (≤ ~32) |
-| `/sitemap-voices.xml` | 0 beyond the state |
-
-Each import bumps the version and leaves every key cold. A full crawl of a year of archive pages after an import costs
-≈ 365 × 32 ≈ 12k rows per colo (at least NRT and KIX). That is negligible next to the events budget. `/voices/` is the
-only read that grows, and section 5.4 bounds it.
+Decisions:
+- **Documents, not topic rows** (the reviewer's simpler route, adopted). The page and the archive renderer already
+  consume whole snapshots. A cold archive read is one row. The importer already reads all history to validate, and at
+  ≈ 1 document a day it can rewrite every date a takedown touches. Rejected for launch: normalized topic rows. They
+  are only needed for per-topic or month queries, which wait for the later month split (5.8).
+- **Per-date revisions plus a manifest switch** give atomic publication without relying on the undocumented
+  transaction behaviour of `wrangler d1 execute --file`. The new rows are invisible until the manifest's single-row
+  `UPDATE … WHERE version = :expected` (each statement is atomic in SQLite). The importer checks that exactly one row
+  changed. Afterwards, rows not named by the manifest are garbage-collected: immediately for takedowns, otherwise
+  after the next successful import (one-step undo, 4.4).
+- **Separate tables from `site_meta`**, because the events importer reads every `site_meta` row in its state read.
+  The events cache version is untouched by voices.
+- **Size.** About 1 KB per topic. A heavy day (32 topics) is ≈ 30 KB, so a year is ≈ 1-11 MB, far below the Free
+  plan's 500 MB per database.
 
 ## 4. Writer: `api/scripts/import-voices.mjs`
 
 ```
-node scripts/import-voices.mjs [--data DIR] [--dates 2026-11-21,...] [--target sqlite|wrangler|remote] [--plan] [--yes]
-                               [--max-writes 5000] [--offline] [--remove-topic ID] [--remove-snapshot DATE] [--export DIR]
-npm run import:voices:remote -- --data <dir> --plan      # read D1, print the review summary + plan, no write
-npm run import:voices:remote -- --data <dir> --yes       # migrations check, read, plan, execute
+node scripts/import-voices.mjs --data DIR [--dates D,…] [--target sqlite|wrangler|remote] --plan [--plan-out FILE]
+node scripts/import-voices.mjs --target remote --yes --plan-file FILE
+node scripts/import-voices.mjs --remove-topic ID | --remove-snapshot DATE  --plan  (then --yes --plan-file)
+node scripts/import-voices.mjs --undo --plan        node scripts/import-voices.mjs --export DIR
 ```
 
-It shares `remote-config.mjs`, the wrangler runner and `SqliteD1` with the events importer. The helpers move into
-`api/scripts/lib/d1-cli.mjs`. Unlike `import:remote`, `--yes` **does not apply migrations**: it fails when one is
-pending (the d1-remote-op rule that migrations need the owner).
+### 4.1 Validation (replaces build.py's checks and the git review)
 
-**Validation**, which replaces build.py's checks and the git review:
+1. Schema (ajv, `contracts/voices.schema.json`) plus every rule in `voices_data()`. Lengths count code points
+   (`[...s].length`, as Python `len()` does).
+2. Privacy:
+   - no `posts` field and no extra fields;
+   - every `x.com` URL anywhere in the file must be a topic's `reacting_to`;
+   - no `@handle` in title, summary or voices;
+   - `sample: true` is refused remotely (samples stay local or in fixtures).
+3. Official only: the handle in `reacting_to` must be in `contracts/voices-official-x.json` (official accounts → games;
+   public handles only). New URLs are checked through oEmbed unless `--offline` is passed: the post exists and its
+   author matches the handle.
+4. **Window rule, made explicit.** The supporting *player* posts must fall inside the window. The lead checks them
+   and they never reach the importer. The official `reacting_to` post may predate the window: it is the trigger of the
+   talk, and 2026-11-21's OPCG notice already does this. The contract gets that sentence.
+5. Continuity, checked against the **resulting timeline** (D1 plus input plus removals), so backfills, edits and
+   removals are covered as well as appends:
+   - an id keeps its `game` and `first_seen`;
+   - `new` requires no earlier appearance;
+   - `continuing` / `cooling` require an earlier appearance;
+   - an appearance removed through the ledger still counts as having existed, so a takedown of a topic's first day
+     does not invalidate its later `continuing` rows;
+   - ledger ids and dates are refused.
+6. Date ≤ today (JST). An older date than the latest is allowed with a warning (backfill). The hard cap is
+   `--max-writes 200`.
 
-1. Schema: ajv with `contracts/voices.schema.json` (already a dependency), then everything `voices_data()` checks now:
-   file name = `date` = `window.to`, a topic window equal to the snapshot window, unique ids, `first_seen ≤ date`,
-   `posts` refused, ≤ 3 voices of 1-80 characters, non-zero share, a known game code.
-2. Privacy: no `posts` and no extra fields (already in the schema). Every `x.com` URL anywhere in the file must be a
-   topic's `reacting_to`, which catches a URL pasted into a summary or voice. No `@handle` in title, summary or voices.
-3. Official accounts only: the `reacting_to` handle must be in `contracts/voices-official-x.json`, a committed map of
-   official account handles to games (public accounts, no personal data). The handle must belong to the topic's game
-   or be a publisher account allowed for several games. Unless `--offline` is passed, `--plan` / `--yes` check each
-   **new** `reacting_to` through `publish.twitter.com/oembed`: the post exists and its `author_url` handle matches.
-   Player posts never reach the importer.
-4. Continuity against D1 plus the input:
-   - an id already in D1 keeps its `game` and `first_seen`;
-   - `status: new` requires that no earlier snapshot has the id;
-   - `continuing` / `cooling` require an earlier snapshot that has it;
-   - an id that reappears after a gap is reported as a warning.
-5. Dates: the date must be ≤ today (JST); an older date than the latest is allowed with a warning (backfill); a remote
-   import refuses `sample: true`; tombstoned ids and dates are refused (no override flag: a restore is a manual owner
-   decision).
-6. A hard cap of `--max-writes` 5,000 (two orders of magnitude above a day).
+### 4.2 Plan, bound to the write
 
-**Plan output.** Per snapshot: new or updated, topics inserted / updated / unchanged / dropped (a topic missing from a
-re-imported snapshot is deleted from that snapshot and listed), per game counts, continuing ids with their days, new
-`reacting_to` handles with the oEmbed result, rows written, the old and new version. Writes run as one `--file`, like
-the events importer, in this order: snapshot upserts, topic upserts and deletes, `n_topics`, then `voices_state` last.
-A partial run is safe to re-run because the state is rewritten from the actual rows.
+`--plan` reads the manifest, every served document and the ledger, diffs per date by `hash`, and prints the review:
+- per date: new, changed, unchanged or removed;
+- per topic inside changed dates: inserted, changed or dropped;
+- continuing ids, handles and their oEmbed result;
+- rows to write, the expected manifest version and the new manifest.
 
-**Where the validated JSON lives afterwards.** In a git-ignored local directory, as with event data (recommended):
-`data/voices/` in the worktree for input, with the canonical copy in the owner's data directory next to the event
-data. A backup tarball goes to `~/shindan-backups/voices-<date>.tgz` before each import. `--export DIR` writes D1 back
-to contract-shaped files, for a restore, for dev fixtures and for a rollback build. The lead keeps the oEmbed
-evidence in `out/voices/<date>/` as today (git-ignored). Rejected: keeping the files committed as an audit log. The
-repo is public, and every committed file stays in history after a takedown, which the privacy page then has to excuse
-again. Committing also means pushing to `main`, which deploys, which is what the owner wants to stop. D1 Time Travel
-(7 days) plus the tarballs cover recovery, and `note` in `voice_snapshots` keeps the provenance.
+It writes `out/voices-plan-<ts>.json` with an input digest (the files plus the flags), a ledger digest, the expected
+manifest version and the exact SQL with its digest. `--yes --plan-file` recomputes all of these and aborts on any
+difference. The write order is fixed:
+1. insert the staged `voice_docs` rows and the ledger rows;
+2. compare-and-swap the manifest; on 0 changed rows, delete the staged rows and abort ("state moved; re-plan");
+3. garbage-collect.
 
-**One-time migration.** At M2: `import-voices.mjs --data data/voices --target remote --plan`, then `--yes` (≈ 66 rows).
-From then until M5 every new snapshot is committed **and** imported (both stores), so a static rollback has the same
-data. At M5 the files are removed with `git rm` (history keeps them, as it already keeps the first one with `posts`)
-and `/data/voices` is added to `.gitignore`.
+An interrupted run leaves staged rows that nothing serves, and the next plan collects them. Tests cover an interrupted
+write between steps 1 and 2, a stale plan racing a takedown, and a re-run after a failed garbage collection.
 
-**Takedown.** `--remove-topic ID --plan` lists every snapshot that has the id and the rows to delete; `--yes` deletes
-them, writes the tombstone and bumps the version. The runbook also deletes the topic from the local files and from the
-backup tarballs. `--remove-snapshot DATE` does the same for a whole snapshot. These are deletes, so they always need
-the owner's OK first (CLAUDE.md approvals).
+### 4.3 Takedown
 
-## 5. Read path without deploys
+`--remove-topic ID` finds every date whose document contains the id and stages rewritten documents without it. A
+date left with no topics drops out of the manifest. The run writes the ledger row, switches the manifest and
+garbage-collects every old revision of those dates, including the undo slot. `--remove-snapshot DATE` does the same
+for a whole date. A takedown always needs the owner's OK first. The removal check (section 6) is part of the procedure.
 
-### 5.1 Routing
+### 4.4 Recovery without whole-database Time Travel
 
-`remote-config.mjs` adds `/voices`, `/voices/*` and `/sitemap-voices.xml` to `assets.run_worker_first`, and the var
-`VOICES_SOURCE=d1`, only when env `VOICES_SOURCE=d1`. This follows the pattern of the feedback mail binding, so the
-committed `wrangler.jsonc` and a `static` deploy behave exactly as today. Without that var the Worker passes those
-paths to `ASSETS`.
+Time Travel restores the whole database: accounts, preferences, feedback and events. It is not used for voices.
+- **A bad voices import:** `--undo` switches the manifest back to the previous revisions, which are kept until the
+  next import (never past a takedown), or re-imports the previous files from the backup as a new revision.
+- **A lost or rebuilt database:** `--restore DIR`. It loads the export plus its ledger, **replays the ledger first**,
+  then imports.
 
-Build artefacts the Worker reads through `env.ASSETS.fetch` (never served: the Worker answers 404 under `/voices/_kit/`):
+### 4.5 Where the JSON lives, seeding
 
-| File (written by build.py with `VOICES_SOURCE=d1`) | Content |
-| --- | --- |
-| `dist/voices/index.html` | the current page, with slots: `/*VSNAPS*/[]` inside `const V = {counts, snapshots: …}`, `<!--VLATEST-->`, `<!--VROBOTS-->` |
-| `dist/voices/_kit/day.html` | the archive shell: SITE_CSS, VOICES_CSS, fonts, brand, corner, sitenav, GA, footer; slots `<!--VHEAD-->` (title, description, canonical, OG, JSON-LD) and `<!--BODY-->` |
-| `dist/voices/_kit/kit.json` | `{games: [{code, name, short, c, cd}], icons: {name: file-or-monogram}, site}`: everything `vcard()` needs that is not topic data |
+- **Input** goes in a git-ignored `data/voices/` (added to `.gitignore` at M5) in the worktree. The canonical copy is
+  in the owner's data dir, next to the event data.
+- **Backups.** Before each import, `--export` (documents plus ledger, sanitized, so removed content is never present)
+  goes to `~/shindan-backups/voices-<ts>.tgz`.
+- **Evidence.** The lead's oEmbed evidence stays in `out/voices/<date>/`.
+- Rejected: keeping the committed files as an audit log. The repo is public, a committed file outlives a takedown in
+  history, and every commit to `main` deploys.
+- **Seeding at M2.** Import from the agreed cutover revision of `main`, then compare the per-date `hash` in D1 with
+  sha256 of each committed file's normalized body. The plan prints both, and a mismatch stops.
+- **Dual-write from M2 to M4.** Every new snapshot is both committed and imported, and both copies are compared by
+  hash before the flag flips.
 
-### 5.2 Archive pages `/voices/<date>/`: TypeScript renderer in the Worker (recommended)
+## 5. Read path
 
-`api/src/voices-render.ts` ports `vcard()`, `vatt_block()`, `vtenths()`, `voices_day_page()` and the prev / next nav
-from build.py line for line. The output is the same HTML (same classes, `約N%` / small-sample rules, `rel="nofollow
-noopener noreferrer"` on `reacting_to`, カレンダーで見る → `/voices/#t=<id>`). Head: the same title 「YYYY年M月D日のTCG話題｜話題カレンダー｜トレカカレンダー」,
-the same description from the top titles and game names, canonical, `og/voices.png`, BreadcrumbList only. prev / next
-come from `voices_state.dates`. A date outside `dates` (unknown, removed, or left with no topics) gets `404.html` with
-status 404. A malformed path gets 404 without a D1 read. `/voices/<date>` without a slash gets 307 to the slash form,
-as static assets do.
+### 5.1 Routing and kit
 
-Parity, so the move changes no indexed text: in M3, build.py renders the fixture snapshots and the two real snapshots
-to golden HTML (`api/tests/fixtures/voices-golden/`). A vitest test requires the TS renderer to produce the same bytes
-for the `<main>` element and the `<head>` metadata. The test stays after the Python renderer is removed. The page's
-own `card()` / `attBlock()` remain the second copy, as today, and the CLAUDE.md "keep the two in step" note moves to
-the TS file.
+`remote-config.mjs` adds `/voices`, `/voices/*` and `/sitemap-voices.xml` to `run_worker_first`, plus the var
+`VOICES_SOURCE=d1`, only when env `VOICES_SOURCE=d1`. This follows the pattern of the feedback binding. Build
+artefacts are fetched from `env.ASSETS` by their **canonical** URLs. With `auto-trailing-slash`, `…/index.html` and
+`….html` redirect.
 
-Rejected:
-- **HTML fragments rendered by the importer and stored in D1.** A template or CSS change would need a re-import of
-  every snapshot. prev / next depend on the neighbours. And the Worker would have to trust stored markup.
-- **Client-rendered archive pages** (a shell plus an API fetch). Crawlers and no-JS visitors would lose the text that
-  the 2026-11-20 decision made indexable.
-- **Rebuilding and deploying on import.** That is what the owner wants to stop.
+| Asset (built with `d1`) | Fetched as | Content |
+| --- | --- | --- |
+| `dist/voices/index.html` | `/voices/` | the page with slots `/*VSNAPS*/[]`, `/*VERR*/false`, `<!--VLATEST-->`, `<!--VROBOTS-->` |
+| `dist/_voices-kit/day/index.html` | `/_voices-kit/day/` | archive shell: CSS, fonts, brand, corner, sitenav, GA; slots `<!--VHEAD-->`, `<!--BODY-->` |
+| `dist/_voices-kit/kit.json` | `/_voices-kit/kit.json` | game names, colours and icons for the renderer |
 
-### 5.3 `/voices/`: injected into the built page (recommended)
+`/_voices-kit/*` holds no topic data. `_headers` gives it `X-Robots-Tag: noindex`, and it is not in any sitemap.
+Worker HTML responses set the canonical in the markup. On `*.workers.dev` they also add `X-Robots-Tag: noindex`,
+because `_headers` does not apply to Worker responses. They never copy the API's blanket noindex.
 
-The Worker fetches `dist/voices/index.html` from ASSETS and replaces three slots:
-- `/*VSNAPS*/[]`: the snapshots, in exactly today's shape (`{date, window, topics, sample}`), so the page script does not
-  change;
-- `<!--VLATEST-->`: the static latest list, rendered by `voices-render.ts` with the same markup as `voices_latest()`;
-- `<!--VROBOTS-->`: noindex while no real snapshot exists.
+### 5.2 Archive pages `/voices/<date>/`
 
-The composed HTML is cached under `(voices version, Worker version id)` (`version_metadata` binding). A deploy that
-changes the shell therefore never serves an old composition. String replacement on about 30-300 KB stays well inside
-the 10 ms CPU limit of Workers Free. Rejected: the page fetching `/api/v1/voices/…` after load. That adds a request,
-an empty calendar on first paint and a layout shift, and the static list for crawlers would still need the Worker.
+They are rendered from the date's document with `src/voices-card.js`: the pure card rules (largest-remainder tenths,
+the < 5 small-sample phrase, badges, labels, link attributes, escaping), as markup builders over a small `h()`
+helper. The browser page includes the same file through a build slot, and the Worker and Node import it. The output
+keeps today's head and body: title 「YYYY年M月D日のTCG話題｜話題カレンダー｜トレカカレンダー」, description, canonical,
+`og/voices.png`, BreadcrumbList only, prev / next from the manifest's listed dates, cards in GAMES order.
+- `/voices/<date>` without a slash gets 307 to the slash form.
+- A malformed path gets 404 without a D1 read.
+- An unlisted date gets 404 (`404.html` body), but only on a fresh manifest (section 6).
 
-### 5.4 Bounding `/voices/` (M6, not needed for the cutover)
+Rejected: HTML fragments stored in D1 (a re-import for every template change, stale neighbours) and client-rendered
+archive pages (they would lose the indexable text).
 
-`V.snapshots` grows by about 10-30 KB a day. Once it passes about 300 KB raw (roughly 2 months), the Worker injects
-only the snapshots of the current and previous month plus `{dates}`. The page fetches `GET /api/v1/voices/month?m=YYYY-MM`
-when the visitor moves to an older month. A month answer covers the snapshots dated in that month plus the first
-snapshot after it (for `versionOn()`), and each topic carries `last` (its last snapshot date, `MAX(snapshot_date)` by
-`idx_voice_topics_id`), so bars spanning months stay correct. This is a page-script change, so it ships separately and
-before the size becomes a problem.
+**Parity.** Committed goldens use **synthetic fixtures only**, so no real topic text is in git. The real pages are
+compared ephemerally in `.verify/` (git-ignored) at M3 and M4: today's Python output against the Worker's for the
+same revision. Semantic tests run both the browser and the Worker renderers on the edge fixtures:
+- share ties, totals of 4 and 5;
+- one snapshot versus several (the 🆕 rule);
+- with and without `reacting_to`;
+- escaping in HTML text, in attributes, and in the inline JSON (`</` escaped, as build.py does).
 
-### 5.5 Fonts
+### 5.3 `/voices/`
 
-New topic text can contain kanji that no subset has. Today such characters get the page's own faces at build time.
-With `VOICES_SOURCE=d1`, `scripts/fonts.py` builds the `voices-*` faces from a fixed set instead of the page text: all
-JIS X 0208 level 1 and 2 kanji plus the characters of every shared page, split into `unicode-range` chunks of about
-120 glyphs per weight. A browser downloads only the chunks a page uses, so a day costs a few chunks of about 15-30 KB.
-The importer warns about any character outside that set (it renders in the system fallback font, which is legible).
-`dist/voices/_kit/day.html` and `/voices/` carry the same `@font-face` list.
+The Worker fetches `/voices/` from ASSETS and injects:
+- the listed documents in today's `{date, window, topics, sample}` shape, so the page script is unchanged;
+- the latest list, which links the latest **non-empty** date;
+- the robots slot.
 
-### 5.6 Game list
+On failure it serves the same shell with `/*VERR*/true`, status **503**, `Retry-After: 120` and `no-store`. The page
+script's `renderNotice()` then shows 「話題データを読み込めませんでした。時間をおいて再度お試しください。」 instead of clearing
+`#notice`, which is a one-line change. The calendar payload is measured at M3: bytes, cold CPU and D1 bytes for the
+real data and for a synthetic year. Section 5.8 starts when it reaches 250 KB raw. At 10-30 KB a day that can be
+only 10-30 days, so the month split must stay ready.
 
-The Worker and the importer need the codes, names and colours. If the game-hub registry (`data/games.json`,
-docs/design/game-hub.md M0) is on `main` first, everything reads `sources.voices` from it. Otherwise M1 moves the list
-out of `src/voices.html` into `contracts/voices-games.json`, read by build.py (with the regex gone), the page (a
-`/*VGAMES*/` slot), `kit.json` and the importer, and the registry later absorbs it. A new game code still needs a
-deploy. That is rare and changes the palette anyway.
+### 5.4 Empty snapshots, per surface
 
-### 5.7 Sitemap
+A date with no topics left (removal) **does not exist** on every surface:
+- it is not in the manifest, so it gets 404, is not in the sitemap, is not in the calendar payload, and prev / next
+  skip it;
+- `latest` and the latest list use the newest listed date;
+- the home block keeps its 7-day rule on that date. After the newest date is emptied, home shows the previous date's
+  topics if they are ≤ 7 days old. These are older topics, never removed ones.
 
-build.py keeps `sitemap.xml` as a urlset. With `d1` it drops `/voices/` and the archive entries from it and adds a
-second line to `robots.txt`: `Sitemap: https://shindan-navi.app/sitemap-voices.xml`. The Worker serves that file from
-`voices_state`: `/voices/` with lastmod = the latest date, then one `<url>` per date with lastmod = the date. Its
-answer is empty (no `<url>`) while there is no real snapshot. Rejected: turning `sitemap.xml` into a sitemap index.
-That changes the URL Search Console already reads, with no benefit. The owner can also submit `sitemap-voices.xml` in
-Search Console (optional).
+This differs from today's `home_voices()`, which uses an empty latest snapshot as-is. Tests cover removing a middle
+date, emptying the latest, deleting the only date and a backfill, checking both neighbours and the sitemap.
 
-### 5.8 Home いま話題 and game hubs: `GET /api/v1/voices/latest`
+### 5.5 Sitemap
 
-The block is built empty (its markup stays behind `<!--VOICES-->`), and `H.voices` goes away. On load, `/` requests
-`/api/v1/voices/latest`. The answer is `{date, games: [{code, name, short, c, cd}], topics: [{id, game, title, summary,
-attitude, volume, first_seen}]}` (today's `home_voices()` shape), or `null` without a real snapshot. The block stays
-hidden until the answer arrives, and on any error or 429. The 7-day staleness rule stays client-side. That is one
-extra request per home view, the same key for everyone, so nearly all are edge hits.
+`robots.txt` gets a second line, `Sitemap: https://shindan-navi.app/sitemap-voices.xml`. `sitemap.xml` drops
+`/voices/` and the archive URLs. The Worker builds the voices sitemap from the manifest: each date's `lastmod` is its
+`modified`, and `/voices/`'s is the newest `modified`. A change to neighbour links alone does not change `lastmod`.
+On a manifest that is not fresh it returns 503.
 
-Rejected: Worker-injecting into `/`. Every home view would pass through the Worker (`run_worker_first` on `/`), and a
-Worker failure would break the whole home page instead of one block.
+### 5.6 Home and hubs: `GET /api/v1/voices/latest`
 
-Game hubs (docs/design/game-hub.md): topics leave `HUB` / `data.json`. The hub reads the same `latest` key (and, for
-the ◆ markers on past days, the month endpoint from section 5.4), filtered client-side. That means no new cache keys
-per game. The hub's static HTML links `/voices/` instead of listing topic titles, which would otherwise go stale
-between deploys. game-hub.md §6 and §8 need this edit before its M1.
+`/` builds the block empty and fetches `latest`, which returns today's `home_voices()` shape `{date, games, topics:
+[{id, game, title, summary, attitude, volume, first_seen}]}` or `null`. On error, 429 or 503 the block stays hidden.
+Rejected: Worker-injecting into `/`. Every home view would pass through the Worker, and a Worker failure would break
+the whole page. Game hubs read the same key later. Their static HTML links `/voices/` instead of listing topic titles,
+which needs an edit to game-hub.md §6/§8.
 
-## 6. API shape, caching, limits, failure
+### 5.7 Fonts
 
-| Path | Params | Answer | Cache key |
-| --- | --- | --- | --- |
-| `GET /api/v1/voices/latest` | none (anything else is 400) | section 5.8 | `/api/v1/voices/latest?vv=<voices version>` |
-| `GET /api/v1/voices/month` (M6) | `m=YYYY-MM`, exactly once, inside the data range (else an empty answer, no D1 read) | section 5.4 | `…/month?vv=<v>&m=` |
-| `/voices/` (HTML) | query ignored (the page reads it client-side) | section 5.3 | `/voices/?vv=<v>&w=<worker version>` |
-| `/voices/<date>/` (HTML) | none | section 5.2 | `/voices/<date>/?vv=<v>&w=<worker version>` |
-| `/sitemap-voices.xml` | none | section 5.7 | `…?vv=<v>` |
+With `d1`, the voices pages use the **shared** subsets plus the Japanese system fallback (already in the font stacks)
+for glyphs the subsets lack. Home is the same. The per-page voices faces in `scripts/fonts.py` are skipped. Chunked
+custom faces are not planned. If the fallback looks wrong, cold mobile requests, bytes and CSS size are measured on
+both fixtures first. The reviewer's estimate is 22-26 chunks of 120 kanji touched per snapshot, which is too many to
+adopt unmeasured.
 
-- `voices_state` is read and memoised exactly as the events `dataState()` does (60 s per isolate, with a last-good copy
-  in the colo cache under `/api/__voices_state`). The function takes the `site_meta` key as a parameter instead of
-  being duplicated. Edge TTL 24 h; browser `max-age=300` for JSON and HTML. The HTML is not `no-store`, so the
-  back/forward cache works.
-- Rate limits count misses only, as today. New bindings `VOICES_LIMIT` (120 misses per minute per client) and
-  `VOICES_BREAKER` (600 per minute per location) are separate from `API_LIMIT`, so a crawler walking archive pages
-  after an import cannot lock a player out of `/events/`. They are generous because a miss reads at most about 32 rows
-  (`/voices/` excepted). Over the limit the HTML gets 503 with `Retry-After: 60` (never 429 or 404 for crawlers) and
-  the JSON gets 429 / 503 like the events API.
-- When D1 fails, the last known version keeps serving every cached answer, as the events API does. On a miss:
-  - archive page: 503 with `Retry-After: 300`, never 404, which could drop the page from the index;
-  - `/voices/`: the shell with an empty `V.snapshots` and 「話題データを読み込めませんでした。時間をおいて再度お試しください。」 in `#notice`,
-    with status 200 and `noindex`;
-  - `latest`: 500, and the home block stays hidden;
-  - sitemap: 503.
+### 5.8 Later: month-scoped payload (not for launch)
 
-  No non-versioned stale copies are kept, so a takedown can never reappear from a fallback.
-- Cloudflare documents working Cache API operations only on custom domains, so on `*.workers.dev` previews every voices
-  request reads D1, as the events requests already do.
-- **Workers Free has 100,000 requests a day.** Static assets are free, but every `/voices/*` view, every home `latest`
-  call and every sitemap fetch is now a Worker invocation. The owner or lead checks the dashboard's daily request
-  count before M4 (Q3).
+When 5.3's limit is reached, `/voices/` carries recent months and fetches older ones. The current
+`versionOn()` picks the next snapshot **that contains the topic**, so a month answer must select by **interval
+overlap**: every topic whose `[first_seen, last appearance]` overlaps the month, with its version chosen per topic.
+The list view needs history loading, and `#t=<id>` / `#d=` deep links to unloaded data need resolving. That requires
+per-topic indexes (normalized rows or a manifest topic index) and gets its own design.
 
-**api/README.md › D1 budget** gets a "話題カレンダー" paragraph with the two tables in section 3, the import cap, the
-Worker-request note and the rule that only `/voices/` grows with history.
+## 6. Freshness, caching, limits, removal check
 
-## 7. Build and verify
+- **Manifest freshness.** Each isolate memoises the manifest for at most 60 s, keyed by **database and state name**.
+  Today `stateMemo` / `stateFailedAt` in `worker.ts` are keyed by database only, so they become
+  `WeakMap<D1Database, Map<name, …>>`, and the events behaviour is unchanged. Voices **never** falls back to an
+  unverified manifest, so there is no colo copy and no 7-day last-good state. When the memo is older than 60 s and D1
+  fails, the response is an uncached 503 with `Retry-After`.
+- **Exposure bound.** A removed card or a missing new date can be served for at most about 60 s plus the browser TTL.
+  HTML and `latest` use `max-age=60`.
+- **Cache keys** (colo, 24 h edge) are `…?vv=<manifest version>&w=<Worker version id>` (`version_metadata` binding)
+  for the HTML, `latest` and the sitemap. A deploy that changes the shell, the card module or the game metadata never
+  serves an old body.
+- **Limits** count misses only:
+  - `VOICES_LIMIT`: 120 per minute per client;
+  - `VOICES_BREAKER`: 600 per minute per location;
+  - `VOICES_CAL_BREAKER`: 10 per minute per location for `/voices/`. Its key is identical for everyone, so a
+    legitimate colo needs about 1 miss per version.
 
-- **`VOICES_SOURCE`** (repo variable and build env; default `static`): `static` is today's build, unchanged. `d1`
-  (needs `VOICES_ENABLED=1` and `BUILD_EVENTS=1`) builds the shell, kit, `robots.txt` line and empty home block, skips
-  `voices_data()`, `render_voices_day()` and the archive entries in `sitemap.xml`, and the deploy workflow passes it to
-  `remote-config.mjs`. The Pages build (`BUILD_EVENTS=0`) is always `static`. Rollback: unset the variable and re-run
-  the deploy. That works until M5, because both stores hold the data until then.
-- **Local dev**: `npm run dev:node` imports `data/voices/` (or, if it is missing, `contracts/fixtures/voices/`, a
-  committed synthetic set: 3 snapshots, a continuing and a cooling topic, a small-sample topic, a removed topic, one
-  fixture official account) into the same SQLite file with `import-voices.mjs --target sqlite`, and serves the Worker
-  with `VOICES_SOURCE=d1`. `import-voices.mjs --export` from remote gives a real local copy when needed.
-- **`verify_release.py`**: with `d1` it builds, then runs `node api/scripts/render-voices.mjs --sqlite <fixture db>
-  --out .verify/voices-d1/`. That script uses the Worker bundle on Node (the dev-node bundling, moved to
-  `api/scripts/lib/local-worker.mjs`) to write `/voices/index.html`, every archive page, `sitemap-voices.xml`,
-  `latest.json`, a removed date's 404 page and its status into a directory shaped like `dist/`. The existing
-  `check_voices()` and home checks then run on those files against the fixture data: cards in GAMES order matching the
-  data, no post text or embeds, no X URL but a topic's `reacting_to`, nofollow, canonical, BreadcrumbList only, prev /
-  next skipping removed snapshots, 404 for removed and empty snapshots, sitemap lastmods. On top of that: the golden
-  parity test, `robots.txt` naming both sitemaps, `/voices/` and the archive pages absent from `sitemap.xml`, and no
-  topic text in `dist/`. Both `VOICES_SOURCE` values are built and checked until M5.
-- **`browser.mjs`**: its static server sends `/voices*`, `/sitemap-voices.xml` and `/api/v1/voices/*` to the same
-  in-process local Worker (SQLite fixtures). `OFFICIAL_X` comes from that database instead of `data/voices`. The
-  `/voices/` and archive-page runs stay as they are. The home いま話題 run waits for the `latest` request, and new
-  cases cover a failing `latest` (block hidden) and the D1-down `/voices/` notice.
-- **Worker vitest**: importer validation, including every refusal in section 4; diff, takedown and tombstones;
-  routing, including `/voices/_kit/` → 404 and `VOICES_SOURCE` off → assets; cache keys under the voices version; 503
-  rather than 404 when D1 fails; rate-limit separation; the parity golden test.
+  Over a limit the HTML gets 503 with `Retry-After`, never 404, and the JSON gets 429 / 503.
+- **Removal check** (scripted, `import-voices.mjs --check-removed ID|DATE`, run after every takedown and every
+  restore). The id or date must be absent from:
+  - `/voices/` (payload and latest list);
+  - the archive bodies **and heads** (title, description);
+  - `latest` and `sitemap-voices.xml`;
+  - `voice_docs` (including undo slots);
+  - the latest export and the backup tarballs (rewritten);
+  - the local input dir;
+  - until M5, the committed files and any open snapshot branch (fixed and pushed before the takedown is reported
+    done);
+  - accessible preview versions (a preview whose voices are served from D1 follows automatically; static previews
+    with baked voices are deleted or redeployed).
 
-## 8. Privacy page, CLAUDE.md, contracts
+  Search caches and third-party archives are outside our control, as the privacy page says. Ledger replay protects
+  restores.
 
-**`src/privacy.html` (VOICES section)**: Japanese wording for the owner to approve. This is a new revision:
-`PRIVACY_EFFECTIVE_VOICES_D1` plus a 改定 line, effective at M4.
+## 7. Budget (Free plan, account-wide)
+
+D1 counts rows, not bytes, and the document model keeps row counts small:
+
+| Operation | Rows written | Rows read |
+| --- | ---: | ---: |
+| New snapshot | 1 doc + 1 manifest (+ GC of the undo slot) ≈ 3 | plan: manifest + ≈ 1 doc per date (≈ 365 a year) + ledger; `--yes` the same again |
+| Takedown touching k dates | 2k + 2 | same |
+| `/voices/<date>/` miss | 0 | 1 doc (+ manifest ≤ 1 per isolate per 60 s) |
+| `latest`, sitemap miss | 0 | 1 / 0 |
+| `/voices/` miss | 0 | all listed docs (≈ 365 a year, rows; payload bytes are the real limit, 5.3) |
+
+**Worker requests** are the larger cost. Workers Free allows 100,000 a day, and cache hits still invoke the Worker:
+every `/voices/*` view, every home `latest` call and every crawler fetch now counts. Gate before M4:
+- take the 7-day peak UTC day of Workers requests and D1 rows read / written, account-wide (dashboard);
+- add the projection: home views, `/voices/` and archive views, crawler fetches after each import, imports;
+- measure cold CPU (10 ms Free limit) and response bytes for the real data and a synthetic year;
+- go ahead only below 50 % of each limit.
+
+`api/README.md` › D1 budget gets the table and the gate.
+
+## 8. Build and verify
+
+- **`VOICES_SOURCE`** (repo variable and build env, default `static`).
+  - `static`: build.py renders the voices pages by running `node api/scripts/render-voices.mjs --data <dir> --out dist/`.
+    That is the same renderer as the Worker, on Node; Node already runs in CI. It replaces `render_voices_day()`.
+    Until M5 `<dir>` is the committed `data/voices`.
+  - `d1`: builds the shell, the kit, the `robots.txt` line and the empty home block, and the deploy passes the flag
+    to `remote-config.mjs`.
+- **Proof before M4.** Build `static` from the committed files and render `d1` from the database seeded at the same
+  revision. Diff the voices output (it must be identical apart from known slots). Check which host serves the domain
+  (`curl -sI`, `LIVE_HOST`, the Worker's custom domain).
+- **Rollback without D1**:
+  - before M5: unset the variable and redeploy (static from the committed files, kept equal by dual-write);
+  - after M5: `scripts/deploy.sh worker --domain` with `VOICES_SOURCE=static VOICES_DATA=<sanitized latest export>`.
+    It builds locally and needs no D1 and no CI data.
+  - M5 waits until this has been **rehearsed with D1 unreachable and after a test takedown** (ledger replayed, the
+    removal check passing on the static output).
+- **Pages after M5.** The Pages build has no voices input in CI, so it builds with voices off (no `/voices/`, no tab,
+  no VOICES privacy part). A manual Pages fallback can use the same local export.
+- **Privacy during fallback.** The static fallback still describes D1 storage, which stays true because the data is
+  still there.
+- **Local dev.** `npm run dev:node` imports `data/voices/`, or else `contracts/fixtures/voices/`: synthetic, with 3
+  dates, continuing, cooling, small-sample and removed topics, one fixture official account, an emptied date and a
+  backfill. It goes into the same SQLite file and the Worker runs with `VOICES_SOURCE=d1`.
+- **`verify_release.py`.** `render-voices.mjs --sqlite <fixture db> --out .verify/voices-d1/` writes a `dist/`-shaped
+  tree: `/voices/`, the archives, the sitemap, `latest.json`, and the 404 / 503 responses with their status. The
+  existing `check_voices()` and home checks then run on it: GAMES order, no post text, no X URL but `reacting_to`,
+  nofollow, canonical, BreadcrumbList only, prev / next, sitemap lastmods. Both flag values are checked until M5.
+- **`browser.mjs`.** Its server routes the voices paths to the in-process Worker (`api/scripts/lib/local-worker.mjs`,
+  shared with dev-node) and reads `OFFICIAL_X` from the fixture database. Added cases: home with `latest` failing, the
+  503 `/voices/` notice, and an archive card compared with the calendar's dialog card.
+- **M3 checks against the real ASSETS binding** (preview upload): status, content type, canonical, the preview
+  noindex header, `/_voices-kit/` headers, both slash forms, 404 on fresh absence, 503 with D1 unreachable.
+- **Vitest.** Every importer refusal; plan binding and mismatch aborts; compare-and-swap races; an interrupted write;
+  ledger replay; continuity on the resulting timeline; freshness (two warmed caches, a takedown and a new date, D1
+  down); state memo keyed by name; cache keys; escaping; renderer semantics.
+
+## 9. Privacy page, CLAUDE.md, contracts
+
+**Privacy (VOICES section).** It needs a new dated revision, **effective at M2**, when storage in D1 starts. The
+Japanese wording is for the owner to approve:
 - 掲載している要約などは Cloudflare D1（米国その他の国のデータセンター）に保存し、そこから表示しています。
-- 削除のご依頼は、確認のうえデータベースから削除します。公開ページへの反映は通常数分以内です。データベースの復旧用バックアップ（最長 7 日間）からも、その期間が過ぎると消去されます。
-- 2026年11月X日（M5 の日付）以降の話題データは GitHub リポジトリに含めていません。それ以前の分は、削除前のデータファイルが変更履歴に残る場合があります（the existing sentence, now limited in time）。
-- The rest is unchanged (no player URLs or handles, evidence kept only locally, search caches may lag).
+- 削除のご依頼は、確認のうえデータベースと公開ページから削除します（反映は通常数分以内）。
+- Cloudflare D1 の障害復旧機能により、削除後も一定期間（契約プランに応じて 7 日間または 30 日間）、復元用のデータが残る場合があります。
+  This mirrors the existing STORE wording and is plan-dependent.
+- The git-history sentence is limited to data before the M5 date.
 
-**CLAUDE.md**:
-- the `/voices/` paragraph: data in D1 written by `import-voices.mjs`; the Worker renders the archive pages and injects
-  `/voices/`; `VOICES_SOURCE`; the "keep in step" note now points at `voices-render.ts` and `card()`;
-- the "How it fits together" diagram gets a voices line;
-- Commands get `import:voices`;
-- Gotchas: voices cache under its own version; the Worker-request quota; fonts chunks.
+**CLAUDE.md.**
+- the `/voices/` paragraph: D1 documents, the importer, `VOICES_SOURCE`, the shared card module replacing "keep the
+  two in step", the freshness rule;
+- the diagram gets a voices line and Commands get `import:voices`;
+- Gotchas: voices served only on a fresh manifest; the Worker request quota.
 
-**`contracts/voices.md`**: Files → local input directory plus D1 tables; "Build checks" → "Importer checks"
-(section 4); the takedown procedure via `--remove-topic` / `--remove-snapshot`; the official-account list.
+**Contracts and other docs.**
+- `contracts/voices.md`: Files → local input + D1; Build checks → importer checks; the window rule (4.1-4);
+  takedown, removal check and ledger; the official-account list.
+- `api/README.md`: a Voices section, the 0008 runbook and the budget.
+- The `d1-remote-op` skill: voices imports go to a Fable review (high → go ahead); takedowns, `--undo` and
+  `--restore` need the owner first.
+- A new `voices-snapshot` skill holds the section 10 runbook.
 
-**Other docs and skills**:
-- `contracts/README.md` gets one line.
-- `api/README.md` gets a Voices section (import, takedown, schema), the 0008 runbook and the budget paragraph.
-- The `d1-remote-op` skill covers voices imports (adding rows: a Fable review, then go ahead on high) and takedowns
-  (owner first).
-- A new `.claude/skills/voices-snapshot/` holds the runbook in section 9.
+## 10. Milestones and runbook
 
-## 9. Milestones
-
-| # | Ships | Live change | Needs the owner |
+| # | Ships | Live change | Owner |
 | --- | --- | --- | --- |
-| M1 | `0008_voices.sql`, `import-voices.mjs` (sqlite / wrangler / remote, `--plan` only against remote), `contracts/voices-official-x.json`, game list file (5.6), fixtures, tests, contract and README drafts | none | design OK, Q2 |
-| M2 | Remote migration 0008 (`!` line below, Time Travel bookmark first), then import today's two snapshots. Each new snapshot from now on goes to both stores (commit + import) | none (tables unused) | runs the migration; OK on the first `--yes` |
-| M3 | `voices.ts` / `voices-render.ts`, `latest` API, sitemap route, shell + kit + chunked fonts behind `VOICES_SOURCE=d1`, parity goldens, verify / browser changes. Deployed with the flag off (the Worker passes voices paths to assets). The `d1` path is checked on a `wrangler versions upload` preview URL with the remote config carrying the paths (D1 read uncached, Cloudflare login needed) | none | Cloudflare login for the preview upload (or the owner runs it) |
-| M4 | Cutover: privacy revision + set the repo variable `VOICES_SOURCE=d1` + push. Home block on `latest`. Watch Search Console coverage for archive URLs | `/voices/*` from D1 | sets the variable; approves the privacy text; the Q3 quota check |
-| M5 | After 2 stable weeks: `git rm data/voices/*.json`, `/data/voices` in `.gitignore`, remove `voices_data()` / the Python renderer and the `static` branch; goldens stay. Rollback from here = `--export` + revert | none | OK (irreversible in practice: the git copy stops) |
-| M6 | Month-scoped `/voices/` payload + `/api/v1/voices/month`; game hubs use `latest` / `month` | smaller `/voices/` | none |
+| M1 | **Events runner change first**: `import:remote --yes` refuses pending migrations, which apply only with an explicit `--apply-migrations` (matching the d1-remote-op rule). Then the voices importer (sqlite / wrangler, remote `--plan` only), `voices-card.js`, the official-account list, synthetic fixtures and goldens, tests. `0008_voices.sql` stays in `api/migrations-pending/` | none | design OK, Q1-Q2 |
+| M2 | Move 0008 into `api/migrations/` and merge. The owner applies it (lines below). Seed from the cutover revision with hash comparison. Privacy revision live. Dual-write starts | privacy text | runs the migration; approves the privacy text; OK on the first `--yes` |
+| M3 | Worker read path, `latest`, sitemap, kit, freshness, limits, `static` via `render-voices.mjs`, verify / browser. Deployed flag-off. Checked on a `wrangler versions upload` preview with the voices routes | none | Cloudflare login for the preview (or the owner runs it) |
+| M4 | Gates: section 7 budget, section 8 static-vs-d1 proof and serving-host check. Then the owner sets the repo variable `VOICES_SOURCE=d1` and pushes. Home uses `latest` | `/voices/*` from D1 | variable; Q3 |
+| M5 | After 2 stable weeks **and** the rehearsal (D1 down, after a test takedown): `git rm data/voices/*.json`, gitignore the folder, Pages voices off, drop the Python remnants | none | OK (the git copy stops) |
+| later | Month-scoped payload (5.8), hubs on `latest` | | |
 
-Owner's remote migration (from `api/`, after `node scripts/remote-config.mjs` with `D1_DATABASE_ID` exported):
+Migration (from `api/`, `D1_DATABASE_ID` exported, after `node scripts/remote-config.mjs`). First check the target
+and the pending list. 0008 must be the only pending migration, otherwise 0006 or 0007 would apply too:
 
 ```
-! ./node_modules/.bin/wrangler d1 time-travel info shindan-navi-events --config ../wrangler.remote.json
+! ./node_modules/.bin/wrangler d1 migrations list shindan-navi-events --remote --config ../wrangler.remote.json
 ! ./node_modules/.bin/wrangler d1 migrations apply shindan-navi-events --remote --config ../wrangler.remote.json
 ```
 
-Check `migrations list` first. If 0006 or 0007 is still unapplied remotely, `apply` would apply them too, so wait or
-apply in number order with their own runbooks. No new secrets are needed. New bindings and vars (`VOICES_LIMIT`,
-`VOICES_BREAKER`, `version_metadata`, `VOICES_SOURCE`) live in config. The repo variable `VOICES_SOURCE` is the owner's.
+There are no secrets. The new bindings and vars (`VOICES_LIMIT`, `VOICES_BREAKER`, `VOICES_CAL_BREAKER`,
+`version_metadata`) live in config.
 
-### Runbook: one new snapshot after the cutover (no commit, no deploy)
+**One new snapshot after cutover (no commit, no deploy):**
+1. Grok answers. The lead writes `data/voices/<date>.json` (contract shape, `note` for provenance).
+2. The lead validates the player posts through oEmbed: inside the window, on topic, not a sales / video / report /
+   shop post, 2+ distinct authors. `reacting_to` is official and may predate the window. Evidence goes to
+   `out/voices/<date>/`. `share` counts only validated posts.
+3. Copy the file to the owner's data dir; `--export` the backup tarball.
+4. `npm run import:voices:remote -- --data <dir> --dates <date> --plan`. Read the review, and note the expected rows
+   (≈ 3) and the manifest version.
+5. A Fable or GPT-astra review of the plan output (D1 id masked). On high, `-- --yes --plan-file <file>`. Medium or
+   low: ask the owner.
+6. After about 60 s: `latest` has the date, `/voices/<date>/` answers 200, the sitemap lists it, the previous page
+   links it as next.
+7. Update the kb note. Until M5, also commit the same file (dual-write) and compare hashes.
 
-1. Grok (`grok-app`) answers per game, and the lead writes `data/voices/<date>.json` in the worktree, in contract shape
-   with `note` for provenance.
-2. The lead validates the supporting player posts and every `reacting_to` through oEmbed (exists, in the window, on
-   topic, not a sales / video / report / shop post, 2+ distinct authors). Evidence goes to `out/voices/<date>/`, local
-   only. `share` counts only validated posts.
-3. Copy to the owner's data directory, then `tar czf ~/shindan-backups/voices-$(date +%F-%H%M).tgz -C <dir> .`.
-4. Optional local look: `npm run dev:node`, then open `/voices/` and `/voices/<date>/`.
-5. `D1_DATABASE_ID=… npm run import:voices:remote -- --data <dir> --dates <date> --plan`. Read the summary: topics
-   new / continuing / cooling, kept `first_seen`, handles and their oEmbed result, rows (≈ 2N + 2), no unexpected
-   deletes.
-6. Record a Time Travel bookmark (`wrangler d1 time-travel info …`) in the report.
-7. A Fable or GPT-astra review of the plan output with the D1 id masked. On high: `-- --yes` with the same flags.
-   Medium or low: ask the owner.
-8. Check live after about 60 s: `/api/v1/voices/latest` has the date; `/voices/<date>/` answers 200 with the cards;
-   `/sitemap-voices.xml` lists it; the previous page links it as next.
-9. Update the kb session note. Until M5, also commit the file on a branch and merge it with the next deploy (both
-   stores).
+**Takedown:** `--remove-topic <id> --plan` → owner OK → `--yes --plan-file` → `--check-removed <id>` → fix the local
+files and backups (and, until M5, the committed files) → re-run the check → reply to the requester.
 
-Takedown: `--remove-topic <id> --plan` → owner OK → `--yes` → delete the topic from the local files and tarballs →
-confirm a 404 or the missing card within minutes → reply to the requester.
+## 11. Risks
 
-## 10. Risks
+- **The freshness rule turns D1 trouble into 503s** on cache misses. That is visible but honest. Cached hits under a
+  fresh manifest keep serving.
+- **Calendar payload growth** may hit the 250 KB limit within weeks. Section 5.8 needs its own design soon after
+  cutover.
+- **Loss of the git audit trail after M5.** D1, the sanitized exports, the tarballs and the ledger remain. Time Travel
+  is not part of voices recovery.
+- **Two renderers become one module plus a static runner on Node.** The browser still renders dialogs client-side
+  from the same module, so drift is limited to the `h()` glue, which the semantic tests cover.
+- **Worker request quota.** Measured before M4; Workers Paid is the escape hatch.
+- **System-font fallback** for rare kanji is visually uneven. It is accepted for launch and measured before anything
+  more.
 
-- **Renderer drift.** There are now two renderers, the TS archive renderer and the page script's `card()`. The goldens
-  pin the TS output, and `browser.mjs` compares the archive cards with the calendar's dialog text for one fixture topic.
-  A later step could share one module between them.
-- **Loss of the git audit trail.** After M5 the only copies are D1, the local files and the tarballs. Time Travel
-  covers 7 days. `--export` into the backup directory after every import is part of the runbook.
-- **SEO during the cutover.** Parity goldens plus a byte diff of the live archive pages before and after M4 (curl).
-  503s, rather than 404s, when D1 fails.
-- **Worker request quota and CPU** (Free: 100k/day, 10 ms). Every voices view and home `latest` call counts. Workers
-  Paid ($5/month) is the escape hatch (Q3). `/voices/` composition grows with history until M6.
-- **Fonts.** A JIS level 1+2 set misses rare kanji and emoji (the system fallback renders them, and the importer warns).
-- **Pending migrations.** `migrations apply` applies every unapplied file (0006 and 0007 if present); check the list
-  first.
-- **Concurrent operators.** One lead imports. The importer re-reads the state in `--yes`, so a stale plan cannot apply.
+## 12. Open questions for the owner
 
-## 11. Open questions for the owner
-
-1. **Stop committing snapshots after M5**, keeping them only in D1, the owner's data directory and backups, as with
-   events. Recommendation: yes. It is what "no page change every time" implies, and it ends new takedown leftovers in
-   public git history.
-2. **Official-account allowlist** committed as `contracts/voices-official-x.json` (public handles only). Recommendation:
-   yes. Without git review it is the main guard that `reacting_to` only ever points at official posts. A new handle is
-   a small commit (it deploys, harmlessly).
-3. **Worker quota.** Is it OK that `/voices/*` and one home request per view become Worker invocations (Free:
-   100k/day)? Recommendation: check the dashboard's daily requests before M4, and move to Workers Paid only if the
-   7-day peak is above about 50k.
-4. **Home block via API** instead of the build-time embed. Recommendation: API. Otherwise the block goes stale until
-   the next deploy, which defeats the change.
-5. **Game hubs** get their topics from the API and drop static topic titles from the hub HTML (an edit to game-hub.md
-   §6/§8). OK?
-6. **Takedown wording.** Hard delete with tombstones, and the privacy page states that D1 backups hold deleted data for
-   up to 7 days. OK?
-7. **Samples never go to D1** (local and fixtures only). OK?
+1. **Stop committing snapshots after M5** (D1, your data dir, sanitized backups and the ledger only)? Recommendation:
+   yes.
+2. **Commit the official X account allowlist** (`contracts/voices-official-x.json`, public handles)? Recommendation:
+   yes. It is the main guard on `reacting_to` once there is no git review.
+3. **Worker quota.** `/voices/*` and one home `latest` call per view become Worker invocations (Free: 100k/day).
+   Accept, with the 50 % gate before M4, and move to Workers Paid if needed?
+4. **Availability over staleness.** On a cache miss when D1 cannot be verified, serve a 503 (never stale content, so
+   a takedown cannot reappear). OK?
+5. **Fonts.** Accept the system-font fallback for new kanji on voices pages, with no custom chunked faces for now?
+6. **Privacy revision at M2** with the plan-dependent 7 / 30-day backup wording. Approve the Japanese text in section 9?
+7. **Home after the newest date is emptied** shows the previous date if it is ≤ 7 days old (section 5.4). OK?
+8. **Game hubs** read `latest` and drop static topic titles (an edit to game-hub.md). OK?
