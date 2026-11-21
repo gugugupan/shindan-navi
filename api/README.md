@@ -308,6 +308,13 @@ month per request.
 | `/events` page with filters, scan per request: 東京都 / 5 largest (max while paging) | 154 / 984 |
 | `/events` page with filters, day lookup | ≤ month's day_counts rows (8 games: ≤ 636 / ≤ 2,733) |
 | `/events/meta`, data version | 1, 1 |
+| `/voices` (話題カレンダー, `VOICES_SOURCE=d1`): all snapshots / `/voices/latest` / voices version | 1 per snapshot (≈ 365 a year) / 1 / 1 |
+
+**Voices** (`import-voices.mjs`, migration `migrations-pending/0008_voices.sql`, docs/design/voices-db.md): one
+`voice_snapshots` row per date, so an import writes ~2 rows per new or changed date + 1 version row (a takedown: the
+dates it rewrites or deletes + 1); its plan reads every row once. `/api/v1/voices*` is cached like the events
+endpoints under its own version (`voice_meta`), so a miss happens once per colo and import; each `/voices/` view and
+each home view with いま話題 is still a Worker request (Workers Free: 100,000 a day).
 
 Paging through December with all cursors: Tokyo unfiltered 1,693 events in 34 requests / 2,557 rows; 5 largest
 with `days=weekend` 1,912 events in 39 requests / 12,521 rows (scan only). An uncached Tokyo list view costs ~340

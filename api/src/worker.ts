@@ -6,6 +6,7 @@ import { FEEDBACK_PATH, handleFeedback, type FeedbackEnv } from './feedback';
 import { guessRegion } from './geo';
 
 import { getMeta, readState, type DataState } from './meta';
+import { latestVoices, listVoices, RawJson, readVoicesState, type VoicesState } from './voices';
 
 export interface Env extends FeedbackEnv {
   DB: D1Database;
@@ -29,14 +30,20 @@ export const BROWSER_TTL = 300;
 const BROWSER_CACHE = `public, max-age=${BROWSER_TTL}`;
 // How long an isolate trusts its last read of the data version (one D1 row).
 export const STATE_TTL_MS = 60_000;
-// Last good data state, kept in the colo cache so a cold isolate can still find cached answers while D1 fails.
-const STATE_PATH = '/api/__state';
+// Last good data state per kind, kept in the colo cache so a cold isolate can still find cached answers while D1 fails.
+// Events and voices have separate versions (site_meta 'state' / voice_meta 'version'), bumped by their own importers.
+type StateKind = 'events' | 'voices';
+type AnyState = DataState | VoicesState;
+const STATES: Record<StateKind, { path: string; read: (db: D1Database) => Promise<AnyState | null> }> = {
+  events: { path: '/api/__state', read: readState },
+  voices: { path: '/api/__state/voices', read: readVoicesState },
+};
 const STATE_EDGE_TTL = 7 * 86_400;
 // After a failed D1 read, wait this long before trying D1 again for the data version.
 export const STATE_RETRY_MS = 5_000;
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
+  return new Response(body instanceof RawJson ? body.text : JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
 }
 
 interface Parsed {
@@ -44,12 +51,19 @@ interface Parsed {
 }
 
 interface Route {
+  /** Whose data version keys the cache (default events). */
+  state?: StateKind;
   /** Validates the query (throws BadRequest), clamped to the data window. */
   parse(params: URLSearchParams, window: DataWindow | null): Parsed;
   /** Canonical query used in the cache key. */
   key(parsed: Parsed): string;
-  run(db: D1Database, parsed: Parsed, state: DataState | null): Promise<unknown>;
+  run(db: D1Database, parsed: Parsed, state: AnyState | null): Promise<unknown>;
 }
+
+const noParams = (p: URLSearchParams): Parsed => {
+  for (const k of p.keys()) throw new BadRequest(`unknown parameter: ${k}`);
+  return {};
+};
 
 type EventQ = ReturnType<typeof parseEventQuery>;
 type DaysQ = ReturnType<typeof parseFilters>;
@@ -58,7 +72,7 @@ const ROUTES: Record<string, Route> = {
   '/api/v1/events': {
     parse: (p, w) => parseEventQuery(p, w),
     key: (q) => canonicalEventQuery(q as EventQ).toString(),
-    run: (db, q, state) => listEvents(db, q as EventQ, state?.fetched_at ?? {}),
+    run: (db, q, state) => listEvents(db, q as EventQ, (state as DataState | null)?.fetched_at ?? {}),
   },
   '/api/v1/events/days': {
     parse: (p, w) => parseFilters(p, 'days', w),
@@ -66,12 +80,21 @@ const ROUTES: Record<string, Route> = {
     run: (db, q) => listDays(db, q as DaysQ),
   },
   '/api/v1/events/meta': {
-    parse: (p) => {
-      for (const k of p.keys()) throw new BadRequest(`unknown parameter: ${k}`);
-      return {};
-    },
+    parse: noParams,
     key: () => '',
     run: (db) => getMeta(db),
+  },
+  '/api/v1/voices': {
+    state: 'voices',
+    parse: noParams,
+    key: () => '',
+    run: (db, _q, state) => listVoices(db, state as VoicesState | null),
+  },
+  '/api/v1/voices/latest': {
+    state: 'voices',
+    parse: noParams,
+    key: () => '',
+    run: (db, _q, state) => latestVoices(db, state as VoicesState | null),
   },
 };
 
@@ -79,26 +102,35 @@ function edgeCache(): Cache | null {
   return typeof caches !== 'undefined' && caches.default ? caches.default : null;
 }
 
-const stateMemo = new WeakMap<D1Database, { at: number; state: DataState | null }>();
-const stateFailedAt = new WeakMap<D1Database, number>();
+// Per database object and state kind, so the events and voices versions never mix.
+const stateMemos = new WeakMap<D1Database, Map<StateKind, { at: number; state: AnyState | null }>>();
+const stateFails = new WeakMap<D1Database, Map<StateKind, number>>();
+const perDb = <T>(m: WeakMap<D1Database, Map<StateKind, T>>, db: D1Database) => {
+  let x = m.get(db);
+  if (!x) m.set(db, (x = new Map()));
+  return x;
+};
 
 /**
- * The data version. With the Cache API it is memoized per isolate for STATE_TTL_MS and, when D1 fails,
+ * The data version of one kind. With the Cache API it is memoized per isolate for STATE_TTL_MS and, when D1 fails,
  * the last known state (memo, then the colo cache) is used so cached answers keep being served.
  */
-async function dataState(db: D1Database, cache: Cache | null, origin: string, ctx?: ExecutionContext): Promise<DataState | null> {
-  if (!cache) return readState(db);
-  const memo = stateMemo.get(db);
+async function dataState(kind: StateKind, db: D1Database, cache: Cache | null, origin: string, ctx?: ExecutionContext): Promise<AnyState | null> {
+  const { path, read } = STATES[kind];
+  if (!cache) return read(db);
+  const stateMemo = perDb(stateMemos, db);
+  const stateFailedAt = perDb(stateFails, db);
+  const memo = stateMemo.get(kind);
   if (memo && Date.now() - memo.at < STATE_TTL_MS) return memo.state;
-  const stateKey = new Request(`${origin}${STATE_PATH}`, { method: 'GET' });
-  if (!memo && Date.now() - (stateFailedAt.get(db) ?? 0) < STATE_RETRY_MS) {
+  const stateKey = new Request(`${origin}${path}`, { method: 'GET' });
+  if (!memo && Date.now() - (stateFailedAt.get(kind) ?? 0) < STATE_RETRY_MS) {
     const hit = await cache.match(stateKey);
-    if (hit) return (await hit.json()) as DataState;
+    if (hit) return (await hit.json()) as AnyState;
     throw new Error('D1 unavailable (retrying shortly)');
   }
   try {
-    const state = await readState(db);
-    stateMemo.set(db, { at: Date.now(), state });
+    const state = await read(db);
+    stateMemo.set(kind, { at: Date.now(), state });
     if (state) {
       const put = cache.put(stateKey, json(state, 200, { 'cache-control': `public, max-age=${STATE_EDGE_TTL}` }));
       if (ctx) ctx.waitUntil(put);
@@ -107,17 +139,17 @@ async function dataState(db: D1Database, cache: Cache | null, origin: string, ct
     return state;
   } catch (e) {
     console.error(e);
-    stateFailedAt.set(db, Date.now());
+    stateFailedAt.set(kind, Date.now());
     // Keep using the last known version; try D1 again after STATE_RETRY_MS rather than on every request.
     const retryAt = Date.now() - STATE_TTL_MS + STATE_RETRY_MS;
     if (memo) {
-      stateMemo.set(db, { at: retryAt, state: memo.state });
+      stateMemo.set(kind, { at: retryAt, state: memo.state });
       return memo.state;
     }
     const hit = await cache.match(stateKey);
     if (!hit) throw e;
-    const state = (await hit.json()) as DataState;
-    stateMemo.set(db, { at: retryAt, state });
+    const state = (await hit.json()) as AnyState;
+    stateMemo.set(kind, { at: retryAt, state });
     return state;
   }
 }
@@ -172,8 +204,8 @@ async function handleApi(request: Request, env: Env, url: URL, ctx?: ExecutionCo
   const cache = edgeCache();
   let res: Response;
   try {
-    const state = await dataState(env.DB, cache, url.origin, ctx);
-    const parsed = route.parse(url.searchParams, state?.window ?? null);
+    const state = await dataState(route.state ?? 'events', env.DB, cache, url.origin, ctx);
+    const parsed = route.parse(url.searchParams, (state as DataState | null)?.window ?? null);
     // Nothing is cached before the first import (no version) or for ranges outside the data (no D1 read).
     const key = cache && state && !parsed.outside ? cacheKey(url.origin, url.pathname, state.version, route.key(parsed)) : null;
     const hit = key ? await cache!.match(key) : undefined;
