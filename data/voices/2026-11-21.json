@@ -5,7 +5,7 @@
     "from": "2026-11-19",
     "to": "2026-11-21"
   },
-  "note": "Grok app answers for ONE PIECE (OP-18 release day) and 名探偵コナンTCG, 2026-11-19..21 JST; other games stay at the 2026-11-20 snapshot. Supporting player posts and the reacting_to URL were checked via X oEmbed (exists, inside the window except the official notice, on topic, not sales/video/shops); topics need 2+ distinct authors; shop, sales and video-promo posts were dropped, which merged Grok's two OP-18 topics into one. Player post URLs are kept locally, never committed. share counts only the validated posts (Grok's numbers are not used), so the topics with fewer than 5 validated posts show the small-sample tendency phrase.",
+  "note": "Grok app answers for ONE PIECE (OP-18 release day) and 名探偵コナンTCG, 2026-11-19..21 JST; other games stay at the 2026-11-20 snapshot. Supporting player posts and every reacting_to URL were checked via X oEmbed (exists, inside the window, on topic, not sales/video/shops); topics need 2+ distinct authors; shop, sales and video-promo posts were dropped, which merged Grok's two OP-18 topics into one. Player post URLs are kept locally, never committed. The only official post before the window is the 2026-11-17 ONE PIECE ban notice (reacting_to of the Bonney topic). share counts only the validated posts (Grok's numbers are not used), so the topics with fewer than 5 validated posts show the small-sample tendency phrase.",
   "topics": [
     {
       "id": "conan-premium-mystery-best-reprint",
