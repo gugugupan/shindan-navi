@@ -79,6 +79,15 @@ class Reset(Repo):
         self.assertIn('restored 2 files from HEAD', out)
         self.assertEqual(self.quiet(refresh.reset_merge_base, self.logdir), '')  # nothing left to reset
 
+    def test_restores_archive_when_head_has_it(self):
+        self.write('data/items-archive.json', '[]\n')
+        self.assertEqual(self.quiet(refresh.reset_merge_base, self.logdir), '')  # not at HEAD yet: left alone
+        sh(self.root, 'add', 'data/items-archive.json')
+        sh(self.root, 'commit', '-q', '-m', 'archive')
+        self.write('data/items-archive.json', '[3]\n')
+        self.quiet(refresh.reset_merge_base, self.logdir)
+        self.assertEqual(self.read('data/items-archive.json'), '[]\n')
+
     def test_keeps_new_thumbs_referenced_by_overrides(self):
         # add_thumb.py: a new jpg plus an override pointing at it; overrides.json is not reset
         self.write('data/overrides.json', '{"i1": {"_name": "x", "thumb": "thumbs/hand.jpg"}, "i2": {"thumb": ""}}')

@@ -1,5 +1,5 @@
 <!--
-  Product page /item/<id>/, one per visible release (render_item() in build.py fills SITE_CSS, BRAND, CORNER, SITENAV,
+  Product page /item/<id>/, one per visible or archived release (render_item() in build.py fills SITE_CSS, BRAND, CORNER, SITENAV,
   CRUMBS and ITEM). Static: no DATA embed and no page script beyond the corner's. Deliberately no `seo` class
   (verify_release.py reads section.seo as a calendar page's static list).
 -->
@@ -13,6 +13,7 @@
 .pd-img .th.none small{display:block;font-size:12px}
 .pd-img .ap{display:inline-block;margin:8px 0 0}
 .pd-tag{margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.pd-sold{display:inline-block;font-size:12px;font-weight:700;line-height:1.5;padding:0 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .pd-card h1{margin:0 0 12px;font-size:clamp(18px,2.6vw,22px);line-height:1.4;text-wrap:pretty;overflow-wrap:anywhere}
 .pd-card dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 14px;margin:0;font-size:13.5px}
 .pd-card dt{color:var(--muted)}
