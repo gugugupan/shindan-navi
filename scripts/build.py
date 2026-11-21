@@ -231,6 +231,8 @@ def tooltabs(tool):
 CORNER_SRC=open(os.path.join(ROOT,'src/corner.html')).read()
 # location picker of /events/ and / (src/locpick.html), inserted before the page script at the LOCPICK slot
 LOCPICK=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/locpick.html')).read(),count=1,flags=re.S).strip()
+# event rows shared by /events/ and / (src/evrow.html, window.snEv), inserted before the page script at the EVROW slot
+EVROW=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/evrow.html')).read(),count=1,flags=re.S).strip()
 def corner(tool):
     # logo-row controls of every page: product switch after the logo, settings and user on the right (src/corner.html)
     return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
@@ -329,7 +331,7 @@ def render_events():
     src=flags(open(os.path.join(ROOT,'src/events.html')).read())
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK),('/*GICON*/',GICON_JS)):
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW),('/*GICON*/',GICON_JS)):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--CORNER-->',corner('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}{siterow("/events/")}</nav>')
@@ -486,7 +488,7 @@ def render_home():
             sys.exit(f"api/src/constants.ts: parsed {len(home['types'])} of {len(lines)} TYPE_LABELS lines (one `code: 'name',` per line)")
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
-                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),) if BUILD_EVENTS else ()):
+                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)

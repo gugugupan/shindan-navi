@@ -5,11 +5,11 @@
 /* /events/: reuses the site stylesheet above (tokens, chips, seg, .ag day groups); only event-specific parts live here */
 .chip.k[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .chip.k[aria-pressed="true"] em{color:inherit;opacity:.7}
-.chip.g em.none{font-family:var(--body);font-size:10.5px}
+.chip.g em.none{font-family:var(--body);font-size:12px}
 .filters{flex-wrap:wrap}
 .filters>.frow{order:3;flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:10px;border-top:1px solid var(--line)}
 .fbtn{display:inline-flex;align-items:center;gap:4px;font-weight:700;max-width:16em}
-.fbtn small{font-size:10.5px;font-weight:700;color:var(--muted)}
+.fbtn small{font-size:12px;font-weight:700;color:var(--muted)}
 .fbtn b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .fbtn::after{content:"";width:6px;height:6px;margin:0 1px 2px 3px;border:solid currentColor;border-width:0 1.6px 1.6px 0;transform:rotate(45deg);opacity:.6;flex:none}
 .fbtn.on{border-color:var(--ink);background:var(--ink);color:var(--surface)}
@@ -18,9 +18,9 @@
 .fgrp{display:grid;gap:6px}
 .fgrp h3{margin:0;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
 .fg{display:grid;grid-template-columns:6em minmax(0,1fr);gap:6px 10px;align-items:start;margin:0;padding:0;border:0;min-width:0}
-.fl{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding-top:5px}
+.fl{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding-top:5px}
 .fc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
-.fc .hint{font-size:11.5px;color:var(--faint)}
+.fc .hint{font-size:12px;color:var(--faint)}
 .prefsel{border:1px dashed var(--accent);color:var(--accent);font-weight:700}
 .chip.x{padding-right:8px}
 .chip.x::after{content:"×";color:var(--muted);margin-left:2px}
@@ -43,29 +43,13 @@
 .notice{margin:8px 0 0;font-size:12.5px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px 12px}
 #list{margin-top:8px;display:flex;flex-direction:column;gap:12px}
 .ag .list{grid-template-columns:repeat(auto-fill,minmax(min(100%,440px),1fr))}
-.ev{position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:4px;min-width:0;background:var(--surface-2);border-radius:10px;padding:10px 12px 10px 14px}
-.ev::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
-.ev-top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px}
-.ev-time{font-family:var(--mono);font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums}
-.ev-time.tbd{font-family:var(--body);font-size:12px;color:var(--muted)}
-.ev .tag{font-size:11.5px;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)))}
-.ev .cat{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px}
-.ev h4{margin:0;font-size:14px;line-height:1.45;overflow-wrap:anywhere}
-.ev .grp{display:block;font-size:11.5px;font-weight:500;color:var(--muted)}
-.ev-venue{margin:0;font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
-.ev-venue span{color:var(--muted)}
-.ev-facts{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 6px}
-.ev-facts li{font-size:11.5px;line-height:1.6;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 8px;white-space:nowrap}
-.ev-facts li.unk{border-style:dashed;color:var(--muted)}
-.ev-facts li.open{border-color:transparent;background:var(--accent-soft);color:var(--accent);font-weight:700}
-.ev-facts li.closed{color:var(--muted)}
-.ev-link{justify-self:start;margin-top:4px;font-size:12.5px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--surface)}
+#list .ev{gap:4px;background:var(--surface-2);border-radius:10px;padding:10px 12px 10px 14px}
+#list .ev::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+#list .evg-l .ev{background:var(--surface);padding:8px 10px}
+#list .evg-l .ev::before{display:none}
+.ev-link{justify-self:start;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;background:var(--surface);white-space:nowrap}
 .ev-link:hover{border-color:var(--accent)}
-.st{font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;letter-spacing:.04em}
-.st.cancel{background:var(--sun);color:#fff}
-.st.post{background:var(--foil);color:var(--foil-ink)}
-.ev.off h4{text-decoration:line-through;color:var(--muted)}
-.ev.off .ev-facts,.ev.off .ev-venue{opacity:.6}
+#list .ev-s .ev-link{margin-left:auto}
 .evsep{grid-column:1/-1;margin:4px 2px 0;padding-top:6px;border-top:1px dashed var(--line);font-size:12px;font-weight:700;color:var(--muted)}
 .sk{height:118px;border-radius:10px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%}
 @media (prefers-reduced-motion:no-preference){.sk{animation:sk 1.2s linear infinite}@keyframes sk{to{background-position:-200% 0}}}
@@ -91,13 +75,13 @@ button.cd:hover{background:var(--surface-2)}
 .cd.today .n{background:var(--foil);color:var(--foil-ink)}
 .cd .c{font-size:13px;font-weight:700}
 .cd .c b{font-family:var(--display);font-weight:400;font-size:20px;margin-right:2px}
-.cd .gs{display:flex;flex-wrap:wrap;gap:2px 8px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.cd .gs{display:flex;flex-wrap:wrap;gap:2px 8px;font-family:var(--mono);font-size:12px;color:var(--muted)}
 .cd .gs span{display:inline-flex;align-items:center;gap:3px}
 .cd .gs i{width:7px;height:7px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
-.cd .zero{font-size:11px;color:var(--faint)}
+.cd .zero{font-size:12px;color:var(--faint)}
 
 /* day view (single-day range in the list): venue map + that day's cards */
-.daymap{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:1px 9px;font-family:var(--body);font-size:11px;font-weight:700;color:var(--accent)}
+.daymap{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:1px 9px;font-family:var(--body);font-size:12px;font-weight:700;color:var(--accent)}
 .daymap:hover{border-color:var(--accent)}
 .ag h3 .daymap{order:4}
 .dayback{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 12px 3px 10px;font-size:12px;font-weight:700;color:var(--ink)}
@@ -115,9 +99,9 @@ button.cd:hover{background:var(--surface-2)}
 .dayv.nomap #gmap{display:none}
 .mapph{display:grid;gap:4px;place-content:center;text-align:center;padding:12px 16px;color:var(--muted);font-size:12.5px;background:var(--surface)}
 .mapph b{color:var(--ink);font-size:13.5px}
-.ev-pin{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 8px;font-size:11px;font-weight:700;color:var(--accent);line-height:1.6}
+.ev-pin{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 8px;font-size:12px;font-weight:700;color:var(--accent);line-height:1.6}
 .ev-pin:hover{border-color:var(--accent)}
-.nomapt{font:inherit;font-size:11px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:999px;padding:0 7px;line-height:1.6;cursor:help}
+.nomapt{font:inherit;font-size:12px;color:var(--muted);background:none;border:1px dashed var(--line);border-radius:999px;padding:0 7px;line-height:1.6;cursor:help}
 .nomapt:hover,.nomapt[aria-expanded="true"]{border-color:var(--muted);color:var(--ink)}
 .nomtip:empty{display:none}
 .nomtip{position:absolute;z-index:5;max-width:min(260px,calc(100% - 16px));padding:7px 10px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:12px;line-height:1.5;box-shadow:var(--shadow)}
@@ -127,23 +111,23 @@ button.cd:hover{background:var(--surface-2)}
 .dayv .ev[data-mk]{cursor:pointer}
 .dayv.nomap .ev[data-mk]{cursor:auto}
 .dayv.nomap .ev-pin,.dayv.nomap .nomapt{display:none}
-.ev.hl{box-shadow:0 0 0 2px var(--accent);background:var(--accent-soft)}
+#list .ev.hl{box-shadow:0 0 0 2px var(--accent);background:var(--accent-soft)}
 
 @media (max-width:760px){
   .fg{grid-template-columns:minmax(0,1fr);gap:4px}
   .fl{padding-top:0}
   .filters>.frow{flex:none;padding-top:8px}
-  .ag h3 .mo{font-family:var(--body);font-size:10px;font-weight:700;color:var(--muted)}
+  .ag h3 .mo{font-family:var(--body);font-size:12px;font-weight:700;color:var(--muted)}
   .fresh .win{display:none}
   .rhead .mcount{display:inline}
   .ag .list{grid-template-columns:minmax(0,1fr)}
-  .ev{padding:9px 10px 10px 12px}
+  #list .ev{padding:9px 10px 10px 12px}
   .cd{min-height:58px;padding:4px;gap:2px;align-items:center}
   .cd .gs{display:none}
-  .cd .c{font-size:10px}
+  .cd .c{font-size:12px;white-space:nowrap}
   .cd .c b{font-size:15px;margin:0}
   .cd .zero{display:none}
-  .ag h3 .daymap{font-size:10px;padding:1px 5px;margin-top:4px}
+  .ag h3 .daymap{font-size:12px;padding:1px 5px;margin-top:4px}
   #results.dayv{grid-template-columns:minmax(0,1fr);gap:8px}
   /* phones: the open map sticks under the toolbar, so picking a pin or a card keeps both in view */
   .mapv{position:static}
@@ -157,9 +141,6 @@ button.cd:hover{background:var(--surface-2)}
 @media (max-width:760px) and (max-height:500px){.mapv.open{position:static}}
 @media (min-width:761px){
   .dayv.nomap .mapv-head{display:none}
-  .ev{grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
-  .ev>*{grid-column:1}
-  .ev>.ev-link{grid-column:2;grid-row:1/span 4;align-self:center;margin:0}
 }
 </style>
 
@@ -209,6 +190,7 @@ button.cd:hover{background:var(--surface-2)}
 </div>
 
 
+<!--EVROW-->
 <!--LOCPICK-->
 
 <dialog id="fDlg" class="prefdlg" aria-labelledby="fTitle"><div class="dlg"><button class="ib close" id="fClose" aria-label="閉じる">×</button><h2 class="dl-day" id="fTitle"></h2><div id="fBody" class="fc"></div></div></dialog>
@@ -233,9 +215,6 @@ const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
 // saved filters may list several; the first one is kept. Tables and picker: src/locpick.html (shared with /).
 const {PREF, ONLINE, locName} = window.snLoc;
 const MAX_PREFS=1;
-const CATS = [['tournament','大会'],['casual','交流会'],['teaching','体験会'],['festival','フェス']];
-const CAT_LABEL = Object.fromEntries([...CATS,['other','その他'],['unknown','種類未分類']]);
-const REG_METHOD = {first_come:'先着',lottery:'抽選',walk_in:'当日参加OK',invitation:'招待制'};
 const DAYS = [['','すべて'],['weekend','土日'],['weekday','平日']];
 const DOW = ['日','月','火','水','木','金','土'];
 const MAX_DAYS = 92, PAGE_SIZE = 50;
@@ -507,64 +486,21 @@ function openPref(fromHead){
 
 // ---- formatting
 const timeFmt = tz => new Intl.DateTimeFormat('ja-JP',{timeZone:tz||'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false});
-function whenText(e){
-  const multi = e.ends_on && e.ends_on!==e.starts_on;
-  const span = multi ? `${md(e.starts_on)}〜${md(e.ends_on)}` : '';
-  if(e.time_precision!=='datetime' || !e.starts_at) return {cls:'tbd', text: span ? span+' · 時刻未定' : '時刻未定'};
-  const f=timeFmt(e.timezone);
-  const t=f.format(new Date(e.starts_at))+'〜'+(e.ends_at&&!multi?f.format(new Date(e.ends_at)):'');
-  return {cls:'', text: span ? `${span} · ${t}` : t};
-}
-function feeText(e){
-  if(e.fee_amount===0) return {cls:'', text:'参加費 無料'};
-  if(typeof e.fee_amount==='number' && e.fee_amount>0) return {cls:'', text: e.fee_currency&&e.fee_currency!=='JPY' ? `参加費 ${e.fee_amount.toLocaleString('ja-JP')} ${e.fee_currency}` : `参加費 ${e.fee_amount.toLocaleString('ja-JP')}円`};
-  return {cls:'unk', text:'参加費未確認'};
-}
-function regText(e){
-  switch(e.registration_status){
-    case 'open': return {cls:'open', text:'受付中'};
-    case 'not_open': {
-      const o=e.registration_opens_at;
-      return {cls:'', text: o ? `受付前（${md(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo'}).format(new Date(o)))} ${timeFmt('Asia/Tokyo').format(new Date(o))}〜）` : '受付前'};
-    }
-    case 'waitlist': return {cls:'', text:'キャンセル待ち'};
-    case 'closed': return {cls:'closed', text:'受付終了'};
-    default: return {cls:'unk', text:'受付状況は公式で確認'};
-  }
-}
-function venueText(e){
-  const online = e.attendance_mode==='online' || e.attendance_mode==='hybrid';
-  const v=e.venue;
-  const place = v ? `${esc(venueLabel(v))}${v.region_name||v.city?` <span>· ${esc([v.region_name||PREF[v.region_code]||'',v.city||''].filter(Boolean).join(' '))}</span>`:''}` : '';
-  if(e.attendance_mode==='online') return 'オンライン開催';
-  if(e.attendance_mode==='hybrid') return (place?place+' <span>· </span>':'')+'オンライン参加あり';
-  return place || '<span>会場は公式で確認</span>';
-}
 // Within a day: today (Japan time), events that already started follow the upcoming ones; cancelled ones go last.
 const started = e => e.starts_on===TODAY && e.time_precision==='datetime' && !!e.starts_at && Date.parse(e.starts_at)<=Date.now();
 const dayRank = e => e.event_status==='cancelled' ? 2 : started(e) ? 1 : 0;
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
-function card(e, day){
-  const g=GAME[e.game_code]||{name:e.game_code,c:'#8a8f9e',cd:'#8a8f9e'};
+// A row in three levels (src/evrow.html). One title chosen: its name is not repeated on every row.
+const colGame = () => state.game.length===1 ? state.game[0] : null;
+function rowOpts(e, day){
   const mk=day&&e.venue?geoKey(e.venue.geo):null;
   const pin=!day||!e.venue ? '' : mk ? `<button type="button" class="ev-pin" aria-label="${esc(venueLabel(e.venue))}を地図で見る">地図</button>` : `<button type="button" class="nomapt" aria-expanded="false" data-why="${e.attendance_mode==='online'?'online':'geo'}">地図なし</button>`;
-  const tags=(Array.isArray(e.game_codes)&&e.game_codes.length?e.game_codes:[e.game_code]).map(c=>{ const x=GAME[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="${gvars(x)}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
-  const w=whenText(e), fee=feeText(e), reg=regText(e);
-  const st = e.event_status==='cancelled' ? '<span class="st cancel">中止</span>' : e.event_status==='postponed' ? '<span class="st post">延期</span>' : '';
-  const cat = CAT_LABEL[e.group&&e.group.category];
-  const grp = e.group && e.group.name && e.group.name!==e.name && !e.name.includes(e.group.name) ? `<span class="grp">${esc(e.group.name)}</span>` : '';
-  const facts=[`<li class="${fee.cls}">${fee.text}</li>`];
-  if(Number.isInteger(e.capacity)) facts.push(`<li>定員 ${e.capacity.toLocaleString('ja-JP')}名</li>`);
-  if(e.event_status!=='cancelled') facts.push(`<li class="${reg.cls}">${reg.text}</li>`);
-  if(REG_METHOD[e.registration_method] && e.event_status!=='cancelled') facts.push(`<li>${REG_METHOD[e.registration_method]}</li>`);
-  return `<article class="ev${e.event_status==='cancelled'?' off':''}${mk&&mk===selKey?' hl':''}" style="${gvars(g)}"${mk?` data-mk="${mk}"`:''}>
-    <div class="ev-top">${st}<span class="ev-time ${w.cls}">${w.text}</span>${tags}${cat?`<span class="cat">${cat}</span>`:''}${pin}</div>
-    <h4>${esc(e.name)}${grp}</h4>
-    <p class="ev-venue">${venueText(e)}</p>
-    <ul class="ev-facts">${facts.join('')}</ul>
-    <a class="ev-link" href="${esc(e.source_url)}" target="_blank" rel="noopener" data-game="${esc(e.game_code)}">${e.event_status==='cancelled'?'公式で確認':'公式で詳細・申込'} ↗<span class="sr">（${esc(e.name)}・外部サイト）</span></a>
-  </article>`;
+  return {pin, cls:mk&&mk===selKey?' hl':'', attrs:mk?` data-mk="${mk}"`:''};
 }
+const card = (e, day) => snEv.row(e,{...rowOpts(e,day), col:colGame(), pref:state.pref[0]});
+// identical events of a day as one expandable row; more = the day is not fully loaded, so a count is a minimum
+const groupCard = (g, day, k, more) => snEv.grp(g,{day:k, col:colGame(), pref:state.pref[0], more, memberOpts:e=>rowOpts(e,day)});
+snEv.init({gi, games:GAME});
 
 // ---- map: pure helpers (no DOM, no google.maps; unit-testable on their own)
 // Prefectural office coordinates in JIS order (JP-01..JP-47): the map's centre when a day has no mappable venue.
@@ -753,7 +689,7 @@ function selectVenue(key, from){
   listEl.querySelectorAll('.ev.hl').forEach(x=>x.classList.remove('hl'));
   const cards=[...listEl.querySelectorAll(`.ev[data-mk="${CSS.escape(key)}"]`)];
   cards.forEach(c=>c.classList.add('hl'));
-  if(from==='map' && cards[0]) revealCard(cards[0]);
+  if(from==='map' && cards[0]){ snEv.reveal(cards[0]); revealCard(cards[0]); }
   const m=markers.get(key);
   if(!m||!gmap) return;
   markers.forEach((x,k)=>setPin(k));
@@ -917,7 +853,10 @@ function renderList(){
   const day=isDay();
   byDay.forEach((its,k)=>{
     const [,,dd]=k.split('-').map(Number), w=dowOf(k);
-    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${[...its].sort((a,b)=>rank(a,k)-rank(b,k)).map((e,i,a)=>(rank(e,k)===1&&(!i||rank(a[i-1],k)===0)?'<p class="evsep">開始済みのイベント</p>':'')+card(e,day)).join('')}</div></section>`;
+    h+=`<section class="ag${k===TODAY?' today':''}" data-day="${k}" aria-label="${md(k)}"><h3><span class="mo">${+k.slice(5,7)}月</span>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${dayCounts&&dayCounts[k]!=null?`<span class="ct">${dayCounts[k].toLocaleString('ja-JP')}件</span>`:''}${day?'':`<button class="daymap" data-open="${k}" aria-label="${md(k)}のイベント${MAPS_KEY?'を地図で見る':'だけを見る'}">${MAPS_KEY?'地図':'この日'}</button>`}</h3><div class="list">${snEv.group([...its].sort((a,b)=>rank(a,k)-rank(b,k)),e=>rank(e,k)).map((x,i,a)=>{
+      const r=rank(x.e||x.rows[0],k), p=i&&rank(a[i-1].e||a[i-1].rows[0],k);
+      return (r===1&&(!i||p===0)?'<p class="evsep">開始済みのイベント</p>':'')+(x.e?card(x.e,day):groupCard(x,day,k,!(dayCounts&&dayCounts[k]!=null&&its.length>=dayCounts[k])));
+    }).join('')}</div></section>`;
   });
   const rest = total!=null && segs.every(x=>x.count!=null) ? total-events.length : null;
   if(!done) h+=`<button class="loadmore" id="loadMore"${busy?' disabled':''}>${busy?'読み込み中…':failed?(failed.status===429||failed.status===503?busyText(failed):'読み込めませんでした。もう一度試す'):rest!=null&&rest>0?`${day?'さらに読み込む':'もっと見る'}（残り ${rest.toLocaleString('ja-JP')}件）`:day?'さらに読み込む':'もっと見る'}</button>`;

@@ -35,7 +35,7 @@
 .rels{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
 a.pk{color:inherit;text-decoration:none;grid-template-columns:48px minmax(0,1fr);padding:6px 8px 6px 6px}
 a.pk .th{width:48px}
-a.pk .n{font-size:13px}
+a.pk .n{font-size:14px}
 a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .pk .sm{color:var(--foil);margin-right:4px}
 /* today's events: one column per game */
@@ -50,40 +50,33 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .gcol .ty b{font-family:var(--mono);font-weight:700;color:var(--ink)}
 .gcol .q{margin:2px;font-size:12px;color:var(--muted)}
 .evs{list-style:none;margin:0;padding:0;display:grid;gap:5px}
-.ev{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;background:var(--surface);border-radius:8px;padding:7px 9px}
-.ev .tm{grid-row:1/span 2;font-family:var(--mono);font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:3.2em}
-.ev .tm.tbd{font-family:var(--body);font-size:11px;color:var(--muted)}
-.ev a{font-size:13px;font-weight:700;line-height:1.4;color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
-.ev a:hover{color:var(--accent);text-decoration:underline}
-.ev p{margin:0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
-.ev .tag{font-size:11px;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%)));margin-right:6px;gap:4px}
-.ev .tag .gi,.wd li .gi,.gc .gi{--gi:14px}
-.wd li .gi{margin-right:4px}
-.ev .st{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:6px;background:var(--sun);color:#fff}
-.ev.off a{text-decoration:line-through;color:var(--muted)}
-.ev.done .tm{color:var(--muted)}
-.ev.done .tm::after{content:"開始済み";display:block;font-family:var(--body);font-size:10px;font-weight:700}
+.evs .ev{gap:2px;background:var(--surface);border-radius:8px;padding:7px 9px}
+.evs .ev-n{font-size:14px;line-height:1.4;text-decoration:none}
+.evs a.ev-n:hover .t{color:var(--accent);text-decoration:underline}
+.evs .ev-m{font-size:12.5px}
+.evs .ev-s{margin-top:1px}
+.evs .evg-l .ev{padding:4px 0 4px 2px;background:none;border-radius:0}
 .sk{height:52px;border-radius:10px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%}
 @media (prefers-reduced-motion:no-preference){.sk{animation:sk 1.2s linear infinite}@keyframes sk{to{background-position:-200% 0}}}
 /* tomorrow and the rest of the week */
 .wk{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
 .wd{border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0;background:var(--surface-2)}
 .wd h3{margin:0;display:flex;align-items:baseline;gap:6px;font-family:var(--mono);font-size:13px}
-.wd h3 .dw{font-family:var(--body);font-size:11px;font-weight:700;color:var(--muted)}
+.wd h3 .dw{font-family:var(--body);font-size:12px;font-weight:700;color:var(--muted)}
 .wd h3 .dw.sat{color:var(--sat)} .wd h3 .dw.sun{color:var(--sun)}
 .wd h3 .lb{font-family:var(--body);font-size:10px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px}
 .wd ul{list-style:none;margin:0;padding:0;display:grid;gap:3px}
 .wd li{font-size:12px;line-height:1.35;min-width:0}
 .wd li a{color:var(--ink);text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
 .wd li a:hover{color:var(--accent)}
-.wd li .gl{font-size:10.5px;font-weight:700;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)));margin-right:4px}
+.wd li .gl{font-size:12px;font-weight:700;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)));margin-right:4px}
 .wd li i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));margin-right:4px;vertical-align:1px}
 .wd li.st a::before{content:"★ ";color:var(--foil)}
 .wd li.st a{font-weight:700}
 .wd li.e a{display:block;white-space:nowrap;text-overflow:ellipsis;color:var(--muted)}
-.wd li.e b{font-family:var(--mono);font-size:11px;color:var(--ink);margin-right:4px}
-.wd .q{margin:0;font-size:11.5px;color:var(--faint)}
-.wd .rl{align-self:flex-start;font-size:11.5px;font-weight:700;color:var(--accent);text-decoration:none}
+.wd li.e b{font-family:var(--mono);font-size:12px;color:var(--ink);margin-right:4px}
+.wd .q{margin:0;font-size:12px;color:var(--faint)}
+.wd .rl{align-self:flex-start;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none}
 .wd .rl b{font-family:var(--mono)}
 .wd .rl:hover{text-decoration:underline}
 .wd .rl .ot{font-weight:400;color:var(--muted)}
@@ -93,7 +86,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .gcs{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
 .gcs.gmore{align-items:center;margin-top:8px}
 .gmore .lab{font-size:12px;color:var(--muted);margin-right:2px}
-.gc{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
+.gc{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
 .gc>span{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .gc b{font-family:var(--mono)}
 .gc:hover{box-shadow:0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
@@ -115,7 +108,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .vts{list-style:none;margin:0;padding:0;display:grid;gap:5px}
 .vt{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:2px 10px;background:var(--surface-2);border-left:3px solid var(--g);border-radius:8px;padding:7px 10px 7px 9px;color:var(--ink);text-decoration:none}
 .vt:hover .tt{color:var(--accent);text-decoration:underline}
-.vt .gm{display:inline-flex;align-items:center;gap:4px;min-width:6.4em;font-size:11.5px;font-weight:700;color:var(--gt);white-space:nowrap}
+.vt .gm{display:inline-flex;align-items:center;gap:4px;min-width:6.4em;font-size:12px;font-weight:700;color:var(--gt);white-space:nowrap}
 .vt .am{font-style:normal;font-weight:700;color:var(--a)}
 .vt .tx{min-width:0;display:grid;gap:1px}
 .vt .tt{font-size:13.5px;font-weight:700;line-height:1.45;overflow-wrap:anywhere}
@@ -137,7 +130,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
   .wd h3{grid-row:1/span 4;flex-direction:column;align-items:center;gap:2px;font-size:16px}
   .wd .gcs{margin-top:2px}
   .wd.norel .gcs{flex-direction:row;align-items:center}
-  .wd.norel .gc{border-radius:999px;font-size:11.5px;padding:1px 8px 1px 6px;gap:6px}
+  .wd.norel .gc{border-radius:999px;font-size:12px;padding:1px 8px 1px 6px;gap:6px}
 }
 </style>
 
@@ -179,6 +172,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
   <!--SITENAV-->
 </div>
 <!--EVENTS-->
+<!--EVROW-->
 <!--LOCPICK-->
 <!--/EVENTS-->
 
@@ -349,15 +343,11 @@ const timeFmt = tz => new Intl.DateTimeFormat('ja-JP',{timeZone:tz||'Asia/Tokyo'
 const isPostcode = s => /^〒?\s*\d{3}-?\d{4}$/.test(String(s||'').trim());
 const venueLabel = v => !v ? '' : isPostcode(v.name) && v.address ? v.address : v.name;
 const timeOf = e => e.time_precision==='datetime'&&e.starts_at ? timeFmt(e.timezone).format(new Date(e.starts_at)) : '';
-// in a game's column; an event shared with other games names them
-function evRow(e,col){
-  const t=timeOf(e);
-  const tm = t ? `<span class="tm">${t}</span>` : '<span class="tm tbd">時刻未定</span>';
-  const where = e.attendance_mode==='online' ? 'オンライン開催' : venueLabel(e.venue) || '会場は公式で確認';
-  const st = e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st">延期</span>' : '';
-  const tags = codesOf(e).filter(c=>c!==col).map(c=>{ const x=EVG[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="${gvars(x)}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
-  return `<li class="ev${e.event_status==='cancelled'?' off':started(e)?' done':''}">${tm}<a href="${esc(e.source_url)}" target="_blank" rel="noopener">${st}${esc(e.name)}<span class="sr">（外部サイト）</span></a><p>${tags}${esc(where)}</p></li>`;
-}
+if(window.snEv) snEv.init({gi, games:EVG});
+// in a game's column (src/evrow.html): the column's game is not repeated; an event shared with other games names them.
+// Identical events of the column (same type and name at several stores) fold into one expandable row.
+const evRow = (e,col,f) => snEv.row(e,{compact:true, col, pref:f.pref, started:started(e)});
+const evItem = (x,col,f,more) => x.e ? evRow(x.e,col,f) : snEv.grp(x,{compact:true, col, pref:f.pref, day:TODAY+'-'+col, more});
 // A column's types today, busiest first: up to 3 named, else 2 and ほか (no type, その他 and unknown codes go to ほか).
 // None when /days has no by_game_type (answers cached before it existed).
 const TYPES = H.types||{};
@@ -399,8 +389,9 @@ function renderEv(){
   const cols=todayCols(), k=SHOW(cols.length), hidden=todayGames().filter(c=>!cols.some(x=>x.g===c.g));
   const others = hidden.length ? `<div class="gcs gmore"><span class="lab">ほかのタイトル</span>${hidden.map(({g,n})=>`<a class="gc" style="${gvars(g)}" href="${esc(dayLink(f,TODAY,g.code))}" title="${esc(g.name)}・${n}件"><span>${gi(g.name)}${esc(g.name)}</span><b>${n}</b></a>`).join('')}</div>` : '';
   body.innerHTML = `<div class="gcols" style="--n:${Math.max(cols.length,1)}">${cols.map(({g,n})=>{
-    const rows=rowsFor(g.code,TODAY).slice(0,k), rest=n-rows.length, href=esc(dayLink(f,TODAY,g.code));
-    const list = rows.length ? `<ul class="evs">${rows.map(e=>evRow(e,g.code)).join('')}</ul>` : '';
+    // loaded rows of the column; a group's count is a minimum while the column has more events than loaded
+    const all=rowsFor(g.code,TODAY), rows=snEv.group(all,dayRank).slice(0,k), rest=n-snEv.covered(rows), href=esc(dayLink(f,TODAY,g.code));
+    const list = rows.length ? `<ul class="evs">${rows.map(x=>evItem(x,g.code,f,all.length<n)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件 ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
     return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件</span></h3>${typeLine(g.code)}${list}${more}</section>`;
@@ -449,7 +440,7 @@ function wkDay(d,i,f,sel,ym){
     const otherEv = sel&&known&&ev.byGame[d]&&!gs.length ? Math.max(0,total-gs.reduce((a,g)=>a+bg[g.code],0)) : 0;
     const ot = (hidden ? `<a class="rl" href="/releases/#d=${d}">ほかのタイトルの発売 <b>${hidden}</b>件 ›</a>` : '')
       + (otherEv ? `<a class="rl" href="${esc(dayLink(f,d))}">ほかのタイトルのイベント <b>${otherEv}</b>件 ›</a>` : '');
-    top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(e.name)}</a></li>`; }).join('')}</ul>${ot}`
+    top = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `<li class="e"><a href="${esc(e.source_url)}" target="_blank" rel="noopener" style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(snEv.name(e))}</a></li>`; }).join('')}</ul>${ot}`
       : chips ? ot : `<p class="q">${sel&&known?'選択中のタイトルの予定なし':sel?'選択中のタイトルの発売なし':known?'発売・イベントなし':'発売なし'}</p>${ot}`;
   }
   return {has:!!rel||gs.length>0||evs.length>0||(anyChip&&!sel),
