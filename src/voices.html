@@ -1,7 +1,9 @@
 <!--
   /voices/ 話題カレンダー (contracts/voices.md): what players on X talk about, per game. Built only with VOICES_ENABLED=1
   by render_voices() in build.py, which fills SITE_CSS, BRAND, CORNER, SITENAV, VLATEST (the latest real snapshot's
-  titles, linking its archive page /voices/<date>/) and the VOICES data (snapshots from data/voices/). Static: the page makes no /api calls. Toolbar, filters and freshness line mirror /events/.
+  titles, linking its archive page /voices/<date>/) and the VOICES data (snapshots from data/voices/). Static: the page makes no /api calls.
+  With VOICES_SOURCE=d1 the build embeds no snapshots (V.api set, no VLATEST, no archive pages): the page fetches them from
+  /api/v1/voices (D1, docs/design/voices-db.md) and then renders exactly as in the static build. Toolbar, filters and freshness line mirror /events/.
 -->
 <title>TCG話題カレンダー（ポケカ・ワンピ・ユニアリほか X の反応まとめ）｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
@@ -271,7 +273,9 @@ const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m<1){m
 const maxS = (a,b) => a>b?a:b, minS = (a,b) => a<b?a:b;
 
 // ---- topics across snapshots: one entry per id, active from first_seen to the last snapshot that lists it
-const SNAPS = [...V.snapshots].sort((a,b)=>a.date<b.date?-1:1);
+// boot(): everything that depends on the snapshots (embedded, or fetched in VOICES_SOURCE=d1 builds; see the end)
+function boot(snapshots){
+const SNAPS = [...snapshots].sort((a,b)=>a.date<b.date?-1:1);
 const SAMPLE = SNAPS.some(s=>s.sample);
 const TOPICS = new Map();
 SNAPS.forEach(s=>s.topics.forEach((t,i)=>{
@@ -526,7 +530,7 @@ function renderList(){
     $('list').innerHTML=`<div class="state"><b>${state.game.length||state.att?'この条件の話題はありません':'話題のデータはまだありません'}</b>${state.game.length||state.att?'<button class="sbtn ghost" id="resetAll2">条件をクリア</button>':''}</div>`;
     return;
   }
-  $('list').innerHTML=es.map(({snap,ts})=>`<section class="vsnap" aria-labelledby="s-${snap.date}"><h2 id="s-${snap.date}">${mdj(snap.date)} 時点<small>${md(snap.window.from)}〜${md(snap.window.to)} の X の投稿から・${ts.length}件${snap.sample?'・サンプル':''}</small>${snap.sample?'':`<a class="vsl" href="/voices/${snap.date}/">この日のまとめ</a>`}</h2>`
+  $('list').innerHTML=es.map(({snap,ts})=>`<section class="vsnap" aria-labelledby="s-${snap.date}"><h2 id="s-${snap.date}">${mdj(snap.date)} 時点<small>${md(snap.window.from)}〜${md(snap.window.to)} の X の投稿から・${ts.length}件${snap.sample?'・サンプル':''}</small>${snap.sample?'':`<a class="vsl" href="${V.api?`/voices/#d=${snap.date}`:`/voices/${snap.date}/`}">この日のまとめ</a>`}</h2>`
     + `<div class="vcards">${ts.map(t=>card({snap,t},'h3')).join('')}</div></section>`).join('');
 }
 
@@ -631,4 +635,19 @@ function fromHash(){
 }
 fromHash();
 window.addEventListener('hashchange',fromHash);
+}
+if(V.api){
+  const load=()=>{
+    $('calv').innerHTML='<div class="state" role="status"><b>話題を読み込んでいます…</b></div>';
+    fetch(V.api,{headers:{accept:'application/json'}})
+      .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)))
+      .then(d=>Array.isArray(d&&d.snapshots)?d:Promise.reject(new Error('bad answer')))
+      // a throw inside boot is a page bug, not a load failure: it is not caught here, so 再読み込み never boots twice
+      .then(d=>{ $('calv').innerHTML=''; boot(d.snapshots); },()=>{
+        $('calv').innerHTML='<div class="state" role="alert"><b>話題を読み込めませんでした</b><span>通信状況を確認して、もう一度お試しください。</span><button class="sbtn ghost" id="vRetry">再読み込み</button></div>';
+        $('vRetry').onclick=load;
+      });
+  };
+  load();
+} else boot(V.snapshots);
 </script>

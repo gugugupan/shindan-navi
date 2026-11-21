@@ -16,6 +16,10 @@ FORBIDDEN_KEYS = {'offers', 'aggregateRating', 'review', 'availability', 'price'
                   'shippingDetails', 'hasMerchantReturnPolicy'}
 
 fails, warns = [], []
+# VOICES_SOURCE=d1 (docs/design/voices-db.md): /voices/ and the home block fetch the snapshots from /api/v1/voices*;
+# the build embeds none and writes no archive pages. Same rule as build.py.
+VOICES_D1 = (os.environ.get('VOICES_ENABLED', '') == '1' and os.environ.get('BUILD_EVENTS', '1') != '0'
+             and (os.environ.get('VOICES_SOURCE', '').strip() or 'static') == 'd1')
 def fail(msg): fails.append(msg)
 def warn(msg): warns.append(msg)
 
@@ -263,7 +267,12 @@ def check_home(today, head, ov):
     real = [x for x in real if not x.get('sample')] if von else []
     hv = h.get('voices')
     if ('id="vtr"' in src) != von: fail(f'/: いま話題 block {"missing" if von else "present while VOICES is off"}')
-    if not von or not real:
+    if VOICES_D1:
+        if hv: fail('/: HOME voices data embedded in a VOICES_SOURCE=d1 build')
+        if h.get('voicesApi') != '/api/v1/voices/latest': fail(f'/: HOME voicesApi {h.get("voicesApi")}')
+        if [g.get('code') for g in h.get('voiceGames') or []] != voice_games(): fail('/: HOME voiceGames differ from GAMES in src/voices.html')
+    elif 'voicesApi' in h or 'voiceGames' in h: fail('/: HOME voicesApi / voiceGames in a static voices build')
+    elif not von or not real:
         if hv: fail('/: HOME voices data embedded without a real snapshot / VOICES_ENABLED')
     elif not hv: fail('/: HOME voices data missing')
     else:
@@ -296,6 +305,7 @@ def check_voices():
         return
     if not os.path.exists(f): fail('/voices/ missing with VOICES_ENABLED=1'); return
     src = open(f).read()
+    if VOICES_D1: return check_voices_d1(src, sitemap, pages, privacy)
     snaps = []
     for x in sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json'))):
         d = json.load(open(x))
@@ -352,6 +362,34 @@ def check_voices():
         if not re.fullmatch(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}', u): fail(f'/voices/: odd reacting_to URL {u}')
     print(f'  /voices/     snapshots={len(got)} topics={sum(len(x["ids"]) for x in got)} sample_only={sample_only}')
     check_voice_days(sitemap)
+
+
+def check_voices_d1(src, sitemap, pages, privacy):
+    """VOICES_SOURCE=d1: /voices/ embeds no snapshots and fetches /api/v1/voices; indexable and in the sitemap without
+    lastmod; no archive pages, no archive URLs, no latest list and no topic text or X URL in the built HTML."""
+    m = re.search(r'const V = (\{.*?\});\n', src)
+    if not m: fail('/voices/: embedded V missing'); return
+    v = json.loads(m[1])
+    if v.get('snapshots') is not None or v.get('api') != '/api/v1/voices': fail(f'/voices/: d1 build embeds snapshots={v.get("snapshots") is not None} api={v.get("api")}')
+    if re.search(r'<meta name="robots" content="noindex">', src): fail('/voices/: noindex in a d1 build (D1 never holds samples)')
+    if f'<url><loc>{SITE}/voices/</loc></url>' not in sitemap: fail('sitemap: /voices/ missing (d1 build: listed without lastmod)')
+    if re.search(re.escape(SITE) + r'/voices/\d', sitemap): fail('sitemap: archive URLs in a d1 build')
+    built = glob.glob(os.path.join(DIST, 'voices/*/index.html'))
+    if built: fail(f'/voices/<date>/: {len(built)} archive pages in a d1 build')
+    if '<section class="vlatest"' in src: fail('/voices/: latest-topics list in a d1 build')
+    for x in pages:
+        if re.search(r'href="/voices/\d', open(x).read()): fail(f'{os.path.relpath(x, DIST)}: links an archive page in a d1 build')
+    texts = [t[k] for f in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) for t in json.load(open(f))['topics'] for k in ('title', 'summary')]
+    leaked = [t for t in texts if t in src or html.escape(t) in src]
+    if leaked: fail(f'/voices/: topic text in a d1 build: {leaked[:2]}')
+    if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail('/voices/: X URL in a d1 build')
+    pp = PageParser(); pp.feed(src)
+    if pp.canonical != SITE + '/voices/': fail(f'/voices/: canonical {pp.canonical}')
+    if len(re.findall(r'<h1[ >]', src)) != 1: fail('/voices/: expected one h1')
+    if not re.search(r'<nav class="tooltabs"[^>]*>(?:(?!</nav>).)*<a href="/voices/"[^>]*aria-current="true"', src, re.S):
+        fail('/voices/: its tool tab is not current')
+    if 'tcg.voices' not in privacy or '話題カレンダー' not in privacy: fail('/privacy/: voices section missing')
+    print('  /voices/     d1 build: snapshots from /api/v1/voices, no archive pages')
 
 
 def voice_games():

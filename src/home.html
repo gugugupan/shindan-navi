@@ -5,7 +5,8 @@
   page from today, the cache keys /events/ uses too; one more page (the /events/ list's second page) only when a game
   column of today would otherwise stay short; /events/meta only once the location picker is opened (its counts).
   The location is the /events/ saved filter's (src/locpick.html), so changing it here changes it there.
-  いま話題 (VOICES parts, VOICES_ENABLED on): the latest /voices/ snapshot embedded as H.voices, no requests; it only
+  いま話題 (VOICES parts, VOICES_ENABLED on): the latest /voices/ snapshot embedded as H.voices, no requests (with
+  VOICES_SOURCE=d1: one GET of H.voicesApi, /api/v1/voices/latest, with the game palette in H.voiceGames); it only
   reads the /voices/ and /events/ saved game filters (changed on /voices/), never writes them.
   明日・今週の予定 follows the same saved game filters (read only; すべて表示 lasts for the visit).
 -->
@@ -493,14 +494,27 @@ function openLoc(){
   }});
 }
 
-// ---- いま話題 (VOICES): the latest /voices/ snapshot (H.voices, build time), read only. Games: the /voices/ saved
-// title filter (tcg.voices), else the /events/ one (tcg.ev.filters), each kept to games with topics now; else all.
-const VT = $('vtr') && H.voices;
+// ---- いま話題 (VOICES): the latest /voices/ snapshot (H.voices, build time; VOICES_SOURCE=d1 builds fetch it once from
+// H.voicesApi), read only. Games: the /voices/ saved title filter (tcg.voices), else the /events/ one (tcg.ev.filters),
+// each kept to games with topics now; else all.
+let VT = $('vtr') && H.voices;
 const VT_PAGE = '/voices/';
 const ATT = {positive:{l:'好意的',m:'＋'}, negative:{l:'否定的',m:'－'}, mixed:{l:'賛否両論',m:'±'}, neutral:{l:'中立',m:'・'}};
 const VOLW = {high:3, mid:2, low:1};
 const daysBetween = (a,b) => Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);
-const vtGame = VT ? Object.fromEntries(VT.games.map(g=>[g.code,g])) : {};
+let vtGame = VT ? Object.fromEntries(VT.games.map(g=>[g.code,g])) : {};
+// d1: the block stays hidden until the answer comes, and on any failure (nothing to retry: it is a teaser)
+async function loadVt(){
+  try{
+    const r=await fetch(H.voicesApi,{headers:{accept:'application/json'}});
+    const s=r.ok?(await r.json()).snapshot:null;
+    if(!s||!Array.isArray(s.topics)) return;
+    const used=new Set(s.topics.map(t=>t.game));
+    VT={date:s.date, topics:s.topics, games:(H.voiceGames||[]).filter(g=>used.has(g.code))};
+    vtGame=Object.fromEntries(VT.games.map(g=>[g.code,g]));
+    renderVt();
+  }catch(e){}
+}
 const vtvars = c => { const g=vtGame[c]; return g&&g.c ? `--gl:${g.c};--gd:${g.cd}` : '--gl:hsl(220 62% 46%);--gd:hsl(220 60% 68%)'; };
 function vtGames(){
   const codes=savedGames(c=>vtGame[c]);
@@ -530,6 +544,7 @@ function renderVt(){
 
 function renderAll(){ renderRel(); renderEv(); renderWeek(); renderVt(); }
 readStars(); renderAll(); loadEvents();
+if($('vtr') && H.voicesApi) loadVt();
 document.addEventListener('click',e=>{
   if(e.target.closest('#evRetry')) loadEvents(true);
   else if(e.target.closest('#locBtn,#pickLoc')) openLoc();

@@ -48,6 +48,11 @@ const HAS_FEEDBACK = fs.existsSync(path.join(DIST, 'feedback/index.html'));
 const HAS_EVENTS = fs.existsSync(path.join(DIST, 'events/index.html'));
 // /voices/ and the home page's いま話題 block: VOICES_ENABLED=1 builds only
 const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
+// VOICES_SOURCE=d1 builds read the snapshots from the Worker: tools/verify/voices-d1.mjs checks them
+if (HAS_VOICES && fs.readFileSync(path.join(DIST, 'voices/index.html'), 'utf8').includes('const V = {"snapshots": null')) {
+  console.error('browser.mjs: dist/ is a VOICES_SOURCE=d1 build; this script checks static builds (use tools/verify/voices-d1.mjs)');
+  process.exit(2);
+}
 const TURNSTILE_STUB = `window.turnstile={_o:null,_n:0,
   render(el,o){this._o=o;setTimeout(()=>o.callback('tok-'+(++this._n)),0);return 'w1';},
   reset(){window.__tsResets=(window.__tsResets||0)+1;setTimeout(()=>this._o.callback('tok-'+(++this._n)),0);}};

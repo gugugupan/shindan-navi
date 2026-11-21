@@ -228,6 +228,12 @@ if not BUILD_EVENTS: TOOLS=[t for t in TOOLS if t[0]!='/events/']
 # /privacy/; off by default. Its data is static, so unlike login / feedback it does not need the Worker.
 VOICES_ENABLED=os.environ.get('VOICES_ENABLED','')=='1'
 if not VOICES_ENABLED: TOOLS=[t for t in TOOLS if t[0]!='/voices/']
+# VOICES_SOURCE=d1 (docs/design/voices-db.md): /voices/ and the home page's いま話題 fetch the snapshots from
+# /api/v1/voices* (D1, written by api/scripts/import-voices.mjs) instead of embedding data/voices/, and there are no
+# archive pages /voices/<date>/. Needs the Worker, so a BUILD_EVENTS=0 build stays static. Default static.
+VOICES_SOURCE=os.environ.get('VOICES_SOURCE','').strip() or 'static'
+if VOICES_SOURCE not in ('static','d1'): sys.exit(f'VOICES_SOURCE must be static or d1, not {VOICES_SOURCE!r}')
+VOICES_D1=VOICES_ENABLED and BUILD_EVENTS and VOICES_SOURCE=='d1'
 # Login UI (user control in the corner, sync wording in the legends, LOGIN parts of /privacy/): LOGIN_ENABLED=1, a repo
 # variable passed to the Worker build only; always off with BUILD_EVENTS=0 (no Worker behind that build).
 LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
@@ -494,6 +500,7 @@ def render_home():
     home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
     if VOICES_ENABLED: home['voices']=home_voices()
+    if VOICES_D1: home['voicesApi']=EVENTS_API_BASE+'/voices/latest'; home['voiceGames']=VOICE_GAME_BLOCK
     # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (明日・今週の予定 filter)
     home['titles']={g['code']:g['name'] for g in VOICE_GAME_INFO}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
@@ -632,18 +639,19 @@ def voices_data():
         snaps.append({k:s[k] for k in ('date','window','topics')}|{'sample':bool(s.get('sample'))})
     if any(not x['sample'] for x in snaps): snaps=[x for x in snaps if not x['sample']]
     return snaps
-VOICES=voices_data() if VOICES_ENABLED else []
+VOICES=voices_data() if VOICES_ENABLED and not VOICES_D1 else []
 # the home page's いま話題 block: only the latest real snapshot, only the fields it shows (None: no block)
 VOICE_GAME_INFO=[dict(re.findall(r"(\w+):'([^']*)'",x)) for x in re.findall(r'\{code:[^}]*\}',VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])]
+VOICE_GAME_BLOCK=[{k:g[k] for k in ('code','name','short','c','cd') if k in g} for g in VOICE_GAME_INFO]
 def home_voices():
     if not VOICES or VOICES[-1]['sample']: return None
     s=VOICES[-1]
     used={t['game'] for t in s['topics']}
     return {'date':s['date'],
-            'games':[{k:g[k] for k in ('code','name','short','c','cd') if k in g} for g in VOICE_GAME_INFO if g['code'] in used],
+            'games':[g for g in VOICE_GAME_BLOCK if g['code'] in used],
             'topics':[{k:t[k] for k in ('id','game','title','summary','attitude','volume','first_seen')} for t in s['topics']]}
-# sample-only data stays out of search: noindex and no sitemap entry until a real snapshot exists
-VOICES_INDEX=bool(VOICES) and not any(x['sample'] for x in VOICES)
+# sample-only data stays out of search: noindex and no sitemap entry until a real snapshot exists. D1 never holds samples.
+VOICES_INDEX=VOICES_D1 or (bool(VOICES) and not any(x['sample'] for x in VOICES))
 VOICES_PAGE=dict(path='/voices/',og='voices',
     desc='ポケカ・ワンピ・ユニアリなどTCGのタイトルごとに、X（旧Twitter）のプレイヤーのあいだで話題になっていることをAIが要約。好意的・否定的な反応の割合や代表的な意見をカレンダーで振り返れます。')
 def render_voices():
@@ -653,6 +661,7 @@ def render_voices():
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
     counts=__import__('collections').Counter(d['game'] for d in data)
     v={'snapshots':VOICES,'counts':counts}
+    if VOICES_D1: v={'snapshots':None,'counts':counts,'api':EVENTS_API_BASE+'/voices'}
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
                      ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/voices/")}{siterow("/voices/")}</nav>'),
                      ('<!--VLATEST-->',voices_latest()),
@@ -1009,7 +1018,8 @@ sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{pg["lastmod"]}</lastmod></url>')
 for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{CHANGED[pg["d"]["id"]]}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
-if VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
+if VOICES_D1: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc></url>')  # the data is in D1: no lastmod at build time
+elif VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
 for x in VOICES_DAYS: sm.append(f'<url><loc>{SITE}{vday_path(x["date"])}</loc><lastmod>{x["date"]}</lastmod></url>')
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
 sm.append('</urlset>')
@@ -1022,4 +1032,4 @@ if not os.path.exists(venv_py):
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
 print('pages',len(pages),'| item pages',len(items),f'({len(archived)} archived)','| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
-      '| voices',f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}, {len(VOICES_DAYS)} archive pages' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+      '| voices','d1 (/api/v1/voices, no archive pages)' if VOICES_D1 else f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}, {len(VOICES_DAYS)} archive pages' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
