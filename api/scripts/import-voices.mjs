@@ -24,7 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { API_DIR, toSqlFile } from './lib/importer.mjs';
 import {
-  DEFAULT_VOICES_DIR, loadVoices, checkTimeline, planVoices, removeTopics, voicesState, redact,
+  DEFAULT_VOICES_DIR, loadVoices, checkTimeline, planVoices, removeTopics, voicesState, redact, strings,
   VOICES_TABLE_SQL, VOICES_STATE_SQL, VOICES_VERSION_SQL,
 } from './lib/voices.mjs';
 import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mjs';
@@ -61,6 +61,8 @@ if (opts['remove-snapshot'] !== undefined && !dropDates.length) fail('--remove-s
 if (dropIds.some((id) => !/^[a-z0-9][a-z0-9-]{2,63}$/.test(id))) fail('--remove-topic takes topic ids (a-z, 0-9, -)', 2);
 if (dropDates.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) fail('--remove-snapshot takes YYYY-MM-DD dates', 2);
 const takedown = dropIds.length > 0 || dropDates.length > 0;
+// A takedown also cleans --data: a mistyped directory must not let it succeed on D1 alone.
+if (takedown && !existsSync(resolve(opts.data))) fail(`${resolve(opts.data)} does not exist (a takedown also removes the topic or date from the local files)`, 2);
 // ids are [a-z0-9-], so a match needs no such character on either side (opcg-x is not inside opcg-x-2)
 const idIn = (text, id) => new RegExp(`(?<![a-z0-9-])${id}(?![a-z0-9-])`).test(text);
 if (takedown && opts.prune) fail('--prune is for imports; a takedown removes only what it names', 2);
@@ -154,32 +156,50 @@ warnings.push(...timeline.warnings);
 if (takedown) warnings.push(...timeline.errors);
 else errors.push(...timeline.errors);
 
-// Files a takedown changes: every *.json in --data that holds a removed id or date, valid or not. A file the
-// removal cannot clean is an error before anything is written.
+// Files a takedown changes: every *.json in --data that holds a removed id or date, valid or not. Readable files are
+// judged on their decoded JSON (an id written with escapes still matches), others on the raw text. A file the removal
+// cannot clean is an error before anything is written.
+/** What a file still holds of the takedown: [removed id or date, …] (decoded strings; raw text if not JSON). */
+function holds(name, text) {
+  let v;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    return [...dropIds.filter((id) => idIn(text, id)), ...dropDates.filter((d) => name === `${d}.json` || text.includes(d))];
+  }
+  const vals = [...strings(v)].map(([, x]) => x);
+  return [...dropIds.filter((id) => vals.some((x) => idIn(x, id))),
+    ...dropDates.filter((d) => name === `${d}.json` || (v && v.date === d))];
+}
 const fileEdits = [];
-if (takedown && existsSync(dataDir)) {
-  const named = (text) => dropIds.find((id) => idIn(text, id));
+if (takedown) {
   for (const f of readdirSync(dataDir).filter((x) => x.endsWith('.json')).sort()) {
     const path = join(dataDir, f);
     const text = readFileSync(path, 'utf8');
+    const held = holds(f, text);
+    if (!held.length) continue;
     let raw = null;
     try {
       raw = JSON.parse(text);
     } catch {}
-    const date = raw && typeof raw.date === 'string' ? raw.date : null;
-    if (dropDates.includes(f.replace(/\.json$/, '')) || (date && dropDates.includes(date))) {
+    if (dropDates.includes(f.replace(/\.json$/, '')) || (raw && dropDates.includes(raw.date))) {
       fileEdits.push({ path, del: true });
       continue;
     }
-    if (!named(text)) continue;
     if (!raw || !Array.isArray(raw.topics)) {
-      errors.push(`${path}: names ${named(text)} but is not a readable snapshot; remove it by hand`);
+      errors.push(`${path}: names ${held.join(', ')} but is not a readable snapshot; remove it by hand`);
       continue;
     }
     const topics = raw.topics.filter((t) => !(t && dropIds.includes(t.id)));
+    // the last topic gone: the file goes too (an empty newest snapshot would hide the home block in static builds)
+    if (!topics.length) {
+      fileEdits.push({ path, del: true });
+      continue;
+    }
     const next = JSON.stringify({ ...raw, topics }, null, 2) + '\n';
-    if (named(next)) {
-      errors.push(`${path}: still names ${named(next)} outside its topics (note?) after removing the topic; edit it by hand`);
+    const still = holds(f, next);
+    if (still.length) {
+      errors.push(`${path}: still names ${still.join(', ')} outside its topics (note?) after removing the topic; edit it by hand`);
       continue;
     }
     fileEdits.push({ path, text: next });
@@ -236,11 +256,8 @@ for (const e of fileEdits) {
 }
 sqliteDb?.close();
 // Check the result: no file in --data may still hold what was removed.
-if (takedown && existsSync(dataDir)) {
-  const left = readdirSync(dataDir).filter((x) => x.endsWith('.json')).filter((f) => {
-    const text = readFileSync(join(dataDir, f), 'utf8');
-    return dropDates.includes(f.replace(/\.json$/, '')) || dropIds.some((id) => idIn(text, id));
-  });
+if (takedown) {
+  const left = readdirSync(dataDir).filter((x) => x.endsWith('.json')).filter((f) => holds(f, readFileSync(join(dataDir, f), 'utf8')).length);
   if (left.length) fail(`takedown incomplete: ${left.join(', ')} in ${dataDir} still hold ${[...dropIds, ...dropDates].join(', ')}; fix by hand before committing`);
 }
 if (fileEdits.length) console.log(`import-voices: ${fileEdits.length} local file(s) changed; review and commit them`);

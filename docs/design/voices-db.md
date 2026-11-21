@@ -65,9 +65,10 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node, applies
   `voice_meta.version` (= `Date.now()`), which is part of the API cache keys.
 - Takedown: starts from the D1 rows, removes the topic from every date that lists it (a date left empty is deleted) or
   the whole date, writes D1, then applies the same removal to every file in `--data` that holds the id or date, valid
-  or not (rewritten with 2-space JSON or deleted; commit them). A file it cannot clean (unparseable, or still naming
-  the id, e.g. in `note`) stops the run before anything is written; a final check fails the run if any file still
-  holds it. Continuity problems are warnings here.
+  or not, judged on the decoded JSON (raw text only for unparseable files). Files are rewritten with 2-space JSON, or
+  deleted when no topic is left; commit them. A missing `--data` directory, or a file it cannot clean (unparseable, or
+  still naming the id, e.g. in `note`), stops the run before anything is written; a final check fails the run if any
+  file still holds it. Continuity problems are warnings here.
 - Targets as `import-events.mjs`: `remote` needs `D1_DATABASE_ID` (written to the git-ignored `wrangler.remote.json`
   by `remote-config.mjs`). Wrangler's output is captured on every call and shown with each UUID and the id redacted.
   The importer never migrates: if the tables are missing it stops and points at the pending migration.

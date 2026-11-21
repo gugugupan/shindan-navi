@@ -379,6 +379,24 @@ describe('import-voices.mjs', () => {
     expect(r2.stderr).toMatch(/still names opcg-test-topic outside its topics/);
   });
 
+  it('a takedown matches decoded ids, deletes a file left without topics and fails on a missing --data', () => {
+    const { db, data } = seeded();
+    // the id written with a JSON escape in 11-20: still the same topic
+    const p20 = join(data, '2026-11-20.json');
+    writeFileSync(p20, readFileSync(p20, 'utf8').replace('"opcg-test-topic"', '"opcg\\u002dtest-topic"'));
+    expect(readFileSync(p20, 'utf8')).not.toContain('opcg-test-topic');
+    const missing = cli([...sqliteArgs(db), '--data', join(data, 'nope'), '--remove-topic', 'opcg-test-topic', '--yes']);
+    expect(missing.status).toBe(2);
+    expect(missing.stderr).toMatch(/does not exist/);
+    expect(rows(db)).toEqual([['2026-11-20', ['opcg-test-topic', 'ptcg-fixture']], ['2026-11-21', ['opcg-test-topic']]]);
+    const r = cli([...sqliteArgs(db), '--data', data, '--remove-topic', 'opcg-test-topic', '--yes']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(rows(db)).toEqual([['2026-11-20', ['ptcg-fixture']]]);
+    expect(JSON.parse(readFileSync(p20, 'utf8')).topics.map((t: any) => t.id)).toEqual(['ptcg-fixture']);
+    // 11-21 listed only that topic: the file goes, as its row did
+    expect(readdirSync(data)).toEqual(['2026-11-20.json']);
+  });
+
   it('a whole-snapshot takedown deletes the row and the file', () => {
     const { db, data } = seeded();
     const r = cli([...sqliteArgs(db), '--data', data, '--remove-snapshot', '2026-11-21', '--yes']);

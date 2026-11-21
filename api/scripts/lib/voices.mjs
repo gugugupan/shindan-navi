@@ -36,7 +36,7 @@ const validateSchema = (s) => {
 };
 
 /** [JSON pointer, value] of every string in v; object keys come under their path + '#key'. */
-function* strings(v, p = '') {
+export function* strings(v, p = '') {
   if (typeof v === 'string') yield [p, v];
   else if (Array.isArray(v)) for (let i = 0; i < v.length; i++) yield* strings(v[i], `${p}/${i}`);
   else if (v && typeof v === 'object') {

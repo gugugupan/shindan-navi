@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -9,6 +9,11 @@ import { run as runOf, synthetic, writeDataDir } from './helpers';
 
 const API_DIR = join(__dirname, '..');
 const FAKE_ID = '12345678-90ab-4cde-8f01-23456789abcd';
+// copy + remove: the temp dir may be on another volume than the repo
+const move = (from: string, to: string) => {
+  copyFileSync(from, to);
+  rmSync(from);
+};
 
 describe('remote-config', () => {
   it('keeps the placeholder and no custom domain in the committed config', () => {
@@ -61,14 +66,15 @@ describe('import --target remote', () => {
     chmodSync(join(bin, 'npx'), 0o755);
     data = writeDataDir(synthetic(30));
     if (existsSync(REMOTE_CONFIG)) {
-      saved = `${REMOTE_CONFIG}.bak-test`;
-      renameSync(REMOTE_CONFIG, saved);
+      // the backup holds the real id: keep it in the temp dir, never next to the git-ignored file
+      saved = join(bin, 'wrangler.remote.json.bak');
+      move(REMOTE_CONFIG, saved);
     }
   });
 
   afterAll(() => {
     rmSync(REMOTE_CONFIG, { force: true });
-    if (saved) renameSync(saved, REMOTE_CONFIG);
+    if (saved) move(saved, REMOTE_CONFIG);
   });
 
   const run = (args: string[], env: Record<string, string> = {}, dir = data) => {
@@ -190,14 +196,14 @@ esac
     data = mkdtempSync(join(tmpdir(), 'voices-remote-'));
     writeFileSync(join(data, '2026-11-20.json'), JSON.stringify(SNAP, null, 2));
     if (existsSync(REMOTE_CONFIG)) {
-      saved = `${REMOTE_CONFIG}.bak-voices-test`;
-      renameSync(REMOTE_CONFIG, saved);
+      saved = join(bin, 'wrangler.remote.json.bak');
+      move(REMOTE_CONFIG, saved);
     }
   });
 
   afterAll(() => {
     rmSync(REMOTE_CONFIG, { force: true });
-    if (saved) renameSync(saved, REMOTE_CONFIG);
+    if (saved) move(saved, REMOTE_CONFIG);
   });
 
   const run = (args: string[], env: Record<string, string> = {}) => {
