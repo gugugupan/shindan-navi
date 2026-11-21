@@ -1252,7 +1252,8 @@ if (HAS_EVENTS) {
             grpText([E('a', 'X', { venue: { name: '店', source_id: '1' } }), E('b', 'X', { venue: { name: '店', source_id: '1' } })], { more: true }),
             grpText([E('a', 'X', { venue: { name: '店', source_id: '1' } }), E('b', 'X', { venue: { name: '店', source_id: '2' } })], { more: true }),
             grpText([E('a', 'X', { venue: { name: '店', city: '渋谷区', source_id: '1' } }), E('b', 'X', { venue: { name: '店', city: '渋谷区' } })]),
-            grpText([E('a', 'X', { venue: { name: '店', city: '渋谷区', source_id: '1' } }), E('b', 'X', { venue: { name: '店', city: '新宿区' } })], { more: true })],
+            grpText([E('a', 'X', { venue: { name: '店', city: '渋谷区', source_id: '1' } }), E('b', 'X', { venue: { name: '店', city: '新宿区' } })], { more: true }),
+            grpText([E('a', 'X', { venue: { name: '店', city: '渋谷区', source_id: '1' } }), E('b', 'X', { venue: { name: '店', city: '渋谷区', source_id: '2' } }), E('c', 'X', { venue: { name: '店', city: '渋谷区' } })])],
           ids: (() => { const id = (key, day = T) => txt(snEv.grp({ key, rows: [E('a', 'X'), E('b', 'X')] }, { day })).querySelector('.evg-tog').getAttribute('aria-controls');
             return [id('0|OPCG|tournament|大会ar') !== id('0|OPCG|tournament|大会c0'), id('0|OPCG|tournament|大会ar') === id('0|OPCG|tournament|大会ar'),
               id('0|OPCG|tournament|大会ar') !== id('0|OPCG|tournament|大会ar', 'other')]; })(),
@@ -1267,7 +1268,7 @@ if (HAS_EVENTS) {
       if (u.days !== 2 || u.months !== 1) fail(where, `day markers grouped (${u.days}) / month markers not (${u.months})`);
       if (u.post !== 2) fail(where, 'a postponed event joined a group');
       if (!u.started) fail(where, 'a started group does not say 開始済み');
-      if (JSON.stringify(u.stores) !== JSON.stringify(['— 2店舗', '— 1店舗・2件', '— 2件以上', '— 2店舗以上', '— 1店舗・2件', '— 2件以上'])) fail(where, `store counts ${JSON.stringify(u.stores)}`);
+      if (JSON.stringify(u.stores) !== JSON.stringify(['— 2店舗', '— 1店舗・2件', '— 2件以上', '— 2店舗以上', '— 1店舗・2件', '— 2件以上', '— 3件'])) fail(where, `store counts ${JSON.stringify(u.stores)}`);
       if (u.ids.some(x => !x)) fail(where, `group ids collide or drift ${JSON.stringify(u.ids)}`);
       if (u.labels.some(x => !x)) fail(where, 'a group toggle label does not start with its visible text');
       if (JSON.stringify(u.links) !== JSON.stringify([0, 0, false, '<b>交流会</b>'])) fail(where, `unsafe links / markup ${JSON.stringify(u.links)}`);

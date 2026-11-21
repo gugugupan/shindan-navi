@@ -169,9 +169,9 @@ window.snEv=(function(){
   function grp(g,o={}){
     const e=g.rows[0], nm=name(e), id=gid(`${o.day||''}|${g.key}`), isOpen=open.has(id);
     // a store: the source's venue id, else name + address / city. A venue without an id takes the id of one with the same
-    // name + address; when one is left unmatched beside ids, stores are unknown (count events only).
+    // name + address (not when several ids share it); when one is left unmatched beside ids, stores are unknown (count events only).
     const na=v=>[venueLabel(v),v.address||v.city||''].join('|'), byNa=new Map();
-    g.rows.forEach(x=>{ const v=x.venue; if(v&&v.source_id&&!byNa.has(na(v))) byNa.set(na(v),'id:'+v.source_id); });
+    g.rows.forEach(x=>{ const v=x.venue; if(!v||!v.source_id) return; const k=na(v), id='id:'+v.source_id; byNa.set(k, byNa.has(k)&&byNa.get(k)!==id ? '' : id); });
     const vk=v=>!v?'':v.source_id?'id:'+v.source_id:byNa.get(na(v))||'na:'+na(v);
     const vks=g.rows.map(x=>vk(x.venue)), vs=new Set(vks), n=g.rows.length;
     const mixed=vks.some(k=>k.startsWith('id:'))&&vks.some(k=>k.startsWith('na:'));
