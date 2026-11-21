@@ -1198,7 +1198,7 @@ if (HAS_EVENTS) {
     const bad = [];
     page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
     // extra: what /days claims beyond the loaded rows (the home check's columns have more than one page holds)
-    let extra = 0;
+    let extra = 0, nobg = false;
     await page.route('https://maps.googleapis.com/**', r => r.fulfill({ contentType: 'text/javascript', body: GSTUB }));
     await page.route('**/api/v1/**', route => {
       const u = new URL(route.request().url()), g = u.searchParams.get('game');
@@ -1206,7 +1206,7 @@ if (HAS_EVENTS) {
       const bg = {}; evs.forEach(e => bg[e.game_code] = (bg[e.game_code] || 0) + 1); if (bg.OPCG) bg.OPCG += extra;
       if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: ['OPCG', 'PTCG', 'CONAN'].map(code => ({ code, record_count: 9, complete: true,
         fetched_at: `${TODAY}T06:00:00+09:00`, window: { from: TODAY, until } })), types: [], prefectures: [{ code: 'JP-13', count: 30 }] } });
-      if (u.pathname.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: evs.length + extra, by_game: bg }] } });
+      if (u.pathname.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: evs.length + extra, ...(nobg ? {} : { by_game: bg }) }] } });
       route.fulfill({ json: { events: u.searchParams.get('from') > TODAY ? [] : evs, next_cursor: null } });
     });
     try {
@@ -1229,6 +1229,39 @@ if (HAS_EVENTS) {
       if (await tog.getAttribute('aria-expanded') !== 'true') fail(where, 'expanded group closed again on its own');
       await tog.click();
       if (await tog.getAttribute('aria-expanded') !== 'false' || await page.locator('#list .evg-l').first().isVisible()) fail(where, 'collapse failed');
+      // snEv on its own: names, grouping, counts, links
+      const u = await page.evaluate(T => {
+        const N = (name, starts_on = T) => snEv.name({ name, starts_on });
+        const E = (id, name, x = {}) => ({ id, name, game_code: 'OPCG', game_codes: ['OPCG'], starts_on: T, time_precision: 'date', timezone: 'Asia/Tokyo',
+          attendance_mode: 'in_person', group: { name, category: 'casual', event_type_code: 'meetup' }, source_url: 'https://example.com/', event_status: 'scheduled', ...x });
+        const y = T.slice(2, 4), ny = String(+y + 1);
+        const txt = h => { const d = document.createElement('div'); d.innerHTML = h; return d; };
+        const grpText = (rows, o = {}) => txt(snEv.grp({ key: 'k' + Math.random(), rows }, o)).querySelector('.evg-c').textContent;
+        const bad = txt(snEv.row(E('x', '<b>交流会</b>', { source_url: 'javascript:alert(1)' }), {}));
+        const badC = txt(snEv.row(E('y', '交流会', { source_url: 'http://example.com/' }), { compact: true }));
+        return {
+          names: [N('交流会（11月開催）'), N('交流会(12月開催)'), N('チャレンジ戦【2026年11月】'), N(`【${y}/11】ジムバトル`), N(`【${y}/11-12月】教室`), N('【10_11月開催】グランプリ'),
+            N('交流会【10/30】'), N('交流会【10/31】'), N(`【${ny}/11】ジムバトル`), N('交流会（13月開催）'), N('（11月開催）'), N('【2026年11月】'),
+            N('チャンピオンシップ 11月度 予選'), N('11月度 ジムバトル'), N('11月度王者決定戦')],
+          days: snEv.group([E('a', '交流会【10/30】'), E('b', '交流会【10/31】')]).length,
+          months: snEv.group([E('a', '交流会（11月開催）'), E('b', '交流会（11月開催）')]).length,
+          post: snEv.group([E('a', '交流会'), E('b', '交流会', { event_status: 'postponed' })]).length,
+          started: txt(snEv.grp({ key: 's', rows: [E('a', '交流会'), E('b', '交流会')] }, { compact: true, started: true })).textContent.includes('開始済み'),
+          stores: [grpText([E('a', 'X', { venue: { name: '店', city: '渋谷区' } }), E('b', 'X', { venue: { name: '店', city: '新宿区' } })]),
+            grpText([E('a', 'X', { venue: { name: '店', source_id: '1' } }), E('b', 'X', { venue: { name: '店', source_id: '1' } })]),
+            grpText([E('a', 'X', { venue: { name: '店', source_id: '1' } }), E('b', 'X', { venue: { name: '店', source_id: '1' } })], { more: true }),
+            grpText([E('a', 'X', { venue: { name: '店', source_id: '1' } }), E('b', 'X', { venue: { name: '店', source_id: '2' } })], { more: true })],
+          links: [bad.querySelectorAll('a').length, badC.querySelectorAll('a').length, !!bad.querySelector('b'), bad.querySelector('.ev-n .t').textContent],
+        };
+      }, TODAY);
+      const wantNames = ['交流会', '交流会', 'チャレンジ戦', 'ジムバトル', '教室', 'グランプリ', '交流会【10/30】', '交流会【10/31】', `【${String(+TODAY.slice(2, 4) + 1)}/11】ジムバトル`,
+        '交流会（13月開催）', '（11月開催）', '【2026年11月】', 'チャンピオンシップ 11月度 予選', 'ジムバトル', '11月度王者決定戦'];
+      if (JSON.stringify(u.names) !== JSON.stringify(wantNames)) fail(where, `names ${JSON.stringify(u.names)}`);
+      if (u.days !== 2 || u.months !== 1) fail(where, `day markers grouped (${u.days}) / month markers not (${u.months})`);
+      if (u.post !== 2) fail(where, 'a postponed event joined a group');
+      if (!u.started) fail(where, 'a started group does not say 開始済み');
+      if (JSON.stringify(u.stores) !== JSON.stringify(['— 2店舗', '— 1店舗・2件', '— 2件以上', '— 2店舗以上'])) fail(where, `store counts ${JSON.stringify(u.stores)}`);
+      if (JSON.stringify(u.links) !== JSON.stringify([0, 0, false, '<b>交流会</b>'])) fail(where, `unsafe links / markup ${JSON.stringify(u.links)}`);
       const small = await page.evaluate(smallText, '#list .ev, .rhead, .ag h3');
       if (small.length) fail(where, `/events/ text under 12px: ${small.slice(0, 3).join(' | ')}`);
       const names = await page.evaluate(() => [...document.querySelectorAll('#list .ev-n .t')].map(e => parseFloat(getComputedStyle(e).fontSize)));
@@ -1275,15 +1308,53 @@ if (HAS_EVENTS) {
       await page.screenshot({ path: path.join(OUT, `${vp}-home-rows.png`), fullPage: true });
       await ht.click();
       if (await ht.getAttribute('aria-expanded') !== 'false') fail(where, 'home collapse failed');
+      const wk = await page.evaluate(() => [...document.querySelectorAll('#wkBody li a')].filter(a => a.getClientRects().length).map(a => parseFloat(getComputedStyle(a).fontSize)));
+      if (wk.some(x => x < 14)) fail(where, `week names under 14px: ${[...new Set(wk)].join(',')}`);
+      // /days without by_game: the column counts come from the loaded rows, the day total says more are coming
+      nobg = true;
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.locator('#evBody .evg').first().waitFor();
+      const nb = await page.evaluate(() => document.querySelector('#evBody .evg .evg-c').textContent);
+      if (!nb.endsWith('以上')) fail(where, `home without by_game: group count ${nb}`);
+      nobg = false; extra = 0;
 
       await page.goto(`${BASE}/releases/`, { waitUntil: 'networkidle' });
       const rs = await page.evaluate(smallText, opt.width > 760 ? '.cal .dow, .cal .dn, .cal .pk, #chips, .chips' : '.agenda .ag, .chips');
       if (rs.length) fail(where, `/releases/ text under 12px: ${rs.slice(0, 3).join(' | ')}`);
+      const ap = await page.evaluate(() => [...document.querySelectorAll('.ap')].map(e => parseFloat(getComputedStyle(e).fontSize)).filter(x => x < 12));
+      if (ap.length) fail(where, `参考画像 label under 12px`);
     } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
     for (const b of [...new Set(bad)]) fail(where, b);
     console.log(`  ${where.padEnd(22)} checked`);
     await ctx.close();
   }
+}
+// /events/ list at 20:00: 50 started stores of one event on the first page, 10 upcoming on the second (delayed). A group
+// opened (and focused) before the last page keeps open and focused when the order switches to upcoming-first.
+if (HAS_EVENTS) {
+  const where = 'desktop event group paging';
+  const mk = i => ({ id: `p${i}`, name: 'スタンダードバトル（11月開催）', game_code: 'OPCG', game_codes: ['OPCG'], starts_on: TODAY, time_precision: 'datetime',
+    starts_at: `${TODAY}T${i < 50 ? '10' : '21'}:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'in_person', venue: { name: `店 ${i}` },
+    group: { name: 'スタンダードバトル', category: 'tournament', event_type_code: 'standard_battle' }, source_url: 'https://example.com/', event_status: 'scheduled' });
+  const { ctx, page, bad } = await eventsPage('desktop', 60, mk, 1500);
+  try {
+    await page.goto(`${BASE}/events/?pref=JP-13&view=list`, { waitUntil: 'load' });
+    const tog = page.locator('#list .evg .evg-tog').first();
+    await tog.waitFor();
+    const before = await page.locator('#list .evg .evg-c').first().textContent();
+    await tog.focus(); await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelectorAll('#list .evg').length === 2, null, { timeout: 15000 });
+    const r = await page.evaluate(() => { const gs = [...document.querySelectorAll('#list .evg')], a = document.activeElement;
+      return { counts: gs.map(g => g.querySelector('.evg-c').textContent), open: gs.map(g => g.querySelector('.evg-tog').getAttribute('aria-expanded')),
+        sep: !!document.querySelector('#list .evsep'), focus: a && a.matches('.evg-tog') ? a.closest('.evg').querySelector('.evg-c').textContent : a && a.tagName }; });
+    if (before !== '— 50店舗以上') fail(where, `first page count ${before}`);
+    if (JSON.stringify(r.counts) !== JSON.stringify(['— 10店舗', '— 50店舗']) || !r.sep) fail(where, `groups after paging ${JSON.stringify(r)}`);
+    if (JSON.stringify(r.open) !== JSON.stringify(['false', 'true'])) fail(where, `open group closed by paging ${JSON.stringify(r.open)}`);
+    if (r.focus !== '— 50店舗') fail(where, `focus lost by paging: ${r.focus}`);
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} checked`);
+  await ctx.close();
 }
 // game icons (gi() in build.py) next to game names in both themes: every one loaded and at its fixed size
 {
