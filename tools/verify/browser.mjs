@@ -552,6 +552,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const code = EVC.find(c => inWeek.some(x => x.game === H.titles[c]));
     // a title with nothing this week: no releases, no stubbed events
     const none = EVC.find(c => c !== 'OPCG' && c !== 'PTCG' && !inWeek.some(x => x.game === H.titles[c]));
+    // the stubbed day counts are this month's (/events/days); next-month days have none, so near the month's end the
+    // event-chip checks below are skipped
+    const evDays = HAS_EVENTS && WEEK2.slice(0, 7) === TODAY.slice(0, 7);
+    if (HAS_EVENTS && !evDays) console.log(`  ${where.padEnd(22)} ${WEEK2} is next month: event chip checks skipped`);
     const short = c => ({ OPCG: 'ワンピ', UATCG: 'ユニアリ', CONAN: 'コナン', PTCG: 'ポケカ', GCG: 'ガンダム', DBFW: 'フュージョンワールド', BS: 'バトスピ', DCG: 'デジカ' })[c];
     // nothing saved: every title, no sub-line
     await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
@@ -560,7 +564,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const all = st.rels.length;
     if (st.shown) fail(where, `sub-line without a selection: ${st.text}`);
     if (all !== shown(null)) fail(where, `all titles: ${all} releases listed, data has ${shown(null)}`);
-    if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ポケモンカード'])) fail(where, `all titles: chips ${st.chips}`);
+    if (evDays && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ポケモンカード'])) fail(where, `all titles: chips ${st.chips}`);
     if (!code) console.log(`  ${where.padEnd(22)} no /events/ title with releases this week: filter checks skipped`);
     else {
       const name = H.titles[code];
@@ -569,9 +573,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         st = await state();
         if (!st.shown || st.text !== `選択中のタイトルのみ（${short(code)}）すべて表示` || st.btn !== 'すべて表示' || st.controls !== 'wkBody') fail(where, `${label}: sub-line "${st.text}" ${st.controls}`);
         if (st.rels.length !== shown([name]) || st.rels.some(g => g !== name)) fail(where, `${label}: releases ${st.rels}`);
-        if (HAS_EVENTS && JSON.stringify(st.chips) !== JSON.stringify(code === 'OPCG' ? ['ONE PIECE'] : code === 'PTCG' ? ['ポケモンカード', 'ポケモンカード'] : [])) fail(where, `${label}: chips ${st.chips}`);
+        if (evDays && JSON.stringify(st.chips) !== JSON.stringify(code === 'OPCG' ? ['ONE PIECE'] : code === 'PTCG' ? ['ポケモンカード', 'ポケモンカード'] : [])) fail(where, `${label}: chips ${st.chips}`);
         // the day after tomorrow: nothing of the chosen title, only other titles' events (when /events/' filter lets them through)
-        if (HAS_EVENTS && code !== 'PTCG' && !inWeek.some(x => x.date === WEEK2 && x.game === name)) {
+        if (evDays && code !== 'PTCG' && !inWeek.some(x => x.date === WEEK2 && x.game === name)) {
           const d2 = st.days[1], others = evGame.includes('PTCG') ? 4 : 0;
           const want = others ? [[`ほかのタイトルのイベント ${others}件 ›`, `/events/?game=${evGame}&pref=JP-13&${dayRange(WEEK2)}`]] : [];
           if (d2.q !== '選択中のタイトルの予定なし' || JSON.stringify(d2.rl.filter(r => r[0].includes('イベント'))) !== JSON.stringify(want)) fail(where, `${label}: ${WEEK2} ${JSON.stringify(d2)}`);
