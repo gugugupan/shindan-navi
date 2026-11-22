@@ -102,8 +102,13 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes a
 - A new snapshot: commit `data/voices/<date>.json`, then `D1_DATABASE_ID=… npm run import:voices -- --target remote`
   (read the plan) and again with `--yes`. No deploy is needed; check `https://shindan-navi.app/api/v1/voices/latest`.
   Writes to the production D1 follow `.claude/skills/d1-remote-op`.
-- Takedown: `--remove-topic` / `--remove-snapshot` with `--target remote --yes`, then commit the edited files.
-- Rollback of a bad import: fix the files and import again (the plan shows `update` / `delete` per date).
+- Takedown: `D1_DATABASE_ID=… npm run import:voices -- --remove-topic ID --target remote` (or `--remove-snapshot DATE`;
+  read the plan), then the same with `--yes`; commit the edited or deleted files.
+- Rollback of a bad import: a wrong date that was already in D1 is fixed by correcting its file and importing again
+  (the plan shows `update`). A date that should not exist at all is removed with
+  `D1_DATABASE_ID=… npm run import:voices -- --remove-snapshot DATE --target remote` (read the plan), then the same with
+  `--yes`: a plain import keeps D1 dates that have no local file (only `--prune` would delete them), and this also
+  deletes the local file; commit that.
 - D1 outage: the edge copies and the last known version in the colo cache cover short ones; otherwise the pages show
   their error state.
 

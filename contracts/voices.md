@@ -88,9 +88,10 @@ refuses unknown ones (build.py embeds the palette for the home block). Add a cod
 ## Takedowns
 
 Snapshot files are never renamed. A topic, or a whole snapshot, may be removed on a takedown / deletion request (the
-privacy page promises deletion): `import-voices.mjs --remove-topic ID` / `--remove-snapshot DATE` removes it from D1
-(every date that lists the id; a date left without topics is deleted) and from the local files, which are then
-committed. Search caches and archives may lag, as the privacy page says.
+privacy page promises deletion): `cd api && D1_DATABASE_ID=… npm run import:voices -- --remove-topic ID --target remote`
+(or `--remove-snapshot DATE`) shows the plan, and the same command with `--yes` removes it from D1 (every date that
+lists the id; a date left without topics is deleted) and from the local files, which are then committed (operations:
+docs/design/voices-db.md). Search caches and archives may lag, as the privacy page says.
 
 ## Checks
 
