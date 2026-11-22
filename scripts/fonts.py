@@ -14,16 +14,13 @@ OWN = [(os.path.join(DIST, 'events/index.html'), '/*EVENT_FONTS*/', 'events'),
        (os.path.join(DIST, 'privacy/index.html'), '/*PAGE_FONTS*/', 'privacy'),
        (os.path.join(DIST, 'feedback/index.html'), '/*PAGE_FONTS*/', 'feedback'),
        (os.path.join(DIST, 'voices/index.html'), '/*PAGE_FONTS*/', 'voices')]
-# the /voices/<date>/ archive pages share the /voices/ faces (same topic text)
-SHARE = {'voices': sorted(glob.glob(os.path.join(DIST, 'voices/*/index.html')))}
-own_files = [o[0] for o in OWN] + [f for fs in SHARE.values() for f in fs]
+own_files = [o[0] for o in OWN]
 text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f not in own_files)
-# VOICES_SOURCE=d1 builds embed no topic text (the pages fetch it from D1): take it from the local data/voices/ files,
-# as the static build would have: the latest snapshot's titles / summaries for the home block (shared subsets), every
-# snapshot for the /voices/ faces. Topics imported later fall back to the system font for glyphs these lack.
-VOICES_PAGE = os.path.join(DIST, 'voices/index.html')
+# /voices/ and the home block fetch their topic text from D1, so the built HTML has none: take it from the local
+# data/voices/ files (the importer's input), the latest snapshot's titles / summaries for the home block (shared
+# subsets), every snapshot for the /voices/ faces. Topics imported later fall back to the system font for glyphs these lack.
 voices_text = ''
-if os.path.exists(VOICES_PAGE) and 'const V = {"snapshots": null' in open(VOICES_PAGE, encoding='utf-8').read():
+if os.path.exists(os.path.join(DIST, 'voices/index.html')):
     import json
     snaps = [json.load(open(f, encoding='utf-8')) for f in sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json')))]
     snaps = [x for x in snaps if not x.get('sample') and x['topics']]
@@ -64,8 +61,7 @@ for path, slot, prefix in OWN:
     if not os.path.exists(path):
         continue
     page = open(path, encoding='utf-8').read()
-    shared = SHARE.get(prefix, [])
-    extra = sorted(c for c in set(page + (voices_text if prefix == 'voices' else '')).union(*(open(f, encoding='utf-8').read() for f in shared)) - set(chars) if ord(c) > 0x7f)
+    extra = sorted(c for c in set(page + (voices_text if prefix == 'voices' else '')) - set(chars) if ord(c) > 0x7f)
     faces = []
     if extra:
         rng = ','.join(f'U+{ord(c):X}' for c in extra)
@@ -74,8 +70,6 @@ for path, slot, prefix in OWN:
                                          ('ZenKakuGothicNew-Bold.ttf', f'{prefix}-zen-kaku-700.woff2', 'Zen Kaku Gothic New', 700)]:
             write_subset(src, out, ''.join(extra))
             faces.append(f'@font-face{{font-family:"{family}";src:url("/fonts/{out}") format("woff2");font-weight:{weight};font-display:swap;unicode-range:{rng}}}')
-    for f in [path] + shared:
-        p = page if f == path else open(f, encoding='utf-8').read()
-        assert p.count(slot) == 1, f
-        open(f, 'w', encoding='utf-8').write(p.replace(slot, ''.join(faces)))
+    assert page.count(slot) == 1, path
+    open(path, 'w', encoding='utf-8').write(page.replace(slot, ''.join(faces)))
     print(prefix, 'extra glyphs', len(extra))

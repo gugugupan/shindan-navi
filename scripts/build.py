@@ -1,4 +1,4 @@
-import json,sys,os,urllib.parse,shutil,html,datetime,re,glob,unicodedata
+import json,sys,os,urllib.parse,shutil,html,datetime,re,unicodedata
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from sourcekey import product_code
 OFFICIAL={'遊戯王OCG':'https://www.yugioh-card.com/japan/','ヴァイスシュヴァルツ':'https://ws-tcg.com/','ヴァンガード':'https://cf-vanguard.com/tcg/',
@@ -224,16 +224,11 @@ TOOLS=[('/releases/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14
        ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>')),
        ('/voices/','話題','カレンダー',ICO('<path d="M4 5h16v11H9l-4 4v-4H4z"/><path d="M8 9h8M8 12h5"/>'))]
 if not BUILD_EVENTS: TOOLS=[t for t in TOOLS if t[0]!='/events/']
-# 話題カレンダー (/voices/, contracts/voices.md): VOICES_ENABLED=1 builds the page, its tool tab and the VOICES parts of
-# /privacy/; off by default. Its data is static, so unlike login / feedback it does not need the Worker.
-VOICES_ENABLED=os.environ.get('VOICES_ENABLED','')=='1'
+# 話題カレンダー (/voices/, contracts/voices.md): VOICES_ENABLED=1 builds the page, its tool tab, the home page's いま話題
+# and the VOICES parts of /privacy/. Both pages fetch the snapshots from /api/v1/voices* (D1, docs/design/voices-db.md),
+# so like login it is always off with BUILD_EVENTS=0 (no Worker behind that build).
+VOICES_ENABLED=BUILD_EVENTS and os.environ.get('VOICES_ENABLED','')=='1'
 if not VOICES_ENABLED: TOOLS=[t for t in TOOLS if t[0]!='/voices/']
-# VOICES_SOURCE=d1 (docs/design/voices-db.md): /voices/ and the home page's いま話題 fetch the snapshots from
-# /api/v1/voices* (D1, written by api/scripts/import-voices.mjs) instead of embedding data/voices/, and there are no
-# archive pages /voices/<date>/. Needs the Worker, so a BUILD_EVENTS=0 build stays static. Default static.
-VOICES_SOURCE=os.environ.get('VOICES_SOURCE','').strip() or 'static'
-if VOICES_SOURCE not in ('static','d1'): sys.exit(f'VOICES_SOURCE must be static or d1, not {VOICES_SOURCE!r}')
-VOICES_D1=VOICES_ENABLED and BUILD_EVENTS and VOICES_SOURCE=='d1'
 # Login UI (user control in the corner, sync wording in the legends, LOGIN parts of /privacy/): LOGIN_ENABLED=1, a repo
 # variable passed to the Worker build only; always off with BUILD_EVENTS=0 (no Worker behind that build).
 LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
@@ -499,8 +494,7 @@ def render_home():
     keep=['id','date','game','name','pack','thumb']
     home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
-    if VOICES_ENABLED: home['voices']=home_voices()
-    if VOICES_D1: home['voicesApi']=EVENTS_API_BASE+'/voices/latest'; home['voiceGames']=VOICE_GAME_BLOCK
+    if VOICES_ENABLED: home['voicesApi']=EVENTS_API_BASE+'/voices/latest'; home['voiceGames']=VOICE_GAME_BLOCK
     # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (明日・今週の予定 filter)
     home['titles']={g['code']:g['name'] for g in VOICE_GAME_INFO}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
@@ -596,62 +590,11 @@ def render_feedback():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
-# ---- 話題カレンダー (/voices/): snapshots from data/voices/ (contracts/voices.md), checked here and embedded in the page
+# ---- 話題カレンダー (/voices/): the page and the home block fetch the snapshots from /api/v1/voices* (contracts/voices.md)
 VOICES_SRC=open(os.path.join(ROOT,'src/voices.html')).read()
-VOICE_GAMES=re.findall(r"\{code:'([A-Z]+)'",VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])
-def voices_data():
-    """All snapshots, oldest first. Sample snapshots only while no real one exists (then they are dropped)."""
-    snaps=[]
-    xpost=re.compile(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}')
-    isdate=lambda v:isinstance(v,str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}',v) and jd(v)
-    TOPIC={'id','game','title','summary','attitude','share','volume','voices','reacting_to','window','first_seen','status','source'}
-    for f in sorted(glob.glob(os.path.join(ROOT,'data/voices/*.json'))):
-        name=os.path.relpath(f,ROOT)
-        def bad(msg): sys.exit(f'{name}: {msg} (contracts/voices.md)')
-        s=json.load(open(f))
-        if set(s)-{'version','date','window','sample','note','topics'} or not {'version','date','window','topics'}<=set(s): bad('wrong top-level fields')
-        if s['version']!=1: bad('version must be 1')
-        w=s['window']
-        if not (isinstance(w,dict) and set(w)=={'from','to'} and isdate(w['from']) and isdate(w['to']) and w['from']<=w['to']): bad('bad window')
-        if not (isdate(s['date']) and s['date']==w['to']==os.path.basename(f)[:-5]): bad('file name, date and window.to must match')
-        if 'sample' in s and not isinstance(s['sample'],bool): bad('sample must be true/false')
-        ids=set()
-        for t in s['topics']:
-            tid=t.get('id','?')
-            def tbad(msg): bad(f'topic {tid}: {msg}')
-            if 'posts' in t: tbad('posts: player post URLs are never committed (contracts/voices.md)')
-            if set(t)!=TOPIC: tbad(f'fields {sorted(set(t)^TOPIC)}')
-            if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,63}',str(tid)) or tid in ids: tbad('bad or duplicate id')
-            ids.add(tid)
-            if t['game'] not in VOICE_GAMES: tbad(f'unknown game {t["game"]} (GAMES in src/voices.html)')
-            for k,n in (('title',40),('summary',160)):
-                if not isinstance(t[k],str) or not t[k].strip() or len(t[k])>n: tbad(f'{k} empty or over {n} characters')
-            if t['attitude'] not in ('positive','negative','mixed','neutral'): tbad('attitude')
-            sh=t['share']
-            if not (isinstance(sh,dict) and set(sh)=={'positive','negative','neutral'} and all(isinstance(v,int) and not isinstance(v,bool) and v>=0 for v in sh.values()) and sum(sh.values())>0): tbad('share')
-            if t['volume'] not in ('high','mid','low'): tbad('volume')
-            if not (isinstance(t['voices'],list) and len(t['voices'])<=3 and all(isinstance(v,str) and 0<len(v.strip())<=80 for v in t['voices'])): tbad('voices: at most 3 strings of 1-80 characters')
-            if t['reacting_to'] is not None and not (isinstance(t['reacting_to'],str) and xpost.fullmatch(t['reacting_to'])): tbad('reacting_to must be an x.com status URL or null')
-            if t['window']!=w: tbad('window differs from the snapshot window')
-            if not isdate(t['first_seen']) or t['first_seen']>s['date']: tbad('first_seen after the snapshot date')
-            if t['status'] not in ('new','continuing','cooling'): tbad('status')
-            if t['source'] not in ('grok-app','openrouter','x-api'): tbad('source')
-        snaps.append({k:s[k] for k in ('date','window','topics')}|{'sample':bool(s.get('sample'))})
-    if any(not x['sample'] for x in snaps): snaps=[x for x in snaps if not x['sample']]
-    return snaps
-VOICES=voices_data() if VOICES_ENABLED and not VOICES_D1 else []
-# the home page's いま話題 block: only the latest real snapshot, only the fields it shows (None: no block)
 VOICE_GAME_INFO=[dict(re.findall(r"(\w+):'([^']*)'",x)) for x in re.findall(r'\{code:[^}]*\}',VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])]
+# the game palette the home block draws the fetched topics with
 VOICE_GAME_BLOCK=[{k:g[k] for k in ('code','name','short','c','cd') if k in g} for g in VOICE_GAME_INFO]
-def home_voices():
-    if not VOICES or VOICES[-1]['sample']: return None
-    s=VOICES[-1]
-    used={t['game'] for t in s['topics']}
-    return {'date':s['date'],
-            'games':[g for g in VOICE_GAME_BLOCK if g['code'] in used],
-            'topics':[{k:t[k] for k in ('id','game','title','summary','attitude','volume','first_seen')} for t in s['topics']]}
-# sample-only data stays out of search: noindex and no sitemap entry until a real snapshot exists. D1 never holds samples.
-VOICES_INDEX=VOICES_D1 or (bool(VOICES) and not any(x['sample'] for x in VOICES))
 VOICES_PAGE=dict(path='/voices/',og='voices',
     desc='ポケカ・ワンピ・ユニアリなどTCGのタイトルごとに、X（旧Twitter）のプレイヤーのあいだで話題になっていることをAIが要約。好意的・否定的な反応の割合や代表的な意見をカレンダーで振り返れます。')
 def render_voices():
@@ -660,11 +603,9 @@ def render_voices():
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
     counts=__import__('collections').Counter(d['game'] for d in data)
-    v={'snapshots':VOICES,'counts':counts}
-    if VOICES_D1: v={'snapshots':None,'counts':counts,'api':EVENTS_API_BASE+'/voices'}
+    v={'counts':counts,'api':EVENTS_API_BASE+'/voices'}
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
                      ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/voices/")}{siterow("/voices/")}</nav>'),
-                     ('<!--VLATEST-->',voices_latest()),
                      ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/')),('/*GICON*/',GICON_JS)):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
@@ -674,7 +615,6 @@ def render_voices():
     pg=VOICES_PAGE
     url=SITE+pg['path']
     og=f'{SITE}/og/{pg["og"]}.png'
-    robots='' if VOICES_INDEX else '<meta name="robots" content="noindex">\n'
     head=f"""<!doctype html>
 <html lang="ja">
 <head>
@@ -682,7 +622,7 @@ def render_voices():
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{esc(title)}</title>
 <meta name="description" content="{esc(pg['desc'])}">
-{robots}<meta name="theme-color" content="#3a43d0">
+<meta name="theme-color" content="#3a43d0">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -709,141 +649,6 @@ def render_voices():
 """
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
-
-# ---- 話題カレンダー archive (/voices/<date>/, owner decision 2026-11-20): one indexable static page per real snapshot,
-# none for samples. The cards follow card() / attBlock() in src/voices.html; keep the share and badge rules in step.
-# a snapshot left without topics (all removed on request) gets no page, like a deleted file; prev / next skip it
-VOICES_DAYS=[s for s in VOICES if not s['sample'] and s['topics']]
-VGAME={g['code']:g for g in VOICE_GAME_INFO}
-VOLW={'high':3,'mid':2,'low':1}
-VDOW='日月火水木金土'
-def vmd(d): x=jd(d); return f'{x.month}/{x.day}({VDOW[(x.weekday()+1)%7]})'
-def vmdj(d): x=jd(d); return f'{x.month}月{x.day}日'
-def vymd(d): x=jd(d); return f'{x.year}年{x.month}月{x.day}日'
-def vday_path(d): return f'/voices/{d}/'
-def gi(n):
-    # same markup as gi() in GICON_JS (the page scripts' game icon)
-    v=GAME_ICON.get(n) or str(n or '?')[0].upper()
-    return f'<img class="gi" src="/gi/{esc(v)}" width="16" height="16" alt="" aria-hidden="true">' if v.endswith(('.png','.svg')) else f'<span class="gi" aria-hidden="true">{esc(v)}</span>'
-def vgvars(c):
-    g=VGAME[c]; return f'--gl:{g["c"]};--gd:{g["cd"]}' if g.get('c') else '--gl:hsl(220 62% 46%);--gd:hsl(220 60% 68%)'
-def vtenths(s,ks):
-    tot=sum(s[k] for k in ks); u=[s[k]/tot*10 for k in ks]; fl=[int(x) for x in u]
-    left=10-sum(fl)
-    for i in sorted(range(len(ks)),key=lambda i:(-(u[i]-fl[i]),-s[ks[i]])):
-        if left>0: fl[i]+=1; left-=1
-    return {k:fl[i]*10 for i,k in enumerate(ks)}
-VATT={'positive':('好意的','＋'),'negative':('否定的','－'),'mixed':('賛否両論','±'),'neutral':('中立','・')}
-VTREND={'positive':'好意的な声が多い','negative':'否定的な声が多い','mixed':'賛否が分かれている','neutral':'目立った賛否はない'}
-VVOL={'high':'多','mid':'中','low':'少'}
-def vatt_block(t):
-    s=t['share']; l,m=VATT[t['attitude']]; a=t['attitude']
-    head=f'<span class="atth">反応の傾向（推定）</span><span class="attl"><span aria-hidden="true">{m} </span>{l}</span>'
-    vol=f'<span class="vol">話題量 <b>{VVOL[t["volume"]]}</b></span>'
-    if sum(s.values())<5:
-        return f'<div class="att a-{a}" data-small>{head}<span class="trend">{VTREND[a]}</span>{vol}<span class="alg">投稿が少ないため、割合は出していません</span></div>'
-    parts=[(k,n) for k,n in (('positive','好意的'),('negative','否定的'),('neutral','中立')) if s[k]]
-    pc=vtenths(s,[k for k,_ in parts])
-    ap=lambda p:f'約{p}%' if p else 'わずか'
-    lab='・'.join(f'{n} {ap(pc[k])}' for k,n in parts)
-    seg=''.join(f'<span class="{c}" style="flex:{s[k]}"></span>' for k,c in (('positive','p'),('negative','n'),('neutral','u')) if s[k])
-    return (f'<div class="att a-{a}">{head}<span class="abar" role="img" aria-label="反応の傾向（推定） {esc(lab)}">{seg}</span>{vol}'
-            f'<span class="alg" aria-hidden="true">{"".join(f"<span class=\"a-{k}\"><i></i>{n} {ap(pc[k])}</span>" for k,n in parts)}</span></div>')
-def vcard(t,snap):
-    st=t['status']
-    badge=(f'<span class="badge hot">🔥 {(jd(snap["date"])-jd(t["first_seen"])).days+1}日連続</span>' if st=='continuing' else
-           '<span class="badge cool">📉 落ち着き</span>' if st=='cooling' else '<span class="badge new">🆕 新</span>' if len(VOICES)>1 else '')
-    voices=(f'<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">'+''.join(f'<li><span aria-hidden="true">💬 </span>{esc(v)}</li>' for v in t['voices'])+'</ul>') if t['voices'] else ''
-    ext='<span class="sr">（外部サイト・X）</span>'
-    rel='nofollow noopener noreferrer'
-    links=f'<a href="{esc(t["reacting_to"])}" target="_blank" rel="{rel}" data-x="reacting">反応元の公式投稿 ↗{ext}</a>' if t['reacting_to'] else ''
-    return (f'<article class="tc" style="{vgvars(t["game"])}" id="topic-{esc(t["id"])}" data-topic="{esc(t["id"])}">'
-            f'<div class="tc-top"><span class="tag">{gi(VGAME[t["game"]]["name"])}{esc(VGAME[t["game"]]["name"])}</span>{badge}<span class="ai">AIによる要約</span></div>'
-            f'<h3>{esc(t["title"])}</h3><p class="sum">{esc(t["summary"])}</p>{vatt_block(t)}{voices}'
-            f'<p class="tc-links">{links}<a class="vopen" href="/voices/#t={esc(t["id"])}">カレンダーで見る</a></p>'
-            f'<p class="tc-win">{vmd(t["window"]["from"])}〜{vmd(t["window"]["to"])} の投稿から（{vmd(snap["date"])} 時点）</p></article>')
-def vday_games(s):
-    """the snapshot's topics per game, in GAMES order (topics keep the snapshot's order)"""
-    return [(c,[t for t in s['topics'] if t['game']==c]) for c in VOICE_GAMES if any(t['game']==c for t in s['topics'])]
-def voices_day_page(s):
-    d=s['date']; x=jd(d); gs=vday_games(s); n=len(s['topics'])
-    top=[t['title'] for _,t in sorted(enumerate(s['topics']),key=lambda p:(-VOLW[p[1]['volume']],p[0]))[:2]]
-    names=[VGAME[c]['short'] for c,_ in gs]
-    gl='・'.join(names[:5])+('ほか' if len(names)>5 else '')
-    desc=(f'{x.year}年{x.month}月{x.day}日時点のTCGの話題を、X（旧Twitter）の{vmd(s["window"]["from"])}〜{vmd(s["window"]["to"])}の投稿から AI が要約。'
-          +''.join(f'「{t}」' for t in top)+f'など、{gl}の{len(gs)}タイトル・{n}件の話題と反応の傾向をまとめています。')
-    return dict(path=vday_path(d),title=f'{vymd(d)}のTCG話題｜話題カレンダー｜トレカカレンダー',h1=f'{vymd(d)}のTCG話題まとめ',
-                crumb=f'{vymd(d)}のTCG話題',desc=desc,games=gs)
-VOICES_DAY_SRC=open(os.path.join(ROOT,'src/voices-day.html')).read()
-def render_voices_day(i):
-    s=VOICES_DAYS[i]; d=s['date']; pg=voices_day_page(s); url=SITE+pg['path']; og=f'{SITE}/og/{VOICES_PAGE["og"]}.png'
-    prev=VOICES_DAYS[i-1] if i else None; nxt=VOICES_DAYS[i+1] if i+1<len(VOICES_DAYS) else None
-    x=jd(d)
-    crumbs=[('トップ','/'),('話題カレンダー','/voices/'),(pg['crumb'],None)]
-    ld={'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
-        {'@type':'ListItem','position':i+1,'name':n,'item':SITE+h if h else url} for i,(n,h) in enumerate(crumbs)]}
-    pn=lambda where: (f'<nav class="vpn" aria-label="ほかの日の話題（{where}）">'
-        +(f'<a href="{vday_path(prev["date"])}" rel="prev">‹ {vmdj(prev["date"])}の話題</a>' if prev else '')
-        +f'<a class="vpn-cal" href="/voices/#d={d}">話題カレンダーでこの日を見る</a>'
-        +(f'<a class="vpn-next" href="{vday_path(nxt["date"])}" rel="next">{vmdj(nxt["date"])}の話題 ›</a>' if nxt else '')+'</nav>')
-    body=('<main class="varc">'
-        +'<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in crumbs)+'</nav>'
-        +f'<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p><time datetime="{d}">{vmd(d)}</time>時点・{vmd(s["window"]["from"])}〜{vmd(s["window"]["to"])} の X の投稿から AI が要約（{len(pg["games"])}タイトル・{len(s["topics"])}件）</p></div>'
-        +pn('ページ上部')
-        +'<nav class="vtoc" aria-label="タイトル">'+''.join(f'<a class="chip g" style="{vgvars(c)}" href="#g-{c}">{gi(VGAME[c]["name"])}{esc(VGAME[c]["name"])} <em>{len(ts)}</em></a>' for c,ts in pg['games'])+'</nav>'
-        +''.join(f'<section class="vgsec" id="g-{c}" style="{vgvars(c)}" aria-labelledby="h-{c}"><h2 id="h-{c}">{gi(VGAME[c]["name"])}{esc(VGAME[c]["name"])}<small>{len(ts)}件</small></h2>'
-                 f'<div class="vcards">{"".join(vcard(t,s) for t in ts)}</div></section>' for c,ts in pg['games'])
-        +pn('ページ下部')+'</main>')
-    src=re.sub(r'\A<!--.*?-->\n','',VOICES_DAY_SRC,count=1,flags=re.S)
-    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
-    voices_css=re.search(r'<style>\n(/\* attitude colours.*?)</style>',VOICES_SRC,re.S).group(1)
-    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    for slot,val in (('/*SITE_CSS*/',site_css),('/*VOICES_CSS*/',voices_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
-                     ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(pg["path"])}{siterow(pg["path"])}</nav>'),('<!--BODY-->',body)):
-        assert src.count(slot)==1,slot
-        src=src.replace(slot,val)
-    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
-    head=f"""<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>{esc(pg['title'])}</title>
-<meta name="description" content="{esc(pg['desc'])}">
-<meta name="theme-color" content="#3a43d0">
-<link rel="icon" href="/favicon.ico" sizes="32x32">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="manifest" href="/site.webmanifest">
-<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="canonical" href="{url}">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="トレカカレンダー">
-<meta property="og:locale" content="ja_JP">
-<meta property="og:title" content="{esc(pg['title'])}">
-<meta property="og:description" content="{esc(pg['desc'])}">
-<meta property="og:url" content="{url}">
-<meta property="og:image" content="{og}">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="TCG 話題カレンダー｜トレカカレンダー">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{esc(pg['title'])}">
-<meta name="twitter:description" content="{esc(pg['desc'])}">
-<meta name="twitter:image" content="{og}">
-<script type="application/ld+json">{json.dumps(ld,ensure_ascii=False).replace('</','<\\/')}</script>
-{GA}
-<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
-"""
-    split=src.index('<div class="wrap">')
-    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
-def voices_latest():
-    """/voices/: the latest real snapshot's topic titles as a static list below the calendar, linking its archive page"""
-    if not VOICES_DAYS: return ''
-    s=VOICES_DAYS[-1]; p=vday_path(s['date'])
-    items=''.join(f'<li><a href="{p}#topic-{esc(t["id"])}"><span class="vlg" style="{vgvars(c)}">{esc(VGAME[c]["short"])}</span>{esc(t["title"])}</a></li>' for c,ts in vday_games(s) for t in ts)
-    return (f'<section class="vlatest" aria-labelledby="vl-h"><h2 id="vl-h"><a href="{p}">{vymd(s["date"])}のTCG話題まとめ</a></h2>'
-            f'<ul>{items}</ul></section>')
 
 # ---- /item/<id>/: one static page per visible release, for searches like 「OP-15 発売日」. Every visible item gets one
 # (past ones are still searched); an item that leaves items.json loses its page. Only BreadcrumbList JSON-LD (see Data model).
@@ -1006,9 +811,6 @@ open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
 if VOICES_ENABLED:
     os.makedirs(os.path.join(dist,'voices'),exist_ok=True)
     open(os.path.join(dist,'voices/index.html'),'w').write(render_voices())
-    for i,x in enumerate(VOICES_DAYS):
-        os.makedirs(os.path.join(dist,'voices',x['date']),exist_ok=True)
-        open(os.path.join(dist,'voices',x['date'],'index.html'),'w').write(render_voices_day(i))
 if FEEDBACK_ENABLED:
     os.makedirs(os.path.join(dist,'feedback'),exist_ok=True)
     open(os.path.join(dist,'feedback/index.html'),'w').write(render_feedback())
@@ -1018,9 +820,7 @@ sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
 for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{pg["lastmod"]}</lastmod></url>')
 for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{CHANGED[pg["d"]["id"]]}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
-if VOICES_D1: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc></url>')  # the data is in D1: no lastmod at build time
-elif VOICES_ENABLED and VOICES_INDEX: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc><lastmod>{VOICES[-1]["date"]}</lastmod></url>')
-for x in VOICES_DAYS: sm.append(f'<url><loc>{SITE}{vday_path(x["date"])}</loc><lastmod>{x["date"]}</lastmod></url>')
+if VOICES_ENABLED: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc></url>')  # the data is in D1: no lastmod at build time
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
@@ -1032,4 +832,4 @@ if not os.path.exists(venv_py):
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
 print('pages',len(pages),'| item pages',len(items),f'({len(archived)} archived)','| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
-      '| voices','d1 (/api/v1/voices, no archive pages)' if VOICES_D1 else f'{len(VOICES)} snapshots{"" if VOICES_INDEX else " (sample, noindex)"}, {len(VOICES_DAYS)} archive pages' if VOICES_ENABLED else False,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+      '| voices',VOICES_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
