@@ -372,7 +372,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.reload({ waitUntil: 'networkidle' });
     const many = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => c.getAttribute('aria-label')),
       types: document.querySelectorAll('#evBody .ty').length,
-      rest: [...document.querySelectorAll('#evBody .gmore a.gc')].map(a => [a.textContent, a.getAttribute('href')]),
+      rest: [...document.querySelectorAll('#evBody .gmore a.gc')].map(a => { const t = a.cloneNode(true); t.querySelectorAll('.gi').forEach(e => e.remove()); return [t.textContent, a.getAttribute('href')]; }),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     if (JSON.stringify(many.cols) !== JSON.stringify(['ONE PIECE', 'ポケモンカード', 'ガンダム', 'デジモン', 'ホロライブ'])) fail(where, `many: columns ${JSON.stringify(many.cols)}`);
     const dayLink = g => `/events/?game=${g}&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`;
