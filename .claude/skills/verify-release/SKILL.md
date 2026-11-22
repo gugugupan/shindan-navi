@@ -7,7 +7,7 @@ description: Pre-merge gate for トレカカレンダー — checks a branch's d
 
 Merging to `main` and pushing deploys the site, so every branch passes this gate first and the owner sees the result before anything is merged. Work happens in a worktree (`../.worktrees/<branch>`), never in the main checkout.
 
-For data updates `scripts/refresh.py` already runs both steps (build with `BUILD_TODAY`, then `verify_release.py --base origin/main --skip-build` and `browser.mjs`, same `TODAY`) and puts the RESULT lines in its packet; run them by hand for other branches.
+Production builds with `VOICES_ENABLED=1` (話題カレンダー `/voices/` and the home いま話題, data from D1), so the gate does too. For data updates `scripts/refresh.py` already runs both steps (build with `BUILD_TODAY` and `VOICES_ENABLED=1`, then `verify_release.py --base origin/main --skip-build` and `browser.mjs`, same `TODAY`) and puts the RESULT lines in its packet; run them by hand for other branches.
 
 ## Setup (once per worktree)
 
@@ -21,7 +21,8 @@ uv venv -p 3.12 .venv && uv pip install -p .venv fonttools==4.66.1 brotli==1.2.0
 ## 1. Data, build, structured data
 
 ```bash
-.venv/bin/python -I scripts/verify_release.py --base main --today YYYY-MM-DD
+VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --base origin/main --today YYYY-MM-DD
+node tools/verify/voices-d1.mjs --today YYYY-MM-DD    # same dist/: /voices/ and the home block against the importer + Worker code (npm ci in api/ once)
 ```
 
 - Rebuilds `dist/` with `BUILD_TODAY` set, so results are reproducible; use today's date unless checking how the site will look on a later day.
@@ -48,7 +49,7 @@ In Chinese: both RESULT lines, every WARN with what you checked, the data summar
 
 ## Notes
 
-- Production builds with `VOICES_ENABLED=1` (話題カレンダー `/voices/` and the home いま話題, data from D1): for branches touching them, run step 1 with `VOICES_ENABLED=1`, then `node tools/verify/voices-d1.mjs --today YYYY-MM-DD` (needs `npm ci` in `api/`), then step 2, which serves the voices API answer from `data/voices/` itself.
+- Step 2 serves the voices API answer from `data/voices/` itself, so it needs no Worker.
 - Google's Rich Results Test has no API; for structured-data changes, offer the owner a manual paste of one built page into https://search.google.com/test/rich-results.
 - Search performance (indexing, impressions, CTR per page / query) can only be judged after Google recrawls; it is not part of this gate.
 - When a check is wrong rather than the site, fix the check in its own commit and say so in the report.

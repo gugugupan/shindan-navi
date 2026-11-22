@@ -303,7 +303,8 @@ def main():
     check_prereqs(args, keys)
     logdir = os.path.join(ROOT, 'out', f'refresh-{today}')
     os.makedirs(logdir, exist_ok=True)
-    env = dict(os.environ, TODAY=today, BUILD_TODAY=today)
+    # build and verify as production does (voices on); VOICES_ENABLED=0 in the environment turns them off
+    env = dict(os.environ, TODAY=today, BUILD_TODAY=today, VOICES_ENABLED=os.environ.get('VOICES_ENABLED', '1'))
     print(f'TODAY {today} · branch {branch} · HEAD {git("rev-parse", "--short", "HEAD")} · '
           f'API keys: {", ".join(sorted(keys)) or "none"} · logs {os.path.relpath(logdir, ROOT)}/')
 

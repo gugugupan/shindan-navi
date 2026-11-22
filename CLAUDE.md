@@ -41,9 +41,9 @@ python3 -I scripts/refresh.py [--skip-collect] [--dry-run] [--no-official]   # d
 python3 -I scripts/og.py [name ...]               # after a build; re-render public/og/*.png (headless Chrome; names = only those)
 cd api && npm ci && npm test && npm run typecheck && npm run bundle   # Worker checks; bundle = wrangler deploy --dry-run
 cd api && npm run dev:node -- --port 8787         # site + API on Node/SQLite (macOS < 13.5 cannot run wrangler dev)
-.venv/bin/python -I scripts/verify_release.py --today YYYY-MM-DD   # pre-merge gate: data diff vs main, build, JSON-LD
+VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --base origin/main --today YYYY-MM-DD   # pre-merge gate: data diff, build as production (voices on), JSON-LD
+node tools/verify/voices-d1.mjs --today YYYY-MM-DD              # same dist/: /voices/ + home from D1 (importer, dev-node, SQLite; npm ci in api once)
 node tools/verify/browser.mjs --today YYYY-MM-DD                 # same date; headless Chrome, desktop + mobile (npm ci in tools/verify once)
-node tools/verify/voices-d1.mjs --today YYYY-MM-DD              # after a VOICES_ENABLED=1 verify_release.py: /voices/ + home from D1 (dev-node, SQLite)
 ```
 
 Local preview: `api/` `npm run dev:node` (site + API), or serve `dist/` alone (launch config `tcg-calendar`, port 5260) for the release calendar. GA only loads on `shindan-navi.app`, so previews are not tracked.
