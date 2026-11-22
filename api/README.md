@@ -321,7 +321,7 @@ month per request.
 | `/events/meta`, data version | 1, 1 |
 | `/voices` (話題カレンダー, `VOICES_SOURCE=d1`): all snapshots / `/voices/latest` / voices version | 1 per snapshot (≈ 365 a year) / 1 / 1 |
 
-**Voices** (`import-voices.mjs`, migration `migrations-pending/0008_voices.sql`, docs/design/voices-db.md): one
+**Voices** (`import-voices.mjs`, migration `migrations/0008_voices.sql`, docs/design/voices-db.md): one
 `voice_snapshots` row per date, so an import writes ~2 rows per new or changed date + 1 version row (a takedown: the
 dates it rewrites or deletes + 1); its plan reads every row once. `/api/v1/voices*` is cached like the events
 endpoints under its own version (`voice_meta`), so a miss happens once per colo and import; each `/voices/` view and
