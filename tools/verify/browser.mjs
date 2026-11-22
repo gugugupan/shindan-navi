@@ -402,13 +402,14 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
 // / いま話題 (VOICES_ENABLED=1 builds only): the latest snapshot's topics, at most 5 rows and 2 per game unless one game
 // is shown; read only: games from the /voices/ saved filter (tcg.voices), else the /events/ one, kept to games with
 // topics, else all; nothing written. Hidden once the snapshot is more than 7 days old. Without a location the only API
-// calls are the voices endpoints (/voices/latest, and /voices once a row opens /voices/).
+// calls are the voices endpoints (/voices/latest, and /voices once a row opens /voices/). The clock is the latest
+// snapshot's day, so the block shows whatever --today is; the 7 / 8-day checks below cover hiding it.
 for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   const where = `${vp} / いま話題`;
   const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
     hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
   const page = await ctx.newPage();
-  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  await page.clock.setFixedTime(new Date(`${VOICE_SNAPS.at(-1)?.date || TODAY}T12:00:00+09:00`));
   const bad = [], api = [];
   page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
