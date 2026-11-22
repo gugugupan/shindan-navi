@@ -1,6 +1,6 @@
-// 話題カレンダー snapshots → D1 (docs/design/voices-db.md). Reads data/voices/<date>.json, validates them with the rules
-// scripts/build.py voices_data() enforces (plus contracts/voices.schema.json and checks across snapshots), and turns
-// the difference against the database's voice_snapshots rows into SQL.
+// 話題カレンダー snapshots → D1 (docs/design/voices-db.md). Reads data/voices/<date>.json, validates them against
+// contracts/voices.md (plus contracts/voices.schema.json and checks across snapshots), and turns the difference against
+// the database's voice_snapshots rows into SQL.
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -23,7 +23,7 @@ const realDate = (v) => typeof v === 'string' && DATE.test(v) && new Date(`${v}T
 const len = (s) => [...s].length;
 export const todayJst = (nowMs = Date.now()) => new Date(nowMs + 9 * 3_600_000).toISOString().slice(0, 10);
 
-/** Game codes from GAMES in src/voices.html, as build.py reads them. */
+/** Game codes from GAMES in src/voices.html. */
 export function voiceGames(src = readFileSync(join(REPO_DIR, 'src/voices.html'), 'utf8')) {
   const block = src.split('const GAMES = [')[1].split('];')[0];
   return [...block.matchAll(/\{code:'([A-Z]+)'/g)].map((m) => m[1]);

@@ -36,7 +36,7 @@ function fixtureDir(list: Record<string, any>[] = FIXTURES) {
 }
 const served = (list: Record<string, any>[] = FIXTURES) => list.map((s) => ({ date: s.date, window: s.window, topics: s.topics }));
 
-describe('voices validation (build.py voices_data rules)', () => {
+describe('voices validation (contracts/voices.md rules)', () => {
   it('accepts the committed snapshots and keeps only date, window and topics', () => {
     // the live files against the real date: only "not after today" depends on it
     const r = loadVoices(DEFAULT_VOICES_DIR, { today: todayJst() });

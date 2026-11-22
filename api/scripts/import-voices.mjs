@@ -193,7 +193,7 @@ if (takedown) {
       continue;
     }
     const topics = raw.topics.filter((t) => !(t && dropIds.includes(t.id)));
-    // the last topic gone: the file goes too (an empty newest snapshot would hide the home block in static builds)
+    // the last topic gone: the file goes too, like its D1 row
     if (!topics.length) {
       fileEdits.push({ path, del: true });
       continue;
