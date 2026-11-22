@@ -296,6 +296,9 @@ def check_voices():
     if f'<url><loc>{SITE}/voices/</loc></url>' not in sitemap: fail('sitemap: /voices/ missing (listed without lastmod)')
     built = [os.path.relpath(x, DIST) for x in glob.glob(os.path.join(DIST, 'voices/*')) if not x.endswith('index.html')]
     if built: fail(f'/voices/: unexpected files {built[:3]}')
+    # the /voices/<date>/ pages are gone (404): nothing may link them
+    for x in pages:
+        if re.search(r'href="/voices/\d', open(x).read()): fail(f'{os.path.relpath(x, DIST)}: links a removed /voices/<date>/ page')
     # topic text is fetched; the committed snapshots must not leak into the HTML, nor any X URL (official posts included)
     texts = [t[k] for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) for t in json.load(open(x))['topics'] for k in ('title', 'summary')]
     leaked = [t for t in texts if t in src or html.escape(t) in src]
