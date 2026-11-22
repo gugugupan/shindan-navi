@@ -403,14 +403,16 @@ def render_events():
 PRIVACY_EFFECTIVE_BASE='2026-11-19'
 PRIVACY_EFFECTIVE_LOGIN='2026-11-19'
 PRIVACY_EFFECTIVE_FEEDBACK='2026-11-19'
-PRIVACY_EFFECTIVE_VOICES='2026-11-22'
+PRIVACY_EFFECTIVE_VOICES='2026-11-20'
+# VOICES_D1: the revision that drops the /voices/<date>/ pages (D1 only); published with VOICES like VOICES itself
+PRIVACY_EFFECTIVE_VOICES_D1='2026-11-22'
 if LOGIN_ENABLED and not PRIVACY_EFFECTIVE_LOGIN:
     sys.exit('LOGIN_ENABLED=1 needs PRIVACY_EFFECTIVE_LOGIN in scripts/build.py: set it to the date login goes live (YYYY-MM-DD)')
 if FEEDBACK_ENABLED and not PRIVACY_EFFECTIVE_FEEDBACK:
     sys.exit('FEEDBACK_ENABLED=1 needs PRIVACY_EFFECTIVE_FEEDBACK in scripts/build.py: set it to the date the feedback form goes live (YYYY-MM-DD)')
 if VOICES_ENABLED and not PRIVACY_EFFECTIVE_VOICES:
     sys.exit('VOICES_ENABLED=1 needs PRIVACY_EFFECTIVE_VOICES in scripts/build.py: set it to the date /voices/ goes live (YYYY-MM-DD)')
-PRIVACY_REVISIONS=[d for d,on in ((PRIVACY_EFFECTIVE_LOGIN,LOGIN_ENABLED),(PRIVACY_EFFECTIVE_FEEDBACK,FEEDBACK_ENABLED),(PRIVACY_EFFECTIVE_VOICES,VOICES_ENABLED)) if on]
+PRIVACY_REVISIONS=[d for d,on in ((PRIVACY_EFFECTIVE_LOGIN,LOGIN_ENABLED),(PRIVACY_EFFECTIVE_FEEDBACK,FEEDBACK_ENABLED),(PRIVACY_EFFECTIVE_VOICES,VOICES_ENABLED),(PRIVACY_EFFECTIVE_VOICES_D1,VOICES_ENABLED)) if on]
 PRIVACY_LASTMOD=max(PRIVACY_REVISIONS,default=PRIVACY_EFFECTIVE_BASE)
 PRIVACY_PAGE=dict(path='/privacy/',og='home',h1='プライバシーポリシー',lead='',js=None,
     desc='トレカカレンダーのプライバシーポリシー。アクセス解析（Google アナリティクス）、ブラウザに保存する設定、Cookie、外部サービスへの送信などについて説明します。')
@@ -432,7 +434,7 @@ def render_privacy():
     src=src.replace('<!--REVISED-->',f'（最終改定日：{day(PRIVACY_LASTMOD)}）' if PRIVACY_REVISIONS else '')
     if LOGIN_ENABLED: src=src.replace('<!--REVISED_LOGIN-->',day(PRIVACY_EFFECTIVE_LOGIN))
     if FEEDBACK_ENABLED: src=src.replace('<!--REVISED_FEEDBACK-->',day(PRIVACY_EFFECTIVE_FEEDBACK))
-    if VOICES_ENABLED: src=src.replace('<!--REVISED_VOICES-->',day(PRIVACY_EFFECTIVE_VOICES))
+    if VOICES_ENABLED: src=src.replace('<!--REVISED_VOICES-->',day(PRIVACY_EFFECTIVE_VOICES)).replace('<!--REVISED_VOICES_D1-->',day(PRIVACY_EFFECTIVE_VOICES_D1))
     assert '<!--REVISED' not in src
     assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
     title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
