@@ -1,13 +1,14 @@
-// VOICES_SOURCE=d1 builds (docs/design/voices-db.md): /voices/ and the home page's いま話題 read the snapshots from the
-// Worker. Seeds a throwaway SQLite database from data/voices/ with the real importer, serves dist/ and the API with
-// api/scripts/dev-node.mjs, and drives both pages in headless Chrome at desktop and mobile widths.
+// /voices/ and the home page's いま話題 against the real Worker code (docs/design/voices-db.md). Seeds a throwaway SQLite
+// database from data/voices/ with the real importer, serves dist/ and the API with api/scripts/dev-node.mjs, and drives
+// both pages in headless Chrome at desktop and mobile widths. (tools/verify/browser.mjs covers the page's interactions
+// with the API answer served from data/voices/.)
 //
-//   VOICES_ENABLED=1 VOICES_SOURCE=d1 .venv/bin/python -I scripts/verify_release.py --today YYYY-MM-DD   # builds dist/
-//   node tools/verify/voices-d1.mjs --today YYYY-MM-DD [--out .verify]                                   # needs api/node_modules
+//   VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --today YYYY-MM-DD   # builds dist/
+//   node tools/verify/voices-d1.mjs --today YYYY-MM-DD [--out .verify]                  # needs api/node_modules
 //
-// Checks: one /api/v1/voices request; the list and calendar render exactly as the static page does for the same
-// snapshots (the d1 page against itself with the answer embedded), この日のまとめ → /voices/#d=, #t= deep links, loading
-// and error states (an HTTP error, a malformed answer) with 再読み込み; the home block makes one /api/v1/voices/latest request and lists that snapshot's topics.
+// Checks: the API answers data/voices/; one /api/v1/voices request; list sections and cards, この日のまとめ → /voices/#d=,
+// the calendar, #t= deep links, loading and error states (an HTTP error, a malformed answer) with 再読み込み; the home
+// block makes one /api/v1/voices/latest request and lists that snapshot's topics.
 import { chromium } from 'playwright-core';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -24,8 +25,8 @@ const PORT = Number(arg('--port', '8797'));
 const BASE = `http://localhost:${PORT}`;
 
 const page0 = path.join(ROOT, 'dist/voices/index.html');
-if (!fs.existsSync(page0) || !fs.readFileSync(page0, 'utf8').includes('const V = {"snapshots": null')) {
-  console.error('voices-d1: dist/ is not a VOICES_SOURCE=d1 build; run VOICES_ENABLED=1 VOICES_SOURCE=d1 scripts/verify_release.py first');
+if (!fs.existsSync(page0)) {
+  console.error('voices-d1: dist/ has no /voices/; run VOICES_ENABLED=1 scripts/verify_release.py first');
   process.exit(2);
 }
 fs.mkdirSync(OUT, { recursive: true });
@@ -63,10 +64,6 @@ try {
       return { page, api };
     };
     const shot = (page, name) => page.screenshot({ path: path.join(OUT, `${vp}-d1-${name}.png`), fullPage: true });
-    const views = (page) => page.evaluate(() => ({
-      list: document.getElementById('list').innerHTML, calv: document.getElementById('calv').innerHTML,
-      fresh: document.getElementById('fresh').innerHTML, count: document.getElementById('count').textContent,
-    }));
 
     // /voices/ from the API, list and calendar
     let where = `${vp} /voices/`;
@@ -82,38 +79,16 @@ try {
     if (ids.length !== files.reduce((n, s) => n + s.topics.length, 0)) fail(where, `${ids.length} cards in the list`);
     if (await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) > 1) fail(where, 'scrolls horizontally');
     await shot(page, 'voices-list');
-    const d1List = await views(page);
     await page.locator('#list a.vsl').first().click();
     await page.waitForFunction(() => document.getElementById('vDlg').open);
     if (await page.evaluate(() => location.hash) !== `#d=${files.at(-1).date}`) fail(where, 'この日のまとめ did not open its day');
     await page.goto(`${BASE}/voices/?view=cal`, { waitUntil: 'networkidle' });
-    const d1Cal = await views(page);
-    if (!d1Cal.calv.includes('data-day=')) fail(where, 'calendar not rendered');
+    if (!(await page.locator('#calv [data-day]').count())) fail(where, 'calendar not rendered');
     await shot(page, 'voices');
     const t0 = files.at(-1).topics[0];
     await page.goto(`${BASE}/voices/#t=${t0.id}`, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => document.getElementById('vDlg').open);
     if (!(await page.locator('#vBody').textContent()).includes(t0.title)) fail(where, `#t=${t0.id} did not open the topic`);
-    await page.close();
-
-    // the same page with the API answer embedded, as a static build embeds it: identical rendering
-    where = `${vp} /voices/ (embedded)`;
-    ({ page, api } = await open(where));
-    await page.route((u) => u.pathname === '/voices/', async (r) => {
-      const res = await r.fetch();
-      const body = (await res.text()).replace('const V = {"snapshots": null', `const V = {"snapshots": ${JSON.stringify(want.snapshots).replace(/<\//g, '<\\/')}`).replace(/, "api": "\/api\/v1\/voices"\}/, '}');
-      await r.fulfill({ response: res, body });
-    });
-    await page.goto(`${BASE}/voices/?view=list`, { waitUntil: 'networkidle' });
-    if (api.length) fail(where, `API requests with embedded data ${JSON.stringify(api)}`);
-    const stList = await views(page);
-    stList.list = stList.list.replace(/href="\/voices\/(\d{4}-\d{2}-\d{2})\/"/g, 'href="/voices/#d=$1"');
-    if (JSON.stringify(stList) !== JSON.stringify(d1List)) {
-      fail(where, `list view differs from the d1 rendering (${vp}-d1-list-*.json)`);
-      for (const [k, v] of Object.entries({ d1: d1List, embedded: stList })) fs.writeFileSync(path.join(OUT, `${vp}-d1-list-${k}.json`), JSON.stringify(v, null, 1));
-    }
-    await page.goto(`${BASE}/voices/?view=cal`, { waitUntil: 'networkidle' });
-    if (JSON.stringify(await views(page)) !== JSON.stringify(d1Cal)) fail(where, 'calendar differs from the d1 rendering');
     await page.close();
 
     // loading, then an error with 再読み込み

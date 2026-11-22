@@ -16,10 +16,9 @@ FORBIDDEN_KEYS = {'offers', 'aggregateRating', 'review', 'availability', 'price'
                   'shippingDetails', 'hasMerchantReturnPolicy'}
 
 fails, warns = [], []
-# VOICES_SOURCE=d1 (docs/design/voices-db.md): /voices/ and the home block fetch the snapshots from /api/v1/voices*;
-# the build embeds none and writes no archive pages. Same rule as build.py.
-VOICES_D1 = (os.environ.get('VOICES_ENABLED', '') == '1' and os.environ.get('BUILD_EVENTS', '1') != '0'
-             and (os.environ.get('VOICES_SOURCE', '').strip() or 'static') == 'd1')
+# /voices/ and the home block fetch the snapshots from /api/v1/voices* (docs/design/voices-db.md), so like build.py
+# a BUILD_EVENTS=0 build has no voices even with VOICES_ENABLED=1.
+VOICES_ON = os.environ.get('VOICES_ENABLED', '') == '1' and os.environ.get('BUILD_EVENTS', '1') != '0'
 def fail(msg): fails.append(msg)
 def warn(msg): warns.append(msg)
 
@@ -261,42 +260,26 @@ def check_home(today, head, ov):
     # the location picker is one shared partial (src/locpick.html) on / and /events/
     for f2, want in ((src, events), (open(os.path.join(DIST, 'events/index.html')).read() if events else '', events)):
         if (f2.count('<dialog id="prefDlg"'), f2.count('window.snLoc=')) != ((1, 1) if want else (0, 0)): fail('location picker missing or duplicated on / or /events/')
-    # いま話題: with VOICES_ENABLED=1 the latest real snapshot's topics, only the fields the block shows
-    von = os.environ.get('VOICES_ENABLED', '') == '1'
-    real = sorted((json.load(open(x)) for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json'))), key=lambda x: x['date'])
-    real = [x for x in real if not x.get('sample')] if von else []
-    hv = h.get('voices')
-    if ('id="vtr"' in src) != von: fail(f'/: いま話題 block {"missing" if von else "present while VOICES is off"}')
-    if VOICES_D1:
-        if hv: fail('/: HOME voices data embedded in a VOICES_SOURCE=d1 build')
+    # いま話題: the block and where it fetches the latest snapshot from; topics are never embedded
+    if ('id="vtr"' in src) != VOICES_ON: fail(f'/: いま話題 block {"missing" if VOICES_ON else "present while voices are off"}')
+    if 'voices' in h: fail('/: HOME embeds voices data')
+    if VOICES_ON:
         if h.get('voicesApi') != '/api/v1/voices/latest': fail(f'/: HOME voicesApi {h.get("voicesApi")}')
         if [g.get('code') for g in h.get('voiceGames') or []] != voice_games(): fail('/: HOME voiceGames differ from GAMES in src/voices.html')
-    elif 'voicesApi' in h or 'voiceGames' in h: fail('/: HOME voicesApi / voiceGames in a static voices build')
-    elif not von or not real:
-        if hv: fail('/: HOME voices data embedded without a real snapshot / VOICES_ENABLED')
-    elif not hv: fail('/: HOME voices data missing')
-    else:
-        last = real[-1]
-        if hv.get('date') != last['date']: fail(f'/: HOME voices date {hv.get("date")} != latest snapshot {last["date"]}')
-        if [t.get('id') for t in hv.get('topics', [])] != [t['id'] for t in last['topics']]: fail('/: HOME voices topics differ from the latest snapshot')
-        keys = {'id', 'game', 'title', 'summary', 'attitude', 'volume', 'first_seen'}
-        if any(set(t) != keys for t in hv.get('topics', [])): fail('/: HOME voices topics carry other fields than the block needs')
-        if {g.get('code') for g in hv.get('games', [])} != {t['game'] for t in last['topics']}: fail('/: HOME voices games differ from the topics\' games')
-    print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events} voices={len(hv["topics"]) if hv else 0}')
+    elif 'voicesApi' in h or 'voiceGames' in h: fail('/: HOME voicesApi / voiceGames while voices are off')
+    print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events} voices={VOICES_ON}')
 
 
 def check_voices():
-    """/voices/ (contracts/voices.md) exists only with VOICES_ENABLED=1: then it embeds every snapshot in data/voices/
-    (samples only while no real one exists), is noindex and out of the sitemap while sample-only, and every page's tool
-    tabs link it. Off, nothing may mention it."""
-    import glob
-    on = os.environ.get('VOICES_ENABLED', '') == '1'
+    """/voices/ (contracts/voices.md) exists only with voices on: then it embeds no snapshots, only where to fetch them
+    (/api/v1/voices), is indexable, in the sitemap without lastmod (the data is in D1), and every page's tool tabs link
+    it. No topic text or X URL in the built HTML. Off, nothing may mention it."""
     f = os.path.join(DIST, 'voices/index.html')
     pages = glob.glob(os.path.join(DIST, '**/*.html'), recursive=True)
     sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
     privacy = open(os.path.join(DIST, 'privacy/index.html')).read()
-    if not on:
-        if os.path.exists(f): fail('/voices/ built without VOICES_ENABLED=1')
+    if not VOICES_ON:
+        if os.path.exists(os.path.join(DIST, 'voices')): fail('/voices/ built while voices are off')
         for x in pages:
             if 'href="/voices/' in open(x).read(): fail(f'{os.path.relpath(x, DIST)}: links /voices/ while it is off')
         if '/voices/' in sitemap: fail('sitemap: /voices/ listed while it is off')
@@ -305,22 +288,21 @@ def check_voices():
         return
     if not os.path.exists(f): fail('/voices/ missing with VOICES_ENABLED=1'); return
     src = open(f).read()
-    if VOICES_D1: return check_voices_d1(src, sitemap, pages, privacy)
-    snaps = []
-    for x in sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json'))):
-        d = json.load(open(x))
-        snaps.append({'date': d['date'], 'sample': bool(d.get('sample')), 'ids': [t['id'] for t in d['topics']]})
-    if any(not x['sample'] for x in snaps): snaps = [x for x in snaps if not x['sample']]
     m = re.search(r'const V = (\{.*?\});\n', src)
-    if not m: fail('/voices/: embedded data missing'); return
+    if not m: fail('/voices/: embedded V missing'); return
     v = json.loads(m[1])
-    got = [{'date': x['date'], 'sample': x['sample'], 'ids': [t['id'] for t in x['topics']]} for x in v['snapshots']]
-    if got != snaps: fail(f'/voices/: embedded snapshots {[x["date"] for x in got]} != data/voices {[x["date"] for x in snaps]}')
-    sample_only = not snaps or all(x['sample'] for x in snaps)
-    noindex = bool(re.search(r'<meta name="robots" content="noindex">', src))
-    listed = f'<loc>{SITE}/voices/</loc>' in sitemap
-    if noindex != sample_only or listed == sample_only:
-        fail(f'/voices/: sample_only={sample_only} but noindex={noindex} sitemap={listed}')
+    if set(v) != {'counts', 'api'} or v['api'] != '/api/v1/voices': fail(f'/voices/: V has {sorted(v)} api={v.get("api")}')
+    if re.search(r'<meta name="robots" content="noindex">', src): fail('/voices/: noindex')
+    if f'<url><loc>{SITE}/voices/</loc></url>' not in sitemap: fail('sitemap: /voices/ missing (listed without lastmod)')
+    built = [os.path.relpath(x, DIST) for x in glob.glob(os.path.join(DIST, 'voices/*')) if not x.endswith('index.html')]
+    if built: fail(f'/voices/: unexpected files {built[:3]}')
+    # topic text is fetched; the committed snapshots must not leak into the HTML, nor any X URL (official posts included)
+    texts = [t[k] for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) for t in json.load(open(x))['topics'] for k in ('title', 'summary')]
+    leaked = [t for t in texts if t in src or html.escape(t) in src]
+    if leaked: fail(f'/voices/: topic text in the built HTML: {leaked[:2]}')
+    if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail('/voices/: X URL in the built HTML')
+    # owner decision 2026-11-20: no topic links to the players who posted
+    if 'data-x="post"' in src or '関連する投稿' in src: fail('/voices/: the page script links players\' posts')
     pp = PageParser(); pp.feed(src)
     if pp.canonical != SITE + '/voices/': fail(f'/voices/: canonical {pp.canonical}')
     if len(re.findall(r'<h1[ >]', src)) != 1: fail('/voices/: expected one h1')
@@ -328,165 +310,18 @@ def check_voices():
     ogf = og and os.path.join(DIST, og[1].replace(SITE + '/', '', 1))
     if not og or og[1] != SITE + '/og/voices.png' or not os.path.exists(ogf): fail(f'/voices/: og:image {og and og[1]} missing')
     elif open(ogf, 'rb').read(24)[16:24] != (1200).to_bytes(4, 'big') + (630).to_bytes(4, 'big'): fail('/voices/: og image is not 1200x630')
-    # topic text lives in the embedded data (rendered by the page); the static HTML has only the latest real snapshot's
-    # titles in the list below the calendar (owner decision 2026-11-20), linking its archive page
-    static = src.replace(m[0], '') if m else src
-    vl = re.search(r'<section class="vlatest".*?</section>', static, re.S)
-    rest = static.replace(vl[0], '') if vl else static
-    leaked = [t[k] for x in v['snapshots'] for t in x['topics'] for k in ('title', 'summary') if html.escape(t[k]) in rest or t[k] in rest]
-    leaked += [y for x in v['snapshots'] for t in x['topics'] for y in t['voices'] if html.escape(y) in static or y in static]
-    if leaked: fail(f'/voices/: topic text in the static HTML outside the latest list: {leaked[:2]}')
-    if sample_only:
-        if vl: fail('/voices/: latest-topics list while only samples exist')
-    elif not vl: fail('/voices/: latest-topics list missing')
-    else:
-        last = [x for x in v['snapshots'] if x['topics']][-1]
-        order = [c for c in voice_games() if any(t['game'] == c for t in last['topics'])]
-        want = [(f'/voices/{last["date"]}/#topic-{t["id"]}', t['title']) for c in order for t in last['topics'] if t['game'] == c]
-        rows = [(h, html.unescape(re.sub(r'<span class="vlg"[^>]*>.*?</span>', '', a))) for h, a in re.findall(r'<li><a href="([^"]+)">(.*?)</a></li>', vl[0])]
-        if rows != want: fail(f'/voices/: latest list {len(rows)} rows != latest snapshot {len(want)} topics in GAMES order')
-        if f'<a href="/voices/{last["date"]}/">' not in vl[0]: fail('/voices/: latest list heading does not link the archive page')
     if not re.search(r'<nav class="tooltabs"[^>]*>(?:(?!</nav>).)*<a href="/voices/"[^>]*aria-current="true"', src, re.S):
         fail('/voices/: its tool tab is not current')
     for x in pages:
         t = open(x).read()
         if '<nav class="tooltabs"' in t and 'href="/voices/"' not in t: fail(f'{os.path.relpath(x, DIST)}: tool tabs lack /voices/')
     if 'tcg.voices' not in privacy or '話題カレンダー' not in privacy: fail('/privacy/: voices section missing')
-    # owner decision 2026-11-20: no topic links to the players who posted; the only X URLs are the official reacting_to posts
-    official = {t['reacting_to'] for x in v['snapshots'] for t in x['topics'] if t.get('reacting_to')}
-    if any('posts' in t for x in v['snapshots'] for t in x['topics']): fail('/voices/: embedded topics carry player posts')
-    if 'data-x="post"' in src or '関連する投稿' in src: fail('/voices/: the page script still links players\' posts')
-    for u in set(re.findall(r'https?://(?:www\.)?(?:x|twitter)\.com/[^"\s<>\\]+', src)) - official:
-        fail(f'/voices/: X URL that is not a topic\'s official reacting_to post {u}')
-    for u in official:
-        if not re.fullmatch(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}', u): fail(f'/voices/: odd reacting_to URL {u}')
-    print(f'  /voices/     snapshots={len(got)} topics={sum(len(x["ids"]) for x in got)} sample_only={sample_only}')
-    check_voice_days(sitemap)
-
-
-def check_voices_d1(src, sitemap, pages, privacy):
-    """VOICES_SOURCE=d1: /voices/ embeds no snapshots and fetches /api/v1/voices; indexable and in the sitemap without
-    lastmod; no archive pages, no archive URLs, no latest list and no topic text or X URL in the built HTML."""
-    m = re.search(r'const V = (\{.*?\});\n', src)
-    if not m: fail('/voices/: embedded V missing'); return
-    v = json.loads(m[1])
-    if v.get('snapshots') is not None or v.get('api') != '/api/v1/voices': fail(f'/voices/: d1 build embeds snapshots={v.get("snapshots") is not None} api={v.get("api")}')
-    if re.search(r'<meta name="robots" content="noindex">', src): fail('/voices/: noindex in a d1 build (D1 never holds samples)')
-    if f'<url><loc>{SITE}/voices/</loc></url>' not in sitemap: fail('sitemap: /voices/ missing (d1 build: listed without lastmod)')
-    if re.search(re.escape(SITE) + r'/voices/\d', sitemap): fail('sitemap: archive URLs in a d1 build')
-    built = glob.glob(os.path.join(DIST, 'voices/*/index.html'))
-    if built: fail(f'/voices/<date>/: {len(built)} archive pages in a d1 build')
-    if '<section class="vlatest"' in src: fail('/voices/: latest-topics list in a d1 build')
-    for x in pages:
-        if re.search(r'href="/voices/\d', open(x).read()): fail(f'{os.path.relpath(x, DIST)}: links an archive page in a d1 build')
-    texts = [t[k] for f in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) for t in json.load(open(f))['topics'] for k in ('title', 'summary')]
-    leaked = [t for t in texts if t in src or html.escape(t) in src]
-    if leaked: fail(f'/voices/: topic text in a d1 build: {leaked[:2]}')
-    if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail('/voices/: X URL in a d1 build')
-    pp = PageParser(); pp.feed(src)
-    if pp.canonical != SITE + '/voices/': fail(f'/voices/: canonical {pp.canonical}')
-    if len(re.findall(r'<h1[ >]', src)) != 1: fail('/voices/: expected one h1')
-    if not re.search(r'<nav class="tooltabs"[^>]*>(?:(?!</nav>).)*<a href="/voices/"[^>]*aria-current="true"', src, re.S):
-        fail('/voices/: its tool tab is not current')
-    if 'tcg.voices' not in privacy or '話題カレンダー' not in privacy: fail('/privacy/: voices section missing')
-    print('  /voices/     d1 build: snapshots from /api/v1/voices, no archive pages')
+    print('  /voices/     snapshots from /api/v1/voices')
 
 
 def voice_games():
     src = open(os.path.join(ROOT, 'src/voices.html')).read()
     return re.findall(r"\{code:'([A-Z]+)'", src.split('const GAMES = [', 1)[1].split('];', 1)[0])
-
-
-def check_voice_days(sitemap):
-    """/voices/<date>/ (owner decision 2026-11-20): one indexable archive page per real snapshot and none for samples;
-    the snapshot's topics in GAMES order with our own text only (no post text, no embeds), X links nofollow, canonical,
-    BreadcrumbList as the only JSON-LD, prev/next between snapshots, in the sitemap dated by the snapshot."""
-    files = sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json')))
-    snaps = [json.load(open(x)) for x in files]
-    real = sorted((x for x in snaps if not x.get('sample') and x['topics']), key=lambda x: x['date'])
-    built = sorted(os.path.basename(os.path.dirname(x)) for x in glob.glob(os.path.join(DIST, 'voices/*/index.html')))
-    if built != [x['date'] for x in real]: fail(f'/voices/<date>/: pages {built} != real snapshots with topics {[x["date"] for x in real]}')
-    for loc in re.findall(re.escape(SITE) + r'/voices/(\d{4}-\d{2}-\d{2})/</loc>', sitemap):
-        if loc not in built: fail(f'sitemap: /voices/{loc}/ listed without a page')
-    for x in snaps:
-        if x.get('sample') and os.path.exists(os.path.join(DIST, 'voices', x['date'])): fail(f'/voices/{x["date"]}/: archive page for a sample snapshot')
-    games = voice_games()
-    titles = collections.Counter()
-    for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True):
-        t = re.search(r'<title>(.*?)</title>', open(f).read())
-        if t: titles[t[1]] += 1
-    for i, s in enumerate(real):
-        d = s['date']; p = f'/voices/{d}/'; url = SITE + p
-        f = os.path.join(DIST, 'voices', d, 'index.html')
-        if not os.path.exists(f): continue
-        src = open(f).read()
-        pp = PageParser(); pp.feed(src)
-        if pp.canonical != url: fail(f'{p}: canonical {pp.canonical}')
-        if re.search(r'<meta name="robots"[^>]*noindex', src): fail(f'{p}: noindex')
-        if f'<url><loc>{url}</loc><lastmod>{d}</lastmod></url>' not in sitemap: fail(f'sitemap: {p} missing or not dated {d}')
-        title = re.search(r'<title>(.*?)</title>', src)
-        if not title or titles[title[1]] != 1: fail(f'{p}: <title> missing or not unique: {title and title[1]}')
-        desc = re.search(r'<meta name="description" content="([^"]+)"', src)
-        if not desc or not any(html.escape(t['title']) in desc[1] for t in s['topics']): fail(f'{p}: description lacks a topic title')
-        og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
-        if not og or og[1] != SITE + '/og/voices.png': fail(f'{p}: og:image {og and og[1]}')
-        if len(re.findall(r'<h1[ >]', src)) != 1: fail(f'{p}: expected one h1')
-        blocks = []
-        for raw in pp.ld:
-            try: blocks.append(json.loads(raw))
-            except ValueError as e: fail(f'{p}: JSON-LD does not parse: {e}')
-        bad = []
-        for k, blk in enumerate(blocks): walk(blk, f'ld[{k}]', bad)
-        if bad: fail(f'{p}: forbidden structured data {bad[0]}')
-        if [b.get('@type') for b in blocks] != ['BreadcrumbList']: fail(f'{p}: JSON-LD should be one BreadcrumbList, got {[b.get("@type") for b in blocks]}')
-        else:
-            el = blocks[0]['itemListElement']
-            if [e.get('position') for e in el] != list(range(1, len(el) + 1)) or [e.get('item') for e in el] != [SITE + '/', SITE + '/voices/', url]:
-                fail(f'{p}: BreadcrumbList {[e.get("item") for e in el]}')
-            crumbs = re.search(r'<nav class="crumbs"[^>]*>(.*?)</nav>', src, re.S)
-            if not crumbs or [html.unescape(re.sub(r'<[^>]+>', '', c)).strip() for c in crumbs[1].split(' › ')] != [e.get('name') for e in el]:
-                fail(f'{p}: visible breadcrumbs differ from the BreadcrumbList')
-        # topics: every one of the snapshot, grouped by game in GAMES order, snapshot order inside a game
-        want = [t['id'] for c in games for t in s['topics'] if t['game'] == c]
-        got = re.findall(r'<article class="tc"[^>]* id="topic-([a-z0-9-]+)"', src)
-        if got != want: fail(f'{p}: {len(got)} topic cards != {len(want)} in GAMES order')
-        secs = re.findall(r'<section class="vgsec" id="g-([A-Z]+)"', src)
-        if secs != [c for c in games if any(t['game'] == c for t in s['topics'])]: fail(f'{p}: game sections {secs}')
-        # no post text: no quotes or embeds; the only X URLs are the topics' official reacting_to posts, labelled by us
-        if re.search(r'<blockquote|twitter-tweet|platform\.twitter\.com|publish\.twitter\.com|<iframe', src): fail(f'{p}: quote or X embed')
-        allowed = {t['reacting_to'] for t in s['topics'] if t['reacting_to']}
-        for u in set(re.findall(r'https?://(?:www\.)?(?:x|twitter)\.com/[^"\s<>]+', src)) - allowed: fail(f'{p}: X URL that is not a reacting_to post {u}'); break
-        if 'data-x="post"' in src or '関連する投稿' in src: fail(f'{p}: links to players\' posts')
-        for a, h, body in re.findall(r'(<a [^>]*href="(https://(?:x|twitter)\.com/[^"]*)"[^>]*>)(.*?)</a>', src):
-            rel = (re.search(r'rel="([^"]*)"', a) or [None, ''])[1].split()
-            if h not in allowed: fail(f'{p}: X link not from the data {h}'); break
-            if not {'nofollow', 'noopener'} <= set(rel) or 'target="_blank"' not in a: fail(f'{p}: X link rel {rel}'); break
-            if re.sub(r'<[^>]+>', '', body).strip() != '反応元の公式投稿 ↗（外部サイト・X）': fail(f'{p}: X link text {body[:40]!r}'); break
-        for t in s['topics']:
-            card = re.search(rf'<article class="tc"[^>]* id="topic-{t["id"]}".*?</article>', src, re.S)
-            if not card: continue
-            c = card[0]
-            texts = [html.unescape(x) for x in re.findall(r'<li><span aria-hidden="true">💬 </span>(.*?)</li>', c)]
-            if texts != t['voices']: fail(f'{p}: {t["id"]} voices differ from the data'); continue
-            if html.escape(t['summary']) not in c or html.escape(t['title']) not in c: fail(f'{p}: {t["id"]} title / summary missing')
-            if f'href="/voices/#t={t["id"]}"' not in c: fail(f'{p}: {t["id"]} lacks its /voices/#t= link')
-            # the tag is what card() in src/voices.html emits: the shared game icon (gi), then the name
-            tag = re.search(r'<span class="tag">(<img class="gi" src="/gi/[a-z0-9]+\.(?:png|svg)" width="16" height="16" alt="" aria-hidden="true">|<span class="gi" aria-hidden="true">[^<]+</span>)([^<]+)</span>', c)
-            if not tag: fail(f'{p}: {t["id"]} tag without the game icon')
-            n = sum(t['share'].values())
-            pct = [int(x) for x in re.findall(r'約(\d+)%', re.search(r'<span class="alg"[^>]*>(.*?)</span></div>', c, re.S)[1])] if 'class="alg"' in c else []
-            if (n < 5) != ('data-small' in c) or (n < 5 and ('%' in c or 'class="abar"' in c)): fail(f'{p}: {t["id"]} small-sample rule (n={n})')
-            if n >= 5 and sum(pct) != 100: fail(f'{p}: {t["id"]} shares add up to {sum(pct)}%')
-            if n >= 5 and any(x % 10 for x in pct): fail(f'{p}: {t["id"]} shares not in 10% steps')
-            if re.search(r'"(positive|negative|neutral)":\s*\d', c) or re.search(r'\b\d+\s*件の投稿', c): fail(f'{p}: {t["id"]} shows post counts')
-        if f'href="/voices/#d={d}"' not in src: fail(f'{p}: no link to the day on /voices/')
-        prev = real[i - 1]['date'] if i else None
-        nxt = real[i + 1]['date'] if i + 1 < len(real) else None
-        for rel, other in (('prev', prev), ('next', nxt)):
-            has = re.findall(rf'<a (?:class="[^"]*" )?href="(/voices/[\d-]+/)" rel="{rel}">', src)
-            if has != ([f'/voices/{other}/'] * 2 if other else []): fail(f'{p}: {rel} links {has}, expected {other}')
-        if 'href="/voices/"' not in src: fail(f'{p}: no link back to /voices/')
-        print(f'  {p:<22} topics={len(got)} games={len(secs)} prev={prev} next={nxt}')
 
 
 def check_items(head, ov, arch, calendar_pages):
@@ -633,11 +468,6 @@ def check_dist(today, head, ov, arch):
     for loc, lm in re.findall(r'<loc>(.*?)</loc><lastmod>(.*?)</lastmod>', sitemap):
         if loc == SITE + '/privacy/':  # dated by the policy's effective date in build.py, not by the data
             if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', lm) or lm > today: fail(f'sitemap: /privacy/ lastmod {lm}')
-        elif loc == SITE + '/voices/':  # dated by the newest real snapshot, not by the release data
-            real = [json.load(open(x))['date'] for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) if not json.load(open(x)).get('sample')]
-            if lm != max(real, default=None): fail(f'sitemap: /voices/ lastmod {lm} != newest snapshot {max(real, default=None)}')
-        elif re.fullmatch(re.escape(SITE) + r'/voices/\d{4}-\d{2}-\d{2}/', loc):  # archive pages: checked in check_voice_days
-            pass
         elif lm != want_lastmod.get(loc, meta['updated']):
             fail(f'sitemap: {loc} lastmod {lm} != {want_lastmod.get(loc, meta["updated"])} ({"newest changed of its items" if loc in want_lastmod else "meta.updated"})')
         if lm > today: fail(f'sitemap: {loc} lastmod {lm} is after {today}')

@@ -10,9 +10,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const DIST = path.join(ROOT, 'dist');
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const TODAY = arg('--today', new Date().toISOString().slice(0, 10));
+// /api/v1/voices as the Worker answers it after importing data/voices/ (samples and empty snapshots are never imported);
+// the server below serves it, so /voices/ and the home block work without the Worker (voices-d1.mjs runs the real one)
+const VOICE_SNAPS = fs.existsSync(path.join(ROOT, 'data/voices')) ? fs.readdirSync(path.join(ROOT, 'data/voices')).filter(f => f.endsWith('.json')).sort()
+  .map(f => JSON.parse(fs.readFileSync(path.join(ROOT, 'data/voices', f), 'utf8'))).filter(s => !s.sample && s.topics.length)
+  .map(s => ({ date: s.date, window: s.window, topics: s.topics })) : [];
+const VOICES_API = { '/api/v1/voices': { version: 'local', snapshots: VOICE_SNAPS }, '/api/v1/voices/latest': { version: 'local', snapshot: VOICE_SNAPS.at(-1) || null } };
+// page stubs of the events API leave the voices endpoints to the server
+const EVENTS_API = u => u.pathname.startsWith('/api/v1/') && !VOICES_API[u.pathname];
 // the official posts the voices snapshots react to: the only X links /voices/ may show
-const OFFICIAL_X = new Set(fs.existsSync(path.join(ROOT, 'data/voices')) ? fs.readdirSync(path.join(ROOT, 'data/voices')).filter(f => f.endsWith('.json'))
-  .flatMap(f => JSON.parse(fs.readFileSync(path.join(ROOT, 'data/voices', f), 'utf8')).topics.map(t => t.reacting_to).filter(Boolean)) : []);
+const OFFICIAL_X = new Set(VOICE_SNAPS.flatMap(s => s.topics.map(t => t.reacting_to).filter(Boolean)));
 const OUT = path.resolve(ROOT, arg('--out', '.verify'));
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
@@ -21,6 +28,7 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  if (VOICES_API[p]) { res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(VOICES_API[p])); return; }
   let f = path.join(DIST, p);
   if (!f.startsWith(DIST)) { res.writeHead(403).end(); return; }
   if (fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, 'index.html');
@@ -46,13 +54,8 @@ const fail = (where, msg) => fails.push(`${where}: ${msg}`);
 const HAS_FEEDBACK = fs.existsSync(path.join(DIST, 'feedback/index.html'));
 // BUILD_EVENTS=0 builds have no /events/ and no tool tabs
 const HAS_EVENTS = fs.existsSync(path.join(DIST, 'events/index.html'));
-// /voices/ and the home page's いま話題 block: VOICES_ENABLED=1 builds only
+// /voices/ and the home page's いま話題 block: VOICES_ENABLED=1 Worker builds only
 const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
-// VOICES_SOURCE=d1 builds read the snapshots from the Worker: tools/verify/voices-d1.mjs checks them
-if (HAS_VOICES && fs.readFileSync(path.join(DIST, 'voices/index.html'), 'utf8').includes('const V = {"snapshots": null')) {
-  console.error('browser.mjs: dist/ is a VOICES_SOURCE=d1 build; this script checks static builds (use tools/verify/voices-d1.mjs)');
-  process.exit(2);
-}
 const TURNSTILE_STUB = `window.turnstile={_o:null,_n:0,
   render(el,o){this._o=o;setTimeout(()=>o.callback('tok-'+(++this._n)),0);return 'w1';},
   reset(){window.__tsResets=(window.__tsResets||0)+1;setTimeout(()=>this._o.callback('tok-'+(++this._n)),0);}};
@@ -277,7 +280,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const evt = (i, code, hh, day = TODAY) => ({ id: `${code}${i}`, name: `テスト大会 ${code} ${i + 1}`, game_code: code, game_codes: [code],
     starts_on: day, time_precision: 'datetime', starts_at: `${day}T${String(hh).padStart(2, '0')}:00:00+09:00`, timezone: 'Asia/Tokyo',
     attendance_mode: 'offline', venue: { name: `テスト店 ${i + 1}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
-  await page.route('**/api/v1/**', route => {
+  await page.route(EVENTS_API, route => {
     const u = new URL(route.request().url());
     api.push(u.pathname + u.search);
     if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [],
@@ -398,7 +401,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
 }
 // / いま話題 (VOICES_ENABLED=1 builds only): the latest snapshot's topics, at most 5 rows and 2 per game unless one game
 // is shown; read only: games from the /voices/ saved filter (tcg.voices), else the /events/ one, kept to games with
-// topics, else all; nothing written. Hidden once the snapshot is more than 7 days old. No API calls without a location.
+// topics, else all; nothing written. Hidden once the snapshot is more than 7 days old. Without a location the only API
+// calls are the voices endpoints (/voices/latest, and /voices once a row opens /voices/).
 for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   const where = `${vp} / いま話題`;
   const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
@@ -421,8 +425,10 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
   try {
     await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
-    const HV = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]).voices);
-    if (!HV) throw new Error('no embedded voices data');
+    const H = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]));
+    const last = VOICE_SNAPS.at(-1);
+    if (!last) throw new Error('no voices snapshot in data/voices/');
+    const HV = { date: last.date, topics: last.topics, games: (H.voiceGames || []).filter(g => last.topics.some(t => t.game === g.code)) };
     const byId = Object.fromEntries(HV.topics.map(t => [t.id, t]));
     const short = Object.fromEntries(HV.games.map(g => [g.code, g.short || g.name]));
     const W = { high: 3, mid: 2, low: 1 };
@@ -491,7 +497,8 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (!(await stale.locator('#vtr').isVisible())) fail(where, 'hidden with a snapshot 7 days old');
     await stale.close();
   } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
-  if (api.length) fail(where, `API called: ${api.join(' ')}`);
+  const other = api.filter(u => !VOICES_API[new URL(u).pathname]);
+  if (other.length) fail(where, `API called: ${other.join(' ')}`);
   for (const b of [...new Set(bad)]) fail(where, b);
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
@@ -508,10 +515,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const bad = [], api = [];
   page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
-  page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
+  page.on('request', r => { if (r.url().includes('/api/') && !VOICES_API[new URL(r.url()).pathname]) api.push(r.url()); });
   // tomorrow: OPCG 2 + PTCG 1 events, the day after: PTCG 4; the saved game filter applies as on the API
   const WEEK2 = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 2 * 864e5).toISOString().slice(0, 10);
-  await page.route('**/api/v1/**', route => {
+  await page.route(EVENTS_API, route => {
     const u = new URL(route.request().url()), gf = (u.searchParams.get('game') || '').split(',').filter(Boolean);
     if (!u.pathname.endsWith('/days')) return route.fulfill({ json: { events: [], next_cursor: null } });
     const days = [[WEEK1, { OPCG: 2, PTCG: 1 }], [WEEK2, { PTCG: 4 }]].map(([date, bg]) => {
@@ -618,7 +625,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (HAS_EVENTS && HAS_VOICES && code2) {
       const p2 = await ctx.newPage();
       await p2.clock.setFixedTime(new Date(`${end}T12:00:00+09:00`));
-      await p2.route('**/api/v1/**', r => r.fulfill({ json: { days: [], events: [], next_cursor: null } }));
+      await p2.route(EVENTS_API, r => r.fulfill({ json: { days: [], events: [], next_cursor: null } }));
       for (const [g, want] of [[code2, `game=${code2}&`], [[code2, code2 === 'PTCG' ? 'OPCG' : 'PTCG'].join(','), null]]) {
         await p2.goto(`${BASE}/`, { waitUntil: 'load' });
         await p2.evaluate(g => { localStorage.clear(); localStorage.setItem('tcg.voices', JSON.stringify({ game: g })); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); }, g);
@@ -656,7 +663,7 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
   page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
   page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
   const until = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 92 * 864e5).toISOString().slice(0, 10);
-  await page.route('**/api/v1/**', route => {
+  await page.route(EVENTS_API, route => {
     const u = new URL(route.request().url());
     if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [{ code: 'OPCG', record_count: 7, complete: true,
       fetched_at: `${TODAY}T06:00:00+09:00`, window: { from: TODAY, until } }], types: [], prefectures: [{ code: 'JP-13', count: 7 }] } });
@@ -837,9 +844,9 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
   }
   console.log(`  /item/ archived       ${arch.length} pages`);
 }
-// /voices/ (VOICES_ENABLED=1 builds only): the embedded snapshots on the calendar (a chip per game on desktop, bars when
-// one game is selected, a dot per game on phones) on the right days, the day, game and topic dialogs, the list view,
-// the filters and safe X links; shares that add up to 100%, one freshness line per snapshot, the dialog in the URL hash
+// /voices/ (VOICES_ENABLED=1 builds only): the snapshots of /api/v1/voices (VOICE_SNAPS) on the calendar (a chip per
+// game on desktop, bars when one game is selected, a dot per game on phones) on the right days, the day, game and topic
+// dialogs, the list view and its この日のまとめ links, the filters and safe X links; shares that add up to 100%, one freshness line per snapshot, the dialog in the URL hash
 // and the copied topic link, 🆕 only with an older snapshot, one tab stop per day.
 for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   const where = `${vp} /voices/`;
@@ -855,9 +862,9 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
   const narrow = opt.width <= 760;
   // topics per day as the page should show them: first_seen .. the last snapshot listing the id
-  const expect = filter => page.evaluate(f => {
+  const expect = filter => page.evaluate(([f, snaps]) => {
     const tp = new Map();
-    [...V.snapshots].sort((a, b) => a.date < b.date ? -1 : 1).forEach(s => s.topics.forEach(t => {
+    [...snaps].sort((a, b) => a.date < b.date ? -1 : 1).forEach(s => s.topics.forEach(t => {
       const x = tp.get(t.id) || { id: t.id, game: t.game, first: t.first_seen, att: t.attitude }; x.last = s.date; x.att = t.attitude;
       if (t.first_seen < x.first) x.first = t.first_seen; tp.set(t.id, x); }));
     const out = {};
@@ -866,7 +873,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
       for (let d = x.first; d <= x.last; d = new Date(Date.parse(d + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10)) (out[d] ||= []).push(x);
     }
     return out;
-  }, filter || {});
+  }, [filter || {}, VOICE_SNAPS]);
   // per day: the visible game marks (chips / dots) as [game, topic count], or the number of bars covering it
   const shown = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.vd[data-day]')].map(b => [b.dataset.day,
     [...b.querySelectorAll('.vchip,.vg')].filter(e => e.offsetParent).map(e => [e.dataset.game || '', +(e.querySelector('.vn')?.textContent || 1)])])));
@@ -891,11 +898,11 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     const extra = Object.keys(got).filter(d => !want[d]);
     if (extra.length) fail(where, `days with topics that have none: ${extra.join(' ')}`);
     // freshness: one entry for the snapshot most titles share, plus one per title on another snapshot
-    const fr = await page.evaluate(() => {
-      const last = {}; [...V.snapshots].sort((a, b) => a.date < b.date ? -1 : 1).forEach(s => s.topics.forEach(t => last[t.game] = s.date));
+    const fr = await page.evaluate(snaps => {
+      const last = {}; [...snaps].sort((a, b) => a.date < b.date ? -1 : 1).forEach(s => s.topics.forEach(t => last[t.game] = s.date));
       const n = {}; Object.values(last).forEach(d => n[d] = (n[d] || 0) + 1);
-      return { want: 1 + Object.values(last).length - Math.max(...Object.values(n)), got: document.querySelectorAll('#fresh .frl>span:not(.lab):not(.smp)').length };
-    });
+      return { want: 1 + Object.values(last).length - Math.max(...Object.values(n)), got: document.querySelectorAll('#fresh .frl>span:not(.lab)').length };
+    }, VOICE_SNAPS);
     if (fr.got !== fr.want) fail(where, `freshness line has ${fr.got} entries, expected ${fr.want}`);
     // keyboard: one tab stop per day with topics (chips and bars are mouse / touch shortcuts)
     const stops = await page.evaluate(() => ({ n: [...document.querySelectorAll('#calv button, #calv a, #calv [tabindex]')].filter(e => e.tabIndex >= 0 && e.offsetParent).length,
@@ -996,22 +1003,24 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     await page.screenshot({ path: path.join(OUT, `${vp}-voices.png`), fullPage: true });
     // list view: snapshots newest first, every topic once per snapshot
     await page.locator('#vList').click();
-    const li = await page.evaluate(() => ({ heads: [...document.querySelectorAll('#list .vsnap')].map(s => s.getAttribute('aria-labelledby').slice(2)),
+    const li = await page.evaluate(snaps => ({ heads: [...document.querySelectorAll('#list .vsnap')].map(s => s.getAttribute('aria-labelledby').slice(2)),
       cards: document.querySelectorAll('#list .tc').length, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      want: [...V.snapshots].filter(s => s.topics.length).map(s => s.date).sort().reverse(), n: V.snapshots.reduce((t, s) => t + s.topics.length, 0) }));
+      want: [...snaps].filter(s => s.topics.length).map(s => s.date).sort().reverse(), n: snaps.reduce((t, s) => t + s.topics.length, 0) }), VOICE_SNAPS);
     if (JSON.stringify(li.heads) !== JSON.stringify(li.want) || li.cards !== li.n) fail(where, `list ${JSON.stringify(li)}`);
     if (li.overflow > 1) fail(where, `list scrolls horizontally by ${li.overflow}px`);
+    const sl = await page.evaluate(() => [...document.querySelectorAll('#list .vsl')].map(a => a.getAttribute('href')));
+    if (JSON.stringify(sl) !== JSON.stringify(li.want.map(d => `/voices/#d=${d}`))) fail(where, `この日のまとめ links ${JSON.stringify(sl)}`);
     // shares in 10% steps adding up to 100% on every card; 🆕 only once an older snapshot exists
     // (cards on fewer than 5 posts: no bar, no percentages, a tendency phrase)
     const sh = await page.evaluate(() => [...document.querySelectorAll('#list .tc .att:not([data-small]) .alg')].map(a => [...a.children].reduce((t, x) => t + (+(/約(\d+)%/.exec(x.textContent) || [0, 0])[1]), 0)));
     if (sh.some(n => n !== 100)) fail(where, `share labels add up to ${[...new Set(sh.filter(n => n !== 100))].join('/')}%`);
-    const sm = await page.evaluate(() => [...document.querySelectorAll('#list .vsnap')].flatMap(sec => {
-      const snap = V.snapshots.find(x => x.date === sec.getAttribute('aria-labelledby').slice(2));
+    const sm = await page.evaluate(snaps => [...document.querySelectorAll('#list .vsnap')].flatMap(sec => {
+      const snap = snaps.find(x => x.date === sec.getAttribute('aria-labelledby').slice(2));
       return [...sec.querySelectorAll('.tc')].map(tc => { const t = snap.topics.find(x => x.id === tc.dataset.topic), n = t.share.positive + t.share.negative + t.share.neutral;
         const small = !!tc.querySelector('.att[data-small]'), pct = /\d+%/.test(tc.querySelector('.att').textContent) || !!tc.querySelector('.abar');
-        return (n < 5) !== small || (small && pct) ? `${t.id} n=${n} small=${small} pct=${pct}` : ''; }).filter(Boolean); }));
+        return (n < 5) !== small || (small && pct) ? `${t.id} n=${n} small=${small} pct=${pct}` : ''; }).filter(Boolean); }), VOICE_SNAPS);
     if (sm.length) fail(where, `small-sample cards: ${sm.slice(0, 3).join(', ')}`);
-    if (await page.evaluate(() => V.snapshots.length === 1 && document.querySelectorAll('.badge.new').length)) fail(where, '🆕 shown with a single snapshot');
+    if (VOICE_SNAPS.length === 1 && await page.locator('.badge.new').count()) fail(where, '🆕 shown with a single snapshot');
     await page.screenshot({ path: path.join(OUT, `${vp}-voices-list.png`), fullPage: true });
     // deep links: a real day opens its dialog, an impossible date is ignored
     for (const [i, [h, open]] of [[`#d=${d0}`, true], ['#d=2026-02-31', false], ['#d=2026-13-01', false]].entries()) {
@@ -1021,86 +1030,11 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     }
     await page.goto(`${BASE}/voices/#t=${t0}`, { waitUntil: 'networkidle' });
     if (await page.locator('#vBody .tc').count() !== 1 || await page.locator('#vBody .tc').getAttribute('data-topic') !== t0) fail(where, `copied link #t=${t0} did not open its topic`);
-    if (api.length) fail(where, `API requests from a static page: ${api.join(' ')}`);
+    const other = api.filter(u => new URL(u).pathname !== '/api/v1/voices');
+    if (other.length) fail(where, `API requests other than /api/v1/voices: ${other.join(' ')}`);
   } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
   for (const b of [...new Set(bad)]) fail(where, b);
   console.log(`  ${where.padEnd(22)} checked`);
-  await ctx.close();
-}
-// /voices/<date>/ archive pages (one per real snapshot): static cards like /voices/ (shares adding up to 100%, the
-// small-sample rule), nofollow X links, no script errors or API calls, no horizontal scroll; the /voices/ latest list
-// points at cards that exist; the 🔗 to /voices/#t= opens that topic there.
-const VOICE_DAYS = HAS_VOICES ? fs.readdirSync(path.join(DIST, 'voices')).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort() : [];
-for (const [vp, opt] of VOICE_DAYS.length ? Object.entries(VIEWPORTS) : []) {
-  const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
-    hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
-  for (const d of VOICE_DAYS) {
-    const where = `${vp} /voices/${d}/`;
-    const page = await ctx.newPage();
-    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
-    const bad = [], api = [];
-    page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
-    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
-    page.on('request', r => { if (r.url().includes('/api/')) api.push(r.url()); });
-    page.on('response', r => { if (r.url().startsWith(BASE) && r.status() >= 400) bad.push(`HTTP ${r.status()}: ${r.url().slice(BASE.length)}`); });
-    try {
-      const res = await page.goto(`${BASE}/voices/${d}/`, { waitUntil: 'networkidle' });
-      if (!res || res.status() !== 200) fail(where, `status ${res && res.status()}`);
-      const hdr = await headerProblem(page, opt.width);
-      if (hdr) fail(where, hdr);
-      const snap = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/voices', `${d}.json`), 'utf8'));
-      const st = await page.evaluate(() => ({
-        cards: [...document.querySelectorAll('article.tc')].map(e => e.dataset.topic),
-        visible: [...document.querySelectorAll('article.tc')].filter(e => e.offsetParent).length,
-        h1: [...document.querySelectorAll('h1')].map(h => h.textContent),
-        links: [...document.querySelectorAll('a[data-x]')].map(a => [a.href, a.target, a.rel]),
-        xa: [...document.querySelectorAll('a')].filter(a => /^https?:\/\/(www\.)?(x|twitter)\.com\//.test(a.href)).map(a => [a.href, a.dataset.x, a.textContent]),
-        players: document.body.textContent.includes('関連する投稿'),
-        shares: [...document.querySelectorAll('.tc .att:not([data-small]) .alg')].map(a => [...a.children].reduce((t, x) => t + (+(/約(\d+)%/.exec(x.textContent) || [0, 0])[1]), 0)),
-        smallPct: [...document.querySelectorAll('.tc .att[data-small]')].filter(a => /\d+%/.test(a.textContent) || a.querySelector('.abar')).length,
-        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        wide: [...document.querySelectorAll('main *')].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1).map(e => e.className || e.tagName).slice(0, 3),
-        scripts: [...document.scripts].filter(s => !s.type || s.type === 'text/javascript').length,
-        tags: [...new Set([...document.querySelectorAll('.tc .tag')].map(e => e.innerHTML))],
-        icons: [...document.querySelectorAll('.tc .tag .gi, .vtoc .gi, .vgsec h2 .gi')].filter(e => !e.getBoundingClientRect().width).length }));
-      if (st.icons) fail(where, `${st.icons} game icons not rendered`);
-      if (st.cards.length !== snap.topics.length || st.visible !== st.cards.length) fail(where, `${st.cards.length} cards (${st.visible} visible), expected ${snap.topics.length}`);
-      if (st.h1.length !== 1 || !st.h1[0].includes('のTCG話題まとめ')) fail(where, `h1 ${JSON.stringify(st.h1)}`);
-      if (st.links.some(([h, t, r]) => !/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(h) || t !== '_blank' || !/nofollow/.test(r) || !/noopener/.test(r))) fail(where, `unsafe X links ${JSON.stringify(st.links.slice(0, 2))}`);
-      const ownX = new Set(snap.topics.map(t => t.reacting_to).filter(Boolean));
-      if (st.players || st.xa.some(([h, k, txt]) => k !== 'reacting' || !txt.startsWith('反応元の公式投稿') || !ownX.has(h))) fail(where, `links players' posts ${JSON.stringify(st.xa.slice(0, 2))}`);
-      if (st.shares.some(n => n !== 100)) fail(where, `share labels add up to ${[...new Set(st.shares.filter(n => n !== 100))].join('/')}%`);
-      if (st.smallPct) fail(where, `${st.smallPct} small-sample cards show percentages`);
-      if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px (${st.wide.join(', ')})`);
-      if (api.length) fail(where, `API requests ${api.join(' ')}`);
-      await page.screenshot({ path: path.join(OUT, `${vp}-voices-${d}.png`), fullPage: true });
-      // a title chip jumps to its game section; a card's カレンダーで見る opens the topic on /voices/
-      const toc = page.locator('.vtoc a').nth(1);
-      if (await toc.count()) { const h = await toc.getAttribute('href'); await toc.click(); if (await page.evaluate(() => location.hash) !== h) fail(where, `toc ${h}`); }
-      const first = st.cards[0];
-      await page.locator(`#topic-${first} a.vopen`).click();
-      await page.waitForURL(u => u.pathname === '/voices/');
-      await page.locator('#vDlg[open]').waitFor();
-      if (await page.locator('#vBody .tc').getAttribute('data-topic') !== first) fail(where, `カレンダーで見る did not open ${first}`);
-      // card tags as the /voices/ card() draws them: gi(name) + name
-      const jsTags = await page.evaluate(() => GAMES.map(g => { const e = document.createElement('span'); e.innerHTML = `${gi(g.name)}${esc(g.name)}`; return e.innerHTML; }));
-      const odd = st.tags.filter(t => !jsTags.includes(t));
-      if (odd.length) fail(where, `card tags differ from /voices/ card(): ${odd[0]}`);
-      // /voices/: the latest list links cards on the latest archive page, the list view links each archive page
-      if (d === VOICE_DAYS.at(-1)) {
-        const rows = await page.evaluate(() => [...document.querySelectorAll('.vlatest li a')].map(a => a.getAttribute('href')));
-        const want = st.cards.map(id => `/voices/${d}/#topic-${id}`);
-        if (JSON.stringify([...rows].sort()) !== JSON.stringify([...want].sort())) fail(where, `/voices/ latest list ${rows.length} rows, expected ${want.length}`);
-        if (await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) > 1) fail(where, '/voices/ with the latest list scrolls horizontally');
-        await page.goto(`${BASE}/voices/?view=list`, { waitUntil: 'networkidle' });
-        const sl = await page.evaluate(() => [...document.querySelectorAll('#list .vsl')].map(a => a.getAttribute('href')));
-        if (JSON.stringify(sl) !== JSON.stringify(VOICE_DAYS.map(x => `/voices/${x}/`).reverse())) fail(where, `list view archive links ${JSON.stringify(sl)}`);
-      }
-    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
-    for (const b of [...new Set(bad)]) fail(where, b);
-    console.log(`  ${where.padEnd(22)} checked`);
-    await page.close();
-  }
   await ctx.close();
 }
 // /events/ list at 20:00 with 100 started and 30 upcoming events today (50 per page): the list loads today's pages by
@@ -1122,7 +1056,7 @@ async function eventsPage(vp, n, mk, delay = 0) {
   const until = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 92 * 864e5).toISOString().slice(0, 10);
   const evs = Array.from({ length: n }, (_, i) => mk(i));
   await page.route('https://maps.googleapis.com/**', r => r.fulfill({ contentType: 'text/javascript', body: GSTUB }));
-  await page.route('**/api/v1/**', async route => {
+  await page.route(EVENTS_API, async route => {
     const u = new URL(route.request().url());
     if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [{ code: 'OPCG', record_count: n, complete: true,
       fetched_at: `${TODAY}T06:00:00+09:00`, window: { from: TODAY, until } }], types: [], prefectures: [{ code: 'JP-13', count: n }] } });
@@ -1217,7 +1151,7 @@ if (HAS_EVENTS) {
     // extra: what /days claims beyond the loaded rows (the home check's columns have more than one page holds)
     let extra = 0, nobg = false;
     await page.route('https://maps.googleapis.com/**', r => r.fulfill({ contentType: 'text/javascript', body: GSTUB }));
-    await page.route('**/api/v1/**', route => {
+    await page.route(EVENTS_API, route => {
       const u = new URL(route.request().url()), g = u.searchParams.get('game');
       const evs = REVS.filter(e => !g || g.split(',').includes(e.game_code));
       const bg = {}; evs.forEach(e => bg[e.game_code] = (bg[e.game_code] || 0) + 1); if (bg.OPCG) bg.OPCG += extra;
@@ -1421,7 +1355,7 @@ if (HAS_EVENTS) {
       starts_at: `${TODAY}T${hh}:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'in_person', venue: { name: `店 ${id}` },
       source_url: 'https://example.com/', event_status: 'scheduled', ...x });
     const p1 = [ev('z', ['OPCG', 'PTCG'], 13), ev('y1', ['OPCG'], 14, SAME), ...Array.from({ length: 48 }, (_, i) => ev(`p${i}`, ['PTCG'], 15 + (i % 5)))];
-    await page.route('**/api/v1/**', async route => {
+    await page.route(EVENTS_API, async route => {
       const u = new URL(route.request().url());
       if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 51, by_game: { OPCG: 3, PTCG: 49 } }] } });
       if (u.searchParams.get('cursor')) { await new Promise(r => setTimeout(r, 1500)); return route.fulfill({ json: { events: [ev('y2', ['OPCG'], 20, SAME)], next_cursor: null } }); }
@@ -1461,7 +1395,7 @@ if (HAS_EVENTS) {
   const targets = [['/releases/', '.gi'], ['/', HAS_EVENTS ? '#evBody .gcol h3 .gi' : '.gi']];
   if (HAS_EVENTS) targets.push(['/events/?pref=JP-13&view=list', '#list .ev .gi']);
   // phones show dots on the calendar: the day dialog (latest snapshot) has the chips and cards
-  const vday = HAS_VOICES && fs.readdirSync(path.join(ROOT, 'data/voices')).filter(f => /^\d{4}-\d\d-\d\d\.json$/.test(f)).sort().pop()?.slice(0, 10);
+  const vday = HAS_VOICES && VOICE_SNAPS.at(-1)?.date;
   if (HAS_VOICES) targets.push(['/voices/', '.gi']);
   for (const [vp, opt] of Object.entries(VIEWPORTS)) for (const scheme of ['light', 'dark']) for (const [p, need] of targets) {
     const where = `${vp} ${scheme} ${p.split('?')[0]} icons`;
@@ -1471,7 +1405,7 @@ if (HAS_EVENTS) {
     await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
     const bad = [];
     page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
-    await page.route('**/api/v1/**', route => {
+    await page.route(EVENTS_API, route => {
       const u = new URL(route.request().url());
       if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: GC.map(code => ({ code, record_count: 2, complete: true,
         fetched_at: `${TODAY}T06:00:00+09:00` })), types: [], prefectures: [{ code: 'JP-13', count: 8 }] } });
