@@ -32,7 +32,7 @@ if (!fs.existsSync(page0)) {
 fs.mkdirSync(OUT, { recursive: true });
 const db = path.join(OUT, 'voices-d1.sqlite3');
 for (const f of [db, `${db}-wal`, `${db}-shm`]) fs.rmSync(f, { force: true });
-const imp = spawnSync(process.execPath, ['scripts/import-voices.mjs', '--target', 'sqlite', '--sqlite', db, '--apply-pending', '--yes'], { cwd: API, encoding: 'utf8' });
+const imp = spawnSync(process.execPath, ['scripts/import-voices.mjs', '--target', 'sqlite', '--sqlite', db, '--yes'], { cwd: API, encoding: 'utf8' });
 process.stdout.write(imp.stdout);
 if (imp.status !== 0) { console.error(imp.stderr); process.exit(1); }
 

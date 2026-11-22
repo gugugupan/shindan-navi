@@ -12,11 +12,11 @@
 // --yes write D1 and then apply the same removal to every file in --data that holds it (commit them). A file the
 // removal cannot clean (unreadable, or still naming the id) stops the run before anything is written.
 //
-// sqlite:   node:sqlite file of the Node dev server (api/.local/events.sqlite3). --apply-pending (with --yes) first
-//           applies api/migrations-pending/*.sql to that file (local only). Without --yes the file is opened read-only.
+// sqlite:   node:sqlite file of the Node dev server (api/.local/events.sqlite3). --yes first applies api/migrations/
+//           to that file (local only); without --yes it is opened read-only.
 // wrangler: local D1 (.wrangler/state) through wrangler --local.
 // remote:   the production D1; needs env D1_DATABASE_ID. Never migrates: the voices tables come from
-//           api/migrations-pending/0008_voices.sql, applied by the owner. Wrangler's output is captured and every
+//           api/migrations/0008_voices.sql, applied by the owner. Wrangler's output is captured and every
 //           UUID / the id is redacted before it is shown.
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
@@ -39,7 +39,6 @@ const { values: opts } = parseArgs({
     plan: { type: 'boolean', default: false },
     yes: { type: 'boolean', default: false },
     prune: { type: 'boolean', default: false },
-    'apply-pending': { type: 'boolean', default: false },
     'remove-topic': { type: 'string' },
     'remove-snapshot': { type: 'string' },
   },
@@ -51,7 +50,6 @@ const fail = (msg, code = 1) => {
 if (opts.target === 'local') opts.target = 'wrangler';
 if (!['wrangler', 'sqlite', 'remote'].includes(opts.target)) fail('--target must be sqlite, wrangler (local) or remote', 2);
 if (opts.plan && opts.yes) fail('--plan and --yes contradict each other: --plan never writes, --yes writes', 2);
-if (opts['apply-pending'] && opts.target !== 'sqlite') fail('--apply-pending is for --target sqlite only; D1 migrations are applied by the owner', 2);
 const list = (v) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const dropIds = list(opts['remove-topic']);
 const dropDates = list(opts['remove-snapshot']);
@@ -92,7 +90,7 @@ let rawDb = null;
 let where;
 let config;
 let query;
-let pendingSoon = false;
+let migrateSoon = false;
 if (opts.target === 'sqlite') {
   const file = resolve(opts.sqlite);
   where = opts.sqlite;
@@ -100,15 +98,14 @@ if (opts.target === 'sqlite') {
     const { SqliteD1 } = await import('./lib/sqlite-d1.mjs');
     mkdirSync(dirname(file), { recursive: true });
     sqliteDb = new SqliteD1(file).migrate();
-    if (opts['apply-pending']) sqliteDb.migratePending();
     rawDb = sqliteDb.db;
   } else if (existsSync(file)) {
     const { DatabaseSync } = await import('node:sqlite');
     rawDb = new DatabaseSync(file, { readOnly: true });
   }
   query = (sql) => (rawDb ? rawDb.prepare(sql).all().map((r) => ({ ...r })) : []);
-  // Plan only: --apply-pending would create the tables with --yes, so plan against an empty database.
-  pendingSoon = !opts.yes && opts['apply-pending'];
+  // Plan only: --yes would create the tables, so a file without them is planned against as empty.
+  migrateSoon = !opts.yes;
 } else {
   config = opts.target === 'remote' ? writeRemoteConfig(process.env.D1_DATABASE_ID) : BASE_CONFIG;
   const flag = opts.target === 'remote' ? '--remote' : '--local';
@@ -122,9 +119,9 @@ let state;
 let hasVersion;
 try {
   const tables = query(VOICES_TABLE_SQL).map((r) => r.name);
-  if (tables.length < 2 && !pendingSoon) {
-    fail(`${where} has no voice_snapshots / voice_meta table${rawDb || opts.target !== 'sqlite' ? '' : ' (the file does not exist)'}: migration api/migrations-pending/0008_voices.sql is not applied yet. `
-      + (opts.target === 'sqlite' ? 'Pass --apply-pending --yes (local file only).' : 'The owner applies it first (docs/design/voices-db.md › Going live).'));
+  if (tables.length < 2 && !migrateSoon) {
+    fail(`${where} has no voice_snapshots / voice_meta table: migration api/migrations/0008_voices.sql is not applied yet. `
+      + 'The owner applies it first (.claude/skills/d1-remote-op).');
   }
   state = voicesState(tables.length < 2 ? [] : query(VOICES_STATE_SQL));
   hasVersion = tables.length < 2 ? false : query(VOICES_VERSION_SQL).length > 0;
@@ -223,7 +220,7 @@ try {
 } catch (e) {
   fail(e.message);
 }
-console.log(`plan against ${where}: ${state.current.size} snapshot(s) in the database${pendingSoon ? ' (tables created by --apply-pending --yes)' : ''}${takedown ? `, takedown ${[...dropIds, ...dropDates].join(', ')}` : `, ${local.snapshots.size} local file(s)`}`);
+console.log(`plan against ${where}: ${state.current.size} snapshot(s) in the database${takedown ? `, takedown ${[...dropIds, ...dropDates].join(', ')}` : `, ${local.snapshots.size} local file(s)`}`);
 for (const r of plan.rows) console.log(`  ${r.date}  ${r.action}${r.topics === null ? '' : `  (${r.topics} topics, ${(r.bytes / 1024).toFixed(1)} KB)`}`);
 console.log(`  D1 rows written ~${plan.writes} (voice_snapshots + voice_meta version)`);
 for (const e of fileEdits) console.log(`  local ${e.del ? 'delete' : 'rewrite'} ${e.path}`);

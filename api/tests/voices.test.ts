@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -190,7 +190,7 @@ describe('voices API', () => {
   let queries: number;
   let db: D1Database;
   beforeEach(() => {
-    raw = new SqliteD1().migratePending();
+    raw = new SqliteD1().migrate();
     importDir(raw, writeDataDir(synthetic(10), { OPCG: run('OPCG', 3) }), 1_000);
     queries = 0;
     db = new Proxy(raw, {
@@ -208,10 +208,10 @@ describe('voices API', () => {
     return { res, body: await res.json() as any };
   };
 
-  it('answers empty before the first import and while the migration is pending', async () => {
+  it('answers empty before the first import and without the migration', async () => {
     expect((await call('/api/v1/voices')).body).toEqual({ version: null, snapshots: [] });
     expect((await call('/api/v1/voices/latest')).body).toEqual({ version: null, snapshot: null });
-    const old = new SqliteD1().migrate() as unknown as D1Database;
+    const old = new SqliteD1() as unknown as D1Database;
     expect((await call('/api/v1/voices', undefined, old)).body).toEqual({ version: null, snapshots: [] });
     expect((await call('/api/v1/voices/latest', undefined, old)).res.status).toBe(200);
   });
@@ -276,26 +276,9 @@ describe('voices API', () => {
 });
 
 describe('migration 0008', () => {
-  const pendingDir = join(API_DIR, 'migrations-pending');
-  const where = () => ['migrations', 'migrations-pending'].filter((d) => existsSync(join(API_DIR, d, '0008_voices.sql')));
-  const hasTables = (db: SqliteD1) => db.db.prepare("SELECT name FROM sqlite_master WHERE name IN ('voice_snapshots', 'voice_meta')").all().length === 2;
-
-  it('lives in exactly one of migrations-pending/ (until the owner moves it) or migrations/', () => {
-    expect(where()).toHaveLength(1);
-  });
-
-  it('migratePending works before the move and after it (a copy of migrations/ holding 0008)', () => {
-    const before = new SqliteD1().migratePending();
-    expect(hasTables(before)).toBe(true);
-    const moved = mkdtempSync(join(tmpdir(), 'migrations-'));
-    for (const f of readdirSync(join(API_DIR, 'migrations'))) copyFileSync(join(API_DIR, 'migrations', f), join(moved, f));
-    copyFileSync(join(API_DIR, where()[0], '0008_voices.sql'), join(moved, '0008_voices.sql'));
-    const after = new SqliteD1().migrate(moved);
-    expect(hasTables(after)).toBe(true);
-    // the pending copy (same name) is then skipped, and running it twice is harmless anyway
-    expect(() => after.migratePending()).not.toThrow();
-    expect(() => after.db.exec(readFileSync(join(moved, '0008_voices.sql'), 'utf8'))).not.toThrow();
-    if (!existsSync(pendingDir)) expect(() => new SqliteD1().migratePending()).not.toThrow();
+  it('is in migrations/ and creates the voice tables', () => {
+    const db = new SqliteD1().migrate();
+    expect(db.db.prepare("SELECT name FROM sqlite_master WHERE name IN ('voice_snapshots', 'voice_meta')").all()).toHaveLength(2);
   });
 });
 
@@ -314,14 +297,14 @@ describe('import-voices.mjs', () => {
   const seeded = () => {
     const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
     const data = fixtureDir();
-    const r = cli([...sqliteArgs(db), '--data', data, '--apply-pending', '--yes']);
+    const r = cli([...sqliteArgs(db), '--data', data, '--yes']);
     expect(r.status, r.stderr).toBe(0);
     return { db, data };
   };
 
   it('refuses --plan with --yes before opening anything', () => {
     const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
-    const r = cli([...sqliteArgs(db), '--data', fixtureDir(), '--plan', '--yes', '--apply-pending']);
+    const r = cli([...sqliteArgs(db), '--data', fixtureDir(), '--plan', '--yes']);
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/--plan and --yes/);
     expect(existsSync(db)).toBe(false);
@@ -329,12 +312,9 @@ describe('import-voices.mjs', () => {
 
   it('plans without creating or migrating the database file', () => {
     const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
-    const missing = cli([...sqliteArgs(db), '--data', fixtureDir()]);
-    expect(missing.status).toBe(1);
-    expect(missing.stderr).toMatch(/no voice_snapshots \/ voice_meta table \(the file does not exist\)/);
-    const pending = cli([...sqliteArgs(db), '--data', fixtureDir(), '--plan', '--apply-pending']);
-    expect(pending.status, pending.stderr).toBe(0);
-    expect(pending.stdout).toMatch(/2026-11-20 {2}insert/);
+    const plan = cli([...sqliteArgs(db), '--data', fixtureDir(), '--plan']);
+    expect(plan.status, plan.stderr).toBe(0);
+    expect(plan.stdout).toMatch(/2026-11-20 {2}insert/);
     expect(existsSync(db)).toBe(false);
   });
 

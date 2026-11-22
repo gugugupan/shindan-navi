@@ -9,7 +9,7 @@
     "import:sqlite": "node scripts/import-events.mjs --target sqlite",
     "import:remote": "node scripts/import-events.mjs --target remote",
     "import:voices": "node scripts/import-voices.mjs",
-    "import:voices:sqlite": "node scripts/import-voices.mjs --target sqlite --apply-pending",
+    "import:voices:sqlite": "node scripts/import-voices.mjs --target sqlite",
     "db:migrate": "wrangler d1 migrations apply shindan-navi-events --local --config ../wrangler.jsonc",
     "db:reset": "rm -rf ../.wrangler/state/v3/d1 .wrangler/state/v3/d1 .local/events.sqlite3*",
     "test": "vitest run",

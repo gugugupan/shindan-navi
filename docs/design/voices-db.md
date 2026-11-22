@@ -34,15 +34,14 @@ voice_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)   -- 'version'
   One row per date; a date without topics has no row.
 - The voices version lives in `voice_meta`, not `site_meta`: the events importer reads every `site_meta` row.
 - Numbering: 0007 is reserved for landing pages, so 0008. `CREATE TABLE IF NOT EXISTS` keeps it harmless if applied
-  again. (It was kept in `api/migrations-pending/` until the go-live; `SqliteD1.migratePending()` and
-  `--apply-pending` still accept that directory and skip it when missing.)
+  again.
 
 ## Writer: `api/scripts/import-voices.mjs`
 
 ```
 npm run import:voices -- [--data DIR] [--target sqlite|wrangler|local|remote] [--yes] [--prune]
 npm run import:voices -- --remove-topic ID[,ID] | --remove-snapshot DATE[,DATE]  [--target …] [--yes]
-npm run import:voices:sqlite -- --yes        # local SQLite of dev:node
+npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes applies api/migrations/ first)
 ```
 
 - Validation = `contracts/voices.md` › Checks (fields, lengths in code points, game codes from `src/voices.html`,

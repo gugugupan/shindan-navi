@@ -1,12 +1,11 @@
 // Minimal D1Database stand-in over node:sqlite, for tests and the Node dev server on machines
 // where workerd cannot run (macOS < 13.5).
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { API_DIR, stateDayCountsSql, stateEventsSql, stateFromRows, stateImportsSql, stateSiteMetaSql } from './importer.mjs';
 
 const MIGRATIONS_DIR = join(API_DIR, 'migrations');
-const PENDING_DIR = join(API_DIR, 'migrations-pending');
 
 class Statement {
   constructor(db, sql, args = []) {
@@ -82,14 +81,6 @@ export class SqliteD1 {
       this.execAll([readFileSync(join(dir, name), 'utf8'), `INSERT INTO d1_migrations (name) VALUES ('${name.replaceAll("'", "''")}')`]);
     }
     return this;
-  }
-  /**
-   * Also apply migrations-pending/*.sql (local files and tests only; remote D1 gets them from the owner). Works before
-   * and after a pending file moves to migrations/: names already applied are skipped, a missing directory is fine.
-   */
-  migratePending() {
-    this.migrate();
-    return existsSync(PENDING_DIR) ? this.migrate(PENDING_DIR) : this;
   }
   /** The importer's view of this database (see importer.mjs stateFromRows). */
   readState() {

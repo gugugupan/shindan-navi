@@ -13,7 +13,7 @@ export class RawJson {
 
 const missingTable = (e: unknown) => e instanceof Error && /no such table/.test(e.message);
 
-/** The voices data version; null before the first import or while migration 0008 is still pending. */
+/** The voices data version; null before the first import or without migration 0008. */
 export async function readVoicesState(db: D1Database): Promise<VoicesState | null> {
   try {
     const v = await db.prepare("SELECT value FROM voice_meta WHERE key = 'version'").first<string>('value');
