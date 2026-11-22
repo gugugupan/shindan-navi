@@ -138,14 +138,14 @@ Locations:
   matches events without a venue (`attendance_mode` online). A hybrid event with a venue is found under its
   prefecture. There is no nationwide query. The API accepts 1-5 locations; the page sends exactly one.
 
-話題カレンダー (`VOICES_SOURCE=d1` builds; contracts/voices.md › D1 mode):
+話題カレンダー (`VOICES_ENABLED=1` builds; contracts/voices.md):
 
 ```
 GET /api/v1/voices              no parameters → { "version": "…" | null, "snapshots": [{ "date", "window", "topics" }] } oldest first
 GET /api/v1/voices/latest       no parameters → { "version": "…" | null, "snapshot": { "date", "window", "topics" } | null }
 ```
 
-Both answer empty (`version: null`) before the first voices import or while migration 0008 is pending. They are
+Both answer empty (`version: null`) before the first voices import or without migration 0008. They are
 cached like the events endpoints below, under the voices version (`voice_meta`, bumped by `import-voices.mjs`).
 
 Caching and limits:

@@ -319,7 +319,7 @@ month per request.
 | `/events` page with filters, scan per request: 東京都 / 5 largest (max while paging) | 154 / 984 |
 | `/events` page with filters, day lookup | ≤ month's day_counts rows (13 games: ≤ 887 / ≤ 3,846) |
 | `/events/meta`, data version | 1, 1 |
-| `/voices` (話題カレンダー, `VOICES_SOURCE=d1`): all snapshots / `/voices/latest` / voices version | 1 per snapshot (≈ 365 a year) / 1 / 1 |
+| `/voices` (話題カレンダー): all snapshots / `/voices/latest` / voices version | 1 per snapshot (≈ 365 a year) / 1 / 1 |
 
 **Voices** (`import-voices.mjs`, migration `migrations/0008_voices.sql`, docs/design/voices-db.md): one
 `voice_snapshots` row per date, so an import writes ~2 rows per new or changed date + 1 version row (a takedown: the

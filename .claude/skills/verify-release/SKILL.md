@@ -48,6 +48,7 @@ In Chinese: both RESULT lines, every WARN with what you checked, the data summar
 
 ## Notes
 
+- Production builds with `VOICES_ENABLED=1` (話題カレンダー `/voices/` and the home いま話題, data from D1): for branches touching them, run step 1 with `VOICES_ENABLED=1`, then `node tools/verify/voices-d1.mjs --today YYYY-MM-DD` (needs `npm ci` in `api/`), then step 2, which serves the voices API answer from `data/voices/` itself.
 - Google's Rich Results Test has no API; for structured-data changes, offer the owner a manual paste of one built page into https://search.google.com/test/rich-results.
 - Search performance (indexing, impressions, CTR per page / query) can only be judged after Google recrawls; it is not part of this gate.
 - When a check is wrong rather than the site, fix the check in its own commit and say so in the report.
