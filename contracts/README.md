@@ -1,6 +1,7 @@
 # Event contracts
 
 Release-calendar collectors and merge have their own contract: `releases.md` (run end to end by `scripts/refresh.py`).
+The 話題カレンダー (`/voices/`) snapshots have theirs: `voices.md` + `voices.schema.json`.
 
 Shared by the collectors (`tools/`), the importer and Worker (`api/`) and the `/events/` page. Change only through the lead; every consumer reads from here.
 
@@ -106,8 +107,10 @@ GET /api/v1/events
 
 GET /api/v1/events/days         from must be the 1st of a month and until the 1st of the next (a whole month);
                                 pref, game, type, days as for /events
-→ { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... } }] }   only days with count > 0;
-   with game=…, by_game lists only the selected games
+→ { "days": [{ "date": "YYYY-MM-DD", "count": n, "by_game": { "OPCG": n, ... },
+                "by_game_type": { "OPCG": { "standard_battle": n, ... }, ... } }] }   only days with count > 0;
+   with game=…, by_game / by_game_type list only the selected games; by_game_type[g] splits by_game[g] by
+   event_type_code ("" = no type), sorted keys; type=… narrows both
 
 GET /api/v1/events/meta         no parameters
 → { "games": [{ "code", "name", "slug", "record_count", "fetched_at", "complete", "window": {"from","until"} }],
@@ -134,6 +137,16 @@ Locations:
 - `pref` is a location: a prefecture (`JP-xx`) matches in-person and hybrid events whose venue is in it; `online`
   matches events without a venue (`attendance_mode` online). A hybrid event with a venue is found under its
   prefecture. There is no nationwide query. The API accepts 1-5 locations; the page sends exactly one.
+
+話題カレンダー (`VOICES_SOURCE=d1` builds; contracts/voices.md › D1 mode):
+
+```
+GET /api/v1/voices              no parameters → { "version": "…" | null, "snapshots": [{ "date", "window", "topics" }] } oldest first
+GET /api/v1/voices/latest       no parameters → { "version": "…" | null, "snapshot": { "date", "window", "topics" } | null }
+```
+
+Both answer empty (`version: null`) before the first voices import or while migration 0008 is pending. They are
+cached like the events endpoints below, under the voices version (`voice_meta`, bumped by `import-voices.mjs`).
 
 Caching and limits:
 

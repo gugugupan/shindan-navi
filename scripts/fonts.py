@@ -12,8 +12,23 @@ SRC = os.path.join(ROOT, 'brand/fonts')
 # the fonts every other page downloads; each gets its own small faces for the glyphs the shared subsets lack.
 OWN = [(os.path.join(DIST, 'events/index.html'), '/*EVENT_FONTS*/', 'events'),
        (os.path.join(DIST, 'privacy/index.html'), '/*PAGE_FONTS*/', 'privacy'),
-       (os.path.join(DIST, 'feedback/index.html'), '/*PAGE_FONTS*/', 'feedback')]
-text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f not in [o[0] for o in OWN])
+       (os.path.join(DIST, 'feedback/index.html'), '/*PAGE_FONTS*/', 'feedback'),
+       (os.path.join(DIST, 'voices/index.html'), '/*PAGE_FONTS*/', 'voices')]
+# the /voices/<date>/ archive pages share the /voices/ faces (same topic text)
+SHARE = {'voices': sorted(glob.glob(os.path.join(DIST, 'voices/*/index.html')))}
+own_files = [o[0] for o in OWN] + [f for fs in SHARE.values() for f in fs]
+text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f not in own_files)
+# VOICES_SOURCE=d1 builds embed no topic text (the pages fetch it from D1): take it from the local data/voices/ files,
+# as the static build would have: the latest snapshot's titles / summaries for the home block (shared subsets), every
+# snapshot for the /voices/ faces. Topics imported later fall back to the system font for glyphs these lack.
+VOICES_PAGE = os.path.join(DIST, 'voices/index.html')
+voices_text = ''
+if os.path.exists(VOICES_PAGE) and 'const V = {"snapshots": null' in open(VOICES_PAGE, encoding='utf-8').read():
+    import json
+    snaps = [json.load(open(f, encoding='utf-8')) for f in sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json')))]
+    snaps = [x for x in snaps if not x.get('sample') and x['topics']]
+    voices_text = ''.join(json.dumps(x['topics'], ensure_ascii=False) for x in snaps)
+    if snaps: text += ''.join(t['title'] + t['summary'] for t in snaps[-1]['topics'])
 # kana, ASCII and common punctuation are always kept so text that arrives with a data refresh still renders in the same face
 always = ''.join(chr(c) for c in range(0x20, 0x7f)) + ''.join(chr(c) for c in range(0x3000, 0x3100)) + \
     ''.join(chr(c) for c in range(0x30a0, 0x3100)) + ''.join(chr(c) for c in range(0xff01, 0xff5f)) + '・〜ー円年月日曜件'
@@ -49,7 +64,8 @@ for path, slot, prefix in OWN:
     if not os.path.exists(path):
         continue
     page = open(path, encoding='utf-8').read()
-    extra = sorted(c for c in set(page) - set(chars) if ord(c) > 0x7f)
+    shared = SHARE.get(prefix, [])
+    extra = sorted(c for c in set(page + (voices_text if prefix == 'voices' else '')).union(*(open(f, encoding='utf-8').read() for f in shared)) - set(chars) if ord(c) > 0x7f)
     faces = []
     if extra:
         rng = ','.join(f'U+{ord(c):X}' for c in extra)
@@ -58,6 +74,8 @@ for path, slot, prefix in OWN:
                                          ('ZenKakuGothicNew-Bold.ttf', f'{prefix}-zen-kaku-700.woff2', 'Zen Kaku Gothic New', 700)]:
             write_subset(src, out, ''.join(extra))
             faces.append(f'@font-face{{font-family:"{family}";src:url("/fonts/{out}") format("woff2");font-weight:{weight};font-display:swap;unicode-range:{rng}}}')
-    assert page.count(slot) == 1
-    open(path, 'w', encoding='utf-8').write(page.replace(slot, ''.join(faces)))
+    for f in [path] + shared:
+        p = page if f == path else open(f, encoding='utf-8').read()
+        assert p.count(slot) == 1, f
+        open(f, 'w', encoding='utf-8').write(p.replace(slot, ''.join(faces)))
     print(prefix, 'extra glyphs', len(extra))

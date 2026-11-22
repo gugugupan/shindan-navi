@@ -27,6 +27,8 @@ jobs:
       # send_email binding in remote-config.mjs. Set it only after Email Routing, Turnstile, the secrets and the
       # migration are in place. TURNSTILE_SITE_KEY is the widget's public site key.
       FEEDBACK_ENABLED: ${{ vars.FEEDBACK_ENABLED }}
+      # 話題カレンダー (contracts/voices.md): "1" builds /voices/ and its tool tab. Static, so both builds take it.
+      VOICES_ENABLED: ${{ vars.VOICES_ENABLED }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,6 +61,9 @@ jobs:
           MAPS_BROWSER_KEY: ${{ vars.MAPS_BROWSER_KEY }}
           LOGIN_ENABLED: ${{ vars.LOGIN_ENABLED }}
           TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+          # "d1": /voices/ and the home block read the snapshots from /api/v1/voices* (docs/design/voices-db.md); set it
+          # only after migration 0008 and the first voices import. Unset = static (data/voices/ embedded).
+          VOICES_SOURCE: ${{ vars.VOICES_SOURCE }}
         run: python -I scripts/build.py
 
       - uses: actions/setup-node@v4

@@ -1,0 +1,242 @@
+<!--
+  Event rows shared by /events/ (day list) and / (今日のイベント): build.py inserts this at the EVROW slot, before the
+  page script. window.snEv: init({gi, games}) once, name(e) (display name), row(e, o) and grp(g, o) (HTML), group(rows,
+  rank) (identical events of a day folded into groups), and the open groups (kept across re-renders).
+  A row has three levels: name → time ・ venue (+ area) → registration facts / action. Display only: names in the data
+  and API stay as they are.
+-->
+<style>
+.ev{position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:3px;min-width:0}
+.ev-n{margin:0;font-size:15px;font-weight:700;line-height:1.45;overflow-wrap:anywhere;color:var(--ink)}
+.ev-n .grp{display:block;font-size:12px;font-weight:500;color:var(--muted)}
+.ev-n .cat{display:inline-block;margin-left:6px;font-size:12px;font-weight:500;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;line-height:1.5;vertical-align:1px}
+.ev-n .evg-c{font-weight:500;color:var(--muted);white-space:nowrap}
+.ev-n .evg-c b{font-family:var(--mono);color:var(--ink)}
+.ev-m{margin:0;font-size:13px;line-height:1.6;color:var(--ink);overflow-wrap:anywhere;min-width:0}
+.ev-m .ev-time{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ev-m .ev-time.tbd{font-family:var(--body);font-weight:500;color:var(--muted)}
+.ev-m .ev-time+.ev-venue::before{content:"・";color:var(--muted)}
+.ev-m .ev-venue .ar,.ev-m .ar0{color:var(--muted)}
+.ev-m a.ev-venue{color:var(--ink);text-decoration:none}
+.ev-m a.ev-venue:hover{color:var(--accent);text-decoration:underline}
+.ev-m .ev-venue .ar::before{content:" · "}
+.ev-m .tag{display:inline-flex;align-items:center;gap:4px;margin-right:8px;vertical-align:-2px;font-size:12px;font-weight:700;color:var(--gt,var(--muted));white-space:nowrap}
+.ev-m .tag .gi{--gi:14px}
+.ev-m .ev-pin,.ev-m .nomapt{margin-left:8px;vertical-align:1px}
+.ev-s{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:2px 0 0}
+.ev-f{list-style:none;margin:0;padding:0;display:contents}
+.ev-f li{font-size:12px;line-height:1.6;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 8px;white-space:nowrap}
+.ev-f li.unk{border-style:dashed;color:var(--muted)}
+.ev-f li.open{border-color:transparent;background:var(--accent-soft);color:var(--accent);font-weight:700}
+.ev-f li.closed,.ev-f li.done{color:var(--muted)}
+.ev .st{font-size:12px;font-weight:700;border-radius:4px;padding:0 6px;margin-right:6px;letter-spacing:.04em;background:var(--sun);color:#fff;vertical-align:1px}
+.ev .st.post{background:var(--foil);color:var(--foil-ink)}
+.ev.off .ev-n>.t{text-decoration:line-through;color:var(--muted)}
+.ev.off .ev-s,.ev.off .ev-venue{opacity:.6}
+.evg-tog{font:inherit;font-size:12.5px;font-weight:700;color:var(--accent);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 10px 2px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.evg-tog:hover{border-color:var(--accent)}
+.evg-tog::after{content:"";width:6px;height:6px;margin:0 2px 3px 2px;border:solid currentColor;border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+.evg-tog[aria-expanded="true"]::after{transform:rotate(-135deg);margin-bottom:-2px}
+.evg-l{list-style:none;margin:6px 0 0;padding:0 0 0 10px;border-left:2px solid var(--g,var(--line));display:grid;gap:6px}
+.evg-l[hidden]{display:none}
+</style>
+<script>
+window.snEv=(function(){
+  const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const DOW = ['日','月','火','水','木','金','土'];
+  const md = s => { const [,m,d]=s.split('-').map(Number); return `${m}/${d}(${DOW[new Date(s+'T00:00:00Z').getUTCDay()]})`; };
+  const timeFmt = tz => new Intl.DateTimeFormat('ja-JP',{timeZone:tz||'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false});
+  const jstDay = s => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo'}).format(new Date(s));
+  let gi = () => '', GAMES = {};
+  const CAT = {tournament:'大会',casual:'交流会',teaching:'体験会',festival:'フェス'};
+  const REG_METHOD = {first_come:'先着',lottery:'抽選',walk_in:'当日参加OK',invitation:'招待制'};
+
+  // Month markers many sources add to every month's copy of the same event: （11月開催） (12月開催) 【2026年12月】
+  // 【26/11】 【26/11-12月】 【10_11月開催】 and a standalone leading 「11月度」. Months must be 1-12; the bare 【YY/MM】 form
+  // only counts when YY is the event's year (else it is a day, as in 【10/30】). Other dates (シーズン2, 26-27) stay.
+  const SEP = '[\\/_・〜~\\-－–]';
+  const okM = (...ms) => ms.every(m=>m==null||(+m>=1&&+m<=12));
+  const MARKS = [
+    [new RegExp(`[（(]\\s*(?:\\d{2,4}年)?(\\d{1,2})(?:${SEP}(\\d{1,2}))?月(?:開催|度)?\\s*[）)]`,'g'), (e,m,a,b)=>okM(a,b)],
+    [new RegExp(`【\\s*(?:\\d{2,4}年)?(\\d{1,2})(?:${SEP}(\\d{1,2}))?月(?:開催|度)?\\s*】`,'g'), (e,m,a,b)=>okM(a,b)],
+    [new RegExp(`【\\s*(\\d{2})\\/(\\d{1,2})(?:${SEP}(\\d{1,2})月?)?\\s*】`,'g'),
+      (e,m,y,a,b)=>okM(a,b) && /^\d{4}-/.test(e.starts_on||'') && +y===+e.starts_on.slice(2,4)],
+    [/^\s*(\d{1,2})月度[\s　]+/, (e,m,a)=>okM(a)]
+  ];
+  // e: an event (its starts_on dates 【YY/MM】), or {name, starts_on}
+  function name(e){
+    const raw=String(e&&e.name||'');
+    let s=raw; for(const [re,ok] of MARKS) s=s.replace(re,(...a)=>ok(e,...a)?' ':a[0]);
+    s=s.replace(/[\s　]+/g,m=>m.includes('　')?'　':' ').replace(/^[\s　]+|[\s　]+$/g,'');
+    return s||raw;
+  }
+  const norm = s => s.normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
+  const codesOf = e => Array.isArray(e.game_codes)&&e.game_codes.length ? e.game_codes : [e.game_code];
+  const isPostcode = s => /^〒?\s*\d{3}-?\d{4}$/.test(String(s||'').trim());
+  const venueLabel = v => !v ? '' : isPostcode(v.name) && v.address ? v.address : v.name;
+  const hasTime = e => e.time_precision==='datetime' && !!e.starts_at;
+  const timeOf = e => hasTime(e) ? timeFmt(e.timezone).format(new Date(e.starts_at)) : '';
+  function when(e){
+    const multi = e.ends_on && e.ends_on!==e.starts_on;
+    const span = multi ? `${md(e.starts_on)}〜${md(e.ends_on)}` : '';
+    if(!hasTime(e)) return {cls:'tbd', text: span ? span+' · 時刻未定' : '時刻未定'};
+    const f=timeFmt(e.timezone);
+    const t=f.format(new Date(e.starts_at))+'〜'+(e.ends_at&&!multi?f.format(new Date(e.ends_at)):'');
+    return {cls:'', text: span ? `${span} · ${t}` : t};
+  }
+  // area: the city (the page shows one prefecture at a time), the prefecture only when it is not that one
+  function place(e,pref){
+    const v=e.venue;
+    if(e.attendance_mode==='online') return 'オンライン開催';
+    const ar = v ? v.city || (v.region_code&&v.region_code!==pref ? v.region_name||'' : '') : '';
+    const p = v ? `${esc(venueLabel(v))}${ar?`<span class="ar">${esc(ar)}</span>`:''}` : '';
+    if(e.attendance_mode==='hybrid') return (p?p+'<span class="ar">オンライン参加あり</span>':'オンライン参加あり');
+    return p || '<span class="ar0">会場は公式で確認</span>';
+  }
+  function fee(e){
+    if(e.fee_amount===0) return {cls:'', text:'参加費 無料'};
+    if(typeof e.fee_amount==='number' && e.fee_amount>0) return {cls:'', text: e.fee_currency&&e.fee_currency!=='JPY' ? `参加費 ${e.fee_amount.toLocaleString('ja-JP')} ${e.fee_currency}` : `参加費 ${e.fee_amount.toLocaleString('ja-JP')}円`};
+    return {cls:'unk', text:'参加費未確認'};
+  }
+  function reg(e){
+    switch(e.registration_status){
+      case 'open': return {cls:'open', text:'受付中'};
+      case 'not_open': { const o=e.registration_opens_at; return {cls:'', text: o ? `受付前（${md(jstDay(o))} ${timeFmt('Asia/Tokyo').format(new Date(o))}〜）` : '受付前'}; }
+      case 'waitlist': return {cls:'', text:'キャンセル待ち'};
+      case 'closed': return {cls:'closed', text:'受付終了'};
+      default: return {cls:'unk', text:'受付状況は公式で確認'};
+    }
+  }
+  // source links only over https; anything else renders without a link
+  const safeUrl = u => /^https:\/\//i.test(String(u||'')) ? String(u) : '';
+  const stBadge = e => e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st post">延期</span>' : '';
+  function tags(e,col){
+    return codesOf(e).filter(c=>c!==col).map(c=>{ const x=GAMES[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="--gl:${x.c};--gd:${x.cd}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
+  }
+  const gvars = c => { const g=GAMES[c]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `--gl:${g.c};--gd:${g.cd}`; };
+  // the category reads as noise when the name already says it (交流会 → 交流会)
+  const catOf = (e,nm) => { const c=CAT[e.group&&e.group.category]; return c && !nm.includes(c) ? c : ''; };
+
+  // o: {compact (home: the name is the link, facts kept to the registration), col (the game the row sits under: no
+  // tag), member (inside a group: no name line, no tag), pref, pin (HTML), cls, attrs, started}
+  function row(e,o={}){
+    const nm=name(e), cancelled=e.event_status==='cancelled', w=when(e), col=o.member?e.game_code:o.col;
+    const facts=[];
+    if(!o.compact) facts.push(fee(e));
+    if(!o.compact && Number.isInteger(e.capacity)) facts.push({cls:'', text:`定員 ${e.capacity.toLocaleString('ja-JP')}名`});
+    if(!cancelled){
+      const r=reg(e); if(!o.compact || r.cls!=='unk') facts.push(r);
+      if(REG_METHOD[e.registration_method]) facts.push({cls:'', text:REG_METHOD[e.registration_method]});
+    }
+    if(o.compact && o.started) facts.push({cls:'done', text:'開始済み'});
+    const url=safeUrl(e.source_url), href=esc(url), ext=`<span class="sr">（${esc(nm)}・外部サイト）</span>`;
+    const tg=o.member?'':tags(e,col);
+    const gn=e.group&&e.group.name ? name({name:e.group.name, starts_on:e.starts_on}) : '';
+    const grp=!o.compact && gn && gn!==nm && !nm.includes(gn) ? `<span class="grp">${esc(gn)}</span>` : '';
+    const cat=o.compact?'':catOf(e,nm);
+    const title=nm!==e.name?` title="${esc(e.name)}"`:'';
+    let n='';
+    if(!o.member) n = o.compact
+      ? (url ? `<a class="ev-n" href="${href}" target="_blank" rel="noopener"${title}>${stBadge(e)}<span class="t">${esc(nm)}</span>${ext}</a>` : `<p class="ev-n"${title}>${stBadge(e)}<span class="t">${esc(nm)}</span></p>`)
+      : `<h4 class="ev-n"${title}>${stBadge(e)}<span class="t">${esc(nm)}</span>${cat?`<span class="cat">${cat}</span>`:''}${grp}</h4>`;
+    const venue = o.member&&o.compact&&url ? `<a class="ev-venue" href="${href}" target="_blank" rel="noopener">${place(e,o.pref)}${ext}</a>` : `<span class="ev-venue">${place(e,o.pref)}</span>`;
+    const m=`<p class="ev-m">${tg}${o.member?stBadge(e):''}<span class="ev-time ${w.cls}">${w.text}</span>${venue}${o.pin||''}</p>`;
+    const link = o.compact||!url ? '' : `<a class="ev-link" href="${href}" target="_blank" rel="noopener" data-game="${esc(e.game_code)}">${cancelled?'公式で確認':'公式で詳細・申込'} ↗${ext}</a>`;
+    const s = facts.length||link ? `<div class="ev-s">${facts.length?`<ul class="ev-f">${facts.map(f=>`<li class="${f.cls}">${esc(f.text)}</li>`).join('')}</ul>`:''}${link}</div>` : '';
+    const tag=o.compact?'li':'article';
+    return `<${tag} class="ev${cancelled?' off':''}${o.cls||''}" style="${gvars(e.game_code)}" data-id="${esc(e.id)}"${o.attrs||''}>${n}${m}${s}</${tag}>`;
+  }
+
+  // Identical events of one day: same games, event type and display name, and the same part (part(e): 開始済み or
+  // not, fixed for the load so an open group keeps its id); cancelled and postponed ones stay single. Returns rows and groups ({key, rows}) in first-appearance order.
+  function group(rows,part=()=>0){
+    const out=[], by=new Map();
+    for(const e of rows){
+      if(e.event_status==='cancelled'||e.event_status==='postponed'){ out.push({e}); continue; }
+      const k=[part(e),codesOf(e).join('+'),e.group&&e.group.event_type_code||'',norm(name(e))].join('|');
+      let g=by.get(k);
+      if(!g){ g={key:k, rows:[]}; by.set(k,g); out.push(g); }
+      g.rows.push(e);
+    }
+    return out.map(x=>x.rows&&x.rows.length===1?{e:x.rows[0]}:x);
+  }
+  const open=new Set();
+  // one DOM id per day + group key for the page's lifetime, so an open group keeps its id across re-renders
+  const ids=new Map();
+  const gid = k => { let v=ids.get(k); if(!v){ v=`evg${ids.size+1}`; ids.set(k,v); } return v; };
+  // o: as row(), plus day (part of the id), more (the day may hold more of them than loaded: count is a minimum) and
+  // member (o for each member row)
+  function grp(g,o={}){
+    const e=g.rows[0], nm=name(e), id=gid(`${o.day||''}|${g.key}`), isOpen=open.has(id);
+    // a store: the source's venue id, else name + address / city. A venue without an id takes the id of one with the same
+    // name + address (not when several ids share it); when one is left unmatched beside ids, stores are unknown (count events only).
+    const na=v=>[venueLabel(v),v.address||v.city||''].join('|'), byNa=new Map();
+    g.rows.forEach(x=>{ const v=x.venue; if(!v||!v.source_id) return; const k=na(v), id='id:'+v.source_id; byNa.set(k, byNa.has(k)&&byNa.get(k)!==id ? '' : id); });
+    const vk=v=>!v?'':v.source_id?'id:'+v.source_id:byNa.get(na(v))||'na:'+na(v);
+    const vks=g.rows.map(x=>vk(x.venue)), vs=new Set(vks), n=g.rows.length;
+    const mixed=vks.some(k=>k.startsWith('id:'))&&vks.some(k=>k.startsWith('na:'));
+    const stores=vs.has('')||mixed?0:vs.size;
+    const cnt=o.more ? (stores===n ? `${n}店舗以上` : `${n}件以上`) : stores ? (stores===n ? `${stores}店舗` : `${stores}店舗・${n}件`) : `${n}件`;
+    const ts=g.rows.filter(hasTime).map(x=>[Date.parse(x.starts_at),timeOf(x)]).sort((a,b)=>a[0]-b[0]);
+    const tbd=g.rows.length-ts.length;
+    const rng=ts.length ? (ts[0][1]===ts[ts.length-1][1] ? `${ts[0][1]}〜` : `${ts[0][1]}〜${ts[ts.length-1][1]} 開始`)+(tbd?'・時刻未定あり':'') : '時刻未定';
+    // registration across the group: one fact when all agree, else the count per state
+    const st={};
+    g.rows.forEach(x=>{ const r=reg(x), k=r.text.replace(/（.*$/,''); if(r.cls!=='unk') (st[k]=st[k]||{cls:r.cls,n:0}).n++; });
+    const ks=Object.keys(st), facts=ks.length===1&&st[ks[0]].n===n ? [{cls:st[ks[0]].cls,text:ks[0]}] : ks.map(k=>({cls:st[k].cls,text:`${k} ${st[k].n}`}));
+    const ms=new Set(g.rows.map(x=>REG_METHOD[x.registration_method]||''));
+    if(ms.size===1&&!ms.has('')) facts.push({cls:'',text:[...ms][0]});
+    if(o.compact && o.started) facts.push({cls:'done', text:'開始済み'});
+    const cat=o.compact?'':catOf(e,nm), title=nm!==e.name?` title="${esc(e.name)}"`:'';
+    const act=stores&&!(o.more&&stores!==n)?'店舗を表示':'一覧を表示', label=`${act}（${esc(nm)}・${cnt}）`;
+    const n1 = o.compact
+      ? `<p class="ev-n"${title}><span class="t">${esc(nm)}</span> <span class="evg-c">— <b>${cnt.replace(/(\d+)/,'$1</b>')}</span></p>`
+      : `<h4 class="ev-n"${title}><span class="t">${esc(nm)}</span> <span class="evg-c">— <b>${cnt.replace(/(\d+)/,'$1</b>')}</span>${cat?`<span class="cat">${cat}</span>`:''}</h4>`;
+    const m=`<p class="ev-m">${tags(e,o.col)}<span class="ev-time">${rng}</span></p>`;
+    const tog=`<button type="button" class="evg-tog" aria-expanded="${isOpen}" aria-controls="${id}" aria-label="${label}">${act}</button>`;
+    const s=`<div class="ev-s">${facts.length?`<ul class="ev-f">${facts.map(f=>`<li class="${f.cls}">${esc(f.text)}</li>`).join('')}</ul>`:''}${tog}</div>`;
+    const tag=o.compact?'li':'article', lt=o.compact?'ul':'div';
+    const mem=g.rows.map(x=>row(x,{...o,...(o.memberOpts?o.memberOpts(x):{}),member:true,compact:o.compact})).join('');
+    return `<${tag} class="ev evg${o.cls||''}" style="${gvars(e.game_code)}" data-g="${id}">${n1}${m}${s}<${lt} class="evg-l" id="${id}"${isOpen?'':' hidden'}>${mem}</${lt}></${tag}>`;
+  }
+  function setOpen(b,on){
+    const id=b.getAttribute('aria-controls'), l=document.getElementById(id); if(!l) return;
+    b.setAttribute('aria-expanded',on); l.hidden=!on;
+    if(on) open.add(id); else open.delete(id);
+  }
+  document.addEventListener('click',ev=>{
+    const b=ev.target.closest('button.evg-tog'); if(!b) return;
+    setOpen(b,b.getAttribute('aria-expanded')!=='true');
+  });
+  // opens the group holding el (a map pin picked a member row)
+  function reveal(el){ const g=el&&el.closest('.evg'); const b=g&&g.querySelector(':scope>.ev-s>.evg-tog'); if(b&&b.getAttribute('aria-expanded')!=='true') setOpen(b,true); }
+  // Re-rendering a list (auto-paging) replaces its nodes: keep(root) remembers the focused control by what it is (a group
+  // toggle by group id; in a row, its event id and the control: source link, map pin, 地図なし) and the game column it
+  // sat in (home: a shared event has a row per column). restore(root, k) focuses its new copy, opening the group a row
+  // was folded into meanwhile; a row that joined a group has its source link on another element (venue on home).
+  const LINK='a.ev-link,a.ev-n,a.ev-venue';
+  function keep(root){
+    const a=document.activeElement; if(!a||!root.contains(a)) return null;
+    const c=a.closest('.gcol'), col=c&&c.getAttribute('aria-label');
+    const g=a.matches('.evg-tog')&&a.closest('.evg'); if(g) return {col, g:g.dataset.g};
+    const r=a.closest('[data-id]'); if(!r) return null;
+    return {col, id:r.dataset.id, ctl:a.matches(LINK)?'link':a.matches('.ev-pin')?'.ev-pin':a.matches('.nomapt')?'.nomapt':null};
+  }
+  function restore(root,k){
+    if(!k) return;
+    const scope=k.col ? root.querySelector(`.gcol[aria-label="${CSS.escape(k.col)}"]`) : root;
+    if(!scope) return;
+    let el;
+    if(k.g) el=scope.querySelector(`.evg[data-g="${CSS.escape(k.g)}"]>.ev-s>.evg-tog`);
+    else {
+      const r=scope.querySelector(`[data-id="${CSS.escape(k.id)}"]`); if(!r) return;
+      el=k.ctl==='link' ? r.querySelector(LINK) : k.ctl ? r.querySelector(k.ctl) : null;
+      if(el && el.closest('.evg-l[hidden]')) reveal(r);
+    }
+    if(el && document.activeElement!==el) el.focus({preventScroll:true});
+  }
+  // events the shown items cover (rows count once each)
+  const covered = items => items.reduce((t,x)=>t+(x.rows?x.rows.length:1),0);
+  return {init(o){ gi=o.gi||gi; GAMES=o.games||GAMES; }, name, row, grp, group, reveal, covered, keep, restore, safeUrl, venueLabel, timeOf, codesOf, open};
+})();
+</script>

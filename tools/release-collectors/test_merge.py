@@ -399,6 +399,72 @@ class BoxInfoAddress(unittest.TestCase):
         self.assertIn('box info: 1 product pages read, 1 items filled, 0 failed', log)
 
 
+class Changed(MergeCase):
+    def test_changed_dates(self):
+        moved, same, dated = dict(E1), dict(E2, changed='2026-11-02'), dict(E3)
+        with open(os.path.join(self.data, 'meta.json'), 'w') as f:
+            json.dump({'updated': '2026-11-17'}, f)
+        self.write_data([moved, same, dated], {})
+        self.write_source('cardlabo', [agg('2026-12-06', OP, E1['name'], 'clabo', pack='220円'),
+                                       agg(E2['date'], OP, E2['name'], 'clabo'), agg(E3['date'], OP, E3['name'], 'clabo')])
+        self.write_source('torecamap', TORECAMAP)
+        got = {x['id']: x.get('changed') for x in self.run_merge('--no-official')}
+        # moved date and the new item: TODAY; unchanged keeps its date; no date yet: the previous run's
+        self.assertEqual(got, {E1['id']: TODAY, E2['id']: '2026-11-02', E3['id']: '2026-11-17',
+                               ud.item_id('MTG', '拡張パック テスト航海'): TODAY})
+        self.assertEqual(ud.shown(dict(E1, pack='6688円(税込)')), ud.shown(dict(E1, pack='6,688円')))
+        self.run_merge('--no-official', '--dry-run')
+        with open(os.path.join(self.data, 'items.json')) as f:
+            self.assertEqual({x['id']: x['changed'] for x in json.load(f)}, got)
+
+    def test_code_change_moves_changed(self):
+        coded = dict(E2, changed='2026-11-02', source=make_source('https://example.test/eb02.html', 'EB-02', 'official'))
+        self.write_data([coded], {})
+        self.write_source('cardlabo', [agg(E2['date'], OP, E2['name'], 'clabo')])
+        self.write_source('torecamap', TORECAMAP)
+        self.assertEqual(ud.shown_code(coded), 'EB-02')
+        self.assertEqual(ud.shown_code(dict(coded, source={'url': '', 'key': 'x', 'site': 'aggregator'})), '')
+        before = ud.shown(coded)
+        self.assertNotEqual(before, ud.shown(dict(coded, source=dict(coded['source'], key='EB-03'))))
+        # the source page alone is not shown: no new date
+        self.assertEqual(before, ud.shown(dict(coded, source=dict(coded['source'], url='https://example.test/other.html'))))
+        got = {x['id']: x['changed'] for x in self.run_merge('--no-official')}
+        self.assertEqual(got[E2['id']], '2026-11-02')
+
+
+class Archive(MergeCase):
+    def test_aged_out_items_are_archived(self):
+        old = dict(item('2026-10-10', OP, '発売済みの商品【OP-14】', pack='220円', thumb='thumbs/old.jpg'), changed='2026-10-01')
+        hidden = item('2026-10-11', OP, '中止になった商品')
+        recent = item('2026-11-01', OP, '先月の商品')
+        ancient = {'id': 'iancient000', 'date': '2024-10-01', 'game': OP, 'name': '二年以上前', 'thumb': 'thumbs/anc.jpg', 'changed': '2024-11-01'}
+        back = {'id': E1['id'], 'date': '2026-10-01', 'game': OP, 'name': E1['name'], 'thumb': '', 'changed': '2026-11-01'}
+        kept = {'id': 'ikept000000', 'date': '2025-06-01', 'game': OP, 'name': '去年の商品', 'thumb': '', 'changed': '2025-07-01'}
+        self.write_data([old, hidden, recent, E1, E2, E3], {hidden['id']: {'hide': True},
+                                                            'iother00000': {'thumb': 'thumbs/ov.jpg', '_name': '別の商品'}})
+        with open(os.path.join(self.data, 'items-archive.json'), 'w') as f:
+            json.dump([ancient, back, kept], f, ensure_ascii=False)
+        for name in ('old.jpg', 'anc.jpg', 'ov.jpg'):
+            open(os.path.join(self.thumbs, name), 'w').close()
+        self.write_source('cardlabo', CLABO)
+        self.write_source('torecamap', TORECAMAP)
+        self.run_merge('--no-official', '--dry-run')
+        with open(os.path.join(self.data, 'items-archive.json')) as f:
+            self.assertEqual(len(json.load(f)), 3)  # a dry run writes nothing
+        items = {x['id'] for x in self.run_merge('--no-official')}
+        self.assertNotIn(old['id'], items)
+        self.assertIn(recent['id'], items)
+        with open(os.path.join(self.data, 'items-archive.json')) as f:
+            archive = json.load(f)
+        # newly archived: TODAY; the hidden one is not archived; back in items.json or over two years old: dropped
+        self.assertEqual([a['id'] for a in archive], [kept['id'], old['id']])
+        self.assertEqual(archive[1], {'id': old['id'], 'date': old['date'], 'game': OP, 'name': old['name'], 'pack': '220円',
+                                      'box': '', 'url': '', 'thumb': 'thumbs/old.jpg', 'approx': False, 'source': old['source'],
+                                      'changed': TODAY})
+        # archive and override thumbs are kept, dropped ones pruned
+        self.assertEqual(sorted(os.listdir(self.thumbs)), ['old.jpg', 'ov.jpg'])
+
+
 class Thumbs(MergeCase):
     def test_save_and_cleanup(self):
         pinned = item('2026-12-03', 'MTG', '固定画像の商品')
@@ -423,7 +489,7 @@ class Thumbs(MergeCase):
             self.assertEqual(len(json.load(f)), len(items))
         with open(os.path.join(self.data, 'meta.json')) as f:
             self.assertEqual(json.load(f), {'updated': TODAY})
-        self.assertEqual(sorted(os.listdir(self.data)), ['items.json', 'meta.json', 'overrides.json', 'update-report.md'])
+        self.assertEqual(sorted(os.listdir(self.data)), ['items-archive.json', 'items.json', 'meta.json', 'overrides.json', 'update-report.md'])
 
     def test_dry_run_writes_no_thumbs_or_data(self):
         open(os.path.join(self.thumbs, 'stale.jpg'), 'w').close()

@@ -189,10 +189,13 @@ class Api:
             out = []
             for e in hits:
                 if not out or out[-1]['date'] != e['starts_on']:
-                    out.append({'date': e['starts_on'], 'count': 0, 'by_game': {}})
+                    out.append({'date': e['starts_on'], 'count': 0, 'by_game': {}, 'by_game_type': {}})
                 out[-1]['count'] += 1
+                t = e['group']['event_type_code'] or ''
                 for g in e['game_codes']:
                     out[-1]['by_game'][g] = out[-1]['by_game'].get(g, 0) + 1
+                    bt = out[-1]['by_game_type'].setdefault(g, {})
+                    bt[t] = bt.get(t, 0) + 1
             return 200, {'days': out}
         try:
             limit = max(1, min(200, int(one('limit') or 100)))

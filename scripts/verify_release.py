@@ -3,9 +3,11 @@
 .venv/bin/python -I scripts/verify_release.py [--base main] [--today YYYY-MM-DD] [--skip-build]
 Exit code 1 if any FAIL. WARN lines are for the owner to review, not blockers.
 """
-import argparse, collections, datetime, hashlib, html.parser, json, os, re, subprocess, sys, unicodedata
+import argparse, collections, datetime, glob, hashlib, html.parser, json, os, re, subprocess, sys, unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+from sourcekey import product_code  # noqa: E402
 DIST = os.path.join(ROOT, 'dist')
 SITE = 'https://shindan-navi.app'
 ALLOWED_TYPES = {'WebSite', 'BreadcrumbList', 'ItemList', 'ListItem'}
@@ -14,6 +16,10 @@ FORBIDDEN_KEYS = {'offers', 'aggregateRating', 'review', 'availability', 'price'
                   'shippingDetails', 'hasMerchantReturnPolicy'}
 
 fails, warns = [], []
+# VOICES_SOURCE=d1 (docs/design/voices-db.md): /voices/ and the home block fetch the snapshots from /api/v1/voices*;
+# the build embeds none and writes no archive pages. Same rule as build.py.
+VOICES_D1 = (os.environ.get('VOICES_ENABLED', '') == '1' and os.environ.get('BUILD_EVENTS', '1') != '0'
+             and (os.environ.get('VOICES_SOURCE', '').strip() or 'static') == 'd1')
 def fail(msg): fails.append(msg)
 def warn(msg): warns.append(msg)
 
@@ -22,11 +28,71 @@ def norm(name):
     return re.sub(r'\s+', '', unicodedata.normalize('NFKC', name)).lower()
 
 
-def git_json(ref, path):
+SHOWN = ('date', 'game', 'name', 'pack', 'box', 'per_box', 'per_pack', 'url', 'thumb', 'approx')  # = update_data.SHOWN
+
+
+def yen(t):
+    m = re.search(r'(\d[\d,]*)\s*円', t or '')
+    return int(m[1].replace(',', '')) if m else None
+
+
+def shown(x):  # = update_data.shown (with shown_code)
+    src = x.get('source') or {}
+    k = src.get('key') or ''
+    code = k if src.get('site') == 'official' and k and product_code(k) == k else product_code(x.get('name') or '') or ''
+    return tuple(yen(x.get(k)) or (x.get(k) or '') if k in ('pack', 'box') else x.get(k) or '' for k in SHOWN) + (code,)
+
+
+def git_json(ref, path, missing=None):
+    """path at ref; `missing` (when given) stands in for a file ref does not have."""
+    if missing is not None and subprocess.run(['git', '-C', ROOT, 'cat-file', '-e', f'{ref}:{path}'], capture_output=True).returncode:
+        return missing
     out = subprocess.run(['git', '-C', ROOT, 'show', f'{ref}:{path}'], capture_output=True, text=True)
     if out.returncode:
         sys.exit(f'cannot read {path} at {ref}: {out.stderr.strip()}')
     return json.loads(out.stdout)
+
+
+def load_archive():
+    p = os.path.join(ROOT, 'data/items-archive.json')
+    return json.load(open(p)) if os.path.exists(p) else []
+
+
+def check_archive(base, head, ov, old, meta, today):
+    """data/items-archive.json (contracts/releases.md › Archive): released items that left items.json keep a slim
+    record; an item the merge dropped for its date (not hidden) must be in it, and nothing in it is in items.json."""
+    arch = load_archive()
+    old_arch = git_json(base, 'data/items-archive.json', missing=[])
+    upd = datetime.date.fromisoformat(meta['updated'])
+    cutoff = (upd - datetime.timedelta(days=30)).isoformat()
+    oldest = (upd - datetime.timedelta(days=730)).isoformat()
+    live = {i['id'] for i in head}
+    ids = collections.Counter(a.get('id') for a in arch)
+    for k, n in ids.items():
+        if n > 1: fail(f'archive: id {k} appears {n} times')
+    for a in arch:
+        if not all(a.get(f) for f in ('id', 'date', 'game', 'name')): fail(f'archive: entry without id / date / game / name: {a}'); continue
+        if a['id'] in live: fail(f'archive: {a["id"]} {a["name"]} is also in items.json')
+        c = a.get('changed')
+        # a merge stamps meta.updated; a hand-added entry (the 2026-11-20 backfill) its publishing day: never after today
+        if not (isinstance(c, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', c) and c <= today):
+            fail(f'archive: {a["id"]} changed {c!r} is not a date on or before {today}')
+        if a['date'] >= cutoff: fail(f'archive: {a["id"]} {a["name"]} released {a["date"]}, still inside the 30-day window')
+        if a['date'] < oldest: warn(f'archive: {a["id"]} {a["name"]} released {a["date"]}, over two years before {meta["updated"]} (the next merge drops it)')
+    have = set(ids)
+    for i in old:
+        if i['id'] not in live and i['id'] not in have and oldest <= i['date'] < cutoff and not ov.get(i['id'], {}).get('hide'):
+            fail(f'archive: {i["id"]} {i["date"]} {i["name"]} left items.json after its release but is not archived')
+    was = {a['id'] for a in old_arch}
+    for a in old_arch:
+        if a['id'] not in have and a['id'] not in live and a['date'] >= oldest and not ov.get(a['id'], {}).get('hide'):
+            warn(f'archive: entry {a["id"]} {a["name"]} was removed')
+    from_base = {i['id'] for i in old}
+    other = [a for a in arch if a['id'] not in was and a['id'] not in from_base]
+    if other:
+        warn(f'archive: {len(other)} new entries were not in {base}\'s items.json (backfill or hand edit — review), e.g. {other[0]["id"]} {other[0]["name"]}')
+    print(f'## archive: {len(old_arch)} -> {len(arch)} entries, +{len(have - was)} / -{len(was - have)}')
+    return arch
 
 
 def check_data(base, today):
@@ -78,20 +144,42 @@ def check_data(base, today):
         d = {f: (a[k].get(f), b[k].get(f)) for f in ('date', 'name', 'pack', 'box') if a[k].get(f) != b[k].get(f)}
         if d: changed.append((b[k], d))
 
+    # `changed` (contracts/releases.md): a date no later than the data update; a merge run moves it for every new item
+    # and every item whose shown fields changed. A branch may hold merge runs of several days (a rerun the next day
+    # compares against the previous run's commit), so an item changed since the base carries a date from base's
+    # update on, not necessarily the last run's.
+    meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
+    old_meta = git_json(base, 'data/meta.json')
+    merged = meta['updated'] != old_meta['updated']
+    stale = []
+    for i in head:
+        c = i.get('changed')
+        if c is not None and not (isinstance(c, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', c) and c <= meta['updated']):
+            fail(f'data: {i["id"]} changed {c!r} is not a date on or before meta.updated {meta["updated"]}')
+        if i['id'] not in a or shown(a[i['id']]) != shown(i):
+            c = i.get('changed', meta['updated'])
+            if (c < old_meta['updated']) if merged else (c != meta['updated']):
+                stale.append(i)
+    for i in stale:
+        msg = f'data: {i["id"]} {i["name"]} is new or changed but its changed date is {i.get("changed")}'
+        if merged: fail(msg + f' (merge runs since {base}\'s {old_meta["updated"]}, last on {meta["updated"]})')
+        else: warn(msg + ' (items.json edited without a merge run: its sitemap lastmod stays old)')
+
     print(f'## data vs {base}: {len(old)} -> {len(head)} items, +{len(added)} / -{len(removed)} / ~{len(changed)}')
     for i in sorted(added, key=lambda x: x['date']):
         print(f'  + {i["date"]} [{i["game"]}] {i["name"]} ({(i.get("source") or {}).get("site", "-")})')
     for i, d in sorted(changed, key=lambda x: x[0]['date']):
         print(f'  ~ {i["id"]} [{i["game"]}] {i["name"]}: ' + ', '.join(f'{f} {x!r} -> {y!r}' for f, (x, y) in d.items()))
     print(f'  - {len(removed)} removed ({sum(i["date"] < cutoff for i in removed)} released over 30 days ago)')
-    return head, ov
+    arch = check_archive(base, head, ov, old, meta, today)
+    return head, ov, arch
 
 
 class PageParser(html.parser.HTMLParser):
     def __init__(self):
         super().__init__()
         self.ld, self.canonical = [], None
-        self.list_names, self.list_dates = [], []
+        self.list_names, self.list_dates, self.list_links = [], [], []
         self._stack, self._buf, self._in = [], [], None
         self._seo_depth = None
 
@@ -104,6 +192,7 @@ class PageParser(html.parser.HTMLParser):
             self._seo_depth = len(self._stack)
         elif self._seo_depth and tag == 'time': self.list_dates.append(a.get('datetime'))
         elif self._seo_depth and tag == 'li': self._in, self._buf = 'li', []
+        elif self._in == 'li' and tag == 'a' and (a.get('href') or '').startswith('/item/'): self.list_links.append(a['href'])
         elif self._in == 'li' and tag == 'a' and (a.get('class') == 'sg'): self._in = 'li-skip'
         elif self._in == 'li' and tag == 'span' and a.get('class') in ('sg', 'sp'): self._in = 'li-skip'
         if tag in ('link', 'meta', 'img', 'br', 'input'): self._stack.pop()
@@ -172,10 +261,347 @@ def check_home(today, head, ov):
     # the location picker is one shared partial (src/locpick.html) on / and /events/
     for f2, want in ((src, events), (open(os.path.join(DIST, 'events/index.html')).read() if events else '', events)):
         if (f2.count('<dialog id="prefDlg"'), f2.count('window.snLoc=')) != ((1, 1) if want else (0, 0)): fail('location picker missing or duplicated on / or /events/')
-    print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events}')
+    # いま話題: with VOICES_ENABLED=1 the latest real snapshot's topics, only the fields the block shows
+    von = os.environ.get('VOICES_ENABLED', '') == '1'
+    real = sorted((json.load(open(x)) for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json'))), key=lambda x: x['date'])
+    real = [x for x in real if not x.get('sample')] if von else []
+    hv = h.get('voices')
+    if ('id="vtr"' in src) != von: fail(f'/: いま話題 block {"missing" if von else "present while VOICES is off"}')
+    if VOICES_D1:
+        if hv: fail('/: HOME voices data embedded in a VOICES_SOURCE=d1 build')
+        if h.get('voicesApi') != '/api/v1/voices/latest': fail(f'/: HOME voicesApi {h.get("voicesApi")}')
+        if [g.get('code') for g in h.get('voiceGames') or []] != voice_games(): fail('/: HOME voiceGames differ from GAMES in src/voices.html')
+    elif 'voicesApi' in h or 'voiceGames' in h: fail('/: HOME voicesApi / voiceGames in a static voices build')
+    elif not von or not real:
+        if hv: fail('/: HOME voices data embedded without a real snapshot / VOICES_ENABLED')
+    elif not hv: fail('/: HOME voices data missing')
+    else:
+        last = real[-1]
+        if hv.get('date') != last['date']: fail(f'/: HOME voices date {hv.get("date")} != latest snapshot {last["date"]}')
+        if [t.get('id') for t in hv.get('topics', [])] != [t['id'] for t in last['topics']]: fail('/: HOME voices topics differ from the latest snapshot')
+        keys = {'id', 'game', 'title', 'summary', 'attitude', 'volume', 'first_seen'}
+        if any(set(t) != keys for t in hv.get('topics', [])): fail('/: HOME voices topics carry other fields than the block needs')
+        if {g.get('code') for g in hv.get('games', [])} != {t['game'] for t in last['topics']}: fail('/: HOME voices games differ from the topics\' games')
+    print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events} voices={len(hv["topics"]) if hv else 0}')
 
 
-def check_dist(today, head, ov):
+def check_voices():
+    """/voices/ (contracts/voices.md) exists only with VOICES_ENABLED=1: then it embeds every snapshot in data/voices/
+    (samples only while no real one exists), is noindex and out of the sitemap while sample-only, and every page's tool
+    tabs link it. Off, nothing may mention it."""
+    import glob
+    on = os.environ.get('VOICES_ENABLED', '') == '1'
+    f = os.path.join(DIST, 'voices/index.html')
+    pages = glob.glob(os.path.join(DIST, '**/*.html'), recursive=True)
+    sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
+    privacy = open(os.path.join(DIST, 'privacy/index.html')).read()
+    if not on:
+        if os.path.exists(f): fail('/voices/ built without VOICES_ENABLED=1')
+        for x in pages:
+            if 'href="/voices/' in open(x).read(): fail(f'{os.path.relpath(x, DIST)}: links /voices/ while it is off')
+        if '/voices/' in sitemap: fail('sitemap: /voices/ listed while it is off')
+        if 'tcg.voices' in privacy or '話題カレンダー' in privacy: fail('/privacy/: voices section while it is off')
+        print('  /voices/     off')
+        return
+    if not os.path.exists(f): fail('/voices/ missing with VOICES_ENABLED=1'); return
+    src = open(f).read()
+    if VOICES_D1: return check_voices_d1(src, sitemap, pages, privacy)
+    snaps = []
+    for x in sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json'))):
+        d = json.load(open(x))
+        snaps.append({'date': d['date'], 'sample': bool(d.get('sample')), 'ids': [t['id'] for t in d['topics']]})
+    if any(not x['sample'] for x in snaps): snaps = [x for x in snaps if not x['sample']]
+    m = re.search(r'const V = (\{.*?\});\n', src)
+    if not m: fail('/voices/: embedded data missing'); return
+    v = json.loads(m[1])
+    got = [{'date': x['date'], 'sample': x['sample'], 'ids': [t['id'] for t in x['topics']]} for x in v['snapshots']]
+    if got != snaps: fail(f'/voices/: embedded snapshots {[x["date"] for x in got]} != data/voices {[x["date"] for x in snaps]}')
+    sample_only = not snaps or all(x['sample'] for x in snaps)
+    noindex = bool(re.search(r'<meta name="robots" content="noindex">', src))
+    listed = f'<loc>{SITE}/voices/</loc>' in sitemap
+    if noindex != sample_only or listed == sample_only:
+        fail(f'/voices/: sample_only={sample_only} but noindex={noindex} sitemap={listed}')
+    pp = PageParser(); pp.feed(src)
+    if pp.canonical != SITE + '/voices/': fail(f'/voices/: canonical {pp.canonical}')
+    if len(re.findall(r'<h1[ >]', src)) != 1: fail('/voices/: expected one h1')
+    og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
+    ogf = og and os.path.join(DIST, og[1].replace(SITE + '/', '', 1))
+    if not og or og[1] != SITE + '/og/voices.png' or not os.path.exists(ogf): fail(f'/voices/: og:image {og and og[1]} missing')
+    elif open(ogf, 'rb').read(24)[16:24] != (1200).to_bytes(4, 'big') + (630).to_bytes(4, 'big'): fail('/voices/: og image is not 1200x630')
+    # topic text lives in the embedded data (rendered by the page); the static HTML has only the latest real snapshot's
+    # titles in the list below the calendar (owner decision 2026-11-20), linking its archive page
+    static = src.replace(m[0], '') if m else src
+    vl = re.search(r'<section class="vlatest".*?</section>', static, re.S)
+    rest = static.replace(vl[0], '') if vl else static
+    leaked = [t[k] for x in v['snapshots'] for t in x['topics'] for k in ('title', 'summary') if html.escape(t[k]) in rest or t[k] in rest]
+    leaked += [y for x in v['snapshots'] for t in x['topics'] for y in t['voices'] if html.escape(y) in static or y in static]
+    if leaked: fail(f'/voices/: topic text in the static HTML outside the latest list: {leaked[:2]}')
+    if sample_only:
+        if vl: fail('/voices/: latest-topics list while only samples exist')
+    elif not vl: fail('/voices/: latest-topics list missing')
+    else:
+        last = [x for x in v['snapshots'] if x['topics']][-1]
+        order = [c for c in voice_games() if any(t['game'] == c for t in last['topics'])]
+        want = [(f'/voices/{last["date"]}/#topic-{t["id"]}', t['title']) for c in order for t in last['topics'] if t['game'] == c]
+        rows = [(h, html.unescape(re.sub(r'<span class="vlg"[^>]*>.*?</span>', '', a))) for h, a in re.findall(r'<li><a href="([^"]+)">(.*?)</a></li>', vl[0])]
+        if rows != want: fail(f'/voices/: latest list {len(rows)} rows != latest snapshot {len(want)} topics in GAMES order')
+        if f'<a href="/voices/{last["date"]}/">' not in vl[0]: fail('/voices/: latest list heading does not link the archive page')
+    if not re.search(r'<nav class="tooltabs"[^>]*>(?:(?!</nav>).)*<a href="/voices/"[^>]*aria-current="true"', src, re.S):
+        fail('/voices/: its tool tab is not current')
+    for x in pages:
+        t = open(x).read()
+        if '<nav class="tooltabs"' in t and 'href="/voices/"' not in t: fail(f'{os.path.relpath(x, DIST)}: tool tabs lack /voices/')
+    if 'tcg.voices' not in privacy or '話題カレンダー' not in privacy: fail('/privacy/: voices section missing')
+    # owner decision 2026-11-20: no topic links to the players who posted; the only X URLs are the official reacting_to posts
+    official = {t['reacting_to'] for x in v['snapshots'] for t in x['topics'] if t.get('reacting_to')}
+    if any('posts' in t for x in v['snapshots'] for t in x['topics']): fail('/voices/: embedded topics carry player posts')
+    if 'data-x="post"' in src or '関連する投稿' in src: fail('/voices/: the page script still links players\' posts')
+    for u in set(re.findall(r'https?://(?:www\.)?(?:x|twitter)\.com/[^"\s<>\\]+', src)) - official:
+        fail(f'/voices/: X URL that is not a topic\'s official reacting_to post {u}')
+    for u in official:
+        if not re.fullmatch(r'https://x\.com/[A-Za-z0-9_]{1,15}/status/[0-9]{1,20}', u): fail(f'/voices/: odd reacting_to URL {u}')
+    print(f'  /voices/     snapshots={len(got)} topics={sum(len(x["ids"]) for x in got)} sample_only={sample_only}')
+    check_voice_days(sitemap)
+
+
+def check_voices_d1(src, sitemap, pages, privacy):
+    """VOICES_SOURCE=d1: /voices/ embeds no snapshots and fetches /api/v1/voices; indexable and in the sitemap without
+    lastmod; no archive pages, no archive URLs, no latest list and no topic text or X URL in the built HTML."""
+    m = re.search(r'const V = (\{.*?\});\n', src)
+    if not m: fail('/voices/: embedded V missing'); return
+    v = json.loads(m[1])
+    if v.get('snapshots') is not None or v.get('api') != '/api/v1/voices': fail(f'/voices/: d1 build embeds snapshots={v.get("snapshots") is not None} api={v.get("api")}')
+    if re.search(r'<meta name="robots" content="noindex">', src): fail('/voices/: noindex in a d1 build (D1 never holds samples)')
+    if f'<url><loc>{SITE}/voices/</loc></url>' not in sitemap: fail('sitemap: /voices/ missing (d1 build: listed without lastmod)')
+    if re.search(re.escape(SITE) + r'/voices/\d', sitemap): fail('sitemap: archive URLs in a d1 build')
+    built = glob.glob(os.path.join(DIST, 'voices/*/index.html'))
+    if built: fail(f'/voices/<date>/: {len(built)} archive pages in a d1 build')
+    if '<section class="vlatest"' in src: fail('/voices/: latest-topics list in a d1 build')
+    for x in pages:
+        if re.search(r'href="/voices/\d', open(x).read()): fail(f'{os.path.relpath(x, DIST)}: links an archive page in a d1 build')
+    texts = [t[k] for f in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) for t in json.load(open(f))['topics'] for k in ('title', 'summary')]
+    leaked = [t for t in texts if t in src or html.escape(t) in src]
+    if leaked: fail(f'/voices/: topic text in a d1 build: {leaked[:2]}')
+    if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail('/voices/: X URL in a d1 build')
+    pp = PageParser(); pp.feed(src)
+    if pp.canonical != SITE + '/voices/': fail(f'/voices/: canonical {pp.canonical}')
+    if len(re.findall(r'<h1[ >]', src)) != 1: fail('/voices/: expected one h1')
+    if not re.search(r'<nav class="tooltabs"[^>]*>(?:(?!</nav>).)*<a href="/voices/"[^>]*aria-current="true"', src, re.S):
+        fail('/voices/: its tool tab is not current')
+    if 'tcg.voices' not in privacy or '話題カレンダー' not in privacy: fail('/privacy/: voices section missing')
+    print('  /voices/     d1 build: snapshots from /api/v1/voices, no archive pages')
+
+
+def voice_games():
+    src = open(os.path.join(ROOT, 'src/voices.html')).read()
+    return re.findall(r"\{code:'([A-Z]+)'", src.split('const GAMES = [', 1)[1].split('];', 1)[0])
+
+
+def check_voice_days(sitemap):
+    """/voices/<date>/ (owner decision 2026-11-20): one indexable archive page per real snapshot and none for samples;
+    the snapshot's topics in GAMES order with our own text only (no post text, no embeds), X links nofollow, canonical,
+    BreadcrumbList as the only JSON-LD, prev/next between snapshots, in the sitemap dated by the snapshot."""
+    files = sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json')))
+    snaps = [json.load(open(x)) for x in files]
+    real = sorted((x for x in snaps if not x.get('sample') and x['topics']), key=lambda x: x['date'])
+    built = sorted(os.path.basename(os.path.dirname(x)) for x in glob.glob(os.path.join(DIST, 'voices/*/index.html')))
+    if built != [x['date'] for x in real]: fail(f'/voices/<date>/: pages {built} != real snapshots with topics {[x["date"] for x in real]}')
+    for loc in re.findall(re.escape(SITE) + r'/voices/(\d{4}-\d{2}-\d{2})/</loc>', sitemap):
+        if loc not in built: fail(f'sitemap: /voices/{loc}/ listed without a page')
+    for x in snaps:
+        if x.get('sample') and os.path.exists(os.path.join(DIST, 'voices', x['date'])): fail(f'/voices/{x["date"]}/: archive page for a sample snapshot')
+    games = voice_games()
+    titles = collections.Counter()
+    for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True):
+        t = re.search(r'<title>(.*?)</title>', open(f).read())
+        if t: titles[t[1]] += 1
+    for i, s in enumerate(real):
+        d = s['date']; p = f'/voices/{d}/'; url = SITE + p
+        f = os.path.join(DIST, 'voices', d, 'index.html')
+        if not os.path.exists(f): continue
+        src = open(f).read()
+        pp = PageParser(); pp.feed(src)
+        if pp.canonical != url: fail(f'{p}: canonical {pp.canonical}')
+        if re.search(r'<meta name="robots"[^>]*noindex', src): fail(f'{p}: noindex')
+        if f'<url><loc>{url}</loc><lastmod>{d}</lastmod></url>' not in sitemap: fail(f'sitemap: {p} missing or not dated {d}')
+        title = re.search(r'<title>(.*?)</title>', src)
+        if not title or titles[title[1]] != 1: fail(f'{p}: <title> missing or not unique: {title and title[1]}')
+        desc = re.search(r'<meta name="description" content="([^"]+)"', src)
+        if not desc or not any(html.escape(t['title']) in desc[1] for t in s['topics']): fail(f'{p}: description lacks a topic title')
+        og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
+        if not og or og[1] != SITE + '/og/voices.png': fail(f'{p}: og:image {og and og[1]}')
+        if len(re.findall(r'<h1[ >]', src)) != 1: fail(f'{p}: expected one h1')
+        blocks = []
+        for raw in pp.ld:
+            try: blocks.append(json.loads(raw))
+            except ValueError as e: fail(f'{p}: JSON-LD does not parse: {e}')
+        bad = []
+        for k, blk in enumerate(blocks): walk(blk, f'ld[{k}]', bad)
+        if bad: fail(f'{p}: forbidden structured data {bad[0]}')
+        if [b.get('@type') for b in blocks] != ['BreadcrumbList']: fail(f'{p}: JSON-LD should be one BreadcrumbList, got {[b.get("@type") for b in blocks]}')
+        else:
+            el = blocks[0]['itemListElement']
+            if [e.get('position') for e in el] != list(range(1, len(el) + 1)) or [e.get('item') for e in el] != [SITE + '/', SITE + '/voices/', url]:
+                fail(f'{p}: BreadcrumbList {[e.get("item") for e in el]}')
+            crumbs = re.search(r'<nav class="crumbs"[^>]*>(.*?)</nav>', src, re.S)
+            if not crumbs or [html.unescape(re.sub(r'<[^>]+>', '', c)).strip() for c in crumbs[1].split(' › ')] != [e.get('name') for e in el]:
+                fail(f'{p}: visible breadcrumbs differ from the BreadcrumbList')
+        # topics: every one of the snapshot, grouped by game in GAMES order, snapshot order inside a game
+        want = [t['id'] for c in games for t in s['topics'] if t['game'] == c]
+        got = re.findall(r'<article class="tc"[^>]* id="topic-([a-z0-9-]+)"', src)
+        if got != want: fail(f'{p}: {len(got)} topic cards != {len(want)} in GAMES order')
+        secs = re.findall(r'<section class="vgsec" id="g-([A-Z]+)"', src)
+        if secs != [c for c in games if any(t['game'] == c for t in s['topics'])]: fail(f'{p}: game sections {secs}')
+        # no post text: no quotes or embeds; the only X URLs are the topics' official reacting_to posts, labelled by us
+        if re.search(r'<blockquote|twitter-tweet|platform\.twitter\.com|publish\.twitter\.com|<iframe', src): fail(f'{p}: quote or X embed')
+        allowed = {t['reacting_to'] for t in s['topics'] if t['reacting_to']}
+        for u in set(re.findall(r'https?://(?:www\.)?(?:x|twitter)\.com/[^"\s<>]+', src)) - allowed: fail(f'{p}: X URL that is not a reacting_to post {u}'); break
+        if 'data-x="post"' in src or '関連する投稿' in src: fail(f'{p}: links to players\' posts')
+        for a, h, body in re.findall(r'(<a [^>]*href="(https://(?:x|twitter)\.com/[^"]*)"[^>]*>)(.*?)</a>', src):
+            rel = (re.search(r'rel="([^"]*)"', a) or [None, ''])[1].split()
+            if h not in allowed: fail(f'{p}: X link not from the data {h}'); break
+            if not {'nofollow', 'noopener'} <= set(rel) or 'target="_blank"' not in a: fail(f'{p}: X link rel {rel}'); break
+            if re.sub(r'<[^>]+>', '', body).strip() != '反応元の公式投稿 ↗（外部サイト・X）': fail(f'{p}: X link text {body[:40]!r}'); break
+        for t in s['topics']:
+            card = re.search(rf'<article class="tc"[^>]* id="topic-{t["id"]}".*?</article>', src, re.S)
+            if not card: continue
+            c = card[0]
+            texts = [html.unescape(x) for x in re.findall(r'<li><span aria-hidden="true">💬 </span>(.*?)</li>', c)]
+            if texts != t['voices']: fail(f'{p}: {t["id"]} voices differ from the data'); continue
+            if html.escape(t['summary']) not in c or html.escape(t['title']) not in c: fail(f'{p}: {t["id"]} title / summary missing')
+            if f'href="/voices/#t={t["id"]}"' not in c: fail(f'{p}: {t["id"]} lacks its /voices/#t= link')
+            # the tag is what card() in src/voices.html emits: the shared game icon (gi), then the name
+            tag = re.search(r'<span class="tag">(<img class="gi" src="/gi/[a-z0-9]+\.(?:png|svg)" width="16" height="16" alt="" aria-hidden="true">|<span class="gi" aria-hidden="true">[^<]+</span>)([^<]+)</span>', c)
+            if not tag: fail(f'{p}: {t["id"]} tag without the game icon')
+            n = sum(t['share'].values())
+            pct = [int(x) for x in re.findall(r'約(\d+)%', re.search(r'<span class="alg"[^>]*>(.*?)</span></div>', c, re.S)[1])] if 'class="alg"' in c else []
+            if (n < 5) != ('data-small' in c) or (n < 5 and ('%' in c or 'class="abar"' in c)): fail(f'{p}: {t["id"]} small-sample rule (n={n})')
+            if n >= 5 and sum(pct) != 100: fail(f'{p}: {t["id"]} shares add up to {sum(pct)}%')
+            if n >= 5 and any(x % 10 for x in pct): fail(f'{p}: {t["id"]} shares not in 10% steps')
+            if re.search(r'"(positive|negative|neutral)":\s*\d', c) or re.search(r'\b\d+\s*件の投稿', c): fail(f'{p}: {t["id"]} shows post counts')
+        if f'href="/voices/#d={d}"' not in src: fail(f'{p}: no link to the day on /voices/')
+        prev = real[i - 1]['date'] if i else None
+        nxt = real[i + 1]['date'] if i + 1 < len(real) else None
+        for rel, other in (('prev', prev), ('next', nxt)):
+            has = re.findall(rf'<a (?:class="[^"]*" )?href="(/voices/[\d-]+/)" rel="{rel}">', src)
+            if has != ([f'/voices/{other}/'] * 2 if other else []): fail(f'{p}: {rel} links {has}, expected {other}')
+        if 'href="/voices/"' not in src: fail(f'{p}: no link back to /voices/')
+        print(f'  {p:<22} topics={len(got)} games={len(secs)} prev={prev} next={nxt}')
+
+
+def check_items(head, ov, arch, calendar_pages):
+    """/item/<id>/: exactly one page per visible or archived item (none for hidden ones), self-canonical, h1 = the shown
+    name, a unique title, only BreadcrumbList JSON-LD ending at the page, internal links that resolve, in the sitemap.
+    Archived items: marked 発売済み, no link into the calendar, and in no calendar page, title / month page or /."""
+    visible = {i['id']: {**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('name', 'date', 'thumb')}}
+               for i in head if not ov.get(i['id'], {}).get('hide')}
+    sold = {a['id']: {**a, **{k: v for k, v in ov.get(a['id'], {}).items() if k in ('name', 'date', 'thumb')}}
+            for a in arch if not ov.get(a['id'], {}).get('hide') and a['id'] not in visible}
+    visible.update(sold)
+    for p in calendar_pages:
+        f = os.path.join(DIST, p.strip('/'), 'index.html')
+        if not os.path.exists(f): continue
+        src = open(f).read()
+        for k in sold:
+            if k in src: fail(f'{p}: archived item {k} ({sold[k]["name"]}) is on the page'); break
+    built = {os.path.basename(os.path.dirname(f)) for f in glob.glob(os.path.join(DIST, 'item/*/index.html'))}
+    for k in sorted(set(visible) - built): fail(f'/item/{k}/: missing ({visible[k]["name"]})')
+    for k in sorted(built - set(visible)):
+        fail(f'/item/{k}/: built for a {"hidden" if k in ov and ov[k].get("hide") else "unknown"} item')
+    sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
+    titles, n_links = {}, 0
+    for k in sorted(built & set(visible)):
+        it = visible[k]
+        p = f'/item/{k}/'
+        src = open(os.path.join(DIST, 'item', k, 'index.html')).read()
+        pp = PageParser(); pp.feed(src)
+        if pp.canonical != SITE + p: fail(f'{p}: canonical {pp.canonical}')
+        if re.search(r'<meta name="robots"[^>]*noindex', src): fail(f'{p}: noindex')
+        if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
+        h1 = re.findall(r'<h1(?:\s[^>]*)?>(.*?)</h1>', src, re.S)
+        if len(h1) != 1 or html.unescape(re.sub(r'<[^>]+>', '', h1[0])) != it['name']:
+            fail(f'{p}: h1 {h1} != {it["name"]!r}')
+        title = html.unescape(re.search(r'<title>(.*?)</title>', src)[1])
+        if it['name'] not in title or not re.search(r' 発売日・価格(｜トレカカレンダー)?$', title): fail(f'{p}: title {title!r}')
+        titles.setdefault(title, []).append(k)
+        if not re.search(r'<meta name="description" content="[^"]{20,}">', src): fail(f'{p}: meta description missing')
+        if f'<time datetime="{it["date"]}">' not in src: fail(f'{p}: release date {it["date"]} not shown')
+        if 'class="seo' in src: fail(f'{p}: has a calendar-page static list')
+        blocks = []
+        for raw in pp.ld:
+            try: blocks.append(json.loads(raw))
+            except ValueError as e: fail(f'{p}: JSON-LD does not parse: {e}')
+        bad = []
+        for i, blk in enumerate(blocks): walk(blk, f'ld[{i}]', bad)
+        if bad: fail(f'{p}: forbidden structured data, e.g. {bad[0]}')
+        if [b.get('@type') for b in blocks] != ['BreadcrumbList']: fail(f'{p}: JSON-LD should be only BreadcrumbList, got {[b.get("@type") for b in blocks]}')
+        else:
+            el = blocks[0].get('itemListElement', [])
+            if [x.get('position') for x in el] != list(range(1, len(el) + 1)) or not el or el[0].get('item') != SITE + '/' \
+                    or el[-1].get('item') != SITE + p or el[-1].get('name') != it['name']:
+                fail(f'{p}: breadcrumbs should run from / to the page itself')
+        og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
+        if not og or not os.path.exists(os.path.join(DIST, og[1].replace(SITE + '/', '', 1))): fail(f'{p}: og:image {og and og[1]} is not a built file')
+        hrefs = set(re.findall(r'href="(/[^"#?]*)', src))
+        for h in hrefs:
+            if not os.path.exists(os.path.join(DIST, h.strip('/'), 'index.html') if h.endswith('/') else os.path.join(DIST, h.strip('/'))):
+                fail(f'{p}: link {h} does not resolve')
+        if k in sold:
+            if '<span class="pd-sold">発売済み</span>' not in src or '（発売済み）' not in src: fail(f'{p}: archived item not marked 発売済み')
+            if 'href="/releases/#i=' in src: fail(f'{p}: archived item links into the calendar')
+            if f'<loc>{SITE}{p}</loc><lastmod>{it.get("changed")}</lastmod>' not in sitemap: fail(f'sitemap: {p} not dated by its archived changed {it.get("changed")}')
+        else:
+            if f'href="/releases/#i={k}"' not in src: fail(f'{p}: no 新弾カレンダーで見る link')
+            if f'href="/{it["date"][:7]}/"' not in src: fail(f'{p}: no month page link')
+            if 'class="pd-sold"' in src: fail(f'{p}: calendar item marked 発売済み')
+        n_links += sum(h.startswith('/item/') for h in hrefs)
+    for t, ks in titles.items():
+        if len(ks) > 1: fail(f'/item/: title {t!r} shared by {ks}')
+    print(f'  /item/       pages={len(built)} visible={len(visible)} (archived {len(sold)}) cross-links={n_links}')
+
+
+def check_index(sitemap, today):
+    """Search basics over every built page: the sitemap lists exactly the indexable pages (no noindex), each
+    self-canonical with a trailing slash and og:url = canonical; <title>s unique (FAIL) and at most 60 characters (WARN);
+    descriptions unique (WARN); robots.txt allows crawling and names the sitemap."""
+    locs = re.findall(r'<loc>(.*?)</loc>', sitemap)
+    if len(locs) != len(set(locs)): fail('sitemap: duplicate <loc>')
+    titles, descs, long_items, indexable = collections.defaultdict(list), collections.defaultdict(list), [], set()
+    for f in sorted(glob.glob(os.path.join(DIST, '**/index.html'), recursive=True)):
+        rel = os.path.relpath(os.path.dirname(f), DIST)
+        p = '/' if rel == '.' else f'/{rel}/'
+        src = open(f).read()
+        noindex = bool(re.search(r'<meta name="robots"[^>]*noindex', src))
+        canon = re.search(r'<link rel="canonical" href="([^"]+)"', src)
+        if not noindex:
+            indexable.add(SITE + p)
+            if not canon or canon[1] != SITE + p: fail(f'{p}: canonical {canon and canon[1]} != {SITE + p}')
+            ogu = re.search(r'<meta property="og:url" content="([^"]+)"', src)
+            if ogu and canon and ogu[1] != canon[1]: fail(f'{p}: og:url {ogu[1]} != canonical')
+        t = re.search(r'<title>(.*?)</title>', src)
+        if not t: fail(f'{p}: no <title>'); continue
+        title = html.unescape(t[1])
+        titles[title].append(p)
+        if len(title) > 60:
+            if p.startswith('/item/'): long_items.append((len(title), p))
+            else: warn(f'{p}: <title> is {len(title)} characters (over 60): {title}')
+        d = re.search(r'<meta name="description" content="([^"]*)"', src)
+        if d and not noindex: descs[d[1]].append(p)
+    for t, ps in titles.items():
+        if len(ps) > 1: fail(f'<title> {t!r} shared by {ps[:4]}')
+    for d, ps in descs.items():
+        if len(ps) > 1: warn(f'meta description shared by {ps[:4]}')
+    if long_items:
+        warn(f'/item/: {len(long_items)} <title>s over 60 characters even without the game / brand (product names), longest {max(long_items)[0]}: {max(long_items)[1]}')
+    if set(locs) != indexable:
+        for x in sorted(indexable - set(locs)): fail(f'sitemap: indexable page {x} missing')
+        for x in sorted(set(locs) - indexable): fail(f'sitemap: {x} is not an indexable built page')
+    robots = open(os.path.join(DIST, 'robots.txt')).read()
+    if f'Sitemap: {SITE}/sitemap.xml' not in robots or re.search(r'^Disallow:\s*/\s*$', robots, re.M): fail(f'robots.txt: {robots!r}')
+    print(f'  index        sitemap={len(locs)} indexable={len(indexable)} titles={len(titles)} long item titles={len(long_items)}')
+
+
+def check_dist(today, head, ov, arch):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
     paths = [p['path'] for p in pages]
@@ -184,6 +610,8 @@ def check_dist(today, head, ov):
     if '/releases/' not in paths: fail('dist: release calendar /releases/ missing')
     if '/' in paths: fail('dist: / is built as a release calendar page')
     check_home(today, head, ov)
+    check_voices()
+    check_items(head, ov, arch, ['/'] + paths)
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
     if not months: fail('dist: no month pages')
 
@@ -192,10 +620,27 @@ def check_dist(today, head, ov):
     paths = ['/'] + paths
     for p in paths:
         if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
+    # lastmod: item pages their item's `changed` (meta.updated until the updater stamps one), calendar pages the newest
+    # of their items', / meta.updated
+    vis = [{**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date',)}} for i in head if not ov.get(i['id'], {}).get('hide')]
+    ch = lambda xs: max((x.get('changed') or meta['updated'] for x in xs), default=meta['updated'])
+    want_lastmod = {f'{SITE}/item/{i["id"]}/': i.get('changed') or meta['updated'] for i in arch + vis}
+    for pg in pages:
+        js = pg.get('js') or {}
+        sel = [i for i in vis if (js.get('game') in (None, i['game'])) and i['date'].startswith(js.get('month', ''))]
+        if pg['path'] != '/events/': want_lastmod[SITE + pg['path']] = ch(sel)
+    check_index(sitemap, today)
     for loc, lm in re.findall(r'<loc>(.*?)</loc><lastmod>(.*?)</lastmod>', sitemap):
         if loc == SITE + '/privacy/':  # dated by the policy's effective date in build.py, not by the data
             if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', lm) or lm > today: fail(f'sitemap: /privacy/ lastmod {lm}')
-        elif lm != meta['updated']: fail(f'sitemap: {loc} lastmod {lm} != meta.updated {meta["updated"]}')
+        elif loc == SITE + '/voices/':  # dated by the newest real snapshot, not by the release data
+            real = [json.load(open(x))['date'] for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) if not json.load(open(x)).get('sample')]
+            if lm != max(real, default=None): fail(f'sitemap: /voices/ lastmod {lm} != newest snapshot {max(real, default=None)}')
+        elif re.fullmatch(re.escape(SITE) + r'/voices/\d{4}-\d{2}-\d{2}/', loc):  # archive pages: checked in check_voice_days
+            pass
+        elif lm != want_lastmod.get(loc, meta['updated']):
+            fail(f'sitemap: {loc} lastmod {lm} != {want_lastmod.get(loc, meta["updated"])} ({"newest changed of its items" if loc in want_lastmod else "meta.updated"})')
+        if lm > today: fail(f'sitemap: {loc} lastmod {lm} is after {today}')
 
     # /feedback/ exists only with FEEDBACK_ENABLED=1: then noindex, out of the sitemap and linked from every footer;
     # otherwise nothing may link to it.
@@ -235,6 +680,10 @@ def check_dist(today, head, ov):
             bc = [blk for blk in blocks if blk.get('@type') == 'BreadcrumbList']
             if not bc: fail(f'{p}: BreadcrumbList missing')
             elif bc[0]['itemListElement'][-1].get('item') != SITE + p: fail(f'{p}: last breadcrumb is not the page itself')
+        # every static list entry links its own /item/<id>/ page
+        if len(pp.list_links) != len(pp.list_names): fail(f'{p}: {len(pp.list_names)} static list entries but {len(pp.list_links)} item links')
+        for h in pp.list_links:
+            if not os.path.exists(os.path.join(DIST, h.strip('/'), 'index.html')): fail(f'{p}: static list links missing page {h}')
         lists = [blk for blk in blocks if blk.get('@type') == 'ItemList']
         if len(lists) > 1: fail(f'{p}: {len(lists)} ItemList blocks')
         if pp.list_names:
@@ -244,6 +693,7 @@ def check_dist(today, head, ov):
                 names = [x.get('name') or (x.get('item') or {}).get('name') for x in el]
                 if lists[0].get('numberOfItems') not in (None, len(el)): fail(f'{p}: numberOfItems {lists[0]["numberOfItems"]} != {len(el)} elements')
                 if [x.get('position') for x in el] != list(range(1, len(el) + 1)): fail(f'{p}: ItemList positions are not 1..n')
+                if any(not str(x.get('url', '')).startswith(SITE + '/item/') for x in el): fail(f'{p}: ItemList entries should point at /item/<id>/ pages')
                 if names != pp.list_names:
                     miss = [n for n in pp.list_names if n not in names][:3]
                     extra = [n for n in names if n not in pp.list_names][:3]
@@ -276,7 +726,7 @@ def main():
     ap.add_argument('--skip-build', action='store_true')
     args = ap.parse_args()
 
-    head, ov = check_data(args.base, args.today)
+    head, ov, arch = check_data(args.base, args.today)
     if not args.skip_build:
         env = dict(os.environ, BUILD_TODAY=args.today)
         r = subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'scripts/build.py')], env=env, capture_output=True, text=True)
@@ -286,7 +736,7 @@ def main():
             print('## build:', r.stdout.strip().splitlines()[-1])
     if os.path.isdir(DIST):
         print(f'## dist (today {args.today})')
-        check_dist(args.today, head, ov)
+        check_dist(args.today, head, ov, arch)
     else:
         fail('dist/ missing')
 

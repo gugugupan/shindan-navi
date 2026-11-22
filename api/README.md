@@ -319,6 +319,13 @@ month per request.
 | `/events` page with filters, scan per request: 東京都 / 5 largest (max while paging) | 154 / 984 |
 | `/events` page with filters, day lookup | ≤ month's day_counts rows (13 games: ≤ 887 / ≤ 3,846) |
 | `/events/meta`, data version | 1, 1 |
+| `/voices` (話題カレンダー, `VOICES_SOURCE=d1`): all snapshots / `/voices/latest` / voices version | 1 per snapshot (≈ 365 a year) / 1 / 1 |
+
+**Voices** (`import-voices.mjs`, migration `migrations-pending/0008_voices.sql`, docs/design/voices-db.md): one
+`voice_snapshots` row per date, so an import writes ~2 rows per new or changed date + 1 version row (a takedown: the
+dates it rewrites or deletes + 1); its plan reads every row once. `/api/v1/voices*` is cached like the events
+endpoints under its own version (`voice_meta`), so a miss happens once per colo and import; each `/voices/` view and
+each home view with いま話題 is still a Worker request (Workers Free: 100,000 a day).
 
 Paging through December with all cursors: Tokyo unfiltered 1,693 events in 34 requests / 2,557 rows; 5 largest
 with `days=weekend` 1,912 events in 39 requests / 12,521 rows (scan only). An uncached Tokyo list view costs ~340
@@ -337,7 +344,8 @@ every scanned row twice). With eight games the busiest 東京都 day has 217 eve
 
 **Today page** (`/`, `src/home.html`): no request without a saved location. With one, 2-3 requests per visit, all
 keys the `/events/` page uses too, with the saved `game`/`type` (not `days`): `/events/days` for this month (calendar
-view; its `by_game` gives each game column's total and the week strip's per-game chips) and `/events` from today to
+view; its `by_game` gives each game column's total and the week strip's per-game chips, `by_game_type` the column's
+per-type line) and `/events` from today to
 the 1st of next month with `limit=50` (first list page). `limit` is fixed at 50 and the page runs in start order across
 all games, so on a busy day one game can fill it: then, and only then, the page asks for the next page with its
 `next_cursor` (the list's second page, same key) — at most one extra page; a column still short after it shows its
@@ -345,6 +353,10 @@ total and a link. Uncached, one prefecture: ≤ ~290 + ~103 (+ ~103) rows (Tokyo
 (+ ~444)). On the data of 2026-11-19 Tokyo unfiltered needs the third request (PTCG 104 of 157 events), Osaka + PTCG
 and online do not. `/events/meta` (1 row, same key as `/events/`) only when the location picker is opened, for its
 counts; no `/geo`. Days of the next month in its week strip link without a count.
+
+`/events/days` answer size: `by_game_type` (2026-11-20) grows it but reads no more rows (same `day_counts` search, see
+above). Measured on 大阪府 (JP-27), December 2026: 2.3 → 9.6 KB raw, 0.44 → 1.2 KB gzip. Upper bound for Tokyo (636
+day_counts rows in a month, synthetic spread over 8 games): 3.6 → 17 KB raw, 0.8 → 2.5 KB gzip.
 
 **Worst case.** A miss costs at most ~4.9k rows with 13 games (~3.8k with eight, ~2.3k with four): a filtered
 `/events` page on the 5 largest prefectures reads the whole month's day_counts when matches are sparse (≤ 3,846), up
@@ -468,7 +480,10 @@ the first import.
 - `game` matches any member game; events carry `game_codes` (sorted alphabetically) and `game_code` = `game_codes[0]`.
   `/events/days` counts a shared event once in `count` and under each member game in `by_game` (only the selected
   games when `game=` is set).
-- `/events/days` lists only days with matches; `by_game` has only games with matches that day.
+- `/events/days` lists only days with matches; `by_game` has only games with matches that day. `by_game_type` splits
+  each game's count by `event_type_code` (`""` = none), counted like `by_game`. It groups the same `day_counts` rows by
+  type as well (the primary key's order, same index search; checked in tests/api.test.ts), so D1 reads are unchanged;
+  only the answer grows.
 - `days` uses the weekday of `starts_on` (already a Tokyo date).
 - All `event_status` values are returned and counted; the page marks cancelled/postponed events.
 - Type labels come from `TYPE_LABELS` in `src/constants.ts` (per `event_type_code`); codes without a label use the code itself.

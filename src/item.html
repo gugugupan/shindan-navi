@@ -1,0 +1,61 @@
+<!--
+  Product page /item/<id>/, one per visible or archived release (render_item() in build.py fills SITE_CSS, BRAND, CORNER, SITENAV,
+  CRUMBS and ITEM). Static: no DATA embed and no page script beyond the corner's. Deliberately no `seo` class
+  (verify_release.py reads section.seo as a calendar page's static list).
+-->
+<title>トレカカレンダー</title>
+<style>/*SITE_CSS*/</style>
+<style>
+.pd-main{max-width:860px;margin:4px auto 0}
+.pd-main .crumbs{margin:0 0 8px}
+.pd-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);display:grid;grid-template-columns:180px minmax(0,1fr);gap:20px;align-items:start}
+.pd-img .th{width:180px;border-radius:8px}
+.pd-img .th.none small{display:block;font-size:12px}
+.pd-img .ap{display:inline-block;margin:8px 0 0}
+.pd-tag{margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.pd-sold{display:inline-block;font-size:12px;font-weight:700;line-height:1.5;padding:0 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.pd-card h1{margin:0 0 12px;font-size:clamp(18px,2.6vw,22px);line-height:1.4;text-wrap:pretty;overflow-wrap:anywhere}
+.pd-card dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 14px;margin:0;font-size:13.5px}
+.pd-card dt{color:var(--muted)}
+.pd-card dd{margin:0}
+.pd-card dd a{color:var(--accent)}
+.pd-card .num{font-family:var(--mono);font-size:13px}
+.pd-card .dl-links{margin:14px 0 0}
+.pd-card .dl-links a.go{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pd-near{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+.pd-near h2{margin:0 0 8px;font-size:15px}
+.pd-near ol{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.pd-near li{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:12px;font-size:13px;line-height:1.5;padding:3px 0;border-top:1px solid var(--line)}
+.pd-near li:first-child{border-top:0}
+.pd-near time{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.pd-near a{color:var(--ink);text-decoration:none}
+.pd-near a:hover{color:var(--accent);text-decoration:underline}
+.pd-near [aria-current]{font-weight:700}
+.pd-near .pd-more{display:inline-block;margin-top:8px;font-size:12.5px;font-weight:700;color:var(--accent)}
+@media (max-width:760px){
+  .pd-card{grid-template-columns:104px minmax(0,1fr);gap:14px;padding:14px 12px}
+  .pd-img .th{width:104px}
+  .pd-img .th.none small{font-size:10px}
+  .pd-near{padding:14px 12px}
+  .pd-near li{gap:8px}
+}
+@media (max-width:420px){
+  .pd-card{grid-template-columns:1fr}
+  .pd-img{display:flex;align-items:flex-end;gap:10px}
+  .pd-img .ap{margin:0}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <!--BRAND-->
+    <!--CORNER-->
+  </header>
+
+  <main class="pd-main">
+    <!--CRUMBS-->
+    <!--ITEM-->
+  </main>
+
+  <!--SITENAV-->
+</div>

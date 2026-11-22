@@ -211,6 +211,10 @@ describe('shared events', () => {
     expect(day.by_game.UATCG).toBe(others.filter((e) => e.game_code === 'UATCG').length + 1);
     const opcgOnly = (await apiAll(db, `/api/v1/events/days?${ALL_PREFS}&game=OPCG&${oneDay}`)).body.days[0];
     expect(Object.keys(opcgOnly.by_game)).toEqual(['OPCG']);
+    expect(Object.keys(opcgOnly.by_game_type)).toEqual(['OPCG']);
+    const t = shared.group.event_type_code ?? '', sameType = (g: string) => others.filter((e) => e.game_code === g && (e.group.event_type_code ?? '') === t).length;
+    expect(day.by_game_type.OPCG[t]).toBe(sameType('OPCG') + 1);
+    expect(day.by_game_type.UATCG[t]).toBe(sameType('UATCG') + 1);
   });
 
   it('keeps per-game meta and missing handling separate', async () => {
