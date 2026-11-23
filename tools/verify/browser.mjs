@@ -559,7 +559,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       todayOthers: document.querySelector('#relBody .rl')?.textContent || null,
       saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')], focus: document.activeElement?.id || null,
       dlg: document.getElementById('hsDlg').open, strip: s.scrollWidth - s.clientWidth,
-      small: [...document.querySelectorAll('#hSet *, #wkStrip *, #wkPanel *')].filter(e => e.getClientRects().length && !e.closest('.sr,.gi') && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).map(e => e.textContent.trim()),
+      small: [...document.querySelectorAll('#home *')].filter(e => e.getClientRects().length && !e.closest('.sr,.gi') && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).map(e => e.textContent.trim()),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
   });
   try {
@@ -1422,7 +1422,7 @@ if (HAS_EVENTS) {
       await ht.click();
       const ho = await page.evaluate(() => [...document.querySelectorAll('#evBody .evg')[0].querySelectorAll('.evg-l a.ev-venue')].filter(a => a.getClientRects().length).length);
       if (await ht.getAttribute('aria-expanded') !== 'true' || ho !== 20) fail(where, `home expand: ${ho} store links`);
-      const hs = await page.evaluate(smallText, '#evBody, #wkStrip, #wkPanel, #hSet');
+      const hs = await page.evaluate(smallText, '#home');
       if (hs.length) fail(where, `home text under 12px: ${hs.slice(0, 3).join(' | ')}`);
       await page.screenshot({ path: path.join(OUT, `${vp}-home-rows.png`), fullPage: true });
       await ht.click();
