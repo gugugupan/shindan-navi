@@ -101,8 +101,21 @@ describe('landing rows (importer)', () => {
     expect(Buffer.byteLength(t.events_json)).toBeLessThanOrEqual(MAX_LANDING_BYTES);
     const perDay = new Map<string, number>();
     for (const e of evs) perDay.set(e.starts_on, (perDay.get(e.starts_on) ?? 0) + 1);
-    expect(Math.max(...perDay.values())).toBe(LANDING_PER_DAY);
+    // fewer a day before any day is dropped: every day keeps the same count
+    expect(perDay.size).toBe(LANDING_DAYS);
+    expect(new Set(perDay.values()).size).toBe(1);
+    expect(Math.max(...perDay.values())).toBeLessThan(LANDING_PER_DAY);
     expect([...perDay.keys()][0]).toBe(TODAY);
+    // implied fields are left out
+    expect(evs[0].venue).not.toHaveProperty('region_code');
+    // one event a day still too big: whole days go from the end
+    const huge = many.map((e) => ({ ...e, name: `${e.name}${'あ'.repeat(1500)}` }));
+    const h = landingRows(run('OPCG', huge.length), huge, TODAY).find((r: Ev) => r.loc === 'JP-13')!;
+    const hev = JSON.parse(h.events_json);
+    expect(Buffer.byteLength(h.events_json)).toBeLessThanOrEqual(MAX_LANDING_BYTES);
+    expect(new Set(hev.map((e: Ev) => e.starts_on)).size).toBe(hev.length);
+    expect(hev[0].starts_on).toBe(TODAY);
+    expect(hev.length).toBeLessThan(LANDING_DAYS);
     expect(evs[0]).not.toHaveProperty('fee_text');
     expect(evs[0].venue).not.toHaveProperty('geo');
     expect(JSON.parse(rows.find((r: Ev) => r.loc === 'JP-01')!.days_json)).toEqual({});

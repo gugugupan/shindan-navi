@@ -64,7 +64,7 @@ export const LANDING_PER_DAY: number;
 export const MAX_LANDING_BYTES: number;
 export const LANDING_LOCS: string[];
 export function jstDay(sec: number): string;
-export function landingEvent(ev: Record<string, any>, codes: string[] | null): Record<string, any>;
+export function landingEvent(ev: Record<string, any>, codes: string[] | null, loc: string): Record<string, any>;
 export function landingRows(run: Record<string, any>, events: Record<string, any>[], builtOn: string, codesOf?: (id: string) => string[] | null): Record<string, any>[];
 export function stateSiteMetaSql(): string;
 export function stateDayCountsSql(): string;

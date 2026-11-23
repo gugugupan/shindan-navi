@@ -304,8 +304,10 @@ export const LANDING_MISSING = 'landing_pages: table missing (migration 0007 not
 // ---- Event landing pages (docs/design/event-landing.md): one row per game and location, built from the game's run.
 export const LANDING_DAYS = 28;
 export const LANDING_PER_DAY = 8;
-// The row goes into one INSERT statement (D1 rejects statements over 100 KB; chunked() allows MAX_STATEMENT_BYTES).
-export const MAX_LANDING_BYTES = 48_000;
+// events_json of one row; with the other columns and quote escaping one INSERT stays under MAX_LANDING_STATEMENT_BYTES
+// (D1 rejects statements over 100 KB). Real data (2026-11-23): ~500 bytes an event, Tokyo days have 10-50 events.
+export const MAX_LANDING_BYTES = 72_000;
+const MAX_LANDING_STATEMENT_BYTES = 90_000;
 export const LANDING_LOCS = [...Array.from({ length: 47 }, (_, i) => `JP-${String(i + 1).padStart(2, '0')}`), 'online'];
 const LANDING_COLS = ['game_code', 'loc', 'fetched_at', 'built_on', 'days_json', 'events_json', 'content_hash'];
 const LANDING_VENUE_KEYS = ['name', 'source_id', 'region_code', 'region_name', 'city', 'address'];
@@ -325,11 +327,13 @@ const pick = (o, keys) => {
  * What a landing row stores per event: the fields the row renderer and the Event JSON-LD use, nulls dropped,
  * timezone only when not Asia/Tokyo; game_codes only for events other games list too.
  */
-export function landingEvent(ev, codes) {
+export function landingEvent(ev, codes, loc) {
   const out = pick(ev, LANDING_EVENT_KEYS);
   if (out.timezone === 'Asia/Tokyo') delete out.timezone;
-  if (ev.group) out.group = pick(ev.group, LANDING_GROUP_KEYS);
-  if (ev.venue) out.venue = pick(ev.venue, LANDING_VENUE_KEYS);
+  // group.name equal to the name and the venue's region equal to the row's location are implied (api/src/landing.ts
+  // hydrate() restores them)
+  if (ev.group) out.group = pick(ev.group, LANDING_GROUP_KEYS.filter((k) => k !== 'name' || ev.group.name !== ev.name));
+  if (ev.venue) out.venue = pick(ev.venue, LANDING_VENUE_KEYS.filter((k) => !(k.startsWith('region_') && ev.venue.region_code === loc)));
   if (codes && codes.length > 1) out.game_codes = codes;
   return out;
 }
@@ -339,8 +343,8 @@ const sortKey = (ev) => (ev.starts_at === null ? NULL_SORT : Math.floor(Date.par
 /**
  * The 48 landing rows of one game from its run's events: every location, also empty ones. `codesOf(id)` names the
  * games listing an event (for the tags of shared events). Days built_on .. built_on + LANDING_DAYS; days_json counts
- * all events of a day, events_json keeps the first LANDING_PER_DAY in API order and drops whole days from the end
- * while over MAX_LANDING_BYTES.
+ * all events of a day, events_json keeps the first events of each day in API order: LANDING_PER_DAY, fewer a day
+ * (down to 1) while over MAX_LANDING_BYTES, so every day stays covered; only then whole days go from the end.
  */
 export function landingRows(run, events, builtOn, codesOf = () => null) {
   const until = addDays(builtOn, LANDING_DAYS);
@@ -354,12 +358,15 @@ export function landingRows(run, events, builtOn, codesOf = () => null) {
       .sort((a, b) => (a[0].starts_on < b[0].starts_on ? -1 : a[0].starts_on > b[0].starts_on ? 1 : a[1] - b[1] || (a[0].id < b[0].id ? -1 : 1)))
       .map(([ev]) => ev);
     const days = {};
-    const kept = [];
-    for (const ev of evs) {
-      const n = (days[ev.starts_on] = (days[ev.starts_on] ?? 0) + 1);
-      if (n <= LANDING_PER_DAY) kept.push(landingEvent(ev, codesOf(ev.id)));
+    const nth = [];
+    for (const ev of evs) nth.push((days[ev.starts_on] = (days[ev.starts_on] ?? 0) + 1));
+    const compact = evs.map((ev) => landingEvent(ev, codesOf(ev.id), loc));
+    let kept, eventsJson;
+    for (let per = LANDING_PER_DAY; per >= 1; per--) {
+      kept = compact.filter((_, i) => nth[i] <= per);
+      eventsJson = JSON.stringify(kept);
+      if (Buffer.byteLength(eventsJson) <= MAX_LANDING_BYTES) break;
     }
-    let eventsJson = JSON.stringify(kept);
     while (Buffer.byteLength(eventsJson) > MAX_LANDING_BYTES) {
       const last = kept[kept.length - 1].starts_on;
       while (kept.length && kept[kept.length - 1].starts_on === last) kept.pop();
@@ -371,7 +378,7 @@ export function landingRows(run, events, builtOn, codesOf = () => null) {
   });
 }
 
-function chunked(head, items, tail = '') {
+function chunked(head, items, tail = '', maxBytes = MAX_STATEMENT_BYTES) {
   const fixed = Buffer.byteLength(head) + Buffer.byteLength(tail);
   const out = [];
   let batch = [];
@@ -383,8 +390,8 @@ function chunked(head, items, tail = '') {
   };
   for (const item of items) {
     const size = Buffer.byteLength(item) + 2;
-    if (fixed + size > MAX_STATEMENT_BYTES) throw new Error(`a single row needs ${fixed + size} bytes, over the ${MAX_STATEMENT_BYTES}-byte statement budget`);
-    if (batch.length && (fixed + bytes + size > MAX_STATEMENT_BYTES || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
+    if (fixed + size > maxBytes) throw new Error(`a single row needs ${fixed + size} bytes, over the ${maxBytes}-byte statement budget`);
+    if (batch.length && (fixed + bytes + size > maxBytes || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
     batch.push(item);
     bytes += size;
   }
@@ -610,7 +617,7 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     }
     statements.push(...chunked(`INSERT INTO landing_pages (${LANDING_COLS.join(', ')}) VALUES\n`,
       landingUpserts.map((r) => `(${LANDING_COLS.map((c) => sqlLiteral(r[c])).join(', ')})`),
-      `\nON CONFLICT(game_code, loc) DO UPDATE SET ${LANDING_COLS.slice(2).map((c) => `${c} = excluded.${c}`).join(', ')}`));
+      `\nON CONFLICT(game_code, loc) DO UPDATE SET ${LANDING_COLS.slice(2).map((c) => `${c} = excluded.${c}`).join(', ')}`, MAX_LANDING_STATEMENT_BYTES));
   } else if (accepted.length) notes.push(LANDING_MISSING);
 
   const meta = computeMeta(next, [...state.imports, ...newImports]);

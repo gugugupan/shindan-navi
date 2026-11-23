@@ -18,8 +18,16 @@
 .lp-day>h2{margin:0 0 10px;font-size:15px;display:flex;align-items:baseline;gap:8px}
 .lp-day>h2 time{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .lp-day>h2 small{font-size:12px;font-weight:500;color:var(--muted)}
-.lp-rows{display:grid;gap:12px}
-.lp-rows>.ev+.ev{border-top:1px solid var(--line);padding-top:12px}
+.lp-rows{display:flex;flex-direction:column;gap:10px}
+/* rows as on /events/ (#list in src/events.html) */
+.lp-rows .ev{gap:4px;background:var(--surface-2);border-radius:10px;padding:10px 12px 10px 14px}
+.lp-rows .ev::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--g)}
+.lp-rows .evg-l .ev{background:var(--surface);padding:8px 10px}
+.lp-rows .evg-l .ev::before{display:none}
+.ev-link{justify-self:start;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;background:var(--surface);white-space:nowrap}
+.ev-link:hover{border-color:var(--accent)}
+.lp-rows .ev-s .ev-link{margin-left:auto}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .lp-more{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:700;color:var(--accent)}
 .lp-empty{border:1px dashed var(--line);border-radius:12px;padding:16px;font-size:13.5px;line-height:1.8;color:var(--muted)}
 .lp-empty a{color:var(--accent);font-weight:700}
@@ -28,7 +36,7 @@
 .lp-links p{margin:0;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px}
 .lp-links a{color:var(--ink)}
 .lp-links a[aria-current]{color:var(--muted);text-decoration:none;font-weight:700}
-@media (max-width:760px){.lp-day{padding:10px 12px}}
+@media (max-width:760px){.lp-day{padding:10px 12px}.lp-rows .ev{padding:9px 10px 10px 12px}}
 </style>
 
 <div class="wrap">

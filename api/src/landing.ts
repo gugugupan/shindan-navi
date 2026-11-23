@@ -137,6 +137,16 @@ export function eventLd(e: Ev, pageUrl: string): Record<string, unknown> | null 
   };
 }
 
+/** A stored event as the row renderer expects it (importer.mjs landingEvent leaves out what the row implies). */
+export function hydrate(e: Ev, code: string, loc: string): Ev {
+  const out: Ev = { ...e, game_code: code };
+  if (e.group && e.group.name === undefined) out.group = { ...e.group, name: e.name };
+  if (e.venue && e.venue.region_code === undefined && loc !== 'online') {
+    out.venue = { ...e.venue, region_code: loc, region_name: PREFECTURES.find(([c]) => c === loc)![1] };
+  }
+  return out;
+}
+
 export interface RenderedPage {
   status: number;
   indexable: boolean;
@@ -155,7 +165,7 @@ export function renderLanding(template: string, code: string, loc: string, row: 
   const h1 = loc === 'online' ? `${game.short} オンライン大会・イベント一覧` : `${place.name}の${game.short} 大会・イベント一覧`;
   const title = loc === 'online' ? `${game.short}のオンライン大会・イベント｜トレカカレンダー` : `${game.short}の大会・イベント（${place.name}）｜トレカカレンダー`;
 
-  const stored: Ev[] = row ? (JSON.parse(row.events_json) as Ev[]).filter((e) => e.starts_on >= today).map((e) => ({ ...e, game_code: code })) : [];
+  const stored: Ev[] = row ? (JSON.parse(row.events_json) as Ev[]).filter((e) => e.starts_on >= today).map((e) => hydrate(e, code, loc)) : [];
   const byDay = new Map<string, Ev[]>();
   for (const e of stored) byDay.set(e.starts_on, [...(byDay.get(e.starts_on) ?? []), e]);
   const shownDays = st.days.filter(([d]) => byDay.has(d));

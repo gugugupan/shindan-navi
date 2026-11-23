@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { renderer, type Ev, type Group } from '../src/evrow';
-import { LANDING_GAMES } from '../src/landing';
+import { hydrate, LANDING_GAMES } from '../src/landing';
 import { GAMES } from '../src/constants';
-import { REPO_DIR } from '../scripts/lib/importer.mjs';
+import { landingEvent, locOf, REPO_DIR } from '../scripts/lib/importer.mjs';
 import { asApi, conflicting, sampleEvents, synthetic } from './helpers';
 
 const read = (p: string) => readFileSync(join(REPO_DIR, p), 'utf8');
@@ -66,6 +66,21 @@ describe('evrow.ts mirrors src/evrow.html', () => {
       }
     }
     expect(groups).toBeGreaterThan(0);
+  });
+});
+
+describe('landing rows keep what the rows show', () => {
+  it('renders a stored (compact, hydrated) event like the API event', () => {
+    const ts = renderer(icon, games);
+    let n = 0;
+    for (const e of fixtures()) {
+      const loc = locOf(e);
+      if (!loc) continue;
+      const back = hydrate(landingEvent(e, e.game_codes, loc), e.game_code, loc);
+      for (const o of [{ col: e.game_code, pref: loc }, {}]) expect(ts.row(back, o)).toBe(ts.row(e, o));
+      n++;
+    }
+    expect(n).toBeGreaterThan(50);
   });
 });
 
