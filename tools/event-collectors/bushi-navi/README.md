@@ -37,8 +37,11 @@ Requests are sequential and at least 1 s apart, with a generic UA (`shindan-navi
 429 / 5xx / network errors are retried 3 times with growing waits. A full run of the five games is 5 × 14 week
 chunks, about 260 requests (~5 min; 255 on 2026-11-19). Every finished chunk is saved under `out/run-<ts>/chunks/` (ignored), so a failed
 run resumes where it stopped; `raw.json` there keeps the fetched rows for re-normalization.
-Chunks and `raw.json` carry a coverage version: `--resume` refetches chunks saved by an older collector, and
-`--from-raw` refuses an older capture. `--dry-run` leaves the built files in `out/run-<ts>/<GAME>/`.
+A run started in the same second as another fails (its `out/run-<ts>/` exists); retry. A saved chunk is reused only
+when its game, dates and query match the planned chunk exactly (otherwise it is refetched). Chunks and `raw.json` carry
+a coverage version: `--resume` refuses a run holding chunks saved by an older collector (older version or no saved
+query; start a fresh run: refetching them would keep the old `fetched_at`, the import id), and `--from-raw` refuses an
+older capture. `--dry-run` leaves the built files in `out/run-<ts>/<GAME>/`.
 
 `www.bushi-navi.com/robots.txt` is `User-agent: * / Allow:`. The Bushi Navi terms (`/tos`, from
 `/api/user/tos`) are member terms: 第7条 reserves all rights in the service's information to Bushiroad and forbids

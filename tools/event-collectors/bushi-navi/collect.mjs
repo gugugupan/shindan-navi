@@ -38,6 +38,10 @@ if (!/^\d+$/.test(opt['chunk-days']) || days < 1) {
 }
 const plan = games.flatMap((game) => chunks(opt.from, opt.until, days).map((c) => ({ game, gameTitleId: GAMES[game].id, ...c })));
 const chunkFile = (c) => `${c.game}-${c.startDate}.json`;
+// Everything that determines a chunk's rows; a checkpoint is reused only when its saved descriptor is identical.
+const chunkQuery = (c) => listPath({ gameTitleId: c.gameTitleId, startDate: c.startDate, endDate: c.endDate, offset: 0 });
+const sameChunk = (done, c) => done.coverage === COVERAGE_VERSION && done.chunk?.game === c.game && done.chunk.gameTitleId === c.gameTitleId
+  && done.chunk.startDate === c.startDate && done.chunk.endDate === c.endDate && done.query === chunkQuery(c);
 
 const fetched = opt['from-raw'] ? loadRaw(resolve(opt['from-raw'])) : await fetchAll();
 const { fetchedAt, results, requests } = fetched;
@@ -70,9 +74,28 @@ async function fetchAll() {
     if (state.from !== opt.from || state.until !== opt.until || state.games.join() !== games.join() || state.days !== days) {
       throw new Error(`--resume: ${runDir} was started with ${JSON.stringify(state)}; pass the same --from/--until/--games/--chunk-days`);
     }
+    // Refetching a chunk saved by an older collector (older coverage version, or no saved query) would publish new rows
+    // under the run's original fetched_at, which the importer uses as the import id.
+    const legacy = plan.map((c) => join(runDir, 'chunks', chunkFile(c))).filter((f) => existsSync(f)).filter((f) => {
+      const done = JSON.parse(readFileSync(f, 'utf8'));
+      return done.coverage !== COVERAGE_VERSION || typeof done.query !== 'string';
+    });
+    if (legacy.length) {
+      console.error(`FAILED: --resume ${runDir} has ${legacy.length} chunk(s) saved by an older collector (coverage version not ${COVERAGE_VERSION} or no query): ${legacy.map((f) => f.slice(runDir.length + 1)).join(', ')}.\nStart a fresh run without --resume.`);
+      process.exit(1);
+    }
   } else {
     const fetchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     runDir = join(here, 'out', `run-${fetchedAt.replace(/:/g, '-')}`);
+    mkdirSync(dirname(runDir), { recursive: true });
+    // fetched_at is the import id, so two runs started in the same second must not share it (nor the checkpoints).
+    try {
+      mkdirSync(runDir);
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      console.error(`FAILED: ${runDir} exists: another run started this second; retry.`);
+      process.exit(1);
+    }
     state = { fetchedAt, from: opt.from, until: opt.until, games, days, requests: 0 };
   }
   mkdirSync(join(runDir, 'chunks'), { recursive: true });
@@ -86,8 +109,8 @@ async function fetchAll() {
       const file = join(runDir, 'chunks', chunkFile(c));
       if (existsSync(file)) {
         const done = JSON.parse(readFileSync(file, 'utf8'));
-        if (done.coverage === COVERAGE_VERSION) { results.push(done); continue; }
-        log(`refetch ${chunkFile(c)}: coverage version ${done.coverage ?? 'none'}, not ${COVERAGE_VERSION}`);
+        if (sameChunk(done, c)) { results.push(done); continue; }
+        log(`refetch ${chunkFile(c)}: saved for ${JSON.stringify({ ...done.chunk, query: done.query })}, planned ${chunkQuery(c)}`);
       }
       let r;
       // A total that moves mid-pagination (an organizer just published or withdrew) is retried twice.
@@ -101,6 +124,7 @@ async function fetchAll() {
         }
       }
       r.chunk = { game: c.game, ...r.chunk };
+      r.query = chunkQuery(c);
       writeFileSync(file, `${JSON.stringify(r)}\n`);
       results.push(r);
       state.requests = (state.requests ?? 0) + r.pages;
