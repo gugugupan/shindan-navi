@@ -107,6 +107,7 @@ const ldOf = (html) => [...html.matchAll(/<script type="application\/ld\+json">(
   build({});
   if (fs.existsSync(path.join(ROOT, 'dist/_landing.html'))) fail('off', 'dist/_landing.html built without the flag');
   if (fs.readFileSync(path.join(ROOT, 'dist/robots.txt'), 'utf8').includes('/events/sitemap.xml')) fail('off', 'robots.txt names the landing sitemap');
+  if (/id="lpl"|LP_GAMES|<!--\/?LANDING-->/.test(fs.readFileSync(path.join(ROOT, 'dist/events/index.html'), 'utf8'))) fail('off', '/events/ has landing links');
   const file = path.join(OUT, 'landing-off.sqlite3');
   seed(file, true);
   const server = await serve(file, {});
@@ -206,6 +207,24 @@ try {
           await tog.click();
           if (await tog.getAttribute('aria-expanded') !== 'true' || await page.locator(`#${id}`).isHidden()) fail(where, 'group toggle does not open');
         } else fail(where, 'no grouped row to check');
+        // /events/ links the chosen location's landing pages: per chosen title, else per title with events there
+        const ev = await ctx.newPage();
+        await ev.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+        ev.on('pageerror', (e) => fail(`${vp} /events/`, `pageerror: ${e.message}`));
+        await ev.goto(`${BASE}/events/?pref=JP-13&game=OPCG`, { waitUntil: 'networkidle' });
+        const one = await ev.$$eval('#lpl a', (as) => as.map((a) => a.getAttribute('href')));
+        if (JSON.stringify(one) !== JSON.stringify(['/events/onepiece/tokyo/'])) fail(`${vp} /events/`, `links with OPCG chosen: ${one}`);
+        await ev.evaluate(() => localStorage.clear());
+        await ev.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'networkidle' });
+        const all = await ev.$$eval('#lpl a', (as) => as.map((a) => a.getAttribute('href')));
+        if (!all.length || !all.every((h) => /^\/events\/[a-z-]+\/tokyo\/$/.test(h))) fail(`${vp} /events/`, `links without a title: ${all}`);
+        for (const h of all) if ((await get(h)).status !== 200) fail(`${vp} /events/`, `${h} not 200`);
+        const lsmall = await ev.$$eval('#lpl, #lpl *', (els) => els.filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
+        if (lsmall) fail(`${vp} /events/`, 'landing links under 12px');
+        if (await ev.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) > 1) fail(`${vp} /events/`, 'scrolls horizontally');
+        await ev.locator('#lpl').screenshot({ path: path.join(OUT, `${vp}-events-landing-links.png`) });
+        console.log(`landing: ${vp} /events/ links ${all.length}`);
+        await ev.close();
         const small = await page.$$eval('.lp-day *', (els) => els.filter((e) => e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
         if (small) fail(where, `${small} text elements under 12px`);
         await page.screenshot({ path: path.join(OUT, `${vp}-landing.png`), fullPage: false });
