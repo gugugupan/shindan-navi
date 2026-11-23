@@ -5,7 +5,7 @@
     "from": "2026-11-21",
     "to": "2026-11-23"
   },
-  "note": "Grok app answers for 2026-11-21..23 JST, one prompt per game (14 answered; デジモン and ヴァイス returned nothing). Every supporting player post and every reacting_to URL was checked via X oEmbed (exists, posted inside the window by snowflake time, on topic, not shop/sales/video/note promo/tournament report/bot/official); topics need 2+ distinct authors. Player post URLs are kept locally, never committed. share counts only the validated posts (Grok's numbers are not used), so topics with fewer than 5 validated posts show the small-sample tendency phrase. ONE PIECE and MTG ban-culture topics fell below 2 validated authors and are absent; Grok's duplicate Gundam / DBFW / hololive topics were merged or split by the official post they quote.",
+  "note": "Grok app answers for 2026-11-21..23 JST, one prompt per game (14 answered; デジモン and ヴァイス returned nothing). Every supporting player post and every reacting_to URL was checked via X oEmbed (exists, posted inside the window by snowflake time, on topic, not shop/sales/video/note promo/tournament report/bot/official); topics need 2+ distinct authors. Player post URLs are kept locally, never committed. share counts only the validated posts (Grok's numbers are not used), so topics with fewer than 5 validated posts show the small-sample tendency phrase. Scored draft / tournament result posts are excluded. ONE PIECE and MTG ban-culture topics fell below 2 validated authors and are absent; Grok's duplicate Gundam / DBFW / hololive topics were merged or split by the official post they quote.",
   "topics": [
     {
       "id": "llocg-sunshine-duo-art",
@@ -141,7 +141,7 @@
       "id": "ptcg-current-regulation-deflation",
       "game": "PTCG",
       "title": "現レギュの物足りなさ・デフレへの不満",
-      "summary": "カードパワーを下げる調整が続き、ゲームとしての面白さが失われているという不満が広がっている。スタン制なのに強いカードを出さない理由が分からないという声が目立つ。",
+      "summary": "カードパワーを抑える調整が続き、ゲームとしての面白さが失われているという不満の声が多い。スタン制なのだから強いカードを出してよいのではという意見もある。",
       "attitude": "negative",
       "share": {
         "positive": 0,
@@ -152,7 +152,7 @@
       "voices": [
         "パワーを抑える調整は今のプレイヤーの不満を募らせるという声",
         "インフレではなくデフレで面白さを失うのは珍しいという声",
-        "ローテーションがあるのだから強いカードを出してほしいという声"
+        "ローテーションがあるのだから強いカードを出してよいのではという声"
       ],
       "reacting_to": null,
       "window": {
@@ -190,32 +190,6 @@
       "source": "grok-app"
     },
     {
-      "id": "mtg-star-trek-limited",
-      "game": "MTG",
-      "title": "『スター・トレック』リミテッドの評価",
-      "summary": "『スター・トレック』のドラフトやシールドを遊んだ感想が多く、赤緑が強いという見方が中心。シールドは長く遊べると楽しむ声もある。",
-      "attitude": "positive",
-      "share": {
-        "positive": 4,
-        "negative": 0,
-        "neutral": 3
-      },
-      "volume": "mid",
-      "voices": [
-        "赤緑がマナ加速もドローも揃っていて強すぎるという声",
-        "赤が取り合いになるので別の色を足す工夫が要るという声",
-        "シールドの方が味があってずっと遊べるという声"
-      ],
-      "reacting_to": null,
-      "window": {
-        "from": "2026-11-21",
-        "to": "2026-11-23"
-      },
-      "first_seen": "2026-11-22",
-      "status": "new",
-      "source": "grok-app"
-    },
-    {
       "id": "vg-inflation-soft-rotation",
       "game": "VG",
       "title": "インフレと実質スタン落ちの懸念",
@@ -223,7 +197,7 @@
       "attitude": "negative",
       "share": {
         "positive": 0,
-        "negative": 5,
+        "negative": 4,
         "neutral": 2
       },
       "volume": "mid",
@@ -245,7 +219,7 @@
       "id": "llocg-aqours-heroes-l-power",
       "game": "LLOCG",
       "title": "Aqours☆HEROES＜L＞の性能",
-      "summary": "DUO収録のライブカード「Aqours☆HEROES＜L＞」が公開され、序盤と終盤で役割を変えられる点を評価する声が多い。必要なハートが重く、既存カードには及ばないという見方もある。",
+      "summary": "DUO収録のライブカード「Aqours☆HEROES＜L＞」が公開され、効果が良い・性能が高いと評価する声が多く、場面で役割を変えられる点を挙げる声もある。必要なハートが重く、既存カードには及ばないという見方もある。",
       "attitude": "positive",
       "share": {
         "positive": 3,
@@ -254,9 +228,9 @@
       },
       "volume": "mid",
       "voices": [
-        "一枚で複数の役割をこなせるのが良いという声",
-        "良い効果だが必要なハートが重く、他のカードと選ぶことになるという声",
-        "既存の強いカードには届かないという声"
+        "効果が良く、性能も高いと評価する声",
+        "一枚で複数の役割をこなせる点を挙げる声",
+        "必要なハートが重く、既存の強いカードには届かないという声"
       ],
       "reacting_to": "https://x.com/LL_cardgame/status/2124774965249798583",
       "window": {
@@ -271,7 +245,7 @@
       "id": "conan-premium-mystery-best-reprint",
       "game": "CONAN",
       "title": "EXパック「PREMIUM MYSTERY BEST」の再録",
-      "summary": "1/30発売の初EXパックでMRが再録され1パックに1枚入ると分かり、安く組めて新規も増えると歓迎する声が多い。新規カードが少なくなることを残念がる声もある。",
+      "summary": "1/30発売の初EXパックで人気カードの再録が発表され、安く組めて始めやすくなると歓迎する声が多い。プレイヤーの間では1パックにMRが1枚入るとの受け止めもある。一方、MRを全種再録するより選んでほしかったという声もある。",
       "attitude": "positive",
       "share": {
         "positive": 3,
@@ -281,8 +255,8 @@
       "volume": "high",
       "voices": [
         "安く組めてコレクションもしやすくなる良い商品だという声",
-        "毎パックMRが入るのはとても太っ腹だという声",
-        "再録ばかりで新しいカードが少ないのはつまらないという声"
+        "1パックにMRが入るなら大盤振る舞いだと喜ぶ声",
+        "MRを全部再録するより、人気や使用率の高いものに絞ってほしかったという声"
       ],
       "reacting_to": "https://x.com/CONAN_tcg/status/2124050223068860821",
       "window": {
@@ -323,7 +297,7 @@
       "id": "ygo-rv02-new-themes",
       "game": "YGO",
       "title": "RV02組の新規カードの評価",
-      "summary": "REVOLUTION BOOSTERで強化された方界・マリンセス・ゴーストリックについて、他のテーマの強化に比べて弱いという声が多い。原作に近い動きができて良かったと喜ぶ声もある。",
+      "summary": "REVOLUTION BOOSTERで新規を得た方界・マリンセス・ゴーストリックについて、方界は他のテーマの強化より弱いという声や、3テーマとも厳しいという見方がある。原作に近い動きができて良かったという声や、構築に迷う声もある。",
       "attitude": "negative",
       "share": {
         "positive": 1,
@@ -332,7 +306,7 @@
       },
       "volume": "mid",
       "voices": [
-        "同じ時期に強化された他のテーマより見劣りするという声",
+        "方界の強化は同じ時期の他のテーマより見劣りするという声",
         "先攻型と後攻型のどちらで組むか迷うという声",
         "映画のような動きができるようになって良かったという声"
       ],
@@ -349,7 +323,7 @@
       "id": "uatcg-new-set-illustrations",
       "game": "UATCG",
       "title": "新弾カードのイラスト評価",
-      "summary": "D.Gray-manやウマ娘など新弾のカードイラストがきれい・かわいいと好評。描きおろしを欲しがる声も出ている。",
+      "summary": "新弾のカードイラストがきれい・かわいいと好評で、D.Gray-manは原作の絵の美しさが生きているという声が出ている。描きおろしを欲しがる声もある。",
       "attitude": "positive",
       "share": {
         "positive": 4,
@@ -371,36 +345,10 @@
       "source": "grok-app"
     },
     {
-      "id": "bs-zekuga-standard-dominance",
-      "game": "BS",
-      "title": "ゼクーガ一強のスタンダード環境",
-      "summary": "スタンダードの大会がゼクーガばかりでつまらないという不満が続いている。一方で、使い方を誤ると簡単に負ける難しいカードだという反論もある。",
-      "attitude": "negative",
-      "share": {
-        "positive": 0,
-        "negative": 2,
-        "neutral": 1
-      },
-      "volume": "low",
-      "voices": [
-        "ゲーム自体ではなくゼクーガばかりの環境がつまらないという声",
-        "大会に出て同じデッキしかいないとがっかりするという声",
-        "強いが扱いが難しく、入れれば勝てるカードではないという声"
-      ],
-      "reacting_to": null,
-      "window": {
-        "from": "2026-11-21",
-        "to": "2026-11-23"
-      },
-      "first_seen": "2026-11-19",
-      "status": "continuing",
-      "source": "grok-app"
-    },
-    {
-      "id": "dm-inflation-fatigue",
-      "game": "DM",
-      "title": "インフレとゲーム体験",
-      "summary": "インフレについて、全体が強くなっているので置いていかれる感じは少なく、うまく調整されているという見方が出ている。",
+      "id": "mtg-star-trek-limited",
+      "game": "MTG",
+      "title": "『スター・トレック』リミテッドの評価",
+      "summary": "『スター・トレック』のリミテッドを遊んだ感想として、シールドやドラフトを楽しむ声が出ている。ドラフトでは赤が強く取り合いになるという分析もある。",
       "attitude": "positive",
       "share": {
         "positive": 2,
@@ -409,8 +357,35 @@
       },
       "volume": "low",
       "voices": [
-        "インフレしていても試合が長くなって面白くなったという声",
-        "全体が揃って強くなるので遊ぶ人が離れにくいという声"
+        "店舗でのシールドとドラフトがとても楽しかったという声",
+        "赤が強い分取り合いになり、別の色を足して補う工夫が要るという分析",
+        "シールドはドラフトより奥が深く、長く遊べそうという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-22",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "bs-zekuga-standard-dominance",
+      "game": "BS",
+      "title": "ゼクーガと環境の多様性",
+      "summary": "スタンダードの大会で同じゼクーガのデッキばかり見かけて楽しめないという声が出ている。ゼクーガを使う側からは、扱いが難しく使い方を誤るとすぐ負けるという体験談もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 0,
+        "negative": 2,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "ゲーム自体ではなく同じデッキばかりの環境がつまらないという声",
+        "いろいろなデッキが勝てる大会であってほしいという声",
+        "使い手として、扱いを誤ってゼクーガで負けたことも多いという声"
       ],
       "reacting_to": null,
       "window": {
@@ -418,7 +393,7 @@
         "to": "2026-11-23"
       },
       "first_seen": "2026-11-19",
-      "status": "cooling",
+      "status": "continuing",
       "source": "grok-app"
     },
     {
@@ -451,7 +426,7 @@
       "id": "hocg-moona-strength",
       "game": "HOCG",
       "title": "ムーナデッキの強さ",
-      "summary": "ムーナを使うデッキが今の環境で強いという見方が広がっていて、新しいカードと比べてどちらが強いか語る声も出ている。",
+      "summary": "今はムーナのデッキが強いと聞くという声や、練習で色々なデッキを回した感想、新しいカードとムーナで盤面の取りやすさを比べる声が出ている。",
       "attitude": "neutral",
       "share": {
         "positive": 0,
@@ -461,6 +436,7 @@
       "volume": "low",
       "voices": [
         "環境に詳しくないが、今はムーナが強いと聞くという声",
+        "色々なデッキを回し、ムーナは引き次第で楽しさが変わるという声",
         "新しいカードは一面だけならムーナより強いが、二面を取るのは難しそうという声"
       ],
       "reacting_to": null,
@@ -475,8 +451,8 @@
     {
       "id": "sve-attribute-limit-break",
       "game": "SVE",
-      "title": "グラブルコラボの属性格差",
-      "summary": "グランブルーファンタジーとのコラボパックで、火属性のカードだけ収録が少ないなど属性ごとの差が大きいという不満が出ている。",
+      "title": "新要素「属性」の偏り",
+      "summary": "グランブルーファンタジーとのコラボで入る新要素「属性」について、火属性だけ収録が少ないなど属性ごとの差や、6属性に分ける仕組み自体の難しさを指摘する声が出ている。",
       "attitude": "negative",
       "share": {
         "positive": 0,
@@ -524,6 +500,31 @@
       "source": "grok-app"
     },
     {
+      "id": "dm-inflation-fatigue",
+      "game": "DM",
+      "title": "インフレとゲーム体験",
+      "summary": "インフレについて、全体が揃って強くなっているので置いていかれにくく、試合も面白くなっているという肯定的な見方が出ている。",
+      "attitude": "positive",
+      "share": {
+        "positive": 2,
+        "negative": 0,
+        "neutral": 0
+      },
+      "volume": "low",
+      "voices": [
+        "インフレしていても試合が長くなって面白くなったという声",
+        "全体が揃って強くなるので遊ぶ人が離れにくいという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "cooling",
+      "source": "grok-app"
+    },
+    {
       "id": "bs-eternal-booster-anticipation",
       "game": "BS",
       "title": "新弾『戦神の轟臨』の評価",
@@ -552,7 +553,7 @@
       "id": "sve-granblue-collab-power",
       "game": "SVE",
       "title": "グラブルコラボ新弾の強さ予想",
-      "summary": "グラブルコラボのカードが出揃い、どの属性が強いか、既存クラスと組み合わせられるかを予想する声が出ている。",
+      "summary": "グラブルコラボのカードについて、どの属性が強いか、既存クラスと組み合わせられるかを予想する声や、発売を楽しみにする声が出ている。",
       "attitude": "neutral",
       "share": {
         "positive": 1,
