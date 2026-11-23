@@ -180,7 +180,8 @@ if (remote && shrunk.length && !opts['allow-shrink']) {
 console.log(`  ${Object.entries(plan.stats).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 for (const n of plan.notes) console.log(`  note: ${n}`);
 console.log(`  D1 rows written ~${cost.rowsWritten.toLocaleString('en-US')} (${Object.entries(cost.writes).filter(([, n]) => n).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ') || 'nothing'})`);
-console.log(`  D1 rows read    ~${cost.rowsRead.toLocaleString('en-US')} (${Object.entries(cost.reads).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ')})`);
+// a lower bound: D1 may count more rows than are returned (index pages a query re-seeks)
+console.log(`  D1 rows read    >=${cost.rowsRead.toLocaleString('en-US')} (${Object.entries(cost.reads).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ')})`);
 if (cost.rowsWritten > FREE_WRITES_PER_DAY) console.log(`  over the D1 Free limit of ${FREE_WRITES_PER_DAY.toLocaleString('en-US')} rows written/day: split with --games across UTC days`);
 
 if (!plan.statements.length) {

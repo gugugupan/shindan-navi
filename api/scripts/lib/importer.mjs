@@ -364,24 +364,29 @@ function validZone(tz) {
 export const LANDING_CONTENT_COLS = ['id', 'loc', 'starts_on', 'starts_sort', 'game_mask', 'name', 'source_url', 'attendance_mode', 'ends_on',
   'starts_at', 'ends_at', 'timezone', 'time_precision', 'capacity', 'fee_amount', 'fee_currency', 'registration_method', 'registration_status',
   'registration_opens_at', 'event_status', 'group_name', 'category', 'event_type_code', 'venue_json'];
-const LANDING_LOC_CHUNK = 8;
+// rows per landing-window page: a few MB of JSON, far below D1's result limit
+export const LANDING_CONTENT_PAGE = 2000;
 
 /**
  * Stored events (eventRow / LANDING_CONTENT_COLS shape) shown in the landing window starting at `fromDay` (with a
- * day's margin each side), through `query(sql) -> rows`. Seeks idx_events_loc per location, so it reads about the
- * window's rows (~23k with 13 games), in LANDING_LOC_CHUNK-location queries to keep each answer small.
+ * day's margin each side), through `query(sql) -> rows`. Keyset pages in idx_events_loc order (loc, starts_on,
+ * starts_sort, id): each page seeks the index per remaining location, so it reads about the window's rows (~23k
+ * with 13 games) plus at most the part of one location a page re-seeks.
  */
-export function readLandingContent(query, fromDay) {
+export function readLandingContent(query, fromDay, pageSize = LANDING_CONTENT_PAGE) {
   const from = addDays(fromDay, -1);
   const until = addDays(fromDay, LANDING_DAYS + 1);
+  const locs = [...LANDING_LOCS].sort();
   const out = new Map();
-  for (let i = 0; i < LANDING_LOCS.length; i += LANDING_LOC_CHUNK) {
-    const locs = LANDING_LOCS.slice(i, i + LANDING_LOC_CHUNK).map(sqlLiteral).join(', ');
-    for (const r of query(`SELECT ${LANDING_CONTENT_COLS.join(', ')} FROM events WHERE loc IN (${locs}) AND starts_on >= ${sqlLiteral(from)} AND starts_on < ${sqlLiteral(until)} AND game_mask <> 0`)) {
-      out.set(r.id, r);
-    }
+  for (let key = null; ; ) {
+    const rest = key ? locs.filter((l) => l >= key.loc) : locs;
+    const after = key ? ` AND (loc, starts_on, starts_sort, id) > (${[key.loc, key.starts_on, Number(key.starts_sort), key.id].map(sqlLiteral).join(', ')})` : '';
+    const page = query(`SELECT ${LANDING_CONTENT_COLS.join(', ')} FROM events WHERE loc IN (${rest.map(sqlLiteral).join(', ')}) AND starts_on >= ${sqlLiteral(from)} `
+      + `AND starts_on < ${sqlLiteral(until)} AND game_mask <> 0${after} ORDER BY loc, starts_on, starts_sort, id LIMIT ${pageSize}`);
+    for (const r of page) out.set(r.id, r);
+    if (page.length < pageSize) return out;
+    key = page[page.length - 1];
   }
-  return out;
 }
 
 /** A stored event row as the landing event shape (what landingEvent reads). */
@@ -681,13 +686,33 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     };
     // the import's winning copy of an event (what D1 gets), else the stored one
     const contentOf = (id) => rows.get(id) ?? state.landingContent?.get(id);
-    for (const { run, events: evs } of accepted) {
-      for (const row of landingRows(run, evs, builtOn, codesOf, next.values(), contentOf)) {
-        const k = `${row.game_code}\t${row.loc}`;
-        if (landingNext.get(k) === row.content_hash) continue;
-        landingUpserts.push(row);
-        landingNext.set(k, row.content_hash);
+    const add = (row) => {
+      const k = `${row.game_code}\t${row.loc}`;
+      if (landingNext.get(k) === row.content_hash) return;
+      landingUpserts.push(row);
+      landingNext.set(k, row.content_hash);
+    };
+    for (const { run, events: evs } of accepted) for (const row of landingRows(run, evs, builtOn, codesOf, next.values(), contentOf)) add(row);
+    // Other games' rows that show an event this import rewrote or re-masked (a shared event moved by one game's run):
+    // rebuilt at the event's old and new location, with the game's own latest fetch date.
+    const done = new Set(accepted.map((r) => r.run.game_code));
+    const touched = new Map();
+    const changedIds = [...upserts.map((r) => r.id), ...[...masks.values()].flat()];
+    for (const id of changedIds) {
+      const old = state.events.get(id);
+      const cur = next.get(id);
+      const m = (old?.game_mask ?? 0) | (cur?.game_mask ?? 0);
+      for (const g of GAME_CODES) {
+        if (!(m & GAME_BITS[g]) || done.has(g)) continue;
+        const locs = touched.get(g) ?? new Set();
+        for (const l of [old?.loc, cur?.loc]) if (l) locs.add(l);
+        touched.set(g, locs);
       }
+    }
+    for (const [g, locs] of touched) {
+      const fetched = state.imports.filter((i) => i.game_code === g).map((i) => i.fetched_at).sort().pop();
+      if (!fetched) continue;
+      for (const row of landingRows({ game_code: g, fetched_at: fetched }, [], builtOn, codesOf, next.values(), contentOf)) if (locs.has(row.loc)) add(row);
     }
     statements.push(...chunked(`INSERT INTO landing_pages (${LANDING_COLS.join(', ')}) VALUES\n`,
       landingUpserts.map((r) => `(${LANDING_COLS.map((c) => sqlLiteral(r[c])).join(', ')})`),
@@ -734,6 +759,8 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
       siteMeta: changed ? { meta: metaJson, state: JSON.stringify({ version, fetched_at, window }) } : state.siteMeta,
       dayCounts: counts,
       landing: landingNext,
+      // stored rows of the landing window as they are after this plan
+      landingContent: state.landingContent ? new Map([...state.landingContent, ...rows]) : null,
     },
   };
 }
@@ -744,8 +771,8 @@ const EVENT_INDEXES = 1;
 /**
  * D1 rows written / read by applying a plan. Writes: an inserted or rewritten event costs the row plus
  * its index entry (upper bound: a rewrite that keeps loc/starts_on may not touch the index), a mask-only
- * update costs the row, imports and site_meta one each. Reads: the state read (one row per existing event
- * and import) plus one primary-key lookup per written row.
+ * update costs the row, imports and site_meta one each. Reads (a lower bound): the state read (one row per existing
+ * event, import, day_counts / landing row and landing-window event) plus one primary-key lookup per written row.
  */
 export function estimateCost(stats, state) {
   const writes = {

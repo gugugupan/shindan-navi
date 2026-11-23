@@ -4,7 +4,7 @@ import { BROWSER_TTL } from '../src/worker';
 import { LOCS, PREF_SLUGS, landingRoute, renderLanding, STALE_DAYS } from '../src/landing';
 import { GAMES, PREFECTURES } from '../src/constants';
 import {
-  emptyState, estimateCost, jstDay, landingEvent, LANDING_DAYS, LANDING_LOCS, LANDING_MISSING, LANDING_PER_DAY, landingRows, loadAll, MAX_LANDING_BYTES, planImport,
+  emptyState, estimateCost, jstDay, landingEvent, LANDING_DAYS, readLandingContent, LANDING_LOCS, LANDING_MISSING, LANDING_PER_DAY, landingRows, loadAll, MAX_LANDING_BYTES, planImport,
 } from '../scripts/lib/importer.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 import { remoteConfig } from '../scripts/remote-config.mjs';
@@ -170,6 +170,42 @@ describe('landing rows: review fixes', () => {
     for (const g of ['OPCG', 'UATCG']) {
       expect(get(g, 'JP-13')).toEqual([]);
       expect(get(g, 'JP-27').map((e: Ev) => [e.id, e.name, e.game_codes])).toEqual([[id, '【SYNTHETIC】UATCG copy', ['OPCG', 'UATCG']]]);
+    }
+  });
+
+  it("a one-game import that moves a shared event rebuilds the other game's rows at both locations", () => {
+    const db = pendingDb();
+    const [first] = tokyo(4);
+    const at = (region_code: string, region_name: string) => ({ ...first.venue, region_code, region_name });
+    const base: Ev = { ...first, venue: at('JP-13', '東京都') };
+    const uatRun = { UATCG: run('UATCG', 1, { fetched_at: '2026-11-17T00:00:00Z' }) };
+    importInto(db, [base, { ...base, game_code: 'UATCG' }], NOW, uatRun);
+    const rowOf = (g: string, l: string) => db.db.prepare('SELECT fetched_at, events_json FROM landing_pages WHERE game_code = ? AND loc = ?').get(g, l) as Ev;
+    expect(JSON.parse(rowOf('UATCG', 'JP-13').events_json).map((e: Ev) => e.id)).toEqual([base.id]);
+    const plan = importInto(db, [{ ...base, venue: at('JP-27', '大阪府') }], NOW + 3600, { OPCG: run('OPCG', 1, { fetched_at: '2026-11-18T01:00:00Z' }) });
+    // OPCG's 48 rows changed fetch date; UATCG only at the old and the new location
+    expect(plan.stats.landing_pages).toBe(48 + 2);
+    expect(JSON.parse(rowOf('UATCG', 'JP-13').events_json)).toEqual([]);
+    expect(JSON.parse(rowOf('UATCG', 'JP-27').events_json).map((e: Ev) => e.id)).toEqual([base.id]);
+    expect(rowOf('UATCG', 'JP-27').fetched_at).toBe('2026-11-17T00:00:00Z');
+    expect(plan.state.landingContent?.get(base.id)?.loc).toBe('JP-27');
+  });
+
+  it('reads the landing window in keyset pages along idx_events_loc', () => {
+    const db = pendingDb();
+    importInto(db, synthetic(400));
+    const sqls: string[] = [];
+    const query = (sql: string) => { sqls.push(sql); return db.db.prepare(sql).all() as Ev[]; };
+    const all = readLandingContent(query, TODAY, 100_000);
+    const paged = readLandingContent(query, TODAY, 7);
+    expect(all.size).toBeGreaterThan(20);
+    expect([...paged.keys()].sort()).toEqual([...all.keys()].sort());
+    expect(sqls.length).toBeGreaterThan(all.size / 7);
+    for (const sql of sqls) {
+      expect(sql).toMatch(/LIMIT \d+$/);
+      const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Ev[]).map((r) => r.detail).join(' | ');
+      expect(plan).toContain('USING INDEX idx_events_loc');
+      expect(plan).not.toContain('TEMP B-TREE');
     }
   });
 

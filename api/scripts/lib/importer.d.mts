@@ -69,7 +69,8 @@ export function jstDay(sec: number): string;
 export function landingEvent(ev: Record<string, any>, codes: string[] | null, loc: string): Record<string, any>;
 export function landingRows(run: Record<string, any>, events: Record<string, any>[], builtOn: string, codesOf?: (id: string) => string[] | null,
   shown?: Iterable<Record<string, any>> | null, contentOf?: ((id: string) => Record<string, any> | undefined) | null): Record<string, any>[];
-export function readLandingContent(query: (sql: string) => Record<string, any>[], fromDay: string): Map<string, Record<string, any>>;
+export function readLandingContent(query: (sql: string) => Record<string, any>[], fromDay: string, pageSize?: number): Map<string, Record<string, any>>;
+export const LANDING_CONTENT_PAGE: number;
 export const LANDING_CONTENT_COLS: string[];
 export function readLandingState(query: (sql: string) => Record<string, any>[]): Record<string, any>[] | null;
 export function stateSiteMetaSql(): string;
