@@ -365,7 +365,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     if (JSON.stringify(busy.cols) !== JSON.stringify([['ONE PIECE', 5, 'ほか 45件 ›'], ['ポケモンカード', 3, '地図で見る ›']])) fail(where, `busy columns ${JSON.stringify(busy.cols)}`);
     if (api.length !== 3 || !api.some(a => a.includes('cursor=c1'))) fail(where, `busy: API requests ${api.join(' ')}`);
-    if (busy.chips !== 2) fail(where, `tomorrow shows ${busy.chips} game chips`);
+    // tomorrow's /days counts exist only within this month
+    if (busy.chips !== (WEEK1.slice(0, 7) === TODAY.slice(0, 7) ? 2 : 0)) fail(where, `tomorrow shows ${busy.chips} game chips`);
     if (JSON.stringify(busy.types) !== JSON.stringify(['スタンダードバトル 30件・フラッグシップバトル 12件・ほか 8件', 'ジムバトル 2件・シティリーグ 1件'])) fail(where, `busy: type lines ${JSON.stringify(busy.types)}`);
     if (opt.width <= 760 && !(busy.tyLine && busy.tyLine.nowrap && busy.tyLine.h < 24)) fail(where, `busy: type line not one line on phones ${JSON.stringify(busy.tyLine)}`);
     if (busy.overflow > 1) fail(where, `busy: page scrolls horizontally by ${busy.overflow}px`);
@@ -1576,7 +1577,7 @@ if (HAS_EVENTS) {
       // without events the home may show no title at all (no releases today or tomorrow): the 表示の設定 chips have icons
       if (p === '/' && !HAS_EVENTS) await page.locator('#hsBtn').click();
       await page.locator(need).first().waitFor({ state: 'attached', timeout: 5000 });
-      if (p === '/' && HAS_EVENTS && !await page.locator('#wkPanel a.gc .gi').count()) fail(where, 'no icons in the strip panel event chips');
+      if (p === '/' && HAS_EVENTS && tmr.slice(0, 7) === TODAY.slice(0, 7) && !await page.locator('#wkPanel a.gc .gi').count()) fail(where, 'no icons in the strip panel event chips');
       const r = await page.evaluate(() => [...document.querySelectorAll('.gi')].filter(e => e.getClientRects().length).map(e => {
         const b = e.getBoundingClientRect(), t = e.tagName !== 'IMG' && e.firstChild && document.createRange();
         if (t) t.selectNodeContents(e); const g = t && t.getBoundingClientRect();
