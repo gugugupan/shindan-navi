@@ -7,6 +7,7 @@ import { guessRegion } from './geo';
 
 import { getMeta, readState, type DataState } from './meta';
 import { latestVoices, listVoices, RawJson, readVoicesState, type VoicesState } from './voices';
+import { jstToday, landingRoute, landingSitemap, readLandingRow, renderLanding, TEMPLATE_PATH, type LandingRoute } from './landing';
 
 export interface Env extends FeedbackEnv {
   DB: D1Database;
@@ -14,6 +15,10 @@ export interface Env extends FeedbackEnv {
   /** Workers Rate Limiting bindings (uncached requests only); absent locally, where nothing is limited. */
   API_LIMIT?: RateLimit;
   API_BREAKER?: RateLimit;
+  /** "1" serves the event landing pages (docs/design/event-landing.md); remote-config.mjs sets it with the routes. */
+  LANDING_ENABLED?: string;
+  /** dev-node only: the Asia/Tokyo date the landing pages treat as today. */
+  DEV_TODAY?: string;
 }
 
 const HEADERS = {
@@ -228,10 +233,82 @@ async function handleApi(request: Request, env: Env, url: URL, ctx?: ExecutionCo
   return head ? withHeaders(res, {}, false) : res;
 }
 
+// ---- Event landing pages (docs/design/event-landing.md)
+const PAGE_HEADERS = { 'content-type': 'text/html; charset=utf-8', 'x-content-type-options': 'nosniff' };
+const fnv = (s: string) => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+};
+// The shell per assets binding (one per isolate in production; a deploy starts new isolates, so the hash in the
+// cache key changes with the shell).
+const templates = new WeakMap<Fetcher, { text: string; hash: string }>();
+async function landingTemplate(env: Env, origin: string): Promise<{ text: string; hash: string } | null> {
+  if (!env.ASSETS) return null;
+  const memo = templates.get(env.ASSETS);
+  if (memo) return memo;
+  const res = await env.ASSETS.fetch(new Request(`${origin}${TEMPLATE_PATH}`));
+  if (!res.ok) return null;
+  const text = await res.text();
+  if (!text.includes('<!--LP_MAIN-->')) return null;
+  const t = { text, hash: fnv(text) };
+  templates.set(env.ASSETS, t);
+  return t;
+}
+
+function page(body: string | null, status: number, headers: Record<string, string>): Response {
+  return new Response(body, { status, headers: { ...PAGE_HEADERS, ...headers } });
+}
+
+async function handleLanding(request: Request, env: Env, url: URL, route: LandingRoute, ctx?: ExecutionContext): Promise<Response> {
+  const head = request.method === 'HEAD';
+  if (request.method !== 'GET' && !head) return page('method not allowed', 405, { allow: 'GET, HEAD', 'content-type': 'text/plain; charset=utf-8' });
+  if (route.kind === 'redirect') return new Response(null, { status: 301, headers: { location: route.to, 'cache-control': `public, max-age=${BROWSER_TTL}` } });
+  const tpl = route.kind === 'page' ? await landingTemplate(env, url.origin) : null;
+  // No shell in this build (flag off at build time): the same static 404 as without the Worker.
+  if (route.kind === 'page' && !tpl) return env.ASSETS ? env.ASSETS.fetch(request) : page('Not found', 404, {});
+  const today = env.DEV_TODAY && /^\d{4}-\d{2}-\d{2}$/.test(env.DEV_TODAY) ? env.DEV_TODAY : jstToday();
+  const cache = edgeCache();
+  const plain = { 'content-type': 'text/plain; charset=utf-8', 'x-robots-tag': 'noindex', 'cache-control': 'no-store' };
+  let res: Response;
+  try {
+    const state = await dataState('events', env.DB, cache, url.origin, ctx);
+    const path = route.kind === 'page' ? route.path : url.pathname;
+    // Keyed by the data version, the Japan date (pages drop past days) and the shell.
+    const key = cache && state ? cacheKey(url.origin, path, state.version, `d=${today}${tpl ? `&t=${tpl.hash}` : ''}`) : null;
+    const hit = key ? await cache!.match(key) : undefined;
+    if (hit) return withHeaders(hit, { 'cache-control': BROWSER_CACHE, 'x-edge-cache': 'hit' }, !head, ['age']);
+    const limited = await rateLimited(request, env);
+    if (limited) {
+      const r = page(limited.status === 429 ? 'アクセスが集中しています。1分ほど待ってから再読み込みしてください。' : '混み合っています。1分ほど待ってから再読み込みしてください。',
+        limited.status, { ...plain, 'retry-after': '60' });
+      return head ? withHeaders(r, {}, false) : r;
+    }
+    if (route.kind === 'sitemap') {
+      res = page(await landingSitemap(env.DB, today), 200, { 'content-type': 'application/xml; charset=utf-8', 'x-robots-tag': 'noindex' });
+    } else {
+      const out = renderLanding(tpl!.text, route.code, route.loc, await readLandingRow(env.DB, route.code, route.loc), today);
+      res = page(out.html, out.status, out.indexable ? {} : { 'x-robots-tag': 'noindex' });
+    }
+    if (key && res.status === 200) {
+      const stored = cache!.put(key, withHeaders(res.clone(), { 'cache-control': `public, max-age=${EDGE_TTL}` }));
+      if (ctx) ctx.waitUntil(stored);
+      else await stored;
+      res = withHeaders(res, { 'cache-control': BROWSER_CACHE, 'x-edge-cache': 'miss' });
+    } else res = withHeaders(res, { 'cache-control': res.status === 200 ? BROWSER_CACHE : 'no-store' });
+  } catch (e) {
+    console.error(e);
+    res = page('一時的に表示できません。しばらくしてから再読み込みしてください。', 503, { ...plain, 'retry-after': '60' });
+  }
+  return head ? withHeaders(res, {}, false) : res;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return handleApi(request, env, url, ctx);
+    const route = env.LANDING_ENABLED === '1' && url.pathname.startsWith('/events/') ? landingRoute(url.pathname) : null;
+    if (route) return handleLanding(request, env, url, route, ctx);
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response('Not found', { status: 404 });
   },
