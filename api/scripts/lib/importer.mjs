@@ -299,6 +299,14 @@ export const stateImportsSql = () => `SELECT ${STATE_IMPORT_COLS.join(', ')} FRO
 export const stateSiteMetaSql = () => 'SELECT key, value FROM site_meta';
 export const stateDayCountsSql = () => 'SELECT loc, starts_on, game_mask, event_type_code, n FROM day_counts';
 export const stateLandingSql = () => 'SELECT game_code, loc, content_hash FROM landing_pages';
+/**
+ * landing_pages hashes through `query(sql) -> rows`, or null when the table does not exist (migration 0007 pending).
+ * Asks sqlite_master first instead of reading error text, so a missing table never depends on how a client reports it.
+ */
+export function readLandingState(query) {
+  const t = query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'landing_pages'");
+  return t.length ? query(stateLandingSql()) : null;
+}
 export const LANDING_MISSING = 'landing_pages: table missing (migration 0007 not applied), landing rows skipped';
 
 // ---- Event landing pages (docs/design/event-landing.md): one row per game and location, built from the game's run.
@@ -329,7 +337,9 @@ const pick = (o, keys) => {
  */
 export function landingEvent(ev, codes, loc) {
   const out = pick(ev, LANDING_EVENT_KEYS);
-  if (out.timezone === 'Asia/Tokyo') delete out.timezone;
+  // The renderer formats these with Intl: a zone it cannot use falls back to Asia/Tokyo, an unparseable time is left out.
+  if (out.timezone === 'Asia/Tokyo' || !validZone(out.timezone)) delete out.timezone;
+  for (const k of ['ends_at', 'registration_opens_at']) if (out[k] !== undefined && Number.isNaN(Date.parse(out[k]))) delete out[k];
   // group.name equal to the name and the venue's region equal to the row's location are implied (api/src/landing.ts
   // hydrate() restores them)
   if (ev.group) out.group = pick(ev.group, LANDING_GROUP_KEYS.filter((k) => k !== 'name' || ev.group.name !== ev.name));
@@ -338,41 +348,72 @@ export function landingEvent(ev, codes, loc) {
   return out;
 }
 
+function validZone(tz) {
+  if (tz === undefined) return true;
+  try {
+    new Intl.DateTimeFormat('ja-JP', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const sortKey = (ev) => (ev.starts_at === null ? NULL_SORT : Math.floor(Date.parse(ev.starts_at) / 1000));
 
 /**
- * The 48 landing rows of one game from its run's events: every location, also empty ones. `codesOf(id)` names the
- * games listing an event (for the tags of shared events). Days built_on .. built_on + LANDING_DAYS; days_json counts
- * all events of a day, events_json keeps the first events of each day in API order: LANDING_PER_DAY, fewer a day
- * (down to 1) while over MAX_LANDING_BYTES, so every day stays covered; only then whole days go from the end.
+ * The 48 landing rows of one game: every location, also empty ones, days built_on .. built_on + LANDING_DAYS.
+ * days_json counts what the database shows for the game after this import (`shown`: the planned state's events, so an
+ * incomplete run, which hides nothing, keeps counting the events it did not list); without `shown`, the run's events.
+ * events_json holds the run's shown events of each day in API order: LANDING_PER_DAY, fewer a day (down to 1) while
+ * the row's SQL text is over MAX_LANDING_BYTES, so every day stays covered; only then whole days go from the end.
+ * `codesOf(id)` names the games listing an event (for the tags of shared events).
  */
-export function landingRows(run, events, builtOn, codesOf = () => null) {
+export function landingRows(run, events, builtOn, codesOf = () => null, shown = null) {
   const until = addDays(builtOn, LANDING_DAYS);
+  const inRange = (d) => d >= builtOn && d < until;
+  const bit = GAME_BITS[run.game_code];
+  const counts = new Map(LANDING_LOCS.map((l) => [l, {}]));
+  let visible = null;
+  if (shown) {
+    visible = new Set();
+    for (const e of shown) {
+      if (!(e.game_mask & bit) || !inRange(e.starts_on)) continue;
+      visible.add(e.id);
+      const c = counts.get(e.loc);
+      if (c) c[e.starts_on] = (c[e.starts_on] ?? 0) + 1;
+    }
+  }
   const byLoc = new Map(LANDING_LOCS.map((l) => [l, []]));
   for (const ev of events) {
-    if (ev.starts_on < builtOn || ev.starts_on >= until) continue;
-    byLoc.get(locOf(ev))?.push(ev);
+    if (!inRange(ev.starts_on) || (visible && !visible.has(ev.id))) continue;
+    const loc = locOf(ev);
+    if (!byLoc.has(loc)) continue;
+    byLoc.get(loc).push(ev);
+    if (!visible) counts.get(loc)[ev.starts_on] = (counts.get(loc)[ev.starts_on] ?? 0) + 1;
   }
   return LANDING_LOCS.map((loc) => {
     const evs = byLoc.get(loc).map((ev) => [ev, sortKey(ev)])
       .sort((a, b) => (a[0].starts_on < b[0].starts_on ? -1 : a[0].starts_on > b[0].starts_on ? 1 : a[1] - b[1] || (a[0].id < b[0].id ? -1 : 1)))
       .map(([ev]) => ev);
-    const days = {};
+    const daysJson = JSON.stringify(Object.fromEntries(Object.entries(counts.get(loc)).sort()));
     const nth = [];
-    for (const ev of evs) nth.push((days[ev.starts_on] = (days[ev.starts_on] ?? 0) + 1));
+    const seen = {};
+    for (const ev of evs) nth.push((seen[ev.starts_on] = (seen[ev.starts_on] ?? 0) + 1));
     const compact = evs.map((ev) => landingEvent(ev, codesOf(ev.id), loc));
+    // measured as SQL literals: quote doubling can grow the text
+    const sqlBytes = (json) => Buffer.byteLength(sqlLiteral(json)) + Buffer.byteLength(sqlLiteral(daysJson));
     let kept, eventsJson;
     for (let per = LANDING_PER_DAY; per >= 1; per--) {
       kept = compact.filter((_, i) => nth[i] <= per);
       eventsJson = JSON.stringify(kept);
-      if (Buffer.byteLength(eventsJson) <= MAX_LANDING_BYTES) break;
+      if (sqlBytes(eventsJson) <= MAX_LANDING_BYTES) break;
     }
-    while (Buffer.byteLength(eventsJson) > MAX_LANDING_BYTES) {
+    while (kept.length && sqlBytes(eventsJson) > MAX_LANDING_BYTES) {
       const last = kept[kept.length - 1].starts_on;
       while (kept.length && kept[kept.length - 1].starts_on === last) kept.pop();
       eventsJson = JSON.stringify(kept);
     }
-    const row = { game_code: run.game_code, loc, fetched_at: run.fetched_at, built_on: builtOn, days_json: JSON.stringify(days), events_json: eventsJson };
+    const row = { game_code: run.game_code, loc, fetched_at: run.fetched_at, built_on: builtOn, days_json: daysJson, events_json: eventsJson };
     row.content_hash = sha1(JSON.stringify([row.fetched_at, row.built_on, row.days_json, row.events_json]));
     return row;
   });
@@ -608,7 +649,7 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
       return GAME_CODES.filter((g) => m & GAME_BITS[g]);
     };
     for (const { run, events: evs } of accepted) {
-      for (const row of landingRows(run, evs, builtOn, codesOf)) {
+      for (const row of landingRows(run, evs, builtOn, codesOf, next.values())) {
         const k = `${row.game_code}\t${row.loc}`;
         if (landingNext.get(k) === row.content_hash) continue;
         landingUpserts.push(row);

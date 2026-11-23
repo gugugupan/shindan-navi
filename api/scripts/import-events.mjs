@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
   API_DIR, DEFAULT_DATA_DIR, loadAll, planImport, toSqlFile, estimateCost, emptyState, stateFromRows, stateEventsSql, stateImportsSql,
-  stateSiteMetaSql, stateDayCountsSql, stateLandingSql,
+  stateSiteMetaSql, stateDayCountsSql, readLandingState,
 } from './lib/importer.mjs';
 import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mjs';
 
@@ -97,11 +97,14 @@ if (remote && incomplete.length) {
 
 function wrangler(args, capture = false) {
   // CI=1 makes wrangler skip its interactive confirmations.
-  const r = spawnSync('npx', ['wrangler', ...args], {
+  // IMPORT_WRANGLER=<script.mjs> runs a stand-in under node instead (tests/import-wrangler.test.ts).
+  const [cmd, argv] = process.env.IMPORT_WRANGLER ? [process.execPath, [process.env.IMPORT_WRANGLER, ...args]] : ['npx', ['wrangler', ...args]];
+  const r = spawnSync(cmd, argv, {
     cwd: API_DIR, env: { ...process.env, CI: '1' }, ...(capture ? { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 } : { stdio: 'inherit' }),
   });
   if (r.status !== 0) {
-    if (capture) throw new Error((r.stderr || r.stdout || '').trim());
+    // D1 errors can be on either stream (stdout as JSON with --json): keep both so callers can match them.
+    if (capture) throw new Error([r.stderr, r.stdout].filter(Boolean).join('\n').trim());
     process.exit(r.status ?? 1);
   }
   return r.stdout;
@@ -111,16 +114,6 @@ function wranglerQuery(where, config, sql) {
   const out = wrangler(['d1', 'execute', DB_NAME, where, '--config', config, '--json', '--command', sql], true);
   const parsed = JSON.parse(out.slice(out.indexOf('[')));
   return parsed[0]?.results ?? [];
-}
-
-// landing_pages comes with the pending migration 0007 (docs/design/event-landing.md): null while it does not exist.
-function readWranglerLanding(where, config) {
-  try {
-    return wranglerQuery(where, config, stateLandingSql());
-  } catch (e) {
-    if (/no such table/.test(e.message)) return null;
-    throw e;
-  }
 }
 
 function readWranglerState(where, config) {
@@ -133,7 +126,7 @@ function readWranglerState(where, config) {
       after = page[page.length - 1].id;
     }
     return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()), wranglerQuery(where, config, stateSiteMetaSql()),
-      wranglerQuery(where, config, stateDayCountsSql()), readWranglerLanding(where, config));
+      wranglerQuery(where, config, stateDayCountsSql()), readLandingState((sql) => wranglerQuery(where, config, sql)));
   } catch (e) {
     if (/no such table/.test(e.message)) return emptyState();
     throw e;
