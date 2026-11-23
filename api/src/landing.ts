@@ -7,7 +7,7 @@ export const SITE = 'https://shindan-navi.app';
 export const TEMPLATE_PATH = '/_landing';
 // Pages turn noindex once their game's data is older than this (days, Asia/Tokyo dates).
 export const STALE_DAYS = 14;
-const MAX_LD_EVENTS = 100;
+const MAX_LD_EVENTS = 50;
 
 // Display name (= GAME_ICON key and the /events/ chip name), common short name, palette (CLAUDE.md › Event game
 // palette), icon (GAME_ICON in build.py) and whether build.py has a 新弾 page at /<slug>/. tests/evrow.test.ts checks
