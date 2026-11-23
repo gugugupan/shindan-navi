@@ -24,9 +24,10 @@ landing_pages(game_code TEXT, loc TEXT /* JP-01..JP-47 | online */, fetched_at T
 ```
 
 - One row per (game, location), also for locations with no events (`days_json` `{}`), so the page can say so.
-- `days_json` counts every event of the game's run per day for `built_on .. built_on + 28 days`; `events_json` keeps
+- `days_json` counts what D1 shows for the game after the import (the planned state, so an incomplete run, which
+  hides nothing, keeps counting events it did not list) per day for `built_on .. built_on + 28 days`; `events_json` keeps
   the first events of each day in API order (`starts_sort`, then id): 8 a day, fewer (down to 1) while the row is
-  over 72 KB, so every day stays covered; only then whole days go from the end. One row per INSERT (≤ 90 KB; D1's
+  over 72 KB as SQL text (quotes doubled), so every day stays covered; only then whole days go from the end. One row per INSERT (≤ 90 KB; D1's
   limit is 100 KB). Stored events drop what the row implies (group name = name, venue region = the location).
   Real data 2026-11-23: 624 rows, average 34 KB, largest 72 KB, no day dropped; Tokyo keeps 4 a day of 30-40.
   Rendering filters by today's date, so a row stays correct (only shorter) until the next import.
