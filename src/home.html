@@ -198,7 +198,7 @@ const covered = d => d>=H.from && d<=H.until;
 // short title labels for the week list (other titles show their full name)
 const SHORT = {'ポケモンカード':'ポケカ','ONE PIECE':'ワンピ','遊戯王OCG':'遊戯王','遊戯王ラッシュデュエル':'ラッシュデュエル','デュエル・マスターズ':'デュエマ',
   'ヴァイスシュヴァルツ':'ヴァイス','UNION ARENA':'ユニアリ','DBフュージョンワールド':'フュージョンワールド','デジモン':'デジカ','バトルスピリッツ':'バトスピ',
-  'ヴァンガード':'ヴァンガ','Shadowverse EVOLVE':'シャドバ','ラブライブ！OCG':'ラブライブ','名探偵コナン':'コナン'};
+  'ヴァンガード':'ヴァンガ','Shadowverse EVOLVE':'シャドバ','ホロライブ':'ホロカ','ラブライブ！OCG':'ラブカ','名探偵コナン':'コナン'};
 
 // same colours as the release calendar (src/template.html: titles by count, golden-angle hues)
 const games = Object.keys(H.counts).sort((a,b)=>H.counts[b]-H.counts[a]||a.localeCompare(b,'ja'));
@@ -260,8 +260,8 @@ const EV_GAMES = [
   {code:'WS', name:'ヴァイスシュヴァルツ', short:'ヴァイス', c:'#d31785', cd:'#ed6eb8', bit:256},
   {code:'VG', name:'ヴァンガード', short:'ヴァンガ', c:'#808a0f', cd:'#d4e425', bit:512},
   {code:'SVE', name:'Shadowverse EVOLVE', short:'シャドバ', c:'#4d6f2a', cd:'#85b950', bit:1024},
-  {code:'HOCG', name:'ホロライブ', short:'ホロライブ', c:'#a96660', cd:'#cfadaa', bit:2048},
-  {code:'LLOCG', name:'ラブライブ！OCG', short:'ラブライブ', c:'#366063', cd:'#62a1a7', bit:4096}
+  {code:'HOCG', name:'ホロライブ', short:'ホロカ', c:'#a96660', cd:'#cfadaa', bit:2048},
+  {code:'LLOCG', name:'ラブライブ！OCG', short:'ラブカ', c:'#366063', cd:'#62a1a7', bit:4096}
 ];
 const EVG = Object.fromEntries(EV_GAMES.map(g=>[g.code,g]));
 const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
