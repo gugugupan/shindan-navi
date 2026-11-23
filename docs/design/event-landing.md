@@ -25,9 +25,11 @@ landing_pages(game_code TEXT, loc TEXT /* JP-01..JP-47 | online */, fetched_at T
 
 - One row per (game, location), also for locations with no events (`days_json` `{}`), so the page can say so.
 - `days_json` counts every event of the game's run per day for `built_on .. built_on + 28 days`; `events_json` keeps
-  at most 8 events per day (same order as the API: `starts_sort`, then id), dropped from the last day backwards
-  while the row is over 48 KB (D1 statements must stay under 100 KB). Rendering filters by today's date, so a
-  row stays correct (only shorter) until the next import.
+  the first events of each day in API order (`starts_sort`, then id): 8 a day, fewer (down to 1) while the row is
+  over 72 KB, so every day stays covered; only then whole days go from the end. One row per INSERT (≤ 90 KB; D1's
+  limit is 100 KB). Stored events drop what the row implies (group name = name, venue region = the location).
+  Real data 2026-11-23: 624 rows, average 34 KB, largest 72 KB, no day dropped; Tokyo keeps 4 a day of 30-40.
+  Rendering filters by today's date, so a row stays correct (only shorter) until the next import.
 - `WITHOUT ROWID` + composite primary key: no secondary index, so 1 written row per row.
 - Pending, not in `api/migrations/`: `import:remote -- --yes` applies `api/migrations/` automatically and the
   owner approves this one separately. wrangler applies by name, so 0007 after the live 0008 is fine
@@ -70,8 +72,8 @@ event content), hashes them and diffs against `landing_pages(game_code, loc, con
   list** (owner-approved exception to the site's h1-in-footer pattern); canonical = the slash URL.
 - JSON-LD: BreadcrumbList (トップ › イベントカレンダー › page) + one `Event` per rendered event (max 100): name,
   startDate (date or datetime), endDate, eventStatus (cancelled / postponed / scheduled), eventAttendanceMode,
-  location (`Place` + `PostalAddress`, or `VirtualLocation` with the source URL), url = source URL, organizer =
-  the venue. No `offers` (fees are often unknown; keeps markup to what the page shows).
+  location (`Place` + `PostalAddress`, or `VirtualLocation` with the source URL), url = source URL. No
+  `organizer` (the venue is not always the organizer) and no `offers` (fees are often unknown).
 
 ## Sitemap
 
@@ -84,14 +86,14 @@ the flag on; `dist/sitemap.xml` stays static. Submit the new sitemap in Search C
 ## Links
 
 - Out: crumbs; 「地図・カレンダーで探す」 → `/events/?game=G&pref=P` (nofollow); the 47 other locations of the game;
-  the 12 other games in the same location; the game's 新弾 page `/<slug>/` where one exists (10 of 13).
+  the 12 other games in the same location; the game's 新弾 page `/<slug>/` where one exists (7 of 13).
 - In: the sitemap and the cross links. Hub → landing links come with game-hub M4 (`docs/design/game-hub.md` › 10).
 
 ## D1 budget (Free: 5M reads / 100k writes per UTC day)
 
 | What | Rows |
 | --- | --- |
-| Import | writes ≤ 624, reads ≤ 1,248 extra |
+| Import | writes ≤ 624 (0 for a same-day re-run), reads ≤ 1,248 extra; ~21 MB more SQL for a full import |
 | Page miss | 1 (+ shared version memo) |
 | Sitemap miss | 624 |
 | Worst case per day | 624 pages × every colo × 1 miss (24 h key) ≈ 624 × 300 = 187k reads; realistic (crawlers in a few colos) < 5k |
@@ -105,8 +107,9 @@ Every landing request (hit or miss) is a Worker invocation (Free: 100k/day), unl
   noindex (0 events, stale), JSON-LD shape, sitemap contents, cache key by version + day, rate-limit, D1 failure.
 - `api/tests/evrow.test.ts`: TS rows == `src/evrow.html` rows for fixture events; palette / icon / slug parity with
   `src/events.html` and `scripts/build.py`.
-- `tools/verify/landing.mjs`: builds with the flag on, imports SYNTHETIC data into SQLite with 0007, serves through
-  `dev-node.mjs`, checks pages and the sitemap over HTTP in both flag states.
+- `tools/verify/landing.mjs --today D [--data DIR]`: flag off (current build, no routes) and on (rebuild with the
+  flag, SYNTHETIC or copied data imported into SQLite with and without 0007), via `dev-node.mjs`: pages, noindex,
+  JSON-LD, links, sitemap over HTTP, one page in headless Chrome at both widths; rebuilds `dist/` flag-off after.
 
 ## Go-live (owner)
 

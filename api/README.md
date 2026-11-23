@@ -320,6 +320,14 @@ month per request.
 | `/events` page with filters, day lookup | ≤ month's day_counts rows (13 games: ≤ 887 / ≤ 3,846) |
 | `/events/meta`, data version | 1, 1 |
 | `/voices` (話題カレンダー): all snapshots / `/voices/latest` / voices version | 1 per snapshot (≈ 365 a year) / 1 / 1 |
+| Event landing page `/events/<slug>/<pref>/` / `/events/sitemap.xml` (only with `LANDING_ENABLED=1`) | 1 / 624 |
+
+**Event landing pages** (docs/design/event-landing.md, pending migration `migrations-pending/0007_landing_pages.sql`):
+the importer writes ≤ 48 `landing_pages` rows per imported game (≤ 624 for all 13; 0 for a same-day re-run; one
+written row each, no secondary index) and reads 624 more state rows; while the table is missing it writes none and
+says so. Pages cache like the API (data version + Japan date + shell, 24 h per colo); the worst case is every page
+missing once a day in every colo (624 × ~300 ≈ 187k reads), crawlers in a few colos make it < 5k. Every landing
+request, hit or miss, is a Worker invocation (Free: 100k/day).
 
 **Voices** (`import-voices.mjs`, migration `migrations/0008_voices.sql`, docs/design/voices-db.md): one
 `voice_snapshots` row per date, so an import writes ~2 rows per new or changed date + 1 version row (a takedown: the
