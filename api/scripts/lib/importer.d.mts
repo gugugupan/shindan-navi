@@ -21,6 +21,8 @@ export interface ImportState {
   imports: Record<string, any>[];
   siteMeta: Record<string, string>;
   dayCounts: Map<string, number>;
+  /** content_hash per `${game}\t${loc}`; null while landing_pages does not exist. */
+  landing: Map<string, string> | null;
 }
 
 export interface GamePlan {
@@ -42,6 +44,7 @@ export interface PlanStats {
   imports: number;
   day_counts: number;
   site_meta: number;
+  landing_pages: number;
   unchanged: number;
 }
 
@@ -52,8 +55,17 @@ export function withoutExpiredGeo(ev: Record<string, any>, cutoff: string): Reco
 export function locOf(ev: Record<string, any>): string | null;
 export function sqlLiteral(v: unknown): string;
 export function importId(run: Record<string, any>): string;
-export function emptyState(): ImportState;
-export function stateFromRows(eventRows: Record<string, any>[], importRows: Record<string, any>[], siteMetaRows?: Record<string, any>[], dayCountRows?: Record<string, any>[]): ImportState;
+export function emptyState(opts?: { landing?: boolean }): ImportState;
+export function stateFromRows(eventRows: Record<string, any>[], importRows: Record<string, any>[], siteMetaRows?: Record<string, any>[], dayCountRows?: Record<string, any>[], landingRows?: Record<string, any>[] | null): ImportState;
+export function stateLandingSql(): string;
+export const LANDING_MISSING: string;
+export const LANDING_DAYS: number;
+export const LANDING_PER_DAY: number;
+export const MAX_LANDING_BYTES: number;
+export const LANDING_LOCS: string[];
+export function jstDay(sec: number): string;
+export function landingEvent(ev: Record<string, any>, codes: string[] | null): Record<string, any>;
+export function landingRows(run: Record<string, any>, events: Record<string, any>[], builtOn: string, codesOf?: (id: string) => string[] | null): Record<string, any>[];
 export function stateSiteMetaSql(): string;
 export function stateDayCountsSql(): string;
 export function computeDayCounts(events: ImportState['events']): Map<string, number>;
@@ -67,6 +79,7 @@ export function planImport(accepted: GameLoad[], state?: ImportState, opts?: { n
   stats: PlanStats;
   perGame: Record<string, GamePlan>;
   meta: Record<string, any>;
+  notes: string[];
   version: string | null;
   state: ImportState;
 };

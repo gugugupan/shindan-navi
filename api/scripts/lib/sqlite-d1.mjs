@@ -3,9 +3,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { API_DIR, stateDayCountsSql, stateEventsSql, stateFromRows, stateImportsSql, stateSiteMetaSql } from './importer.mjs';
+import { API_DIR, stateDayCountsSql, stateEventsSql, stateFromRows, stateImportsSql, stateLandingSql, stateSiteMetaSql } from './importer.mjs';
 
 const MIGRATIONS_DIR = join(API_DIR, 'migrations');
+/** Migrations the owner applies by hand (docs/design/event-landing.md); tests and local checks may apply them. */
+export const PENDING_MIGRATIONS_DIR = join(API_DIR, 'migrations-pending');
 
 class Statement {
   constructor(db, sql, args = []) {
@@ -72,8 +74,10 @@ export class SqliteD1 {
       throw e;
     }
   }
-  /** Apply migrations/*.sql not yet recorded, using the same table name as wrangler. */
-  migrate(dir = MIGRATIONS_DIR) {
+  /** Apply migrations/*.sql not yet recorded, using the same table name as wrangler (pending: also migrations-pending/). */
+  migrate(dir = MIGRATIONS_DIR, { pending = false } = {}) {
+    if (pending) this.migrate(dir);
+    if (pending) dir = PENDING_MIGRATIONS_DIR;
     this.db.exec('CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)');
     const done = new Set(this.db.prepare('SELECT name FROM d1_migrations').all().map((r) => r.name));
     for (const name of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
@@ -91,7 +95,9 @@ export class SqliteD1 {
       if (page.length < 5000) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, this.db.prepare(stateImportsSql()).all(), this.db.prepare(stateSiteMetaSql()).all(), this.db.prepare(stateDayCountsSql()).all());
+    const hasLanding = this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'landing_pages'").get();
+    return stateFromRows(events, this.db.prepare(stateImportsSql()).all(), this.db.prepare(stateSiteMetaSql()).all(), this.db.prepare(stateDayCountsSql()).all(),
+      hasLanding ? this.db.prepare(stateLandingSql()).all() : null);
   }
   close() {
     this.db.close();

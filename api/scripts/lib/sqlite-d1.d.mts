@@ -1,5 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
+export const PENDING_MIGRATIONS_DIR: string;
+
 export class SqliteD1 {
   constructor(path?: string);
   db: DatabaseSync;
@@ -7,7 +9,7 @@ export class SqliteD1 {
   batch(statements: unknown[]): Promise<unknown[]>;
   exec(sql: string): Promise<{ count: number; duration: number }>;
   execAll(statements: string[]): void;
-  migrate(dir?: string): this;
+  migrate(dir?: string, opts?: { pending?: boolean }): this;
   readState(): import('./importer.mjs').ImportState;
   close(): void;
 }
