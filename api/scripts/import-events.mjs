@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
   API_DIR, DEFAULT_DATA_DIR, loadAll, planImport, toSqlFile, estimateCost, emptyState, stateFromRows, stateEventsSql, stateImportsSql,
-  stateSiteMetaSql, stateDayCountsSql, readLandingState,
+  stateSiteMetaSql, stateDayCountsSql, readLandingState, readLandingContent, jstDay,
 } from './lib/importer.mjs';
 import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mjs';
 
@@ -125,8 +125,10 @@ function readWranglerState(where, config) {
       if (page.length < STATE_PAGE) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()), wranglerQuery(where, config, stateSiteMetaSql()),
-      wranglerQuery(where, config, stateDayCountsSql()), readLandingState((sql) => wranglerQuery(where, config, sql)));
+    const query = (sql) => wranglerQuery(where, config, sql);
+    const landing = readLandingState(query);
+    return stateFromRows(events, query(stateImportsSql()), query(stateSiteMetaSql()), query(stateDayCountsSql()),
+      landing, landing ? readLandingContent(query, jstDay(Math.floor(Date.now() / 1000))) : null);
   } catch (e) {
     if (/no such table/.test(e.message)) return emptyState();
     throw e;

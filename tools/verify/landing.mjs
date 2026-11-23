@@ -81,7 +81,7 @@ function seed(file, pending) {
   for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });
   const db = new SqliteD1(file).migrate(undefined, { pending });
   const accepted = loadAll(DATA ? path.resolve(DATA) : syntheticDir()).filter((r) => !r.errors.length);
-  const plan = planImport(accepted, db.readState(), { now: Math.floor(Date.parse(`${TODAY}T10:00:00+09:00`) / 1000) });
+  const plan = planImport(accepted, db.readState({ landingFrom: TODAY }), { now: Math.floor(Date.parse(`${TODAY}T10:00:00+09:00`) / 1000) });
   db.execAll(plan.statements);
   db.close();
   console.log(`landing: imported ${accepted.map((r) => `${r.game} ${r.events.length}`).join(', ')}; landing rows ${plan.stats.landing_pages}${plan.notes.length ? `; ${plan.notes.join('; ')}` : ''}`);

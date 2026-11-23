@@ -10,6 +10,6 @@ export class SqliteD1 {
   exec(sql: string): Promise<{ count: number; duration: number }>;
   execAll(statements: string[]): void;
   migrate(dir?: string, opts?: { pending?: boolean }): this;
-  readState(): import('./importer.mjs').ImportState;
+  readState(opts?: { landingFrom?: string }): import('./importer.mjs').ImportState;
   close(): void;
 }
