@@ -35,7 +35,7 @@ const md = (s: string) => {
   return `${m}/${d}(${DOW[new Date(s + 'T00:00:00Z').getUTCDay()]})`;
 };
 const fmts = new Map<string, Intl.DateTimeFormat>();
-const timeFmt = (tz?: string) => {
+const timeFmt = (tz?: string): Intl.DateTimeFormat => {
   const k = tz || 'Asia/Tokyo';
   let f = fmts.get(k);
   if (!f) {
