@@ -139,12 +139,23 @@ export function eventLd(e: Ev, pageUrl: string): Record<string, unknown> | null 
 
 /** A stored event as the row renderer expects it (importer.mjs landingEvent leaves out what the row implies). */
 export function hydrate(e: Ev, code: string, loc: string): Ev {
-  const out: Ev = { ...e, game_code: code };
+  // as the API: game_code is the first listing game, so a shared event looks the same on every game's page
+  const out: Ev = { ...e, game_code: Array.isArray(e.game_codes) && e.game_codes.length ? e.game_codes[0] : code };
   if (e.group && e.group.name === undefined) out.group = { ...e.group, name: e.name };
   if (e.venue && e.venue.region_code === undefined && loc !== 'online') {
     out.venue = { ...e.venue, region_code: loc, region_name: PREFECTURES.find(([c]) => c === loc)![1] };
   }
   return out;
+}
+
+/** f(), or fallback() when f throws (a stored value Intl cannot format): one bad event must not fail the page. */
+function safe(f: () => string, fallback: () => string): string {
+  try {
+    return f();
+  } catch (e) {
+    console.error('landing: row skipped', e);
+    return fallback();
+  }
 }
 
 export interface RenderedPage {
@@ -188,7 +199,8 @@ export function renderLanding(template: string, code: string, loc: string, row: 
   const sections = shownDays.map(([day, total]) => {
     const evs = [...byDay.get(day)!].sort((a, b) => rank(a) - rank(b));
     const more = total > evs.length;
-    const rows = r.group(evs).map((x) => ('rows' in x ? r.grp(x as Group, { day, col: code, pref: loc, more }) : r.row((x as { e: Ev }).e, { col: code, pref: loc }))).join('');
+    const rows = r.group(evs).map((x) => safe(() => ('rows' in x ? r.grp(x as Group, { day, col: code, pref: loc, more }) : r.row((x as { e: Ev }).e, { col: code, pref: loc })),
+      () => ('rows' in x ? (x as Group).rows : [(x as { e: Ev }).e]).map((e) => safe(() => r.row(e, { col: code, pref: loc }), () => '')).join(''))).join('');
     const all = more ? `<a class="lp-more" href="${esc(eventsUrl({ game: code, pref: loc, range: 'custom', from: day, to: day }))}" rel="nofollow">この日の${total}件をすべて見る →</a>` : '';
     return `<section class="lp-day" aria-labelledby="d-${day}"><h2 id="d-${day}"><time datetime="${day}">${md(day)}</time><small>${total}件${more ? `（${evs.length}件を表示）` : ''}</small></h2><div class="lp-rows">${rows}</div>${all}</section>`;
   });

@@ -32,7 +32,8 @@ function fixtures(): Ev[] {
   const day = base[0].starts_on;
   const same = synthetic(5, 900).map((e, i) => asApi({ ...e, starts_on: day, name: '【SYNTHETIC】スタンダードバトル（11月開催）', game_code: 'OPCG',
     group: { ...e.group, event_type_code: 'standard_battle' }, registration_method: i % 2 ? 'first_come' : 'lottery', event_status: 'scheduled' }));
-  const shared = { ...asApi(synthetic(1, 950)[0]), game_codes: ['OPCG', 'UATCG'], registration_status: 'not_open', registration_opens_at: '2026-11-20T12:00:00+09:00' };
+  // as the API: game_code = game_codes[0]
+  const shared = { ...asApi(synthetic(1, 950)[0]), game_code: 'OPCG', game_codes: ['OPCG', 'UATCG'], registration_status: 'not_open', registration_opens_at: '2026-11-20T12:00:00+09:00' };
   return [...base, ...same, shared];
 }
 
@@ -81,6 +82,18 @@ describe('landing rows keep what the rows show', () => {
       n++;
     }
     expect(n).toBeGreaterThan(50);
+  });
+
+  it("shows a shared event on the second game's page as the API does (game_code = first listing game)", () => {
+    const ts = renderer(icon, games);
+    const api = { ...asApi(synthetic(1, 960)[0]), game_code: 'OPCG', game_codes: ['OPCG', 'UATCG'] };
+    const loc = locOf(api)!;
+    const fromRun = { ...api, game_code: 'UATCG' };
+    const back = hydrate(landingEvent(fromRun, ['OPCG', 'UATCG'], loc), 'UATCG', loc);
+    expect(back.game_code).toBe('OPCG');
+    const o = { col: 'UATCG', pref: loc };
+    expect(ts.row(back, o)).toBe(ts.row(api, o));
+    expect(ts.row(back, o)).toContain('ONE PIECE');
   });
 });
 

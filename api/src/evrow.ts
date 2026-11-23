@@ -38,7 +38,15 @@ const fmts = new Map<string, Intl.DateTimeFormat>();
 const timeFmt = (tz?: string) => {
   const k = tz || 'Asia/Tokyo';
   let f = fmts.get(k);
-  if (!f) fmts.set(k, (f = new Intl.DateTimeFormat('ja-JP', { timeZone: k, hour: '2-digit', minute: '2-digit', hour12: false })));
+  if (!f) {
+    // Unlike the page (which would throw), an unknown zone renders in Asia/Tokyo: one bad row must not fail the page.
+    try {
+      f = new Intl.DateTimeFormat('ja-JP', { timeZone: k, hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch {
+      f = timeFmt('Asia/Tokyo');
+    }
+    fmts.set(k, f);
+  }
   return f;
 };
 const jstDayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' });

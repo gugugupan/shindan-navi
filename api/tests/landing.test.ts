@@ -4,7 +4,7 @@ import { BROWSER_TTL } from '../src/worker';
 import { LOCS, PREF_SLUGS, landingRoute, renderLanding, STALE_DAYS } from '../src/landing';
 import { GAMES, PREFECTURES } from '../src/constants';
 import {
-  emptyState, estimateCost, LANDING_DAYS, LANDING_LOCS, LANDING_MISSING, LANDING_PER_DAY, landingRows, loadAll, MAX_LANDING_BYTES, planImport,
+  emptyState, estimateCost, landingEvent, LANDING_DAYS, LANDING_LOCS, LANDING_MISSING, LANDING_PER_DAY, landingRows, loadAll, MAX_LANDING_BYTES, planImport,
 } from '../scripts/lib/importer.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 import { remoteConfig } from '../scripts/remote-config.mjs';
@@ -119,6 +119,60 @@ describe('landing rows (importer)', () => {
     expect(evs[0]).not.toHaveProperty('fee_text');
     expect(evs[0].venue).not.toHaveProperty('geo');
     expect(JSON.parse(rows.find((r: Ev) => r.loc === 'JP-01')!.days_json)).toEqual({});
+  });
+});
+
+describe('landing rows: review fixes', () => {
+  it('an incomplete run keeps counting the events it did not list', () => {
+    const db = pendingDb();
+    const all = tokyo(80);
+    importInto(db, all);
+    const row = () => db.db.prepare("SELECT days_json, events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev;
+    const before = row();
+    const half = all.filter((_, i) => i % 2);
+    const plan = importInto(db, half, NOW + 3600, { OPCG: run('OPCG', half.length, { complete: false, fetched_at: '2026-11-18T01:00:00Z' }) });
+    expect(plan.stats.landing_pages).toBeGreaterThan(0);
+    const after = row();
+    expect(after.days_json).toBe(before.days_json);
+    expect(JSON.parse(after.events_json).length).toBeGreaterThan(0);
+    // a complete run hides what it no longer lists: the counts follow
+    const done = importInto(db, half, NOW + 7200, { OPCG: run('OPCG', half.length, { fetched_at: '2026-11-18T02:00:00Z' }) });
+    expect(done.stats.landing_pages).toBeGreaterThan(0);
+    const total = (j: string) => Object.values(JSON.parse(j) as Record<string, number>).reduce((a, b) => a + b, 0);
+    expect(total(row().days_json)).toBeLessThan(total(before.days_json));
+  });
+
+  it('measures the row as SQL text: apostrophes cannot push an INSERT over the statement budget', () => {
+    const quoty = Array.from({ length: 28 * 8 }, (_, i) => ({
+      ...synthetic(1, 7000 + i)[0], id: `tcgp:q${i}`, external_id: `q${i}`, game_code: 'OPCG', attendance_mode: 'in_person',
+      name: `【SYNTHETIC】${"'".repeat(300)} ${i}`,
+      starts_on: new Date(Date.parse(`${TODAY}T00:00:00Z`) + Math.floor(i / 8) * 86_400_000).toISOString().slice(0, 10),
+      venue: { name: "【SYNTHETIC】shop's", source_id: null, country_code: 'JP', region_code: 'JP-13', region_name: '東京都', city: null, address: "'".repeat(100), postal_code: null },
+    }));
+    const r = landingRows(run('OPCG', quoty.length), quoty, TODAY).find((x: Ev) => x.loc === 'JP-13')!;
+    const lit = (v: string) => Buffer.byteLength(`'${v.replaceAll("'", "''")}'`);
+    expect(lit(r.events_json) + lit(r.days_json)).toBeLessThanOrEqual(MAX_LANDING_BYTES);
+    const plan = importInto(pendingDb(), quoty);
+    const ins = plan.statements.filter((x) => x.startsWith('INSERT INTO landing_pages'));
+    expect(Math.max(...ins.map((x) => Buffer.byteLength(x)))).toBeLessThanOrEqual(90_000);
+  });
+
+  it('drops a time zone or time Intl cannot use, and a bad stored zone does not fail the page', async () => {
+    const [e] = synthetic(1, 3);
+    const c = landingEvent({ ...e, timezone: 'Not/A_Zone', registration_opens_at: 'soon', ends_at: 'later' }, null, 'JP-13');
+    expect(c).not.toHaveProperty('timezone');
+    expect(c).not.toHaveProperty('registration_opens_at');
+    expect(c).not.toHaveProperty('ends_at');
+    const db = pendingDb();
+    importInto(db, tokyo(20));
+    const evs = JSON.parse((db.db.prepare("SELECT events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev).events_json);
+    evs[0] = { ...evs[0], timezone: 'Not/A_Zone', time_precision: 'datetime', starts_at: `${evs[0].starts_on}T10:00:00+09:00` };
+    evs[1] = { ...evs[1], event_status: 'scheduled', registration_status: 'not_open', registration_opens_at: 'soon' };
+    db.db.prepare("UPDATE landing_pages SET events_json = ? WHERE game_code = 'OPCG' AND loc = 'JP-13'").run(JSON.stringify(evs));
+    const { res, text } = await get(db, '/events/onepiece/tokyo/');
+    expect(res.status).toBe(200);
+    expect(text).toContain('class="ev');
+    expect(text).not.toContain(`data-id="${evs[1].id}"`);
   });
 });
 
