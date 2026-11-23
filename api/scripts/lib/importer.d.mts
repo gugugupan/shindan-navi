@@ -23,6 +23,8 @@ export interface ImportState {
   dayCounts: Map<string, number>;
   /** content_hash per `${game}\t${loc}`; null while landing_pages does not exist. */
   landing: Map<string, string> | null;
+  /** Stored rows of the events shown in the landing window (readLandingContent); null without the table. */
+  landingContent?: Map<string, Record<string, any>> | null;
 }
 
 export interface GamePlan {
@@ -56,7 +58,7 @@ export function locOf(ev: Record<string, any>): string | null;
 export function sqlLiteral(v: unknown): string;
 export function importId(run: Record<string, any>): string;
 export function emptyState(opts?: { landing?: boolean }): ImportState;
-export function stateFromRows(eventRows: Record<string, any>[], importRows: Record<string, any>[], siteMetaRows?: Record<string, any>[], dayCountRows?: Record<string, any>[], landingRows?: Record<string, any>[] | null): ImportState;
+export function stateFromRows(eventRows: Record<string, any>[], importRows: Record<string, any>[], siteMetaRows?: Record<string, any>[], dayCountRows?: Record<string, any>[], landingRows?: Record<string, any>[] | null, landingContent?: Map<string, Record<string, any>> | null): ImportState;
 export function stateLandingSql(): string;
 export const LANDING_MISSING: string;
 export const LANDING_DAYS: number;
@@ -65,7 +67,11 @@ export const MAX_LANDING_BYTES: number;
 export const LANDING_LOCS: string[];
 export function jstDay(sec: number): string;
 export function landingEvent(ev: Record<string, any>, codes: string[] | null, loc: string): Record<string, any>;
-export function landingRows(run: Record<string, any>, events: Record<string, any>[], builtOn: string, codesOf?: (id: string) => string[] | null, shown?: Iterable<Record<string, any>> | null): Record<string, any>[];
+export function landingRows(run: Record<string, any>, events: Record<string, any>[], builtOn: string, codesOf?: (id: string) => string[] | null,
+  shown?: Iterable<Record<string, any>> | null, contentOf?: ((id: string) => Record<string, any> | undefined) | null): Record<string, any>[];
+export function readLandingContent(query: (sql: string) => Record<string, any>[], fromDay: string, pageSize?: number): Map<string, Record<string, any>>;
+export const LANDING_CONTENT_PAGE: number;
+export const LANDING_CONTENT_COLS: string[];
 export function readLandingState(query: (sql: string) => Record<string, any>[]): Record<string, any>[] | null;
 export function stateSiteMetaSql(): string;
 export function stateDayCountsSql(): string;

@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { API_DIR, readLandingState, stateDayCountsSql, stateEventsSql, stateFromRows, stateImportsSql, stateSiteMetaSql } from './importer.mjs';
+import { API_DIR, jstDay, readLandingContent, readLandingState, stateDayCountsSql, stateEventsSql, stateFromRows, stateImportsSql, stateSiteMetaSql } from './importer.mjs';
 
 const MIGRATIONS_DIR = join(API_DIR, 'migrations');
 /** Migrations the owner applies by hand (docs/design/event-landing.md); tests and local checks may apply them. */
@@ -86,8 +86,11 @@ export class SqliteD1 {
     }
     return this;
   }
-  /** The importer's view of this database (see importer.mjs stateFromRows). */
-  readState() {
+  /**
+   * The importer's view of this database (see importer.mjs stateFromRows). landingFrom: first day of the landing
+   * window whose stored events are read (default today in Japan; pass the plan's day when planning with another `now`).
+   */
+  readState({ landingFrom = jstDay(Math.floor(Date.now() / 1000)) } = {}) {
     const events = [];
     for (let after = null; ; ) {
       const page = this.db.prepare(stateEventsSql(after, 5000)).all();
@@ -95,8 +98,10 @@ export class SqliteD1 {
       if (page.length < 5000) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, this.db.prepare(stateImportsSql()).all(), this.db.prepare(stateSiteMetaSql()).all(), this.db.prepare(stateDayCountsSql()).all(),
-      readLandingState((sql) => this.db.prepare(sql).all()));
+    const query = (sql) => this.db.prepare(sql).all();
+    const landing = readLandingState(query);
+    return stateFromRows(events, query(stateImportsSql()), query(stateSiteMetaSql()), query(stateDayCountsSql()),
+      landing, landing ? readLandingContent(query, landingFrom) : null);
   }
   close() {
     this.db.close();

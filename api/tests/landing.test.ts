@@ -4,7 +4,7 @@ import { BROWSER_TTL } from '../src/worker';
 import { LOCS, PREF_SLUGS, landingRoute, renderLanding, STALE_DAYS } from '../src/landing';
 import { GAMES, PREFECTURES } from '../src/constants';
 import {
-  emptyState, estimateCost, landingEvent, LANDING_DAYS, LANDING_LOCS, LANDING_MISSING, LANDING_PER_DAY, landingRows, loadAll, MAX_LANDING_BYTES, planImport,
+  emptyState, estimateCost, jstDay, landingEvent, LANDING_DAYS, readLandingContent, LANDING_LOCS, LANDING_MISSING, LANDING_PER_DAY, landingRows, loadAll, MAX_LANDING_BYTES, planImport,
 } from '../scripts/lib/importer.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 import { remoteConfig } from '../scripts/remote-config.mjs';
@@ -20,7 +20,7 @@ const pendingDb = () => new SqliteD1().migrate(undefined, { pending: true });
 
 function importInto(db: SqliteD1, events: Ev[], now = NOW, runs: Record<string, Ev> = {}) {
   const accepted = loadAll(writeDataDir(events, runs)).filter((r) => !r.errors.length);
-  const plan = planImport(accepted, db.readState(), { now });
+  const plan = planImport(accepted, db.readState({ landingFrom: jstDay(now) }), { now });
   db.execAll(plan.statements);
   return plan;
 }
@@ -44,7 +44,7 @@ const ld = (html: string) => [...html.matchAll(/<script type="application\/ld\+j
 const robotsNoindex = (html: string) => /<meta name="robots" content="noindex">/.test(html);
 
 // Dense Tokyo ONE PIECE days plus a few elsewhere: every synthetic OPCG event moved to Tokyo or Osaka.
-const tokyo = (n: number, seed = 0) => synthetic(n * 4, seed).filter((e) => e.game_code === 'OPCG').map((e, i) => ({
+const tokyo = (n: number, seed = 0): Ev[] => synthetic(n * 4, seed).filter((e) => e.game_code === 'OPCG').map((e, i) => ({
   ...e,
   attendance_mode: 'in_person',
   venue: { ...(e.venue ?? { name: `【SYNTHETIC】shop ${i}`, source_id: null, country_code: 'JP', city: null, address: null, postal_code: null }),
@@ -60,12 +60,12 @@ describe('landing rows (importer)', () => {
     expect(estimateCost(plan.stats, emptyState()).writes.landing_pages).toBe(4 * 48);
     const n = db.db.prepare('SELECT COUNT(*) AS n FROM landing_pages').get() as { n: number };
     expect(n.n).toBe(192);
-    const again = planImport(loadAll(writeDataDir(synthetic(400))), db.readState(), { now: NOW + 60 });
+    const again = planImport(loadAll(writeDataDir(synthetic(400))), db.readState({ landingFrom: TODAY }), { now: NOW + 60 });
     expect(again.stats.landing_pages).toBe(0);
     expect(again.statements).toEqual([]);
     expect(estimateCost(again.stats, db.readState()).reads['state read']).toBeGreaterThanOrEqual(192);
     // a later JST day moves every row's first day: rewritten (still <= 48 per game)
-    expect(planImport(loadAll(writeDataDir(synthetic(400))), db.readState(), { now: NOW + 86_400 }).stats.landing_pages).toBe(192);
+    expect(planImport(loadAll(writeDataDir(synthetic(400))), db.readState({ landingFrom: "2026-11-19" }), { now: NOW + 86_400 }).stats.landing_pages).toBe(192);
   });
 
   it('stays within 624 writes for all 13 games', () => {
@@ -142,9 +142,87 @@ describe('landing rows: review fixes', () => {
     expect(total(row().days_json)).toBeLessThan(total(before.days_json));
   });
 
+  it('an empty incomplete run keeps showing the events D1 keeps', () => {
+    const db = pendingDb();
+    importInto(db, tokyo(80));
+    const row = () => db.db.prepare("SELECT days_json, events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev;
+    const before = row();
+    const kept = JSON.parse(before.events_json)[0];
+    const plan = importInto(db, [], NOW + 3600, { OPCG: run('OPCG', 0, { complete: false, fetched_at: '2026-11-18T01:00:00Z' }) });
+    expect(plan.stats.landing_pages).toBe(48);
+    const after = row();
+    expect(after.days_json).toBe(before.days_json);
+    expect(after.events_json).toBe(before.events_json);
+    expect(JSON.parse(after.events_json)[0]).toEqual(kept);
+  });
+
+  it('builds rows from the copy D1 keeps when games disagree about a shared event', () => {
+    const db = pendingDb();
+    const [base] = tokyo(4);
+    const id = base.id;
+    const opcg = { ...base, name: '【SYNTHETIC】OPCG copy', venue: { ...base.venue, region_code: 'JP-13', region_name: '東京都' } };
+    const uatcg = { ...base, game_code: 'UATCG', name: '【SYNTHETIC】UATCG copy', venue: { ...base.venue, region_code: 'JP-27', region_name: '大阪府' } };
+    importInto(db, [opcg, uatcg]);
+    const get = (g: string, l: string) => JSON.parse((db.db.prepare('SELECT events_json FROM landing_pages WHERE game_code = ? AND loc = ?').get(g, l) as Ev).events_json);
+    const stored = db.db.prepare('SELECT loc, name FROM events WHERE id = ?').get(id) as Ev;
+    // the later game in the import wins (importer.mjs loadAll), on both games' pages
+    expect(stored).toMatchObject({ loc: 'JP-27', name: '【SYNTHETIC】UATCG copy' });
+    for (const g of ['OPCG', 'UATCG']) {
+      expect(get(g, 'JP-13')).toEqual([]);
+      expect(get(g, 'JP-27').map((e: Ev) => [e.id, e.name, e.game_codes])).toEqual([[id, '【SYNTHETIC】UATCG copy', ['OPCG', 'UATCG']]]);
+    }
+  });
+
+  it("a one-game import that moves a shared event rebuilds the other game's rows at both locations", () => {
+    const db = pendingDb();
+    const [first] = tokyo(4);
+    const at = (region_code: string, region_name: string) => ({ ...first.venue, region_code, region_name });
+    const base: Ev = { ...first, venue: at('JP-13', '東京都') };
+    const uatRun = { UATCG: run('UATCG', 1, { fetched_at: '2026-11-17T00:00:00Z' }) };
+    importInto(db, [base, { ...base, game_code: 'UATCG' }], NOW, uatRun);
+    const rowOf = (g: string, l: string) => db.db.prepare('SELECT fetched_at, events_json FROM landing_pages WHERE game_code = ? AND loc = ?').get(g, l) as Ev;
+    expect(JSON.parse(rowOf('UATCG', 'JP-13').events_json).map((e: Ev) => e.id)).toEqual([base.id]);
+    const plan = importInto(db, [{ ...base, venue: at('JP-27', '大阪府') }], NOW + 3600, { OPCG: run('OPCG', 1, { fetched_at: '2026-11-18T01:00:00Z' }) });
+    // OPCG's 48 rows changed fetch date; UATCG only at the old and the new location
+    expect(plan.stats.landing_pages).toBe(48 + 2);
+    expect(JSON.parse(rowOf('UATCG', 'JP-13').events_json)).toEqual([]);
+    expect(JSON.parse(rowOf('UATCG', 'JP-27').events_json).map((e: Ev) => e.id)).toEqual([base.id]);
+    expect(rowOf('UATCG', 'JP-27').fetched_at).toBe('2026-11-17T00:00:00Z');
+    expect(plan.state.landingContent?.get(base.id)?.loc).toBe('JP-27');
+  });
+
+  it('reads the landing window in keyset pages along idx_events_loc', () => {
+    const db = pendingDb();
+    importInto(db, synthetic(400));
+    const sqls: string[] = [];
+    const query = (sql: string) => { sqls.push(sql); return db.db.prepare(sql).all() as Ev[]; };
+    const all = readLandingContent(query, TODAY, 100_000);
+    const paged = readLandingContent(query, TODAY, 7);
+    expect(all.size).toBeGreaterThan(20);
+    expect([...paged.keys()].sort()).toEqual([...all.keys()].sort());
+    expect(sqls.length).toBeGreaterThan(all.size / 7);
+    for (const sql of sqls) {
+      expect(sql).toMatch(/LIMIT \d+$/);
+      const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Ev[]).map((r) => r.detail).join(' | ');
+      expect(plan).toContain('USING INDEX idx_events_loc');
+      expect(plan).not.toContain('TEMP B-TREE');
+    }
+  });
+
+  it('links every counted day, also one without stored rows before a shown one', () => {
+    const [e] = synthetic(1, 4);
+    const ev = { ...e, starts_on: '2026-11-20', starts_at: null, time_precision: 'date', event_status: 'scheduled' };
+    const row = { fetched_at: `${TODAY}T00:00:00Z`, built_on: TODAY, days_json: JSON.stringify({ '2026-11-19': 3, '2026-11-20': 2, '2026-11-25': 4 }), events_json: JSON.stringify([ev]) };
+    const out = renderLanding(TEMPLATE, 'OPCG', 'JP-13', row, TODAY);
+    for (const d of ['2026-11-19', '2026-11-25']) expect(out.html).toContain(`from=${d}&amp;to=${d}`);
+    expect(out.html).toContain('この日の3件をイベントカレンダーで見る');
+    expect(out.html).toContain('2件（1件を表示）');
+    expect(out.indexable).toBe(true);
+  });
+
   it('measures the row as SQL text: apostrophes cannot push an INSERT over the statement budget', () => {
     const quoty = Array.from({ length: 28 * 8 }, (_, i) => ({
-      ...synthetic(1, 7000 + i)[0], id: `tcgp:q${i}`, external_id: `q${i}`, game_code: 'OPCG', attendance_mode: 'in_person',
+      ...synthetic(1, 7000 + i)[0], id: `tcgp:q${i}`, external_id: `q${i}`, game_code: 'OPCG', source_code: 'bandai_tcg_plus', attendance_mode: 'in_person',
       name: `【SYNTHETIC】${"'".repeat(300)} ${i}`,
       starts_on: new Date(Date.parse(`${TODAY}T00:00:00Z`) + Math.floor(i / 8) * 86_400_000).toISOString().slice(0, 10),
       venue: { name: "【SYNTHETIC】shop's", source_id: null, country_code: 'JP', region_code: 'JP-13', region_name: '東京都', city: null, address: "'".repeat(100), postal_code: null },
@@ -153,7 +231,10 @@ describe('landing rows: review fixes', () => {
     const lit = (v: string) => Buffer.byteLength(`'${v.replaceAll("'", "''")}'`);
     expect(lit(r.events_json) + lit(r.days_json)).toBeLessThanOrEqual(MAX_LANDING_BYTES);
     const plan = importInto(pendingDb(), quoty);
+    expect(plan.stats.inserted).toBe(quoty.length);
     const ins = plan.statements.filter((x) => x.startsWith('INSERT INTO landing_pages'));
+    expect(ins.length).toBeGreaterThanOrEqual(1);
+    expect(ins.some((x) => x.includes("''''"))).toBe(true);
     expect(Math.max(...ins.map((x) => Buffer.byteLength(x)))).toBeLessThanOrEqual(90_000);
   });
 
@@ -173,6 +254,8 @@ describe('landing rows: review fixes', () => {
     expect(res.status).toBe(200);
     expect(text).toContain('class="ev');
     expect(text).not.toContain(`data-id="${evs[1].id}"`);
+    expect(ld(text).some((b) => b.url === evs[1].source_url)).toBe(false);
+    expect(ld(text).some((b) => b.url === evs[2].source_url)).toBe(true);
   });
 });
 

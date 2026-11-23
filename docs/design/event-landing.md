@@ -38,11 +38,13 @@ landing_pages(game_code TEXT, loc TEXT /* JP-01..JP-47 | online */, fetched_at T
 
 ## Importer write path and budget
 
-`planImport` builds the 48 rows of each **accepted game** from that run's full events (the state read has no
-event content), hashes them and diffs against `landing_pages(game_code, loc, content_hash)`:
+`planImport` builds the 48 rows of each **accepted game** from what D1 will show for it after the import: the
+import's winning copy of each event, else the stored row (the readers fetch the landing window's rows per location
+through `idx_events_loc`, only while the table exists). Rows are hashed and diffed against
+`landing_pages(game_code, loc, content_hash)`:
 
 - Writes: ≤ 48 per imported game, **≤ 624 per import** (all 13 games), 0 for a re-run of the same data on the
-  same JST day. Reads: +624 (hash state) + ≤ 624 primary-key lookups.
+  same JST day. Reads: +624 (hash state) + the window's events (~23k with 13 games) + ≤ 624 primary-key lookups.
 - Table missing (migration not applied): the state read sees `no such table`, the plan skips landing rows and
   prints `landing_pages: table missing (migration 0007 not applied), landing rows skipped`. Events import as before.
 - Only the games in the run are rebuilt; rows of other games keep their own `fetched_at` and go stale on their own.
@@ -94,7 +96,7 @@ the flag on; `dist/sitemap.xml` stays static. Submit the new sitemap in Search C
 
 | What | Rows |
 | --- | --- |
-| Import | writes ≤ 624 (0 for a same-day re-run), reads ≤ 1,248 extra; ~21 MB more SQL for a full import |
+| Import | writes ≤ 624 (0 for a same-day re-run), reads ~25k extra; ~21 MB more SQL for a full import |
 | Page miss | 1 (+ shared version memo) |
 | Sitemap miss | 624 |
 | Worst case per day | 624 pages × every colo × 1 miss (24 h key) ≈ 624 × 300 = 187k reads; realistic (crawlers in a few colos) < 5k |

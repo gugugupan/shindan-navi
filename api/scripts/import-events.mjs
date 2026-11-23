@@ -20,7 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
   API_DIR, DEFAULT_DATA_DIR, loadAll, planImport, toSqlFile, estimateCost, emptyState, stateFromRows, stateEventsSql, stateImportsSql,
-  stateSiteMetaSql, stateDayCountsSql, readLandingState,
+  stateSiteMetaSql, stateDayCountsSql, readLandingState, readLandingContent, jstDay,
 } from './lib/importer.mjs';
 import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mjs';
 
@@ -125,8 +125,10 @@ function readWranglerState(where, config) {
       if (page.length < STATE_PAGE) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()), wranglerQuery(where, config, stateSiteMetaSql()),
-      wranglerQuery(where, config, stateDayCountsSql()), readLandingState((sql) => wranglerQuery(where, config, sql)));
+    const query = (sql) => wranglerQuery(where, config, sql);
+    const landing = readLandingState(query);
+    return stateFromRows(events, query(stateImportsSql()), query(stateSiteMetaSql()), query(stateDayCountsSql()),
+      landing, landing ? readLandingContent(query, jstDay(Math.floor(Date.now() / 1000))) : null);
   } catch (e) {
     if (/no such table/.test(e.message)) return emptyState();
     throw e;
@@ -178,7 +180,8 @@ if (remote && shrunk.length && !opts['allow-shrink']) {
 console.log(`  ${Object.entries(plan.stats).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 for (const n of plan.notes) console.log(`  note: ${n}`);
 console.log(`  D1 rows written ~${cost.rowsWritten.toLocaleString('en-US')} (${Object.entries(cost.writes).filter(([, n]) => n).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ') || 'nothing'})`);
-console.log(`  D1 rows read    ~${cost.rowsRead.toLocaleString('en-US')} (${Object.entries(cost.reads).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ')})`);
+// a lower bound: D1 may count more rows than are returned (index pages a query re-seeks)
+console.log(`  D1 rows read    >=${cost.rowsRead.toLocaleString('en-US')} (${Object.entries(cost.reads).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ')})`);
 if (cost.rowsWritten > FREE_WRITES_PER_DAY) console.log(`  over the D1 Free limit of ${FREE_WRITES_PER_DAY.toLocaleString('en-US')} rows written/day: split with --games across UTC days`);
 
 if (!plan.statements.length) {
