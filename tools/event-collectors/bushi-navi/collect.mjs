@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, w
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { chunks, collectChunk, CoverageError, LIST_PATH, listPath, PAGE_SIZE, rawCoverageGaps } from './lib/collect.mjs';
+import { chunks, collectChunk, COVERAGE_VERSION, CoverageError, LIST_PATH, listPath, PAGE_SIZE, rawCoverageGaps } from './lib/collect.mjs';
 import { makeTransport } from './lib/http.mjs';
 import { GAMES, normalizeEvent, sortEvents } from './lib/normalize.mjs';
 import { buildOutputs, makeValidators } from './lib/output.mjs';
@@ -47,6 +47,10 @@ const outDir = join(here, 'out', `run-${fetchedAt.replace(/:/g, '-')}`);
 // requested plan; otherwise an import would drop events in weeks the capture never fetched.
 function loadRaw(file) {
   const saved = JSON.parse(readFileSync(file, 'utf8'));
+  if (saved.coverage !== COVERAGE_VERSION || saved.chunks.some((c) => c.coverage !== COVERAGE_VERSION)) {
+    console.error(`FAILED: --from-raw ${file} has coverage version ${saved.coverage ?? 'none'}, not ${COVERAGE_VERSION}; its chunks were proven by an older collector. Fetch again.`);
+    process.exit(1);
+  }
   const gaps = rawCoverageGaps(plan, saved.chunks.map((c) => c.chunk));
   if (gaps.length) {
     console.error(`FAILED: --from-raw ${file} does not match the requested window; pass the --from/--until/--games/--chunk-days it was fetched with.\n  ${gaps.slice(0, 10).join('\n  ')}${gaps.length > 10 ? `\n  ... ${gaps.length - 10} more` : ''}`);
@@ -80,7 +84,11 @@ async function fetchAll() {
   try {
     for (const c of plan) {
       const file = join(runDir, 'chunks', chunkFile(c));
-      if (existsSync(file)) { results.push(JSON.parse(readFileSync(file, 'utf8'))); continue; }
+      if (existsSync(file)) {
+        const done = JSON.parse(readFileSync(file, 'utf8'));
+        if (done.coverage === COVERAGE_VERSION) { results.push(done); continue; }
+        log(`refetch ${chunkFile(c)}: coverage version ${done.coverage ?? 'none'}, not ${COVERAGE_VERSION}`);
+      }
       let r;
       // A total that moves mid-pagination (an organizer just published or withdrew) is retried twice.
       for (let attempt = 1; ; attempt += 1) {
@@ -108,7 +116,7 @@ async function fetchAll() {
     process.exit(1);
   }
   const rows = results.flatMap((r) => r.rows.map((row) => ({ _chunk: chunkFile(r.chunk), ...row })));
-  writeFileSync(join(runDir, 'raw.json'), `${JSON.stringify({ fetchedAt: state.fetchedAt, requests: state.requests, plan, chunks: results.map(({ rows: _, ...m }) => m), rows }, null, 2)}\n`);
+  writeFileSync(join(runDir, 'raw.json'), `${JSON.stringify({ coverage: COVERAGE_VERSION, fetchedAt: state.fetchedAt, requests: state.requests, plan, chunks: results.map(({ rows: _, ...m }) => m), rows }, null, 2)}\n`);
   return { fetchedAt: state.fetchedAt, results, requests: state.requests };
 }
 
@@ -160,6 +168,10 @@ for (const game of games) {
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, 'summary.json'), `${JSON.stringify({ fetchedAt, requests, games: summary }, null, 2)}\n`);
 log(`summary ${JSON.stringify(summary)}`);
+for (const [game, files] of Object.entries(outputs)) {
+  mkdirSync(join(outDir, game), { recursive: true });
+  for (const [name, body] of Object.entries(files)) writeFileSync(join(outDir, game, name), `${JSON.stringify(body, null, 2)}\n`);
+}
 if (opt['dry-run']) {
   log(`dry run: data/events not touched; see ${outDir}`);
   process.exit(0);
@@ -168,8 +180,6 @@ if (opt['dry-run']) {
 for (const [game, files] of Object.entries(outputs)) {
   const target = join(repo, 'data', 'events', game);
   const staging = join(outDir, game);
-  mkdirSync(staging, { recursive: true });
-  for (const [name, body] of Object.entries(files)) writeFileSync(join(staging, name), `${JSON.stringify(body, null, 2)}\n`);
   mkdirSync(target, { recursive: true });
   for (const old of readdirSync(target)) if (/^(\d{4}-\d{2}|_run)\.json$/.test(old)) rmSync(join(target, old));
   for (const name of Object.keys(files)) renameSync(join(staging, name), join(target, name));

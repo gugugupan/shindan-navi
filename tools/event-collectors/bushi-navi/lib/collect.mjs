@@ -2,6 +2,9 @@
 
 export const LIST_PATH = '/api/user/event/list';
 export const PAGE_SIZE = 100; // the site's largest page size option
+// Stamped on every saved chunk and raw.json. Bump whenever collectChunk's proof gets stricter: older saves may hold
+// chunks the new proof would reject (before 2, a group without an events array was silently counted).
+export const COVERAGE_VERSION = 2;
 
 // Only these fields are kept from a list row; everything else (organizer phone numbers, free-text notes and
 // excerpts that can carry contact details) is dropped before anything is written, raw.json included.
@@ -104,21 +107,23 @@ export async function collectChunk(fetchJson, { gameTitleId, startDate, endDate 
     if (s.organizer_event_series.length < PAGE_SIZE || offset + PAGE_SIZE >= total) break;
   }
   if (groups.size !== total) throw new CoverageError(`${where}: ${groups.size} distinct series groups != total ${total}`);
-  return { chunk: { gameTitleId, startDate, endDate }, total, pages, rows: [...events.values()] };
+  return { coverage: COVERAGE_VERSION, chunk: { gameTitleId, startDate, endDate }, total, pages, rows: [...events.values()] };
 }
 
 const chunkKey = (c) => `${c.game} ${c.startDate}..${c.endDate}`;
 
 /**
- * Chunks a saved raw.json must hold, exactly, to be replayed for `plan`; returns [] when it covers the plan, otherwise
- * one message per missing or unrequested chunk. Saved chunks of games outside the plan are ignored.
+ * Chunks a saved raw.json must hold, exactly once each, to be replayed for `plan`; returns [] when it covers the plan,
+ * otherwise one message per missing, duplicated or unrequested chunk. Saved chunks of games outside the plan are ignored.
  */
 export function rawCoverageGaps(plan, savedChunks) {
   const games = new Set(plan.map((c) => c.game));
   const want = new Set(plan.map(chunkKey));
-  const have = new Set(savedChunks.filter((c) => games.has(c.game)).map(chunkKey));
+  const have = new Map();
+  for (const k of savedChunks.filter((c) => games.has(c.game)).map(chunkKey)) have.set(k, (have.get(k) ?? 0) + 1);
   return [
     ...[...want].filter((k) => !have.has(k)).map((k) => `missing ${k}`),
-    ...[...have].filter((k) => !want.has(k)).map((k) => `not requested ${k}`),
+    ...[...have].filter(([, n]) => n > 1).map(([k, n]) => `duplicate ${k} (${n}x)`),
+    ...[...have.keys()].filter((k) => !want.has(k)).map((k) => `not requested ${k}`),
   ];
 }

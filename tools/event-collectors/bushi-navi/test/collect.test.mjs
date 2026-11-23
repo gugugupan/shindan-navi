@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chunks, collectChunk, CoverageError, flattenGroups, listPath, PAGE_SIZE, rawCoverageGaps, tokyoDay } from '../lib/collect.mjs';
+import { chunks, collectChunk, COVERAGE_VERSION, CoverageError, flattenGroups, listPath, PAGE_SIZE, rawCoverageGaps, tokyoDay } from '../lib/collect.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Recorded list response (2026-11-19); phone numbers, notes and excerpts are replaced by fake values.
@@ -55,6 +55,11 @@ test('rawCoverageGaps accepts the saved plan and lists missing or unrequested ch
     ['missing WS 2026-11-19..2026-11-24', 'not requested WS 2026-11-18..2026-11-24']);
 });
 
+test('rawCoverageGaps rejects a chunk saved twice, even an empty one', () => {
+  const plan = chunks('2026-11-18', '2026-12-02', 7).map((c) => ({ game: 'WS', ...c }));
+  assert.deepEqual(rawCoverageGaps(plan, [...plan, plan[1]]), ['duplicate WS 2026-11-25..2026-12-01 (2x)']);
+});
+
 test('tokyoDay converts UTC instants to the Japanese date', () => {
   assert.equal(tokyoDay('2026-11-21T15:00:00+00:00'), '2026-11-22');
   assert.equal(tokyoDay('2026-11-21T14:59:00+00:00'), '2026-11-21');
@@ -75,6 +80,7 @@ test('collectChunk pages until total and proves distinct groups == total', async
   const r = await collectChunk(api.fetchJson, chunk);
   assert.equal(r.total, 230);
   assert.equal(r.pages, 3);
+  assert.equal(r.coverage, COVERAGE_VERSION);
   assert.equal(r.rows.length, 230);
   assert.deepEqual(api.calls.map((p) => new URLSearchParams(p.split('?')[1]).get('offset')), ['0', '100', '200']);
 });
