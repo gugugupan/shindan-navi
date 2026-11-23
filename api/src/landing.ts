@@ -176,13 +176,12 @@ export function renderLanding(template: string, code: string, loc: string, row: 
   const h1 = loc === 'online' ? `${game.short} オンライン大会・イベント一覧` : `${place.name}の${game.short} 大会・イベント一覧`;
   const title = loc === 'online' ? `${game.short}のオンライン大会・イベント｜トレカカレンダー` : `${game.short}の大会・イベント（${place.name}）｜トレカカレンダー`;
 
-  const stored: Ev[] = row ? (JSON.parse(row.events_json) as Ev[]).filter((e) => e.starts_on >= today).map((e) => hydrate(e, code, loc)) : [];
+  const r = renderer(gi, ROW_GAMES);
+  // Only events whose row renders count as shown (rows, per-day numbers, JSON-LD); row() has no side effects.
+  const stored: Ev[] = row ? (JSON.parse(row.events_json) as Ev[]).filter((e) => e.starts_on >= today).map((e) => hydrate(e, code, loc))
+    .filter((e) => safe(() => (r.row(e, { col: code, pref: loc }), 'ok'), () => '') === 'ok') : [];
   const byDay = new Map<string, Ev[]>();
   for (const e of stored) byDay.set(e.starts_on, [...(byDay.get(e.starts_on) ?? []), e]);
-  const shownDays = st.days.filter(([d]) => byDay.has(d));
-  const lastShown = shownDays.length ? shownDays[shownDays.length - 1][0] : '';
-  const later = st.days.filter(([d]) => d > lastShown && !byDay.has(d));
-  const laterCount = later.reduce((n, [, c]) => n + c, 0);
 
   const first = stored[0];
   const lead = row
@@ -194,19 +193,20 @@ export function renderLanding(template: string, code: string, loc: string, row: 
     ? `${where}の${g.name}（${game.short}）の大会・イベント${st.total.toLocaleString('ja-JP')}件。次は${md(first.starts_on)}「${displayName(first).slice(0, 40)}」。開催日・会場・参加費・受付状況を一覧でチェックできます。`
     : `${where}の${g.name}（${game.short}）の店舗大会・交流会・体験会をトレカカレンダーで探せます。`;
 
-  const r = renderer(gi, ROW_GAMES);
   const rank = (e: Ev) => (e.event_status === 'cancelled' ? 1 : 0);
-  const sections = shownDays.map(([day, total]) => {
+  // every day with events gets a section; one without stored rows (row budget, or events kept from an earlier run)
+  // links the day on /events/
+  const sections = st.days.map(([day, total]) => {
+    const dayLink = (text: string) => `<a class="lp-more" href="${esc(eventsUrl({ game: code, pref: loc, range: 'custom', from: day, to: day }))}" rel="nofollow">${text}</a>`;
+    const head = (small: string) => `<h2 id="d-${day}"><time datetime="${day}">${md(day)}</time><small>${small}</small></h2>`;
+    if (!byDay.has(day)) return `<section class="lp-day" aria-labelledby="d-${day}">${head(`${total}件`)}${dayLink(`この日の${total}件をイベントカレンダーで見る →`)}</section>`;
     const evs = [...byDay.get(day)!].sort((a, b) => rank(a) - rank(b));
     const more = total > evs.length;
     const rows = r.group(evs).map((x) => safe(() => ('rows' in x ? r.grp(x as Group, { day, col: code, pref: loc, more }) : r.row((x as { e: Ev }).e, { col: code, pref: loc })),
       () => ('rows' in x ? (x as Group).rows : [(x as { e: Ev }).e]).map((e) => safe(() => r.row(e, { col: code, pref: loc }), () => '')).join(''))).join('');
-    const all = more ? `<a class="lp-more" href="${esc(eventsUrl({ game: code, pref: loc, range: 'custom', from: day, to: day }))}" rel="nofollow">この日の${total}件をすべて見る →</a>` : '';
-    return `<section class="lp-day" aria-labelledby="d-${day}"><h2 id="d-${day}"><time datetime="${day}">${md(day)}</time><small>${total}件${more ? `（${evs.length}件を表示）` : ''}</small></h2><div class="lp-rows">${rows}</div>${all}</section>`;
+    const all = more ? dayLink(`この日の${total}件をすべて見る →`) : '';
+    return `<section class="lp-day" aria-labelledby="d-${day}">${head(`${total}件${more ? `（${evs.length}件を表示）` : ''}`)}<div class="lp-rows">${rows}</div>${all}</section>`;
   });
-  if (laterCount) {
-    sections.push(`<p class="lp-empty">${md(later[0][0])}以降にもう${laterCount.toLocaleString('ja-JP')}件あります。<a href="${esc(eventsUrl({ game: code, pref: loc }))}" rel="nofollow">イベントカレンダーで見る →</a></p>`);
-  }
   if (!sections.length) {
     sections.push(`<p class="lp-empty">${row ? `${where}で開催予定の${esc(game.short)}のイベントは、いま掲載していません。` : `${where}の${esc(game.short)}のイベント情報は準備中です。`}<a href="${esc(eventsUrl({ game: code, pref: loc }))}" rel="nofollow">イベントカレンダーで探す →</a></p>`);
   }
@@ -226,8 +226,7 @@ export function renderLanding(template: string, code: string, loc: string, row: 
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: crumbs.map(([n, h], i) => ({ '@type': 'ListItem', position: i + 1, name: n, item: h ? SITE + h : url })),
   }];
-  const shown = shownDays.flatMap(([d]) => byDay.get(d)!);
-  for (const e of shown.slice(0, MAX_LD_EVENTS)) {
+  for (const e of stored.slice(0, MAX_LD_EVENTS)) {
     const x = eventLd(e, url);
     if (x) ld.push({ '@context': 'https://schema.org', ...x });
   }
