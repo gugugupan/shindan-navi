@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, w
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { chunks, collectChunk, CoverageError, LIST_PATH, listPath, PAGE_SIZE } from './lib/collect.mjs';
+import { chunks, collectChunk, CoverageError, LIST_PATH, listPath, PAGE_SIZE, rawCoverageGaps } from './lib/collect.mjs';
 import { makeTransport } from './lib/http.mjs';
 import { GAMES, normalizeEvent, sortEvents } from './lib/normalize.mjs';
 import { buildOutputs, makeValidators } from './lib/output.mjs';
@@ -32,6 +32,10 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const games = opt.games.split(',').map((s) => s.trim()).filter(Boolean);
 for (const g of games) if (!GAMES[g]) throw new Error(`unknown game ${g}; one of ${Object.keys(GAMES).join(', ')}`);
 const days = Number(opt['chunk-days']);
+if (!/^\d+$/.test(opt['chunk-days']) || days < 1) {
+  console.error(`FAILED: --chunk-days must be a positive integer, got ${JSON.stringify(opt['chunk-days'])}`);
+  process.exit(1);
+}
 const plan = games.flatMap((game) => chunks(opt.from, opt.until, days).map((c) => ({ game, gameTitleId: GAMES[game].id, ...c })));
 const chunkFile = (c) => `${c.game}-${c.startDate}.json`;
 
@@ -39,9 +43,16 @@ const fetched = opt['from-raw'] ? loadRaw(resolve(opt['from-raw'])) : await fetc
 const { fetchedAt, results, requests } = fetched;
 const outDir = join(here, 'out', `run-${fetchedAt.replace(/:/g, '-')}`);
 
+// The output window and _run.json `complete: true` come from the CLI flags, so the saved chunks must be exactly the
+// requested plan; otherwise an import would drop events in weeks the capture never fetched.
 function loadRaw(file) {
   const saved = JSON.parse(readFileSync(file, 'utf8'));
-  return { fetchedAt: saved.fetchedAt, requests: saved.requests, results: saved.chunks.map((c) => ({ ...c, rows: saved.rows.filter((r) => r._chunk === chunkFile(c.chunk)).map(({ _chunk, ...r }) => r) })) };
+  const gaps = rawCoverageGaps(plan, saved.chunks.map((c) => c.chunk));
+  if (gaps.length) {
+    console.error(`FAILED: --from-raw ${file} does not match the requested window; pass the --from/--until/--games/--chunk-days it was fetched with.\n  ${gaps.slice(0, 10).join('\n  ')}${gaps.length > 10 ? `\n  ... ${gaps.length - 10} more` : ''}`);
+    process.exit(1);
+  }
+  return { fetchedAt: saved.fetchedAt, requests: saved.requests, results: saved.chunks.filter((c) => games.includes(c.chunk.game)).map((c) => ({ ...c, rows: saved.rows.filter((r) => r._chunk === chunkFile(c.chunk)).map(({ _chunk, ...r }) => r) })) };
 }
 
 // Each finished chunk is saved under out/run-<ts>/chunks/, so `--resume out/run-<ts>` continues an interrupted run

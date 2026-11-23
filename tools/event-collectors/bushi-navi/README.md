@@ -27,7 +27,7 @@ npm test                                        # unit tests on a recorded fixtu
 node collect.mjs                                # all five games, window 2026-11-18 .. 2027-02-18 (half-open)
 node collect.mjs --games WS,VG --dry-run        # validate only, no data/ write
 node collect.mjs --resume out/run-<ts>          # continue an interrupted run (same --from/--until/--games)
-node collect.mjs --from-raw out/run-<ts>/raw.json   # re-normalize a saved run offline
+node collect.mjs --from-raw out/run-<ts>/raw.json   # re-normalize a saved run offline (same --from/--until/--chunk-days)
 ```
 
 Options: `--from`, `--until`, `--games` (comma list), `--chunk-days` (default 7), `--delay-ms` (default 1100,

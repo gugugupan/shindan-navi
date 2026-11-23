@@ -45,6 +45,7 @@ function addDays(iso, n) {
 
 // Half-open [from, until) split into inclusive [start, end] chunks of at most `days` days.
 export function chunks(from, until, days) {
+  if (!Number.isInteger(days) || days < 1) throw new RangeError(`chunk days must be a positive integer, got ${days}`);
   const out = [];
   for (let s = from; s < until;) {
     let e = addDays(s, days - 1);
@@ -88,6 +89,7 @@ export async function collectChunk(fetchJson, { gameTitleId, startDate, endDate 
     else if (s.total !== total) throw new CoverageError(`${where}: total changed ${total} -> ${s.total} mid-pagination`);
     for (const g of s.organizer_event_series) {
       if (g.game_title_id !== gameTitleId) throw new CoverageError(`${where}: series ${g.event_series_id} has game ${g.game_title_id}`);
+      if (!Array.isArray(g.events)) throw new CoverageError(`${where}@${offset}: series ${g.event_series_id} has no events array`);
       groups.set(groupKey(g), true);
       for (const row of flattenGroups([g])) {
         const day = tokyoDay(row.start_datetime);
@@ -103,4 +105,20 @@ export async function collectChunk(fetchJson, { gameTitleId, startDate, endDate 
   }
   if (groups.size !== total) throw new CoverageError(`${where}: ${groups.size} distinct series groups != total ${total}`);
   return { chunk: { gameTitleId, startDate, endDate }, total, pages, rows: [...events.values()] };
+}
+
+const chunkKey = (c) => `${c.game} ${c.startDate}..${c.endDate}`;
+
+/**
+ * Chunks a saved raw.json must hold, exactly, to be replayed for `plan`; returns [] when it covers the plan, otherwise
+ * one message per missing or unrequested chunk. Saved chunks of games outside the plan are ignored.
+ */
+export function rawCoverageGaps(plan, savedChunks) {
+  const games = new Set(plan.map((c) => c.game));
+  const want = new Set(plan.map(chunkKey));
+  const have = new Set(savedChunks.filter((c) => games.has(c.game)).map(chunkKey));
+  return [
+    ...[...want].filter((k) => !have.has(k)).map((k) => `missing ${k}`),
+    ...[...have].filter((k) => !want.has(k)).map((k) => `not requested ${k}`),
+  ];
 }

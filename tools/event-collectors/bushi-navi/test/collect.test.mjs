@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chunks, collectChunk, CoverageError, flattenGroups, listPath, PAGE_SIZE, tokyoDay } from '../lib/collect.mjs';
+import { chunks, collectChunk, CoverageError, flattenGroups, listPath, PAGE_SIZE, rawCoverageGaps, tokyoDay } from '../lib/collect.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Recorded list response (2026-11-19); phone numbers, notes and excerpts are replaced by fake values.
@@ -39,6 +39,20 @@ test('chunks split a half-open window into inclusive week ranges', () => {
   assert.equal(c.length, 14);
   assert.deepEqual(c[0], { startDate: '2026-11-18', endDate: '2026-11-24' });
   assert.deepEqual(c.at(-1), { startDate: '2027-02-17', endDate: '2027-02-17' });
+});
+
+test('chunks rejects a chunk size that is not a positive integer', () => {
+  for (const d of [0, -7, 1.5, Number.NaN]) assert.throws(() => chunks('2026-11-18', '2027-02-18', d), RangeError, String(d));
+});
+
+test('rawCoverageGaps accepts the saved plan and lists missing or unrequested chunks', () => {
+  const plan = (from, until, games = ['WS']) => games.flatMap((game) => chunks(from, until, 7).map((c) => ({ game, ...c })));
+  const saved = plan('2026-11-18', '2026-11-25', ['WS', 'VG']);
+  assert.deepEqual(rawCoverageGaps(plan('2026-11-18', '2026-11-25'), saved), []);
+  assert.deepEqual(rawCoverageGaps(plan('2026-11-18', '2026-12-02'), saved), ['missing WS 2026-11-25..2026-12-01']);
+  assert.deepEqual(rawCoverageGaps(plan('2026-11-18', '2026-11-25', ['WS', 'DM']), saved), ['missing DM 2026-11-18..2026-11-24']);
+  assert.deepEqual(rawCoverageGaps(plan('2026-11-19', '2026-11-25'), saved),
+    ['missing WS 2026-11-19..2026-11-24', 'not requested WS 2026-11-18..2026-11-24']);
 });
 
 test('tokyoDay converts UTC instants to the Japanese date', () => {
@@ -86,6 +100,15 @@ test('collectChunk fails on an event dated outside the chunk (Asia/Tokyo)', asyn
   // 2026-11-25T15:30Z is 2026-11-26 00:30 in Japan.
   const api = fakeApi(groupsOf(1, '2026-11-25T15:30:00+00:00'));
   await assert.rejects(collectChunk(api.fetchJson, chunk), /outside the chunk/);
+});
+
+test('collectChunk rejects a group without an events array', async () => {
+  for (const events of [undefined, null, {}]) {
+    const groups = groupsOf(2);
+    groups[1] = { ...groups[1], events };
+    if (events === undefined) delete groups[1].events;
+    await assert.rejects(collectChunk(fakeApi(groups).fetchJson, chunk), (e) => e instanceof CoverageError && /no events array/.test(e.message));
+  }
 });
 
 test('collectChunk rejects another game and unexpected bodies', async () => {
