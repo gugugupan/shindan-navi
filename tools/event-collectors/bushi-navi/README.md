@@ -31,17 +31,17 @@ node collect.mjs --from-raw out/run-<ts>/raw.json   # re-normalize a saved run o
 ```
 
 Options: `--from`, `--until`, `--games` (comma list), `--chunk-days` (default 7), `--delay-ms` (default 1100,
-minimum 1000), `--max-requests` (default 1500), `--note "<text>"` (repeatable, appended to `_run.json` notes), `--out DIR` (where the built files go).
+minimum 1000), `--max-requests` (default 1500), `--note "<text>"` (repeatable, appended to `_run.json` notes).
 
 Requests are sequential and at least 1 s apart, with a generic UA (`shindan-navi-event-collector`), no cookies.
 429 / 5xx / network errors are retried 3 times with growing waits. A full run of the five games is 5 × 14 week
 chunks, about 260 requests (~5 min; 255 on 2026-11-19). Every finished chunk is saved under `out/run-<ts>/chunks/` (ignored), so a failed
 run resumes where it stopped; `raw.json` there keeps the fetched rows for re-normalization.
-Each run gets its own `out/run-<ts>-<pid>-<random>/`. A saved chunk is reused only when its game, dates and query
-match the planned chunk exactly (otherwise it is refetched). Chunks and `raw.json` carry a coverage version:
-`--resume` refuses a run holding chunks saved by an older collector (start a fresh run: refetching them would keep the
-old `fetched_at`, the import id), and `--from-raw` refuses an older capture. `--dry-run` leaves the built files in the
-run directory under `<GAME>/` (`--from-raw` in `out/run-<fetched_at>/`; `--out DIR` overrides either).
+A run started in the same second as another fails (its `out/run-<ts>/` exists); retry. A saved chunk is reused only
+when its game, dates and query match the planned chunk exactly (otherwise it is refetched). Chunks and `raw.json` carry
+a coverage version: `--resume` refuses a run holding chunks saved by an older collector (older version or no saved
+query; start a fresh run: refetching them would keep the old `fetched_at`, the import id), and `--from-raw` refuses an
+older capture. `--dry-run` leaves the built files in `out/run-<ts>/<GAME>/`.
 
 `www.bushi-navi.com/robots.txt` is `User-agent: * / Allow:`. The Bushi Navi terms (`/tos`, from
 `/api/user/tos`) are member terms: 第7条 reserves all rights in the service's information to Bushiroad and forbids

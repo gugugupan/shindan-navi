@@ -1,5 +1,4 @@
 // Collect Bushiroad title events from the Bushi Navi event search into data/events/<GAME>/ (see README.md).
-import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +23,6 @@ const { values: opt } = parseArgs({
     'max-requests': { type: 'string', default: '1500' },
     'dry-run': { type: 'boolean', default: false },
     resume: { type: 'string' },
-    out: { type: 'string' },
     'from-raw': { type: 'string' },
     note: { type: 'string', multiple: true, default: [] },
   },
@@ -47,7 +45,7 @@ const sameChunk = (done, c) => done.coverage === COVERAGE_VERSION && done.chunk?
 
 const fetched = opt['from-raw'] ? loadRaw(resolve(opt['from-raw'])) : await fetchAll();
 const { fetchedAt, results, requests } = fetched;
-const outDir = opt.out ? resolve(opt.out) : fetched.runDir ?? join(here, 'out', `run-${fetchedAt.replace(/:/g, '-')}`);
+const outDir = join(here, 'out', `run-${fetchedAt.replace(/:/g, '-')}`);
 
 // The output window and _run.json `complete: true` come from the CLI flags, so the saved chunks must be exactly the
 // requested plan; otherwise an import would drop events in weeks the capture never fetched.
@@ -76,20 +74,28 @@ async function fetchAll() {
     if (state.from !== opt.from || state.until !== opt.until || state.games.join() !== games.join() || state.days !== days) {
       throw new Error(`--resume: ${runDir} was started with ${JSON.stringify(state)}; pass the same --from/--until/--games/--chunk-days`);
     }
-    // Refetching an older-coverage chunk here would publish new rows under the run's original fetched_at, which the
-    // importer uses as the import id.
-    const legacy = plan.map((c) => join(runDir, 'chunks', chunkFile(c))).filter((f) => existsSync(f))
-      .filter((f) => JSON.parse(readFileSync(f, 'utf8')).coverage !== COVERAGE_VERSION);
+    // Refetching a chunk saved by an older collector (older coverage version, or no saved query) would publish new rows
+    // under the run's original fetched_at, which the importer uses as the import id.
+    const legacy = plan.map((c) => join(runDir, 'chunks', chunkFile(c))).filter((f) => existsSync(f)).filter((f) => {
+      const done = JSON.parse(readFileSync(f, 'utf8'));
+      return done.coverage !== COVERAGE_VERSION || typeof done.query !== 'string';
+    });
     if (legacy.length) {
-      console.error(`FAILED: --resume ${runDir} has ${legacy.length} chunk(s) saved by an older collector (coverage version not ${COVERAGE_VERSION}): ${legacy.map((f) => f.slice(runDir.length + 1)).join(', ')}.\nStart a fresh run without --resume.`);
+      console.error(`FAILED: --resume ${runDir} has ${legacy.length} chunk(s) saved by an older collector (coverage version not ${COVERAGE_VERSION} or no query): ${legacy.map((f) => f.slice(runDir.length + 1)).join(', ')}.\nStart a fresh run without --resume.`);
       process.exit(1);
     }
   } else {
     const fetchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    // Two runs started in the same second must never share checkpoints.
-    runDir = join(here, 'out', `run-${fetchedAt.replace(/:/g, '-')}-${process.pid}-${randomBytes(3).toString('hex')}`);
+    runDir = join(here, 'out', `run-${fetchedAt.replace(/:/g, '-')}`);
     mkdirSync(dirname(runDir), { recursive: true });
-    mkdirSync(runDir);
+    // fetched_at is the import id, so two runs started in the same second must not share it (nor the checkpoints).
+    try {
+      mkdirSync(runDir);
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      console.error(`FAILED: ${runDir} exists: another run started this second; retry.`);
+      process.exit(1);
+    }
     state = { fetchedAt, from: opt.from, until: opt.until, games, days, requests: 0 };
   }
   mkdirSync(join(runDir, 'chunks'), { recursive: true });
@@ -135,7 +141,7 @@ async function fetchAll() {
   }
   const rows = results.flatMap((r) => r.rows.map((row) => ({ _chunk: chunkFile(r.chunk), ...row })));
   writeFileSync(join(runDir, 'raw.json'), `${JSON.stringify({ coverage: COVERAGE_VERSION, fetchedAt: state.fetchedAt, requests: state.requests, plan, chunks: results.map(({ rows: _, ...m }) => m), rows }, null, 2)}\n`);
-  return { fetchedAt: state.fetchedAt, results, requests: state.requests, runDir };
+  return { fetchedAt: state.fetchedAt, results, requests: state.requests };
 }
 
 const validators = makeValidators(repo);
