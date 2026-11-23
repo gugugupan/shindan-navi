@@ -476,17 +476,21 @@ function renderSet(){
   l.innerHTML = PIN+(p?esc(LOC.locName(p)):'地域未設定');
   l.classList.toggle('unset',!p);
 }
-let draft=[];
+// draft: the dialog's titles; edited: the visitor touched them (else confirming keeps whatever is saved, which account
+// sync may change while the dialog is open)
+let draft=[], edited=false;
 function renderSetDlg(){
-  $('hsTitles').innerHTML = `<button type="button" class="chip all" data-t="" aria-pressed="${!draft.length}">すべてのタイトル</button>`
+  const box=$('hsTitles'), had=box.contains(document.activeElement)?document.activeElement.dataset.t:null;
+  box.innerHTML = `<button type="button" class="chip all" data-t="" aria-pressed="${!draft.length}">すべてのタイトル</button>`
     + TITLE_OPTS.map(c=>`<button type="button" class="chip" data-t="${c}" style="--h:${HUE[TITLES[c]]||0}" aria-pressed="${draft.includes(c)}">${gi(TITLES[c])}${esc(TITLES[c])}</button>`).join('');
+  if(had!=null) box.querySelector(`[data-t="${had}"]`)?.focus();
   if(!EVENTS) return;
   const p=evFilters().pref;
   $('hsLoc').textContent = p ? LOC.locName(p) : '未設定';
   $('hsLocBtn').textContent = p ? '地域を変更' : '都道府県を選ぶ';
 }
 function openSet(){
-  draft=homeSel(); renderSetDlg();
+  draft=homeSel(); edited=false; renderSetDlg();
   const d=$('hsDlg'); if(d.showModal) d.showModal(); else d.setAttribute('open','');
   d.querySelector('.chip[aria-pressed="true"]')?.focus();
 }
@@ -510,7 +514,7 @@ function saveTitles(codes){
 // true when the titles changed
 function applySet(){
   const next=TITLE_OPTS.filter(c=>draft.includes(c));
-  if(next.join()===homeSel().join()) return false;
+  if(!edited||next.join()===homeSel().join()) return false;
   saveTitles(next); renderAll(); loadEvents();
   return true;
 }
@@ -570,7 +574,10 @@ function renderWeek(){
   }).join('');
   strip.scrollLeft=sx;
   if(focused) $('wkT'+wkSel).focus();
+  // a re-render (events arriving, sync) keeps the focused panel control: the same link / button, else the panel
+  const p=$('wkPanel'), a=document.activeElement, key=p.contains(a)&&a!==p ? (a.getAttribute('href')||'')+'|'+a.textContent : null;
   renderPanel(days[wkSel],f,sel,loading,failed);
+  if(key!=null) ([...p.querySelectorAll('a,button')].find(e=>(e.getAttribute('href')||'')+'|'+e.textContent===key)||p).focus();
 }
 function renderPanel(x,f,sel,loading,failed){
   const p=$('wkPanel'), d=x.d, [,m,dd]=d.split('-').map(Number), lb=dayLabel(wkSel);
@@ -646,6 +653,7 @@ function openLoc(back){
       if(window.snPrefs) window.snPrefs.changed();
       track('home_location',{value:c});
       loadEvents(); renderSet();
+      if($('hsDlg').open) renderSetDlg();
     }
     (back||$('locBtn')||$('hsBtn'))?.focus();
   }});
@@ -712,16 +720,19 @@ $('hsDlg').addEventListener('click',e=>{
   const d=$('hsDlg');
   if(e.target===d||e.target.closest('#hsClose,#hsCancel')){ closeSet(); return; }
   if(e.target.closest('#hsOk')){ applySet(); closeSet(); $('hsBtn').focus(); return; }
-  if(e.target.closest('#hsLocBtn')){ applySet(); closeSet(); openLoc($('hsBtn')); return; }
+  // the picker opens over this dialog and saves the location itself; the title draft stays pending
+  if(e.target.closest('#hsLocBtn')){ openLoc($('hsLocBtn')); return; }
   const c=e.target.closest('[data-t]');
   if(!c) return;
   const t=c.dataset.t;
-  draft = !t ? [] : draft.includes(t) ? draft.filter(x=>x!==t) : [...draft,t];
+  draft = !t ? [] : draft.includes(t) ? draft.filter(x=>x!==t) : [...draft,t]; edited=true;
   renderSetDlg();
-  $('hsTitles').querySelector(`[data-t="${t}"]`)?.focus();
 });
 // logged in, corner.html replaces the local favourites / saved filters with the account's: re-read them
-document.addEventListener('sn:prefs',()=>{ readStars(); renderAll(); loadEvents(); if(LOC) LOC.refresh(); });
+document.addEventListener('sn:prefs',()=>{
+  readStars(); renderAll(); loadEvents(); if(LOC) LOC.refresh();
+  if($('hsDlg').open){ if(!edited) draft=homeSel(); renderSetDlg(); }
+});
 document.addEventListener('sn:user',()=>{ renderRel(); renderEv(); });
 })();
 </script>

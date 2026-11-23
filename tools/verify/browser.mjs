@@ -720,13 +720,67 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     strip('すべて', st, null, null);
     // the location through the shared picker
     if (HAS_EVENTS) {
+      // a title chip touched first stays a draft through the picker: Esc afterwards saves no title
       await page.locator('#hsBtn').click();
+      await page.locator(`#hsTitles [data-t="${code}"]`).click();
       await page.locator('#hsLocBtn').click();
       await page.locator('#prefDlg[open] [data-pref="JP-27"]').click();
       await page.waitForFunction(() => document.getElementById('hsL').textContent === '大阪府');
       st = await state();
-      if (JSON.parse(st.saved[1]).pref !== 'JP-27' || st.focus !== 'hsBtn' || st.dlg) fail(where, `location: ${st.saved[1]} focus ${st.focus}`);
-      if (!(await state()).tabs.every(t => t.ev != null)) fail(where, 'location: no event counts');
+      const pressed = await page.locator(`#hsTitles [data-t="${code}"]`).getAttribute('aria-pressed');
+      if (JSON.parse(st.saved[1]).pref !== 'JP-27' || JSON.parse(st.saved[1]).game || !st.dlg || st.focus !== 'hsLocBtn' || pressed !== 'true'
+        || await page.locator('#hsLoc').textContent() !== '大阪府') fail(where, `location: ${st.saved[1]} dialog ${st.dlg} focus ${st.focus} chip ${pressed}`);
+      if (!st.tabs.every(t => t.ev != null)) fail(where, 'location: no event counts');
+      await page.keyboard.press('Escape');
+      st = await state();
+      if (st.dlg || st.titles !== 'すべてのタイトル' || JSON.parse(st.saved[1]).game) fail(where, `Esc after the picker saved the titles: "${st.titles}" ${st.saved[1]}`);
+      // Esc in the picker closes only the picker; the draft is still confirmed by この内容で表示
+      await page.locator('#hsBtn').click();
+      await page.locator(`#hsTitles [data-t="${code}"]`).click();
+      await page.locator('#hsLocBtn').click();
+      await page.locator('#prefDlg[open]').waitFor();
+      await page.keyboard.press('Escape');
+      if (!(await state()).dlg) fail(where, 'Esc in the picker closed the settings dialog');
+      await page.locator('#hsOk').click();
+      st = await state();
+      if (JSON.parse(st.saved[1]).game !== code || st.titles !== short(code)) fail(where, `confirm after the picker: "${st.titles}" ${st.saved[1]}`);
+    }
+    // account sync while the dialog is open: confirming untouched titles keeps the synced ones; touched ones win
+    {
+      const sync = g => page.evaluate(g => { const o = JSON.parse(localStorage.getItem('tcg.ev.filters') || '{}'); o.game = g;
+        localStorage.setItem('tcg.ev.filters', JSON.stringify(o)); document.dispatchEvent(new CustomEvent('sn:prefs')); }, g);
+      const other = code === 'PTCG' ? 'OPCG' : 'PTCG';
+      await setStore({ 'tcg.ev.filters': { pref: 'JP-13', game: code } });
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.locator('#hsBtn').click();
+      await sync(other);
+      if (await page.locator(`#hsTitles [data-t="${other}"]`).getAttribute('aria-pressed') !== 'true') fail(where, 'sync: the open dialog did not follow the synced titles');
+      await page.locator('#hsOk').click();
+      st = await state();
+      if (JSON.parse(st.saved[1]).game !== other || st.titles !== short(other)) fail(where, `sync, untouched: saved ${st.saved[1]} line "${st.titles}"`);
+      await page.locator('#hsBtn').click();
+      await page.locator(`#hsTitles [data-t="${code}"]`).click();
+      await sync(code);
+      if (await page.locator(`#hsTitles [data-t="${code}"]`).getAttribute('aria-pressed') !== 'true') fail(where, 'sync: the draft was replaced');
+      await page.locator('#hsOk').click();
+      st = await state();
+      if (JSON.parse(st.saved[1]).game !== Object.keys(H.titles).filter(c => c === code || c === other).join(',')) fail(where, `sync, touched: saved ${st.saved[1]}`);
+    }
+    // a slow /days answer re-renders the panel: the focused panel link keeps focus
+    if (HAS_EVENTS) {
+      await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
+      let release; hold = new Promise(r => { release = r; });
+      await page.reload({ waitUntil: 'load' });
+      const i = week.findIndex((d, j) => j > 0 && relN(d, null) !== '0');
+      if (i > 0) await page.locator(`#wkT${i}`).click();
+      const target = await page.locator('#wkPanel a.rl').count() ? page.locator('#wkPanel a.rl').first() : page.locator('#wkPanel');
+      await target.focus();
+      const before = await page.evaluate(() => { const a = document.activeElement; return a.id || a.getAttribute('href'); });
+      if (!await page.locator('#wkPanel .sk').count()) fail(where, 'slow answer: the panel is not loading');
+      release(); hold = null;
+      await page.waitForFunction(() => !document.querySelector('#wkPanel .sk'));
+      const after = await page.evaluate(() => { const a = document.activeElement; return a.id || a.getAttribute('href'); });
+      if (after !== before) fail(where, `slow answer: focus moved from ${before} to ${after}`);
     }
 
     // next month's days: no count, the panel links the day view (one chosen game: its own)
