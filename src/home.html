@@ -523,16 +523,30 @@ function dayData(d,f,sel,ym){
   const its=all&&(names?all.filter(x=>names.has(x.game)):all);
   const known=!!(f&&f.pref&&ev&&ev.counts&&d.slice(0,7)===ym);
   const bg=known?ev.byGame[d]||null:null, total=known?ev.counts[d]||0:0;
-  let gs=[], n=null, other=0;
-  if(known){
-    if(bg){
-      gs=EV_GAMES.filter(g=>bg[g.code]>0&&(!names||sel.includes(g.code)));
-      const kept=gs.reduce((a,g)=>a+bg[g.code],0), every=EV_GAMES.every(g=>!(bg[g.code]>0)||gs.includes(g));
-      // by_game counts an event shared by several games under each: the day total is exact when every game is kept
-      n=every?total:kept; other=every?0:Math.max(0,total-kept);
-    } else n=total; // /days without by_game: the day's total, whatever the titles
+  const gs=known&&bg?EV_GAMES.filter(g=>bg[g.code]>0&&(!names||sel.includes(g.code))):[];
+  const c=known?evCount(d,sel,total,bg):null, n=c&&c.n!=null?c.n:null;
+  return {d, all, its, hidden:all?all.length-its.length:0, known, bg, total, gs, c, n, other:n!=null?total-n:null};
+}
+// The selection's events on day d among the /days total: {n} when exact, else {lo, hi}. by_game counts an event shared
+// by several games under each, so a sum over two or more kept games (of fewer than all) can overstate; the loaded rows
+// decide when they cover the whole day.
+function evCount(d,sel,total,bg){
+  if(!sel.length) return {n:total};
+  const evSel=sel.filter(c=>EVG[c]);
+  if(!evSel.length) return {n:0};
+  const rows=ev.list.filter(e=>e.starts_on===d);
+  if(rows.length===total) return {n:rows.filter(e=>codesOf(e).some(c=>evSel.includes(c))).length};
+  if(!bg){
+    // without by_game the total is the selection's only when the query asked for exactly its games
+    const q=evF&&evF.game?evF.game.split(','):[];
+    return q.length===evSel.length&&q.every(c=>evSel.includes(c)) ? {n:total} : {lo:0, hi:total};
   }
-  return {d, all, its, hidden:all?all.length-its.length:0, known, bg, total, gs, n, other};
+  const kept=EV_GAMES.filter(g=>bg[g.code]>0&&evSel.includes(g.code)), rest=EV_GAMES.filter(g=>bg[g.code]>0&&!evSel.includes(g.code));
+  if(!rest.length) return {n:total};
+  if(kept.length<=1) return {n:kept.length?bg[kept[0].code]:0};
+  const sum=gs=>gs.reduce((a,g)=>a+bg[g.code],0);
+  const lo=Math.max(...kept.map(g=>bg[g.code]), total-sum(rest)), hi=Math.min(sum(kept),total);
+  return lo===hi ? {n:lo} : {lo, hi};
 }
 const dayLabel = i => i===0?'今日':i===1?'明日':'';
 function renderWeek(){
@@ -545,9 +559,10 @@ function renderWeek(){
     const d=x.d, w=dowOf(d), [,m,dd]=d.split('-').map(Number), lb=dayLabel(i), on=i===wkSel;
     const rel=x.its?x.its.length:null, star=!!x.its&&x.its.some(isStar);
     // events: null = no line (no location / no events build); '' = not known here (next month, loading, failed)
-    const en = !f||!f.pref ? null : x.known ? x.n : '';
+    // a count, あり (some, number unknown), or '' when not known here
+    const en = !f||!f.pref ? null : !x.known ? '' : x.n!=null ? x.n : x.c.lo>0 ? 'あり' : '';
     const said=[`${m}月${dd}日(${DOW[w]})${lb?' '+lb:''}`, rel==null?'発売は新弾カレンダーで':`発売${rel}件${star?'（お気に入りあり）':''}`]
-      .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):`イベント${en}件`]);
+      .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):en==='あり'?'イベントあり（件数はイベントカレンダーで）':`イベント${en}件`]);
     return `<button type="button" role="tab" class="wdy${i===0?' today':''}" id="wkT${i}" aria-selected="${on}" tabindex="${on?0:-1}" aria-controls="wkPanel" aria-label="${esc(said.join('、'))}">`
       + `<span class="dt"><b>${m}/${dd}</b><span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}</span>${lb?`<span class="lb">${lb}</span>`:''}</span>`
       + `<span class="ct"><span class="${rel?'':'z'}">発売 <b>${rel==null?'–':rel}</b>${star?'<span class="sm">★</span>':''}</span>`
@@ -588,8 +603,12 @@ function renderPanel(x,f,sel,loading,failed){
       // a few of the day's events when the loaded pages reach it (start order)
       const evs = ev.list.filter(e=>e.starts_on===d&&codesOf(e).some(keep)).sort((a,b)=>dayRank(a)-dayRank(b)).slice(0,3);
       const list = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; const u=snEv.safeUrl(e.source_url); return `<li class="e"><a${u?` href="${esc(u)}" target="_blank" rel="noopener"`:''} style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(snEv.name(e))}</a></li>`; }).join('')}</ul>` : '';
+      // not exact: the per-game chips and the day's total under the saved /events/ filter, never a summed count
+      const all=`<a class="rl" href="${esc(dayLink(f,d))}">イベントカレンダーで見る（この日 全 <b>${x.total}</b>件）›</a>`;
       evp = x.n ? `${list}${chips?`<div class="gcs">${chips}</div>`:''}<a class="rl" href="${esc(dayLink(f,d,one))}">イベント <b>${x.n}</b>件をイベントカレンダーで見る ›</a>`
-        : `<p class="q">${names?'選択中のタイトルのイベントなし':'イベントなし'}</p>`;
+        : x.n===0 ? `<p class="q">${names?'選択中のタイトルのイベントなし':'イベントなし'}</p>`
+        : x.c.lo>0 ? `${list}${chips?`<div class="gcs">${chips}</div>`:''}${all}`
+        : `<p class="q">選択中のタイトルの件数はイベントカレンダーでご確認ください。</p>${all}`;
       if(x.other) evp+=`<a class="rl" href="${esc(dayLink(f,d))}">ほかのタイトルのイベント <b>${x.other}</b>件 ›</a>`;
     }
   }
