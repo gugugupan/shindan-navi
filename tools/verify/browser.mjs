@@ -1470,6 +1470,8 @@ if (HAS_EVENTS) {
     try {
       await page.goto(`${BASE}${p}${p === '/voices/' && vp === 'mobile' && vday ? `#d=${vday}` : ''}`, { waitUntil: 'networkidle' });
       if (p === '/') { await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' }))); await page.reload({ waitUntil: 'networkidle' }); }
+      // without events the home may show no title at all (no releases today or tomorrow): the 表示の設定 chips have icons
+      if (p === '/' && !HAS_EVENTS) await page.locator('#hsBtn').click();
       await page.locator(need).first().waitFor({ state: 'attached', timeout: 5000 });
       if (p === '/' && HAS_EVENTS && !await page.locator('#wkPanel a.gc .gi').count()) fail(where, 'no icons in the strip panel event chips');
       const r = await page.evaluate(() => [...document.querySelectorAll('.gi')].filter(e => e.getClientRects().length).map(e => {
