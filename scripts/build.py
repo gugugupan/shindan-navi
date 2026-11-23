@@ -245,7 +245,7 @@ if FEEDBACK_ENABLED and not re.fullmatch(r'[0-9A-Za-z_-]{10,100}',TURNSTILE_SITE
 def flags(src):
     # STORE: parts about data kept on the server (login or feedback)
     for tag,keep in (('EVENTS',BUILD_EVENTS),('LOGIN',LOGIN_ENABLED),('NOLOGIN',not LOGIN_ENABLED),
-                     ('FEEDBACK',FEEDBACK_ENABLED),('VOICES',VOICES_ENABLED),('STORE',LOGIN_ENABLED or FEEDBACK_ENABLED),('NOSTORE',not (LOGIN_ENABLED or FEEDBACK_ENABLED))):
+                     ('FEEDBACK',FEEDBACK_ENABLED),('VOICES',VOICES_ENABLED),('LANDING',LANDING_ENABLED),('STORE',LOGIN_ENABLED or FEEDBACK_ENABLED),('NOSTORE',not (LOGIN_ENABLED or FEEDBACK_ENABLED))):
         src=re.sub(rf'<!--{tag}-->(.*?)<!--/{tag}-->\n?',(lambda m:m.group(1)) if keep else '',src,flags=re.S)
     return src
 def tooltabs(tool):

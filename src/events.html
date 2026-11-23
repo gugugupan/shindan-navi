@@ -17,7 +17,12 @@
 .freset{border:0;background:none;color:var(--accent);font-size:12px;font-weight:700;padding:4px 6px}
 .ygo{margin-left:auto;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;padding:4px 2px;white-space:nowrap}
 .ygo:hover{text-decoration:underline}
-.state .ygo{margin:0}
+<!--LANDING-->.lpl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:14px 2px 0}
+.lpl b{font-size:12px;font-weight:700;color:var(--muted);margin-right:2px}
+.lpl a.chip{color:var(--ink);text-decoration:none;font-size:12.5px}
+.lpl a.chip:hover{border-color:var(--accent);color:var(--accent)}
+.lpl a.chip .gi{--gi:14px}
+<!--/LANDING-->.state .ygo{margin:0}
 .fgrp{display:grid;gap:6px}
 .fgrp h3{margin:0;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
 .fg{display:grid;grid-template-columns:6em minmax(0,1fr);gap:6px 10px;align-items:start;margin:0;padding:0;border:0;min-width:0}
@@ -186,7 +191,8 @@ button.cd:hover{background:var(--surface-2)}
     <div id="calv"></div>
   </main>
 
-  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード・ガンダム・DBフュージョンワールド・バトルスピリッツ・デジモン・ヴァイスシュヴァルツ・ヴァンガード・Shadowverse EVOLVE・ホロライブ・ラブライブ！OCG）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
+<!--LANDING-->  <nav class="lpl" id="lpl" aria-label="タイトル別のイベント一覧ページ" hidden></nav>
+<!--/LANDING-->  <div class="pageinfo"><div class="ptitle"><h1>TCG イベントカレンダー（ONE PIECE・UNION ARENA・名探偵コナン・ポケモンカード・ガンダム・DBフュージョンワールド・バトルスピリッツ・デジモン・ヴァイスシュヴァルツ・ヴァンガード・Shadowverse EVOLVE・ホロライブ・ラブライブ！OCG）</h1><p>店舗大会・交流会・体験会を、開催日・都道府県・イベント形式で探せます。</p></div><p class="fresh" id="fresh" aria-label="データの更新状況"></p></div>
   <p class="legend">イベント情報は各タイトルの公式イベントページで公開されている内容をもとに掲載しています。開催可否・参加費・定員・申込方法は変わることがあるため、参加前に必ず「公式で詳細・申込」から最新情報をご確認ください。定員は募集人数で、残り枠ではありません。</p>
   <p class="legend"><!--NOLOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->絞り込み条件・表示設定はお使いのブラウザ（localStorage）に保存されます。ログインすると、絞り込み条件（都道府県を含む）をアカウントに保存し、ほかの端末と同期します。<!--/LOGIN-->初めて開いたときの都道府県は、接続元 IP アドレスから推定したものです（位置情報の許可は求めず、推定結果も保存しません）。本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。日付ごとの会場地図には Google マップを使っており、地図を開くと IP アドレスなどの情報が Google に送信されます。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
@@ -218,7 +224,35 @@ const GAMES = [
   {code:'LLOCG', name:'ラブライブ！OCG', c:'#366063', cd:'#62a1a7', bit:4096}
 ];
 const GAME = Object.fromEntries(GAMES.map(g=>[g.code,g]));
-const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
+<!--LANDING-->// Event landing pages /events/<slug>/<pref>/ (docs/design/event-landing.md; slugs and short names as api/src/landing.ts,
+// kept equal by api/tests/evrow.test.ts): links for the chosen location, per chosen title or per title with events there.
+const LP_GAMES = {OPCG:['onepiece','ワンピカード'], UATCG:['unionarena','ユニアリ'], CONAN:['conan','コナンカード'], PTCG:['pokemon','ポケカ'],
+  GCG:['gundam','ガンダムカード'], DBFW:['dragonball','フュージョンワールド'], BS:['battlespirits','バトスピ'], DCG:['digimon','デジカ'],
+  WS:['weiss','ヴァイス'], VG:['vanguard','ヴァンガード'], SVE:['shadowverse-evolve','シャドバエボルヴ'], HOCG:['hololive','ホロカ'], LLOCG:['lovelive','ラブカ']};
+const LP_PREFS = ['hokkaido','aomori','iwate','miyagi','akita','yamagata','fukushima','ibaraki','tochigi','gunma','saitama','chiba','tokyo','kanagawa',
+  'niigata','toyama','ishikawa','fukui','yamanashi','nagano','gifu','shizuoka','aichi','mie','shiga','kyoto','osaka','hyogo','nara','wakayama','tottori',
+  'shimane','okayama','hiroshima','yamaguchi','tokushima','kagawa','ehime','kochi','fukuoka','saga','nagasaki','kumamoto','oita','miyazaki','kagoshima','okinawa'];
+function renderLanding(){
+  const el=document.getElementById('lpl'), loc=state.pref[0];
+  const slug = loc===ONLINE ? 'online' : loc ? LP_PREFS[+loc.slice(3)-1] : null;
+  let codes=[];
+  if(slug){
+    if(state.game.length) codes=state.game.filter(c=>LP_GAMES[c]);
+    else {
+      const lc=meta&&meta.loc_counts;
+      codes=GAMES.map(g=>g.code).filter(c=>{
+        if(!hasData(c)) return false;
+        if(!lc) return true;
+        const r=window.snLoc.countsFromMeta(meta,{mask:GAME[c].bit, months:lc.months});
+        return !r || (r.n[loc]||0)>0;
+      });
+    }
+  }
+  el.hidden=!codes.length;
+  el.innerHTML = codes.length ? `<b>${esc(locName(loc))}のイベント一覧</b>`+codes.map(c=>{ const [s,short]=LP_GAMES[c];
+    return `<a class="chip" href="/events/${s}/${slug}/" style="${gvars(GAME[c])}" aria-label="${esc(short)}の${esc(locName(loc))}のイベント一覧">${gi(GAME[c].name)}${esc(short)}</a>`; }).join('') : '';
+}
+<!--/LANDING-->const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
 // One location at a time (owner decision): a prefecture, or 'online' for events without a venue. Older links and
 // saved filters may list several; the first one is kept. Tables and picker: src/locpick.html (shared with /).
 const {PREF, ONLINE, locName} = window.snLoc;
@@ -833,7 +867,8 @@ function renderHead(){
   el.innerHTML = state.view==='cal' ? `${where}${mcount}`
     : `${isDay()?`<button class="dayback" id="dayBack">‹ ${backView()==='list'?'一覧':'カレンダー'}に戻る</button>`:''}<span class="rng">${rng}</span>${where}${mcount}`;
   if(refocus) document.getElementById('locBtn')?.focus();
-}
+<!--LANDING-->  renderLanding();
+<!--/LANDING-->}
 function renderNotice(){
   const sel=state.game.length?state.game:GAMES.map(g=>g.code);
   const none=meta?sel.filter(c=>!hasData(c)):[];

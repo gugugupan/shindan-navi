@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { renderer, type Ev, type Group } from '../src/evrow';
-import { hydrate, LANDING_GAMES } from '../src/landing';
+import { hydrate, LANDING_GAMES, PREF_SLUGS } from '../src/landing';
 import { GAMES } from '../src/constants';
 import { landingEvent, locOf, REPO_DIR } from '../scripts/lib/importer.mjs';
 import { asApi, conflicting, sampleEvents, synthetic } from './helpers';
@@ -103,6 +103,14 @@ describe('landing registry matches the pages', () => {
     const rows = [...block.matchAll(/\{code:'(\w+)', name:'([^']+)', c:'(#[0-9a-f]{6})', cd:'(#[0-9a-f]{6})', bit:(\d+)\}/g)];
     expect(rows.map((m) => m[1])).toEqual(GAMES.map((g) => g.code));
     for (const [, code, label, c, cd] of rows) expect(LANDING_GAMES[code]).toMatchObject({ label, c, cd });
+  });
+
+  it('gives /events/ the same landing slugs and short names', () => {
+    const src = read('src/events.html');
+    const games = Object.fromEntries([...src.split('const LP_GAMES = {')[1].split('};')[0].matchAll(/(\w+):\['([a-z-]+)','([^']+)'\]/g)].map((m) => [m[1], [m[2], m[3]]]));
+    expect(games).toEqual(Object.fromEntries(GAMES.map((g) => [g.code, [g.slug, LANDING_GAMES[g.code].short]])));
+    const prefs = [...src.split('const LP_PREFS = [')[1].split('];')[0].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
+    expect(prefs).toEqual(PREF_SLUGS);
   });
 
   it('uses the GAME_ICON icons and the build.py title pages', () => {
