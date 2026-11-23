@@ -323,7 +323,7 @@ month per request.
 | Event landing page `/events/<slug>/<pref>/` / `/events/sitemap.xml` (only with `LANDING_ENABLED=1`) | 1 / 624 |
 
 **Event landing pages** (docs/design/event-landing.md, pending migration `migrations-pending/0007_landing_pages.sql`):
-the importer writes ≤ 48 `landing_pages` rows per imported game (≤ 624 for all 13; 0 for a same-day re-run; one
+the importer writes 48 `landing_pages` rows per imported game plus other games' rows touched by moved shared events (≤ 624 in all; 0 for a same-day re-run; one
 written row each, no secondary index) and reads 624 more state rows; while the table is missing it writes none and
 says so. Its state read adds the landing window's events (~23k rows with 13 games, index seeks per location). Pages cache like the API (data version + Japan date + shell, 24 h per colo); the worst case is every page
 missing once a day in every colo (624 × ~300 ≈ 187k reads), crawlers in a few colos make it < 5k. Every landing
