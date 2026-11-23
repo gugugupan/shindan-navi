@@ -13,7 +13,8 @@ SRC = os.path.join(ROOT, 'brand/fonts')
 OWN = [(os.path.join(DIST, 'events/index.html'), '/*EVENT_FONTS*/', 'events'),
        (os.path.join(DIST, 'privacy/index.html'), '/*PAGE_FONTS*/', 'privacy'),
        (os.path.join(DIST, 'feedback/index.html'), '/*PAGE_FONTS*/', 'feedback'),
-       (os.path.join(DIST, 'voices/index.html'), '/*PAGE_FONTS*/', 'voices')]
+       (os.path.join(DIST, 'voices/index.html'), '/*PAGE_FONTS*/', 'voices'),
+       (os.path.join(DIST, '_landing.html'), '/*PAGE_FONTS*/', 'landing')]
 own_files = [o[0] for o in OWN]
 text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f not in own_files)
 # /voices/ and the home block fetch their topic text from D1, so the built HTML has none: take it from the local
@@ -61,7 +62,9 @@ for path, slot, prefix in OWN:
     if not os.path.exists(path):
         continue
     page = open(path, encoding='utf-8').read()
-    extra = sorted(c for c in set(page + (voices_text if prefix == 'voices' else '')) - set(chars) if ord(c) > 0x7f)
+    # the landing pages' fixed wording (headings, prefecture and game names) lives in the Worker renderer
+    more = voices_text if prefix == 'voices' else open(os.path.join(ROOT, 'api/src/landing.ts'), encoding='utf-8').read() if prefix == 'landing' else ''
+    extra = sorted(c for c in set(page + more) - set(chars) if ord(c) > 0x7f)
     faces = []
     if extra:
         rng = ','.join(f'U+{ord(c):X}' for c in extra)

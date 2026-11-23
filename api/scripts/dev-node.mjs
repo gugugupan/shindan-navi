@@ -36,6 +36,8 @@ const dist = resolve(opts.dist);
 
 const SECRETS = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'SESSION_SECRET'];
 const env = { DB: db, SITE_ORIGIN: `http://localhost:${opts.port}` };
+// Event landing pages: LANDING_ENABLED=1 as on the Worker; DEV_TODAY=YYYY-MM-DD pins their "today".
+for (const k of ['LANDING_ENABLED', 'DEV_TODAY']) if (process.env[k]) env[k] = process.env[k];
 for (const k of SECRETS) {
   if (process.env[k]) env[k] = process.env[k];
   else if (opts['dev-login']) env[k] = k === 'SESSION_SECRET' ? randomBytes(32).toString('hex') : 'dev-login-only';

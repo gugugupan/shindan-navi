@@ -236,6 +236,10 @@ LOGIN_ENABLED=BUILD_EVENTS and os.environ.get('LOGIN_ENABLED','')=='1'
 # FEEDBACK_ENABLED=1, Worker build only like LOGIN_ENABLED. TURNSTILE_SITE_KEY is the widget's public site key.
 FEEDBACK_ENABLED=BUILD_EVENTS and os.environ.get('FEEDBACK_ENABLED','')=='1'
 TURNSTILE_SITE_KEY=os.environ.get('TURNSTILE_SITE_KEY','').strip()
+# Event landing pages /events/<slug>/<pref>/ (docs/design/event-landing.md): LANDING_ENABLED=1, Worker build only, writes
+# the shell dist/_landing.html the Worker fills from D1 and names the Worker's /events/sitemap.xml in robots.txt. The
+# Worker only serves the pages when remote-config.mjs routes them (same variable).
+LANDING_ENABLED=BUILD_EVENTS and os.environ.get('LANDING_ENABLED','')=='1'
 if FEEDBACK_ENABLED and not re.fullmatch(r'[0-9A-Za-z_-]{10,100}',TURNSTILE_SITE_KEY):
     sys.exit('FEEDBACK_ENABLED=1 needs TURNSTILE_SITE_KEY (the Turnstile widget site key, a repo variable)')
 def flags(src):
@@ -592,6 +596,46 @@ def render_feedback():
     split=src.index('<div class="wrap">')
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 
+def render_landing():
+    src=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/landing.html')).read(),count=1,flags=re.S)
+    src=flags(src)
+    site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
+    brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/events/')),
+                     ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}{siterow("/events/")}</nav>'),('<!--EVROW-->',EVROW)):
+        assert src.count(slot)==1,slot
+        src=src.replace(slot,val)
+    assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py
+    assert src.count('<!--LP_MAIN-->')==1 and src.count('<!--/LP_MAIN-->')==1
+    title=html.unescape(re.search(r'<title>(.*?)</title>',src).group(1))
+    src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
+    head=f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!--LP_HEAD--><title>{esc(title)}</title>
+<meta name="robots" content="noindex"><!--/LP_HEAD-->
+<meta name="theme-color" content="#3a43d0">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/fonts/zen-kaku-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="トレカカレンダー">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:image" content="{SITE}/og/events.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{SITE}/og/events.png">
+{GA}
+<style>:root{{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}}body{{margin:0;font:14px system-ui}}img{{max-width:100%}}[hidden]{{display:none!important}}</style>
+"""
+    split=src.index('<div class="wrap">')
+    return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 # ---- 話題カレンダー (/voices/): the page and the home block fetch the snapshots from /api/v1/voices* (contracts/voices.md)
 VOICES_SRC=open(os.path.join(ROOT,'src/voices.html')).read()
 VOICE_GAME_INFO=[dict(re.findall(r"(\w+):'([^']*)'",x)) for x in re.findall(r'\{code:[^}]*\}',VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])]
@@ -813,6 +857,8 @@ open(os.path.join(dist,'privacy/index.html'),'w').write(render_privacy())
 if VOICES_ENABLED:
     os.makedirs(os.path.join(dist,'voices'),exist_ok=True)
     open(os.path.join(dist,'voices/index.html'),'w').write(render_voices())
+if LANDING_ENABLED:
+    open(os.path.join(dist,'_landing.html'),'w').write(render_landing())
 if FEEDBACK_ENABLED:
     os.makedirs(os.path.join(dist,'feedback'),exist_ok=True)
     open(os.path.join(dist,'feedback/index.html'),'w').write(render_feedback())
@@ -826,7 +872,8 @@ if VOICES_ENABLED: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc></url>
 sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMOD}</lastmod></url>')
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
-open(os.path.join(dist,'robots.txt'),'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n')
+# the landing pages' sitemap is the Worker's (indexable pages depend on D1 data and its age)
+open(os.path.join(dist,'robots.txt'),'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n'+(f'Sitemap: {SITE}/events/sitemap.xml\n' if LANDING_ENABLED else ''))
 json.dump([{'path':p['path'],'og':p['og'],'h1':p['h1'],'lead':p['lead'],'js':p['js']} for p in pages+[EVENTS_PAGE]],open(os.path.join(ROOT,'scripts/.pages.json'),'w'),ensure_ascii=False)
 venv_py=os.path.join(ROOT,'.venv/bin/python')
 if not os.path.exists(venv_py):
@@ -834,4 +881,4 @@ if not os.path.exists(venv_py):
 import subprocess
 subprocess.run([venv_py,'-I',os.path.join(ROOT,'scripts/fonts.py')],check=True)
 print('pages',len(pages),'| item pages',len(items),f'({len(archived)} archived)','| events page',BUILD_EVENTS,'| login',LOGIN_ENABLED,'| feedback',FEEDBACK_ENABLED,
-      '| voices',VOICES_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
+      '| voices',VOICES_ENABLED,'| landing',LANDING_ENABLED,'| items',len(data),'| product links',sum(1 for d in data if d['url']),'| GA',GA_ID or '(none)','| today',TODAY)
