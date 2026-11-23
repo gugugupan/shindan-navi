@@ -207,6 +207,7 @@ try {
           await tog.click();
           if (await tog.getAttribute('aria-expanded') !== 'true' || await page.locator(`#${id}`).isHidden()) fail(where, 'group toggle does not open');
         } else fail(where, 'no grouped row to check');
+        // decorative monogram tiles (.gi, aria-hidden) are skipped as in browser.mjs smallText
         // /events/ links the chosen location's landing pages: per chosen title, else per title with events there
         const ev = await ctx.newPage();
         await ev.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
@@ -219,13 +220,13 @@ try {
         const all = await ev.$$eval('#lpl a', (as) => as.map((a) => a.getAttribute('href')));
         if (!all.length || !all.every((h) => /^\/events\/[a-z-]+\/tokyo\/$/.test(h))) fail(`${vp} /events/`, `links without a title: ${all}`);
         for (const h of all) if ((await get(h)).status !== 200) fail(`${vp} /events/`, `${h} not 200`);
-        const lsmall = await ev.$$eval('#lpl, #lpl *', (els) => els.filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
+        const lsmall = await ev.$$eval('#lpl, #lpl *', (els) => els.filter((e) => !e.closest('.gi') && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
         if (lsmall) fail(`${vp} /events/`, 'landing links under 12px');
         if (await ev.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) > 1) fail(`${vp} /events/`, 'scrolls horizontally');
         await ev.locator('#lpl').screenshot({ path: path.join(OUT, `${vp}-events-landing-links.png`) });
         console.log(`landing: ${vp} /events/ links ${all.length}`);
         await ev.close();
-        const small = await page.$$eval('.lp-day *', (els) => els.filter((e) => e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
+        const small = await page.$$eval('.lp-day *', (els) => els.filter((e) => !e.closest('.sr,.gi') && e.childNodes.length && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
         if (small) fail(where, `${small} text elements under 12px`);
         await page.screenshot({ path: path.join(OUT, `${vp}-landing.png`), fullPage: false });
         await ctx.close();
