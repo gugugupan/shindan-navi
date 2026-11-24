@@ -238,13 +238,14 @@ function renderLanding(){
   let codes=[];
   if(slug){
     if(state.game.length) codes=state.game.filter(c=>LP_GAMES[c]);
-    else {
-      const lc=meta&&meta.loc_counts;
+    // no title chosen: the titles with events at this location, known only once /events/meta has arrived (loadMeta
+    // renders again); its loc_counts decide, record_count only for meta written before them
+    else if(meta){
+      const lc=meta.loc_counts;
       codes=GAMES.map(g=>g.code).filter(c=>{
-        if(!hasData(c)) return false;
-        if(!lc) return true;
+        if(!lc) return hasData(c);
         const r=window.snLoc.countsFromMeta(meta,{mask:GAME[c].bit, months:lc.months});
-        return !r || (r.n[loc]||0)>0;
+        return !!r && (r.n[loc]||0)>0;
       });
     }
   }
@@ -1051,7 +1052,8 @@ async function loadMeta(){
   try{ meta=await api('/events/meta'); metaErr=false; }
   catch(e){ metaErr=true; }
   renderFresh(); renderControls(); renderNotice();
-  if(state.view==='cal' && meta){ const [lo,hi]=calBounds(); if(state.month<lo||state.month>hi){ commit({month:state.month<lo?lo:hi},{replace:true,auto:true}); } }
+<!--LANDING-->  renderLanding();
+<!--/LANDING-->  if(state.view==='cal' && meta){ const [lo,hi]=calBounds(); if(state.month<lo||state.month>hi){ commit({month:state.month<lo?lo:hi},{replace:true,auto:true}); } }
 }
 
 // no location from the link or saved filters: preselect the prefecture the server guesses from the IP
