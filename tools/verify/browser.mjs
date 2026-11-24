@@ -358,6 +358,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     scenario = 'busy'; api.length = 0;
     await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })));
     await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
     const busy = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelectorAll('.ev').length,
       c.querySelector('a.go')?.textContent]), chips: document.querySelectorAll('#wkPanel a.gc').length,
       types: [...document.querySelectorAll('#evBody .gcol')].map(c => c.querySelector('.ty')?.textContent || null),
@@ -548,7 +549,11 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     route.fulfill({ json: { days } });
   });
   const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
-  const state = () => page.evaluate(() => {
+  // the strip renders before the events answer is applied (… / a loading panel): read it once that has settled; a stuck
+  // state then fails on its counts
+  const settled = p => p.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
+  const state = async () => { await settled(page); return read(); };
+  const read = () => page.evaluate(() => {
     const tabs = [...document.querySelectorAll('#wkStrip [role="tab"]')], p = document.getElementById('wkPanel'), s = document.getElementById('wkStrip');
     const cnt = (t, k) => { const x = [...t.querySelectorAll('.ct > span')].find(e => e.textContent.startsWith(k)); return x ? x.querySelector('b').textContent : null; };
     return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null,
