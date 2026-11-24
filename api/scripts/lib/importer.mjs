@@ -263,7 +263,7 @@ function eventRow(ev, now) {
  * State of an empty (freshly migrated) database. `landing` is null while landing_pages does not exist (migration 0007
  * pending, docs/design/event-landing.md): the plan then writes no landing rows.
  */
-export const emptyState = ({ landing = false } = {}) => ({ events: new Map(), imports: [], siteMeta: {}, dayCounts: new Map(), landing: landing ? new Map() : null, landingContent: null });
+export const emptyState = ({ landing = false } = {}) => ({ events: new Map(), imports: [], siteMeta: {}, dayCounts: new Map(), landing: landing ? new Map() : null, landingContent: landing ? new Map() : null });
 
 /**
  * Builds the importer's view of a database from rows of STATE_EVENT_COLS / STATE_IMPORT_COLS / site_meta /

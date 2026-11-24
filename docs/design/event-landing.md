@@ -43,11 +43,13 @@ import's winning copy of each event, else the stored row (the readers fetch the 
 through `idx_events_loc`, only while the table exists). Rows are hashed and diffed against
 `landing_pages(game_code, loc, content_hash)`:
 
-- Writes: ≤ 48 per imported game, **≤ 624 per import** (all 13 games), 0 for a re-run of the same data on the
-  same JST day. Reads: +624 (hash state) + the window's events (~23k with 13 games) + ≤ 624 primary-key lookups.
-- Table missing (migration not applied): the state read sees `no such table`, the plan skips landing rows and
+- Writes: 48 per imported game, plus the rows of other games at the old and new location of each shared event
+  the import rewrote or re-masked; **≤ 624 per import** in all (one row per game and location), 0 for a re-run of
+  the same data on the same JST day. Reads: +624 (hash state) + the window's events (~23k with 13 games) + ≤ 624 primary-key lookups.
+- Table missing (migration not applied): the readers find no `landing_pages` in `sqlite_master`, the plan skips landing rows and
   prints `landing_pages: table missing (migration 0007 not applied), landing rows skipped`. Events import as before.
-- Only the games in the run are rebuilt; rows of other games keep their own `fetched_at` and go stale on their own.
+- Rows of games not in the import keep their own `fetched_at` (also when rebuilt for a moved shared event) and go
+  stale on their own.
 
 ## Worker render and caching
 
@@ -73,7 +75,7 @@ through `idx_events_loc`, only while the table exists). Rows are hashed and diff
   no row / table missing → 404).
 - `<title>`: `{short}の大会・イベント（{県}）｜トレカカレンダー`; h1 `{県}の{short} 大会・イベント一覧` **above the
   list** (owner-approved exception to the site's h1-in-footer pattern); canonical = the slash URL.
-- JSON-LD: BreadcrumbList (トップ › イベントカレンダー › page) + one `Event` per rendered event (max 100): name,
+- JSON-LD: BreadcrumbList (トップ › イベントカレンダー › page) + one `Event` per rendered event (max 50, owner 2026-11-23): name,
   startDate (date or datetime), endDate, eventStatus (cancelled / postponed / scheduled), eventAttendanceMode,
   location (`Place` + `PostalAddress`, or `VirtualLocation` with the source URL), url = source URL. No
   `organizer` (the venue is not always the organizer) and no `offers` (fees are often unknown).
@@ -90,7 +92,10 @@ the flag on; `dist/sitemap.xml` stays static. Submit the new sitemap in Search C
 
 - Out: crumbs; 「地図・カレンダーで探す」 → `/events/?game=G&pref=P` (nofollow); the 47 other locations of the game;
   the 12 other games in the same location; the game's 新弾 page `/<slug>/` where one exists (7 of 13).
-- In: the sitemap and the cross links. Hub → landing links come with game-hub M4 (`docs/design/game-hub.md` › 10).
+- In: the sitemap, the cross links, and `/events/` (flag on only, `<!--LANDING-->` parts of `src/events.html`): once
+  a location is chosen, a 「<県>のイベント一覧」 row of chips under the list, one per chosen title, else per title with
+  events there (from `loc_counts`), linking `/events/<slug>/<pref>/` (owner 2026-11-23). Hub → landing links come
+  with game-hub M4 (`docs/design/game-hub.md` › 10).
 
 ## D1 budget (Free: 5M reads / 100k writes per UTC day)
 

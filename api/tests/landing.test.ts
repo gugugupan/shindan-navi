@@ -209,6 +209,28 @@ describe('landing rows: review fixes', () => {
     }
   });
 
+  it('marks up at most 50 events a page', () => {
+    const evs = synthetic(80, 300).map((e, i) => ({ ...e, id: `tcgp:m${i}`, starts_on: TODAY, starts_at: null, time_precision: 'date', event_status: 'scheduled',
+      attendance_mode: 'in_person', venue: { name: `【SYNTHETIC】shop ${i}`, region_code: 'JP-13', region_name: '東京都' } }));
+    const row = { fetched_at: `${TODAY}T00:00:00Z`, built_on: TODAY, days_json: JSON.stringify({ [TODAY]: 80 }), events_json: JSON.stringify(evs) };
+    const out = renderLanding(TEMPLATE, 'OPCG', 'JP-13', row, TODAY);
+    expect(ld(out.html).filter((b) => b['@type'] === 'Event')).toHaveLength(50);
+  });
+
+  it('chains plans from emptyState({ landing: true }) without losing stored details', () => {
+    const accepted = loadAll(writeDataDir(tokyo(40))).filter((r) => !r.errors.length);
+    const first = planImport(accepted, emptyState({ landing: true }), { now: NOW });
+    const empty = loadAll(writeDataDir([], { OPCG: run('OPCG', 0, { complete: false, fetched_at: '2026-11-18T01:00:00Z' }) }));
+    const second = planImport(empty, first.state, { now: NOW + 60 });
+    const db = pendingDb();
+    const shown = () => JSON.parse((db.db.prepare("SELECT events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev).events_json);
+    db.execAll(first.statements);
+    const before = shown();
+    expect(before.length).toBeGreaterThan(0);
+    db.execAll(second.statements);
+    expect(shown()).toEqual(before);
+  });
+
   it('links every counted day, also one without stored rows before a shown one', () => {
     const [e] = synthetic(1, 4);
     const ev = { ...e, starts_on: '2026-11-20', starts_at: null, time_precision: 'date', event_status: 'scheduled' };
