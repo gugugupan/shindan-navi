@@ -236,19 +236,23 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (rowOver > 1) fail(where, `toolbar row overflows by ${Math.round(rowOver)}px`);
     // the static release list starts folded in a closed <details> and opens from its summary (before the
     // /releases/ interactions, which leave the phone filter sheet open)
-    const fold = await page.evaluate(() => { const d = document.getElementById('seo-list'), li = d?.querySelector('li');
-      return d && { open: d.open, liShown: !!li?.checkVisibility(),
-        sumFont: parseFloat(getComputedStyle(d.querySelector('summary .ct')).fontSize) }; });
-    if (fold) try {
-      if (fold.open || fold.liShown) fail(where, 'static list is not folded');
+    const fold = await page.evaluate(() => { const d = document.getElementById('seo-list'), lis = [...document.querySelectorAll('.seo-day li')];
+      return { items: lis.length, has: !!d, open: d?.open, outside: lis.filter(li => li.closest('details') !== d).length,
+        shown: lis.filter(li => li.checkVisibility()).length, heading: d?.previousElementSibling?.matches('h2#seo-h') && !d.querySelector('h2'),
+        sumFont: d ? parseFloat(getComputedStyle(d.querySelector('summary')).fontSize) : 0 }; });
+    if (fold.items) try {
+      if (!fold.has) throw new Error('static list has no disclosure (#seo-list)');
+      if (fold.outside) fail(where, `${fold.outside} of ${fold.items} static list entries outside #seo-list`);
+      if (fold.open || fold.shown) fail(where, `static list is not folded (${fold.shown} entries shown)`);
+      if (!fold.heading) fail(where, 'list h2 is not a heading right before the disclosure');
       if (fold.sumFont < 12) fail(where, `list summary font ${fold.sumFont}px`);
       await page.locator('#seo-list > summary').click();
-      const opened = await page.evaluate(() => { const d = document.getElementById('seo-list'); return d.open && !!d.querySelector('li')?.checkVisibility(); });
+      const opened = await page.evaluate(() => { const d = document.getElementById('seo-list'), lis = [...d.querySelectorAll('.seo-day li')];
+        return d.open && lis.length && lis.every(li => li.checkVisibility()); });
       if (!opened) fail(where, 'static list does not open from its summary');
       await page.locator('#seo-list > summary').click();
       await page.evaluate(() => window.scrollTo(0, 0));
     } catch (e) { fail(where, `list fold: ${e.message.split('\n')[0]}`); }
-    else if (p === '/releases/') fail(where, 'static list (#seo-list) missing');
     if (p === '/releases/') try {
       if (await page.locator('#filterBtn').isVisible()) await page.locator('#filterBtn').click();
       const chip = page.locator('#chips .chip:not(.all):not(.toggle):not(.starchip)').first();

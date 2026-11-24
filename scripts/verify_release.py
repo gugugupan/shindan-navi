@@ -181,7 +181,7 @@ class PageParser(html.parser.HTMLParser):
         self.list_names, self.list_dates, self.list_links = [], [], []
         self._stack, self._buf, self._in = [], [], None
         self._seo_depth = None
-        self.list_fold = None
+        self.list_folds, self._det, self._det_n = [], [], 0
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -190,9 +190,12 @@ class PageParser(html.parser.HTMLParser):
         elif tag == 'link' and a.get('rel') == 'canonical': self.canonical = a.get('href')
         elif tag == 'section' and 'seo' in (a.get('class') or '').split() and 'about' not in (a.get('class') or ''):
             self._seo_depth = len(self._stack)
-        elif self._seo_depth and tag == 'details' and self.list_fold is None: self.list_fold = 'open' if 'open' in a else 'closed'
+        elif self._seo_depth and tag == 'details':
+            self._det_n += 1; self._det.append((len(self._stack), self._det_n, 'open' in a))
         elif self._seo_depth and tag == 'time': self.list_dates.append(a.get('datetime'))
-        elif self._seo_depth and tag == 'li': self._in, self._buf = 'li', []
+        elif self._seo_depth and tag == 'li':
+            self._in, self._buf = 'li', []
+            self.list_folds.append(self._det[-1][1:] if self._det else None)
         elif self._in == 'li' and tag == 'a' and (a.get('href') or '').startswith('/item/'): self.list_links.append(a['href'])
         elif self._in == 'li' and tag == 'a' and (a.get('class') == 'sg'): self._in = 'li-skip'
         elif self._in == 'li' and tag == 'span' and a.get('class') in ('sg', 'sp'): self._in = 'li-skip'
@@ -205,6 +208,7 @@ class PageParser(html.parser.HTMLParser):
         if self._stack and self._stack[-1] == tag:
             self._stack.pop()
             if self._seo_depth and len(self._stack) < self._seo_depth: self._seo_depth = None
+            if self._det and len(self._stack) < self._det[-1][0]: self._det.pop()
 
     def handle_data(self, data):
         if self._in in ('ld', 'li'): self._buf.append(data)
@@ -519,11 +523,13 @@ def check_dist(today, head, ov, arch):
         if len(pp.list_links) != len(pp.list_names): fail(f'{p}: {len(pp.list_names)} static list entries but {len(pp.list_links)} item links')
         for h in pp.list_links:
             if not os.path.exists(os.path.join(DIST, h.strip('/'), 'index.html')): fail(f'{p}: static list links missing page {h}')
-        # the static list is folded into a closed <details> (owner 2026-11-24) but stays in the HTML
+        # the static list is folded into one closed <details> (owner 2026-11-24) but stays in the HTML
         if pp.list_names:
-            if pp.list_fold != 'closed': fail(f'{p}: static list is not inside a closed <details> ({pp.list_fold or "none"})')
-            m = re.search(r'<summary><h2 id="seo-h">[^<]*<span class="ct">（(\d+)件）</span></h2></summary>', src)
-            if not m or int(m[1]) != len(pp.list_names): fail(f'{p}: list summary count {m and m[1]} != {len(pp.list_names)} entries')
+            folds = set(pp.list_folds)
+            if len(folds) != 1 or None in folds or next(iter(folds))[1]:
+                fail(f'{p}: static list entries are not all inside one closed <details> ({sorted(map(str, folds))[:3]})')
+            m = re.search(r'<h2 id="seo-h">[^<]*<span class="ct">（(\d+)件）</span></h2><details class="seo-fold" id="seo-list">', src)
+            if not m or int(m[1]) != len(pp.list_names): fail(f'{p}: list heading count {m and m[1]} != {len(pp.list_names)} entries')
         lists = [blk for blk in blocks if blk.get('@type') == 'ItemList']
         if len(lists) > 1: fail(f'{p}: {len(lists)} ItemList blocks')
         if pp.list_names:
