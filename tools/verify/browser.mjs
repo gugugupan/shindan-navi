@@ -572,7 +572,12 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     // the strip's event count for the selected /events/ games (null: all) under the query's game filter gf: exact when the
     // loaded rows cover the day (today, tomorrow), every game of the day is kept or one game is; else from the bounds
     // max(kept game, total - others' sum) .. min(kept sum, total), and あり when they differ
+    // a query that leaves out a chosen game gives a lower bound only: あり when it holds some, else unknown (–)
     const evN = (d, sel, gf) => {
+      const v = evN0(d, sel, gf);
+      return v == null || v === '–' || !sel || !gf.length || sel.every(c => gf.includes(c)) ? v : v === '0' ? '–' : 'あり';
+    };
+    const evN0 = (d, sel, gf) => {
       if (!HAS_EVENTS) return null;
       if (d.slice(0, 7) !== ym) return '–';
       const rows = EVTS.filter(e => e.d === d && (!gf.length || e.codes.some(c => gf.includes(c)))), total = rows.length;
@@ -664,6 +669,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (HAS_EVENTS && WEEK1.slice(0, 7) === ym) {
         const ev = st.rl.filter(([t]) => t.includes('イベント')).map(([t]) => t);
         if (JSON.stringify(ev) !== JSON.stringify(['イベント 3件をイベントカレンダーで見る ›', 'ほかのタイトルのイベント 1件 ›'])) fail(where, `narrower, ${WEEK1}: ${JSON.stringify(ev)}`);
+        // the exact count's link opens the day view of the same games
+        const href = st.rl.find(([t]) => t.startsWith('イベント 3件'))?.[1];
+        if (href !== `/events/?game=OPCG,UATCG&pref=JP-13&range=custom&from=${WEEK1}&to=${WEEK1}`) fail(where, `narrower, ${WEEK1}: count link ${href}`);
       }
       if (HAS_EVENTS && WEEK2.slice(0, 7) === ym) {
         await page.locator('#wkT2').click();
@@ -678,6 +686,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         if (st.tabs[1].ev !== '3' || st.tabs[2].ev !== '–') fail(where, `narrower without by_game: ${st.tabs[1].ev} / ${st.tabs[2].ev}`);
         nobg = false;
       }
+      // the /events/ filter leaves out UATCG: its answers bound the chosen games' events from below only
+      await setStore({ 'tcg.voices': { game: two.join(',') }, 'tcg.ev.filters': { pref: 'JP-13', game: 'OPCG,PTCG' } });
+      await page.reload({ waitUntil: 'networkidle' });
+      strip('query narrower than the selection', await state(), two.map(c => H.titles[c]), two, true, ['OPCG', 'PTCG']);
     }
 
     // 変更: the dialog writes the titles (other saved filters kept), cancel writes nothing
