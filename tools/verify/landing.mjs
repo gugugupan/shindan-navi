@@ -216,9 +216,22 @@ try {
         const one = await ev.$$eval('#lpl a', (as) => as.map((a) => a.getAttribute('href')));
         if (JSON.stringify(one) !== JSON.stringify(['/events/onepiece/tokyo/'])) fail(`${vp} /events/`, `links with OPCG chosen: ${one}`);
         await ev.evaluate(() => localStorage.clear());
-        await ev.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'networkidle' });
+        // without a title the links wait for /events/meta (held back here until the list has loaded: meta last)
+        let release;
+        const held = new Promise((r) => { release = r; });
+        await ev.route('**/api/v1/events/meta', async (route) => { await held; await route.continue(); });
+        await ev.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'domcontentloaded' });
+        await ev.waitForSelector('#list .ev, #calv .cd', { timeout: 15000 }).catch(() => fail(`${vp} /events/`, 'list did not load'));
+        if (await ev.$$eval('#lpl a', (as) => as.length) || !(await ev.locator('#lpl').isHidden())) fail(`${vp} /events/`, 'links shown before meta');
+        release();
+        await ev.waitForSelector('#lpl a', { timeout: 15000 }).catch(() => fail(`${vp} /events/`, 'no links after meta'));
+        await ev.unroute('**/api/v1/events/meta');
         const all = await ev.$$eval('#lpl a', (as) => as.map((a) => a.getAttribute('href')));
-        if (!all.length || !all.every((h) => /^\/events\/[a-z-]+\/tokyo\/$/.test(h))) fail(`${vp} /events/`, `links without a title: ${all}`);
+        // the SYNTHETIC fixture has ONE PIECE and Pokémon events in Tokyo (in /events/ game order)
+        const want = DATA ? null : ['/events/onepiece/tokyo/', '/events/pokemon/tokyo/'];
+        if (want ? JSON.stringify(all) !== JSON.stringify(want) : !all.length || !all.every((h) => /^\/events\/[a-z-]+\/tokyo\/$/.test(h))) {
+          fail(`${vp} /events/`, `links without a title: ${all}`);
+        }
         for (const h of all) if ((await get(h)).status !== 200) fail(`${vp} /events/`, `${h} not 200`);
         const lsmall = await ev.$$eval('#lpl, #lpl *', (els) => els.filter((e) => !e.closest('.gi') && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
         if (lsmall) fail(`${vp} /events/`, 'landing links under 12px');
