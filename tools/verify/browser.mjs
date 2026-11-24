@@ -234,6 +234,21 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const rowOver = await page.evaluate(() => { const r = document.querySelector('.panel>.row'), last = [...r.children].filter(e => e.offsetParent).at(-1);
       return Math.max(r.scrollWidth - r.clientWidth, last ? last.getBoundingClientRect().right - r.getBoundingClientRect().right : 0); });
     if (rowOver > 1) fail(where, `toolbar row overflows by ${Math.round(rowOver)}px`);
+    // the static release list starts folded in a closed <details> and opens from its summary (before the
+    // /releases/ interactions, which leave the phone filter sheet open)
+    const fold = await page.evaluate(() => { const d = document.getElementById('seo-list'), li = d?.querySelector('li');
+      return d && { open: d.open, liShown: !!li?.checkVisibility(),
+        sumFont: parseFloat(getComputedStyle(d.querySelector('summary .ct')).fontSize) }; });
+    if (fold) try {
+      if (fold.open || fold.liShown) fail(where, 'static list is not folded');
+      if (fold.sumFont < 12) fail(where, `list summary font ${fold.sumFont}px`);
+      await page.locator('#seo-list > summary').click();
+      const opened = await page.evaluate(() => { const d = document.getElementById('seo-list'); return d.open && !!d.querySelector('li')?.checkVisibility(); });
+      if (!opened) fail(where, 'static list does not open from its summary');
+      await page.locator('#seo-list > summary').click();
+      await page.evaluate(() => window.scrollTo(0, 0));
+    } catch (e) { fail(where, `list fold: ${e.message.split('\n')[0]}`); }
+    else if (p === '/releases/') fail(where, 'static list (#seo-list) missing');
     if (p === '/releases/') try {
       if (await page.locator('#filterBtn').isVisible()) await page.locator('#filterBtn').click();
       const chip = page.locator('#chips .chip:not(.all):not(.toggle):not(.starchip)').first();

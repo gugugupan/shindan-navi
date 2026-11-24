@@ -116,7 +116,8 @@ def static_list(items,heading,note,show_game=True):
     if not items: return ''
     days={}
     for d in items: days.setdefault(d['date'],[]).append(d)
-    out=[f'<section class="seo" aria-labelledby="seo-h"><h2 id="seo-h">{esc(heading)}</h2><p>{esc(note)}</p><div class="seo-days">']
+    # closed by default (owner 2026-11-24); the full list stays in the HTML for crawlers
+    out=[f'<section class="seo seo-list" aria-labelledby="seo-h"><details class="seo-fold" id="seo-list"><summary><h2 id="seo-h">{esc(heading)}<span class="ct">（{len(items)}件）</span></h2></summary><p>{esc(note)}</p><div class="seo-days">']
     for k,its in days.items():
         out.append(f'<div class="seo-day"><h3><time datetime="{k}">{fmt(k,True)}</time></h3><ul>')
         for d in its:
@@ -126,7 +127,7 @@ def static_list(items,heading,note,show_game=True):
             pr=f'<span class="sp">{esc(d["pack"])}</span>' if d['pack'] else ''
             out.append(f'<li>{g}{a}{pr}</li>')
         out.append('</ul></div>')
-    out.append('</div></section>')
+    out.append('</div></details></section>')
     return ''.join(out)
 
 # extra names people search with, per main title
