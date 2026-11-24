@@ -358,6 +358,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     scenario = 'busy'; api.length = 0;
     await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })));
     await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
     const busy = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelectorAll('.ev').length,
       c.querySelector('a.go')?.textContent]), chips: document.querySelectorAll('#wkPanel a.gc').length,
       types: [...document.querySelectorAll('#evBody .gcol')].map(c => c.querySelector('.ty')?.textContent || null),
@@ -531,10 +532,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['OPCG', 'UATCG']]]
     .filter(([d]) => d.slice(0, 7) === ym).map(([d, codes], i) => ({ d, codes, i }));
   // nobg: /days answers cached before by_game existed; hold: /days waits for it (a slow answer)
-  let nobg = false, hold = null;
+  let nobg = false, hold = null, metaHold = null;
   await page.route(EVENTS_API, async route => {
     const u = new URL(route.request().url()), gf = (u.searchParams.get('game') || '').split(',').filter(Boolean);
-    if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [], prefectures: [{ code: 'JP-13', count: 7 }, { code: 'JP-27', count: 2 }] } });
+    if (u.pathname.endsWith('/events/meta')) { if (metaHold) await metaHold; return route.fulfill({ json: { games: [], types: [], prefectures: [{ code: 'JP-13', count: 7 }, { code: 'JP-27', count: 2 }] } }); }
     const rows = EVTS.filter(e => !gf.length || e.codes.some(c => gf.includes(c)));
     if (!u.pathname.endsWith('/days')) return route.fulfill({ json: { events: rows.filter(e => e.d <= WEEK1).map(e => ({ id: `s${e.i}`, name: `テスト大会 ${e.i}`,
       game_code: e.codes[0], game_codes: e.codes, starts_on: e.d, time_precision: 'date', timezone: 'Asia/Tokyo', attendance_mode: 'offline',
@@ -548,7 +549,11 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     route.fulfill({ json: { days } });
   });
   const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
-  const state = () => page.evaluate(() => {
+  // the strip renders before the events answer is applied (… / a loading panel): read it once that has settled; a stuck
+  // state then fails on its counts
+  const settled = p => p.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
+  const state = async () => { await settled(page); return read(); };
+  const read = () => page.evaluate(() => {
     const tabs = [...document.querySelectorAll('#wkStrip [role="tab"]')], p = document.getElementById('wkPanel'), s = document.getElementById('wkStrip');
     const cnt = (t, k) => { const x = [...t.querySelectorAll('.ct > span')].find(e => e.textContent.startsWith(k)); return x ? x.querySelector('b').textContent : null; };
     return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null,
@@ -572,7 +577,12 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     // the strip's event count for the selected /events/ games (null: all) under the query's game filter gf: exact when the
     // loaded rows cover the day (today, tomorrow), every game of the day is kept or one game is; else from the bounds
     // max(kept game, total - others' sum) .. min(kept sum, total), and あり when they differ
+    // a query that leaves out a chosen game gives a lower bound only: あり when it holds some, else unknown (–)
     const evN = (d, sel, gf) => {
+      const v = evN0(d, sel, gf);
+      return v == null || v === '–' || !sel || !gf.length || sel.every(c => gf.includes(c)) ? v : v === '0' ? '–' : 'あり';
+    };
+    const evN0 = (d, sel, gf) => {
       if (!HAS_EVENTS) return null;
       if (d.slice(0, 7) !== ym) return '–';
       const rows = EVTS.filter(e => e.d === d && (!gf.length || e.codes.some(c => gf.includes(c)))), total = rows.length;
@@ -664,6 +674,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (HAS_EVENTS && WEEK1.slice(0, 7) === ym) {
         const ev = st.rl.filter(([t]) => t.includes('イベント')).map(([t]) => t);
         if (JSON.stringify(ev) !== JSON.stringify(['イベント 3件をイベントカレンダーで見る ›', 'ほかのタイトルのイベント 1件 ›'])) fail(where, `narrower, ${WEEK1}: ${JSON.stringify(ev)}`);
+        // the exact count's link opens the day view of the same games
+        const href = st.rl.find(([t]) => t.startsWith('イベント 3件'))?.[1];
+        if (href !== `/events/?game=OPCG,UATCG&pref=JP-13&range=custom&from=${WEEK1}&to=${WEEK1}`) fail(where, `narrower, ${WEEK1}: count link ${href}`);
       }
       if (HAS_EVENTS && WEEK2.slice(0, 7) === ym) {
         await page.locator('#wkT2').click();
@@ -678,6 +691,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         if (st.tabs[1].ev !== '3' || st.tabs[2].ev !== '–') fail(where, `narrower without by_game: ${st.tabs[1].ev} / ${st.tabs[2].ev}`);
         nobg = false;
       }
+      // the /events/ filter leaves out UATCG: its answers bound the chosen games' events from below only
+      await setStore({ 'tcg.voices': { game: two.join(',') }, 'tcg.ev.filters': { pref: 'JP-13', game: 'OPCG,PTCG' } });
+      await page.reload({ waitUntil: 'networkidle' });
+      strip('query narrower than the selection', await state(), two.map(c => H.titles[c]), two, true, ['OPCG', 'PTCG']);
     }
 
     // 変更: the dialog writes the titles (other saved filters kept), cancel writes nothing
@@ -745,6 +762,21 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       await page.locator('#hsOk').click();
       st = await state();
       if (JSON.parse(st.saved[1]).game !== code || st.titles !== short(code)) fail(where, `confirm after the picker: "${st.titles}" ${st.saved[1]}`);
+    }
+    // the picker's counts arrive after it opened (first /events/meta): the focused location keeps focus
+    if (HAS_EVENTS) {
+      const p2 = page;
+      await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
+      await page.reload({ waitUntil: 'networkidle' });
+      let release; metaHold = new Promise(r => { release = r; });
+      await p2.locator('#locBtn').click();
+      await p2.locator('#prefDlg[open] [data-pref="JP-27"]').focus();
+      if (await p2.locator('#prefDlg [data-pref="JP-27"] em').count()) fail(where, 'meta: counts before the answer');
+      release(); metaHold = null;
+      await p2.waitForFunction(() => document.querySelector('#prefDlg [data-pref="JP-27"] em'));
+      const f2 = await p2.evaluate(() => document.activeElement?.dataset?.pref || document.activeElement?.tagName);
+      if (f2 !== 'JP-27') fail(where, `meta: focus moved to ${f2} when the counts arrived`);
+      await p2.keyboard.press('Escape');
     }
     // account sync while the dialog is open: confirming untouched titles keeps the synced ones; touched ones win
     {
