@@ -1,6 +1,6 @@
--- Event landing pages /events/<slug>/<pref>/ (docs/design/event-landing.md). Pending: the owner moves this file to
--- api/migrations/ when the pages go live; until then the events importer's automatic `migrations apply` cannot pick it
--- up, skips the landing rows and the Worker answers the pages with 404. IF NOT EXISTS keeps a re-run harmless.
+-- Event landing pages /events/<slug>/<pref>/ (docs/design/event-landing.md). Applied by the next remote import's
+-- `migrations apply` (`import:remote -- --yes`); until then the importer skips the landing rows and the Worker answers
+-- the pages with 404. IF NOT EXISTS keeps a re-run harmless. Numbered before the live 0008: wrangler applies by name.
 -- One row per (game, location), written only by the events importer from that game's latest run:
 --   built_on    JST day the row starts at (the import day, or the run window's first day when later)
 --   days_json   {"YYYY-MM-DD": events that day} for every day with events in built_on .. built_on + 28 days
