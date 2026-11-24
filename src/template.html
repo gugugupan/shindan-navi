@@ -323,6 +323,7 @@ tbody tr.starred td.nm{font-weight:700}
 .sitenav a{color:var(--accent);text-decoration:none}
 .sitenav a:hover{text-decoration:underline}
 .sitenav a[aria-current]{color:var(--ink);font-weight:700}
+.sitenav .sitenote{margin:0;font-size:12px;color:var(--muted)}
 
 /* location button (/ and /events/: opens the shared picker, src/locpick.html) */
 .locbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px 3px 8px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
@@ -516,8 +517,6 @@ tbody tr.starred td.nm{font-weight:700}
   </div>
   <div class="pageinfo"><!--PAGEHEAD--></div>
   <!--SEOLIST-->
-  <p class="legend">価格は税込。画像はトレカの地図・公式サイト・通販サイトの商品画像で、「参考画像」はシリーズのキービジュアル等のため実際のパッケージと異なる場合があります。発売日・価格は変更されることがあるので、購入前に公式情報をご確認ください。</p>
-  <p class="legend"><!--NOLOGIN-->お気に入り・表示設定はお使いのブラウザ（localStorage）に保存され、本サイトのサーバーには送信されません。<!--/NOLOGIN--><!--LOGIN-->お気に入り・表示設定はお使いのブラウザ（localStorage）に保存されます。ログインすると、お気に入りなどの設定をアカウントに保存し、ほかの端末と同期します。<!--/LOGIN-->本サイトはアクセス解析のため Google アナリティクス（Cookie を使用し、閲覧ページ・参照元・端末やブラウザの情報などを Google に送信）を利用しています。詳しくは <a href="/privacy/">プライバシーポリシー</a> をご覧ください。</p>
   <!--SITENAV-->
 </div>
 
@@ -722,7 +721,7 @@ function renderTable(list){
     <td class="d">${fmtDate(d.date)}</td>
     <td class="im"><button class="pk thbtn" style="--h:${HUE[d.game]}" data-id="${d.id}" aria-label="詳細">${thumb(d)}</button></td>
     <td class="gm"><span class="tag" style="--h:${HUE[d.game]}">${gi(d.game)}${esc(d.game)}</span></td>
-    <td class="nm">${esc(d.name)}${d.approx?'<span class="ap">参考画像</span>':''}</td>
+    <td class="nm">${esc(d.name)}${d.approx?'<span class="ap" title="シリーズのキービジュアル等のため、実際のパッケージと異なる場合があります">参考画像</span>':''}</td>
     <td class="p p1">${esc(d.pack||'—')}</td>
     <td class="p bx">${esc(d.box||'—')}${d.box&&d.per_box?`<small class="pb">${d.per_box}パック</small>`:''}</td>
     <td class="lk">${[d.url?`<a href="${esc(d.url)}" target="_blank" rel="noopener">商品</a>`:'',OFFICIAL[d.game]?`<a href="${esc(OFFICIAL[d.game])}" target="_blank" rel="noopener">公式</a>`:''].filter(Boolean).join(' · ')}</td></tr>`;
@@ -828,10 +827,10 @@ function openDetail(items,title,keepOpen){
     <div class="dl-head"><span class="tag">${gi(d.game)}${esc(d.game)}</span>${starBtn(d,true)}</div>
     <h4>${esc(d.name)}</h4>
     <dl><dt>発売日</dt><dd>${fmtDate(d.date)}</dd>
-    <dt>価格</dt><dd>${esc(d.pack||'—')}</dd>
+    <dt>価格（税込）</dt><dd>${esc(d.pack||'—')}</dd>
     ${d.box?`<dt>1BOX</dt><dd>${esc(d.box)}${d.per_box?`（${d.per_box}パック入り）`:''}</dd>`:''}
     ${d.per_pack?`<dt>内容</dt><dd>${d.per_box||(d.packN||0)<1000?'1パック':'1セット'}${d.per_pack}枚入り</dd>`:''}</dl>
-    ${d.approx?'<p class="ap" style="display:inline-block;margin:8px 0 0">参考画像（実際の商品と異なる場合あり）</p>':''}
+    ${d.approx?'<p class="ap" style="display:inline-block;margin:8px 0 0">参考画像（実際の商品と異なる場合あり）</p><p class="dl-none">シリーズのキービジュアル等のため、実際のパッケージと異なる場合があります。</p>':''}
     <p class="dl-links">${d.date>=TODAY?`<button class="calbtn" data-cal-id="${d.id}">📅 カレンダーに追加</button>`:''}<a class="itempg" href="/item/${d.id}/">商品ページ</a>${linkList(d).join('')}</p>
   </div></div>`).join('');
   if(keepOpen) return;

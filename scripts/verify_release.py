@@ -232,6 +232,23 @@ def walk(node, path, out):
 TOOL_PAGES = {'/events/'}
 
 
+FOOT_NOTE = '価格・日程は変更されることがあります。購入前に公式情報をご確認ください。'
+
+
+def check_footer():
+    """Every page: the one notice line and the privacy link in the footer, no note paragraphs repeating them (owner
+    decision 2026-11-24). The Worker's landing shell (_landing.html) is left to tools/verify/landing.mjs."""
+    pages = [f for f in glob.glob(os.path.join(DIST, '**', '*.html'), recursive=True) if not os.path.basename(f).startswith('_')]
+    for f in pages:
+        src, rel = open(f).read(), os.path.relpath(f, DIST)
+        if src.count(FOOT_NOTE) != 1: fail(f'{rel}: footer notice missing or repeated')
+        if '>プライバシーポリシー・外部送信について</a>' not in src: fail(f'{rel}: footer privacy link not renamed')
+        if re.search(r'<p class="legend">[^<]*(localStorage|Google アナリティクス)', src): fail(f'{rel}: storage / analytics note paragraph is back')
+    priv = os.path.join(DIST, 'privacy/index.html')
+    if os.path.exists(priv) and 'id="external"' not in open(priv).read(): fail('/privacy/: no #external anchor')
+    print(f'  footer       {len(pages)} pages')
+
+
 def check_home(today, head, ov):
     """/ is the today page: indexable, and the releases it embeds cover build day -1 .. +14 exactly."""
     f = os.path.join(DIST, 'index.html')
@@ -455,6 +472,7 @@ def check_dist(today, head, ov, arch):
     if '/releases/' not in paths: fail('dist: release calendar /releases/ missing')
     if '/' in paths: fail('dist: / is built as a release calendar page')
     check_home(today, head, ov)
+    check_footer()
     check_voices()
     check_items(head, ov, arch, ['/'] + paths)
     if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')

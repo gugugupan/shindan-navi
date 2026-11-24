@@ -268,7 +268,9 @@ def siterow(cur):
     if FEEDBACK_ENABLED:
         fb=f'<a href="/feedback/"{cur_("/feedback/")}>ご意見・ご要望</a>' if cur=='/feedback/' else f'<a href="/feedback/?from={urllib.parse.quote(cur)}">ご意見・ご要望</a>'
     brand='トレカカレンダー<small>（旧・新弾ナビ）</small>' if cur=='/' else 'トレカカレンダー'
-    return f'<div><b>{brand}</b><a href="/"{cur_("/")}>トップ</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー</a>{fb}</div>'
+    # the site's one notice about changing prices / dates (owner 2026-11-24: no note paragraphs above the footer)
+    return (f'<div><b>{brand}</b><a href="/"{cur_("/")}>トップ</a><a href="/privacy/"{cur_("/privacy/")}>プライバシーポリシー・外部送信について</a>{fb}</div>'
+            '<p class="sitenote">価格・日程は変更されることがあります。購入前に公式情報をご確認ください。</p>')
 def toolrow(cur):
     if len(TOOLS)<2: return ''
     return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{a}{b}</a>' for p,a,b,ic in TOOLS)+'</div>'
@@ -515,7 +517,7 @@ def render_home():
         if not home['types'] or len(home['types'])!=len(lines):
             sys.exit(f"api/src/constants.ts: parsed {len(home['types'])} of {len(lines)} TYPE_LABELS lines (one `code: 'name',` per line)")
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
-                     ('<!--H1-->',esc(pg['h1'])),('<!--LEAD-->',esc(pg['lead'])),
+                     ('<!--H1-->',esc(pg['h1'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
@@ -747,7 +749,7 @@ def item_body(pg):
     d=pg['d']; g=d['game']; ym=d['date'][:7]; sold=d.get('archived')
     img=(f'<img class="th" src="{esc(d["thumb"])}" alt="{esc(d["name"])}">' if d['thumb'] else
          f'<span class="th none" role="img" aria-label="{esc(d["name"])}（画像準備中）">{PLACEHOLDER}<small>画像準備中</small></span>')
-    if d['approx']: img+='<p class="ap">参考画像（実際の商品と異なる場合あり）</p>'
+    if d['approx']: img+='<p class="ap" title="シリーズのキービジュアル等のため、実際のパッケージと異なる場合があります">参考画像（実際の商品と異なる場合あり）</p>'
     row=lambda t,v:f'<dt>{t}</dt><dd>{v}</dd>'
     title_dd=f'<a href="/{pg["slug"]}/">{esc(g)}</a>' if pg['slug'] else esc(g)
     rows=[row('発売日',f'<time datetime="{d["date"]}">{jdate(d["date"])}</time>'+('（発売済み）' if sold else '')),
@@ -776,7 +778,8 @@ def item_body(pg):
           f'<a class="pd-more" href="/releases/">新弾カレンダーで{esc(g)}の発売日を見る</a>')
     near=f'<section class="pd-near" aria-labelledby="near-h"><h2 id="near-h">同じタイトルの前後の新弾</h2><ol>{lis}</ol>{more}</section>' if len(pg['near'])>1 else ''
     legend=(f'<p class="legend">発売済みの商品です（新弾カレンダーには載っていません）。価格は発売時の税込価格で、現在の販売状況・価格は公式情報や販売店でご確認ください。</p>' if sold else
-            f'<p class="legend">価格は税込。発売日・価格は変更されることがあるので、購入前に公式情報をご確認ください（{upd_label}更新）。</p>')
+            f'<p class="legend">価格は税込（{upd_label}更新）。</p>')
+    if d['approx']: legend+='<p class="legend">「参考画像」はシリーズのキービジュアル等のため、実際のパッケージと異なる場合があります。</p>'
     return card+near+legend
 def render_item(pg):
     d=pg['d']
