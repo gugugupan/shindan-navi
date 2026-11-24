@@ -237,8 +237,8 @@ FOOT_NOTE = '価格・日程は変更されることがあります。購入前�
 
 def check_footer():
     """Every page: the one notice line and the privacy link in the footer, no note paragraphs repeating them (owner
-    decision 2026-11-24). The Worker's landing shell (_landing.html) is left to tools/verify/landing.mjs."""
-    pages = [f for f in glob.glob(os.path.join(DIST, '**', '*.html'), recursive=True) if not os.path.basename(f).startswith('_')]
+    decision 2026-11-24), the Worker's landing shell (_landing.html) included."""
+    pages = glob.glob(os.path.join(DIST, '**', '*.html'), recursive=True)
     for f in pages:
         src, rel = open(f).read(), os.path.relpath(f, DIST)
         if src.count(FOOT_NOTE) != 1: fail(f'{rel}: footer notice missing or repeated')
