@@ -325,14 +325,19 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const H = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]));
   const todays = H.items.filter(d => d.date === TODAY);
   const hasEvents = await page.locator('#evBody').count() > 0;
-  const st = await page.evaluate(() => ({ date: document.getElementById('hDate').textContent, cards: document.querySelectorAll('#relBody a.pk').length,
-    none: !!document.querySelector('#relBody .none'), days: document.querySelectorAll('#wkStrip [role="tab"]').length,
-    prompt: !!document.querySelector('#evBody .none button#pickLoc'), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
+  // today's panel is the day view: its release cards, and without a location one muted line; the 表示中 line's 地域を設定
+  // is the only location control (no 都道府県を選ぶ button outside the dialogs)
+  const st = await page.evaluate(() => ({ date: document.getElementById('hDate').textContent, cards: document.querySelectorAll('#wkPanel a.pk').length,
+    none: !!document.querySelector('#wkPanel .wps .q'), days: document.querySelectorAll('#wkStrip [role="tab"]').length,
+    prompt: !!document.getElementById('hsLocSet') && document.getElementById('evBody').textContent === '地域を設定すると、この日のイベントも表示します。'
+      && ![...document.querySelectorAll('#home button')].some(b => b.textContent.includes('都道府県')),
+    blocks: document.querySelectorAll('#relBody, #relH, #evH, #locBtn, #pickLoc').length, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
   const [, m, d] = TODAY.split('-').map(Number);
   if (!st.date.startsWith(`${m}月${d}日`)) fail(where, `date ${st.date}`);
   if (st.cards !== todays.length || (!todays.length && !st.none)) fail(where, `today shows ${st.cards} releases, data has ${todays.length}`);
   if (st.days !== 7) fail(where, `the strip shows ${st.days} days`);
-  if (hasEvents && !st.prompt) fail(where, 'no location: the pick-a-location prompt is missing');
+  if (hasEvents && !st.prompt) fail(where, 'no location: 地域を設定 / the muted line missing, or another location button');
+  if (st.blocks) fail(where, 'the 今日発売 / 今日のイベント blocks or their location controls are back');
   if (api.length) fail(where, `API called without a location: ${api.join(' ')}`);
   if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
   await page.screenshot({ path: path.join(OUT, `${vp}-home-nopref.png`), fullPage: true });
@@ -343,7 +348,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13,JP-14', game: 'OPCG', days: 'weekend' })); }, [fav && fav.id]);
   await page.reload({ waitUntil: 'networkidle' });
   if (fav) {
-    const first = await page.locator('#relBody a.pk').first().getAttribute('href');
+    const first = await page.locator('#wkPanel a.pk').first().getAttribute('href');
     if (first !== `/releases/#i=${fav.id}`) fail(where, `favourite not first: ${first}`);
   }
   if (hasEvents) {
@@ -351,7 +356,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const want = [`/api/v1/events/days?from=${ym}-01&until=${next}&game=OPCG&pref=JP-13`, `/api/v1/events?from=${TODAY}&until=${next}&game=OPCG&pref=JP-13&limit=50`];
     if (JSON.stringify([...api].sort()) !== JSON.stringify(want.sort())) fail(where, `API requests ${api.join(' ')}`);
     const ev = await page.evaluate(() => ({ rows: document.querySelectorAll('#evBody .ev').length, more: document.querySelector('#evBody a.go')?.getAttribute('href'),
-      cols: document.querySelectorAll('#evBody .gcol').length, types: document.querySelectorAll('#evBody .ty').length, where: document.getElementById('evWhere').textContent }));
+      cols: document.querySelectorAll('#evBody .gcol').length, types: document.querySelectorAll('#evBody .ty').length, where: document.getElementById('hsL').textContent }));
     if (ev.cols !== 1 || ev.rows !== 5) fail(where, `today's events show ${ev.cols} columns / ${ev.rows} rows`);
     // /days without by_game_type (answers cached before it existed): no type line
     if (ev.types) fail(where, `${ev.types} type lines without by_game_type`);
@@ -360,18 +365,20 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
 
     // the location picker (shared with /events/): the choice goes into the saved filters, the rest of them kept
     api.length = 0;
-    await page.locator('#locBtn').click();
+    await page.locator('#hsBtn').click();
+    await page.locator('#hsLocBtn').click();
     await page.locator('#prefDlg[open] [data-pref="JP-27"]').waitFor();
     // counts from meta.loc_counts for the saved game filter (OPCG): Tokyo 3 + 4, Osaka's row is PTCG only
     await page.waitForFunction(() => document.querySelector('#prefDlg [data-pref="JP-13"] em')?.textContent === '7');
     if (await page.locator('#prefDlg [data-pref="JP-27"] em').textContent() !== '0') fail(where, 'picker counts ignore the game filter');
     await page.locator('#prefDlg [data-pref="JP-27"]').click();
-    await page.waitForFunction(() => document.getElementById('evWhere').textContent.startsWith('大阪府') && document.querySelector('#evBody .gcol'));
+    await page.waitForFunction(() => document.getElementById('hsL').textContent.startsWith('大阪府') && document.querySelector('#evBody .gcol'));
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tcg.ev.filters')));
     if (saved.pref !== 'JP-27' || saved.game !== 'OPCG' || saved.days !== 'weekend') fail(where, `picker saved ${JSON.stringify(saved)}`);
     const want2 = ['/api/v1/events/meta', `/api/v1/events/days?from=${ym}-01&until=${next}&game=OPCG&pref=JP-27`, `/api/v1/events?from=${TODAY}&until=${next}&game=OPCG&pref=JP-27&limit=50`];
     if (JSON.stringify([...api].sort()) !== JSON.stringify(want2.sort())) fail(where, `API requests after the picker ${api.join(' ')}`);
     if (await page.locator('#prefDlg').evaluate(d => d.open)) fail(where, 'picker still open');
+    await page.keyboard.press('Escape');
 
     // all games, one busy: per-game columns from /days by_game, one cursor page for the game the first page missed
     scenario = 'busy'; api.length = 0;
@@ -379,14 +386,19 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
     const busy = await page.evaluate(() => ({ cols: [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelectorAll('.ev').length,
-      c.querySelector('a.go')?.textContent]), chips: document.querySelectorAll('#wkPanel a.gc').length,
-      types: [...document.querySelectorAll('#evBody .gcol')].map(c => c.querySelector('.ty')?.textContent || null),
+      c.querySelector('a.go')?.textContent]),       types: [...document.querySelectorAll('#evBody .gcol')].map(c => c.querySelector('.ty')?.textContent || null),
       tyLine: (() => { const t = document.querySelector('#evBody .gcol .ty'); return t ? { nowrap: getComputedStyle(t).whiteSpace === 'nowrap', h: t.getBoundingClientRect().height } : null; })(),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     if (JSON.stringify(busy.cols) !== JSON.stringify([['ONE PIECE', 5, 'ほか 45件 ›'], ['ポケモンカード', 3, '地図で見る ›']])) fail(where, `busy columns ${JSON.stringify(busy.cols)}`);
     if (api.length !== 3 || !api.some(a => a.includes('cursor=c1'))) fail(where, `busy: API requests ${api.join(' ')}`);
-    // tomorrow's /days counts exist only within this month
-    if (busy.chips !== (WEEK1.slice(0, 7) === TODAY.slice(0, 7) ? 2 : 0)) fail(where, `tomorrow shows ${busy.chips} game chips`);
+    // tomorrow (this month): its columns from /days by_game; the loaded pages reach the month's end, so no request
+    if (WEEK1.slice(0, 7) === TODAY.slice(0, 7)) {
+      const n0 = api.length;
+      await page.locator('#wkT1').click();
+      const tc = await page.evaluate(() => [...document.querySelectorAll('#evBody .gcol')].map(c => c.getAttribute('aria-label')));
+      if (JSON.stringify(tc) !== JSON.stringify(['UNION ARENA', '名探偵コナン']) || api.length !== n0) fail(where, `busy: tomorrow's columns ${tc}, requests +${api.length - n0}`);
+      await page.locator('#wkT0').click();
+    }
     if (JSON.stringify(busy.types) !== JSON.stringify(['スタンダードバトル 30件・フラッグシップバトル 12件・ほか 8件', 'ジムバトル 2件・シティリーグ 1件'])) fail(where, `busy: type lines ${JSON.stringify(busy.types)}`);
     if (opt.width <= 760 && !(busy.tyLine && busy.tyLine.nowrap && busy.tyLine.h < 24)) fail(where, `busy: type line not one line on phones ${JSON.stringify(busy.tyLine)}`);
     if (busy.overflow > 1) fail(where, `busy: page scrolls horizontally by ${busy.overflow}px`);
@@ -556,9 +568,12 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const u = new URL(route.request().url()), gf = (u.searchParams.get('game') || '').split(',').filter(Boolean);
     if (u.pathname.endsWith('/events/meta')) { if (metaHold) await metaHold; return route.fulfill({ json: { games: [], types: [], prefectures: [{ code: 'JP-13', count: 7 }, { code: 'JP-27', count: 2 }] } }); }
     const rows = EVTS.filter(e => !gf.length || e.codes.some(c => gf.includes(c)));
-    if (!u.pathname.endsWith('/days')) return route.fulfill({ json: { events: rows.filter(e => e.d <= WEEK1).map(e => ({ id: `s${e.i}`, name: `テスト大会 ${e.i}`,
-      game_code: e.codes[0], game_codes: e.codes, starts_on: e.d, time_precision: 'date', timezone: 'Asia/Tokyo', attendance_mode: 'offline',
-      venue: { name: 'テスト店' }, source_url: 'https://example.com/', event_status: 'scheduled' })), next_cursor: rows.some(e => e.d > WEEK1) ? 'c2' : null } });
+    if (!u.pathname.endsWith('/days')) {
+      const from = u.searchParams.get('from'), first = from === TODAY, page = rows.filter(e => e.d >= from && (!first || e.d <= WEEK1));
+      return route.fulfill({ json: { events: page.map(e => ({ id: `s${e.i}`, name: `テスト大会 ${e.i}`,
+        game_code: e.codes[0], game_codes: e.codes, starts_on: e.d, time_precision: 'date', timezone: 'Asia/Tokyo', attendance_mode: 'offline',
+        venue: { name: 'テスト店' }, source_url: 'https://example.com/', event_status: 'scheduled' })), next_cursor: first && rows.some(e => e.d > WEEK1) ? 'c2' : null } });
+    }
     if (hold) await hold;
     const days = [...new Set(rows.map(e => e.d))].map(date => {
       const r = rows.filter(e => e.d === date), by_game = {};
@@ -577,10 +592,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const cnt = (t, k) => { const x = [...t.querySelectorAll('.ct > span')].find(e => e.textContent.startsWith(k)); return x ? x.querySelector('b').textContent : null; };
     return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null,
       tabs: tabs.map(t => ({ sel: t.getAttribute('aria-selected'), ti: t.tabIndex, rel: cnt(t, '発売'), ev: cnt(t, 'イベント'), label: t.getAttribute('aria-label') })),
-      by: p.getAttribute('aria-labelledby'), rels: [...p.querySelectorAll('a[href^="/releases/#i="]')].map(a => a.getAttribute('title').split(' / ')[0]),
-      chips: [...p.querySelectorAll('a.gc')].map(a => a.getAttribute('title').split('・')[0]), rl: [...p.querySelectorAll('.rl')].map(a => [a.textContent, a.getAttribute('href')]),
-      locBtn: !!p.querySelector('[data-loc]'), today: [...document.querySelectorAll('#relBody a.pk .g')].map(g => g.textContent.replace('★', '')),
-      todayOthers: document.querySelector('#relBody .rl')?.textContent || null,
+      by: p.getAttribute('aria-labelledby'), rels: [...p.querySelectorAll('a.pk .g')].map(g => g.textContent.replace('★', '')),
+      cols: [...p.querySelectorAll('.gcol')].map(c => c.getAttribute('aria-label')), others: p.querySelector('.relo .rl')?.textContent || null,
+      foot: [...p.querySelectorAll('.wpf a')].map(a => [a.textContent, a.getAttribute('href')]),
+      locSet: !!document.getElementById('hsLocSet'), evText: document.getElementById('evBody')?.textContent ?? null,
       saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')], focus: document.activeElement?.id || null,
       dlg: document.getElementById('hsDlg').open, strip: s.scrollWidth - s.clientWidth,
       small: [...document.querySelectorAll('#home *')].filter(e => e.getClientRects().length && !e.closest('.sr,.gi') && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).map(e => e.textContent.trim()),
@@ -626,18 +641,36 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const inWeek = H.items.filter(x => week.includes(x.date));
     const code = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG'].find(c => inWeek.some(x => x.game === H.titles[c])) || 'OPCG';
 
-    // location only: every title, tomorrow open
+    // location only: every title, today open
     await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
     api.length = 0;
     await page.reload({ waitUntil: 'networkidle' });
     let st = await state();
     if (st.titles !== 'すべてのタイトル' || st.loc !== (HAS_EVENTS ? '東京都' : null)) fail(where, `line "${st.titles}" "${st.loc}"`);
     strip('all titles', st, null, null);
-    if (st.tabs[1].sel !== 'true' || st.by !== 'wkT1') fail(where, `tomorrow not open first (${st.by})`);
-    const tmrRels = H.items.filter(x => x.date === WEEK1);
-    if (st.rels.length !== Math.min(5, tmrRels.length)) fail(where, `tomorrow's panel lists ${st.rels.length} releases, data has ${tmrRels.length}`);
-    if (HAS_EVENTS && WEEK1.slice(0, 7) === ym && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'UNION ARENA', 'ポケモンカード'])) fail(where, `tomorrow's chips ${st.chips}`);
+    if (st.tabs[0].sel !== 'true' || st.by !== 'wkT0') fail(where, `today not open first (${st.by})`);
+    const todayRels = H.items.filter(x => x.date === TODAY);
+    if (st.rels.length !== todayRels.length) fail(where, `today's panel shows ${st.rels.length} release cards, data has ${todayRels.length}`);
+    const evDay = d => `/events/?pref=JP-13&range=custom&from=${d}&to=${d}`;
+    if (JSON.stringify(st.foot) !== JSON.stringify([['新弾カレンダーでこの日を見る ›', `/releases/#d=${TODAY}`]].concat(HAS_EVENTS ? [['イベントカレンダーでこの日を見る ›', evDay(TODAY)]] : []))) fail(where, `today's links ${JSON.stringify(st.foot)}`);
     if (HAS_EVENTS && api.length !== 2) fail(where, `API requests ${api.join(' ')}`);
+    // tomorrow: covered by the loaded rows (no request), one column per game
+    if (HAS_EVENTS && WEEK1.slice(0, 7) === ym) {
+      await page.locator('#wkT1').click();
+      st = await state();
+      if (JSON.stringify(st.cols) !== JSON.stringify(['ONE PIECE', 'UNION ARENA', 'ポケモンカード']) || api.length !== 2) fail(where, `tomorrow: columns ${st.cols}, requests ${api.length}`);
+      // the day after: not covered (the first page ends with tomorrow): one request for its own page, kept for the visit
+      await page.locator('#wkT2').click();
+      st = await state();
+      const want = `/api/v1/events?from=${WEEK2}&until=${new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 1)).toISOString().slice(0, 10)}&pref=JP-13&limit=50`;
+      if (api.length !== 3 || !api[2].endsWith(want) || JSON.stringify(st.cols) !== JSON.stringify(['ONE PIECE', 'UNION ARENA', 'ポケモンカード'])) fail(where, `${WEEK2}: requests ${api.slice(2).join(' ')} columns ${st.cols}`);
+      await page.locator('#wkT0').click();
+      await page.locator('#wkT2').click();
+      await state();
+      if (api.length !== 3) fail(where, `${WEEK2} asked for again: ${api.slice(3).join(' ')}`);
+      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-day-busy.png`) });
+      await page.locator('#wkT0').click();
+    }
     if (opt.width <= 760 && st.strip < 1) fail(where, 'the strip does not scroll on phones');
     if (opt.width > 760 && st.strip > 1) fail(where, `the strip scrolls on desktop by ${st.strip}px`);
     await page.screenshot({ path: path.join(OUT, `${vp}-home-top.png`) });
@@ -645,16 +678,15 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.screenshot({ path: path.join(OUT, `${vp}-home-top-dark.png`) });
     await page.emulateMedia({ colorScheme: 'light' });
     // keys: one tab stop, arrows move and open, Home / End, wrap
-    await page.locator('#wkT1').focus();
+    await page.locator('#wkT1').click();
     await page.keyboard.press('ArrowRight');
     st = await state();
     if (st.focus !== 'wkT2' || st.by !== 'wkT2' || st.tabs[2].sel !== 'true' || st.tabs[2].ti !== 0 || st.tabs[1].ti !== -1) fail(where, `ArrowRight: focus ${st.focus} panel ${st.by}`);
-    if (HAS_EVENTS && WEEK2.slice(0, 7) === ym && JSON.stringify(st.chips) !== JSON.stringify(['ONE PIECE', 'UNION ARENA', 'ポケモンカード'])) fail(where, `${WEEK2} chips ${st.chips}`);
     await page.keyboard.press('End');
     if ((await state()).focus !== 'wkT6') fail(where, 'End');
     await page.keyboard.press('Home');
     st = await state();
-    if (st.focus !== 'wkT0' || !st.rl.some(([, h]) => h === '#relH')) fail(where, `Home: focus ${st.focus}, today's panel ${JSON.stringify(st.rl)}`);
+    if (st.focus !== 'wkT0' || st.foot[0]?.[1] !== `/releases/#d=${TODAY}`) fail(where, `Home: focus ${st.focus}, today's panel ${JSON.stringify(st.foot)}`);
     await page.keyboard.press('ArrowLeft');
     if ((await state()).focus !== 'wkT6') fail(where, 'ArrowLeft does not wrap');
     await page.keyboard.press('Tab');
@@ -662,7 +694,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     await page.locator('#wkT1').click();
     if ((await state()).by !== 'wkT1') fail(where, 'click does not open the day');
 
-    // from /events/' saved game filter: strip, panel and 今日発売 follow it
+    // from /events/' saved game filter: strip and today's panel follow it
     const name = H.titles[code];
     await setStore({ 'tcg.ev.filters': { pref: 'JP-13', game: code } });
     await page.reload({ waitUntil: 'networkidle' });
@@ -671,9 +703,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     strip('from /events/', st, [name], [code]);
     if (st.rels.some(g => g !== name)) fail(where, `from /events/: panel releases ${st.rels}`);
     const todays = H.items.filter(x => x.date === TODAY), mine = todays.filter(x => x.game === name);
-    if (st.today.length !== mine.length || st.today.some(g => g !== name)) fail(where, `from /events/: 今日発売 ${st.today}`);
+    if (st.rels.length !== mine.length) fail(where, `from /events/: today's cards ${st.rels}`);
     const hid = todays.length - mine.length;
-    if ((hid ? `ほかのタイトルの発売 ${hid}件 ›` : null) !== st.todayOthers) fail(where, `from /events/: 今日発売 others "${st.todayOthers}"`);
+    if ((hid ? `ほかのタイトルの発売 ${hid}件 ›` : null) !== st.others) fail(where, `from /events/: others "${st.others}"`);
     await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-strip-filtered.png`) });
     // tcg.voices wins over /events/ (VOICES builds)
     if (HAS_VOICES) {
@@ -683,25 +715,24 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       st = await state();
       if (st.titles !== short(code)) fail(where, `from /voices/: line "${st.titles}"`);
       strip('from /voices/', st, [name], [code], true, evGame.split(','));
-      // narrower than the query: OPCG + UATCG of every game. Tomorrow's rows are loaded (exact: 3, ほか 1); the day after
-      // has one event shared by both: no summed count (あり) and no ほか count, only the day's total
+      // narrower than the query: OPCG + UATCG of every game. Tomorrow's rows are loaded (exact: 3): its day-view link
+      // carries both games; the day after has one event shared by both (あり): the link keeps the saved filter
       const two = ['OPCG', 'UATCG'];
       await setStore({ 'tcg.voices': { game: two.join(',') }, 'tcg.ev.filters': { pref: 'JP-13' } });
       await page.reload({ waitUntil: 'networkidle' });
       st = await state();
       strip('narrower selection', st, two.map(c => H.titles[c]), two, true, []);
       if (HAS_EVENTS && WEEK1.slice(0, 7) === ym) {
-        const ev = st.rl.filter(([t]) => t.includes('イベント')).map(([t]) => t);
-        if (JSON.stringify(ev) !== JSON.stringify(['イベント 3件をイベントカレンダーで見る ›', 'ほかのタイトルのイベント 1件 ›'])) fail(where, `narrower, ${WEEK1}: ${JSON.stringify(ev)}`);
-        // the exact count's link opens the day view of the same games
-        const href = st.rl.find(([t]) => t.startsWith('イベント 3件'))?.[1];
-        if (href !== `/events/?game=OPCG,UATCG&pref=JP-13&range=custom&from=${WEEK1}&to=${WEEK1}`) fail(where, `narrower, ${WEEK1}: count link ${href}`);
+        await page.locator('#wkT1').click();
+        st = await state();
+        const href = st.foot[1]?.[1];
+        if (href !== `/events/?game=OPCG,UATCG&pref=JP-13&range=custom&from=${WEEK1}&to=${WEEK1}`) fail(where, `narrower, ${WEEK1}: day-view link ${href}`);
       }
       if (HAS_EVENTS && WEEK2.slice(0, 7) === ym) {
         await page.locator('#wkT2').click();
         st = await state();
-        const ev = st.rl.filter(([t]) => t.includes('イベント')).map(([t]) => t);
-        if (st.tabs[2].ev !== 'あり' || JSON.stringify(ev) !== JSON.stringify(['イベントカレンダーで見る（この日 全 5件）›'])) fail(where, `narrower, ${WEEK2}: ${st.tabs[2].ev} ${JSON.stringify(ev)}`);
+        const href = st.foot[1]?.[1];
+        if (st.tabs[2].ev !== 'あり' || href !== `/events/?pref=JP-13&range=custom&from=${WEEK2}&to=${WEEK2}`) fail(where, `narrower, ${WEEK2}: ${st.tabs[2].ev} ${href}`);
         await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-strip-shared.png`) });
         // /days without by_game: tomorrow still from its rows, the day after unknown
         nobg = true;
@@ -788,13 +819,15 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
       await page.reload({ waitUntil: 'networkidle' });
       let release; metaHold = new Promise(r => { release = r; });
-      await p2.locator('#locBtn').click();
+      await p2.locator('#hsBtn').click();
+      await p2.locator('#hsLocBtn').click();
       await p2.locator('#prefDlg[open] [data-pref="JP-27"]').focus();
       if (await p2.locator('#prefDlg [data-pref="JP-27"] em').count()) fail(where, 'meta: counts before the answer');
       release(); metaHold = null;
       await p2.waitForFunction(() => document.querySelector('#prefDlg [data-pref="JP-27"] em'));
       const f2 = await p2.evaluate(() => document.activeElement?.dataset?.pref || document.activeElement?.tagName);
       if (f2 !== 'JP-27') fail(where, `meta: focus moved to ${f2} when the counts arrived`);
+      await p2.keyboard.press('Escape');
       await p2.keyboard.press('Escape');
     }
     // account sync while the dialog is open: confirming untouched titles keeps the synced ones; touched ones win
@@ -825,7 +858,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       await page.reload({ waitUntil: 'load' });
       const i = week.findIndex((d, j) => j > 0 && relN(d, null) !== '0');
       if (i > 0) await page.locator(`#wkT${i}`).click();
-      const target = await page.locator('#wkPanel a.rl').count() ? page.locator('#wkPanel a.rl').first() : page.locator('#wkPanel');
+      const target = page.locator('#wkPanel .wpf a').first();
       await target.focus();
       const before = await page.evaluate(() => { const a = document.activeElement; return a.id || a.getAttribute('href'); });
       if (!await page.locator('#wkPanel .sk').count()) fail(where, 'slow answer: the panel is not loading');
@@ -835,25 +868,36 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (after !== before) fail(where, `slow answer: focus moved from ${before} to ${after}`);
     }
 
-    // next month's days: no count, the panel links the day view (one chosen game: its own)
+    // next month's days: no count; the panel asks for the day's own page once (no /days for next month: counts from its
+    // rows) and links the day view (one chosen game: its own)
     const nx = week.findIndex(d => d.slice(0, 7) !== ym);
     if (HAS_EVENTS && nx > 0) {
       await setStore({ 'tcg.ev.filters': { pref: 'JP-13', game: 'OPCG' } });
       await page.reload({ waitUntil: 'networkidle' });
+      api.length = 0;
       await page.locator(`#wkT${nx}`).click();
       st = await state();
       const href = `/events/?game=OPCG&pref=JP-13&range=custom&from=${week[nx]}&to=${week[nx]}`;
-      if (st.tabs[nx].ev !== '–' || !st.rl.some(([t, h]) => h === href && t.startsWith('イベントカレンダーで見る'))) fail(where, `next month ${week[nx]}: ${st.tabs[nx].ev} ${JSON.stringify(st.rl)}`);
+      const nm1 = new Date(Date.UTC(+week[nx].slice(0, 4), +week[nx].slice(5, 7), 1)).toISOString().slice(0, 10);
+      if (st.tabs[nx].ev !== '–' || JSON.stringify(st.foot[1]) !== JSON.stringify(['イベントカレンダーでこの日を見る ›', href])) fail(where, `next month ${week[nx]}: ${st.tabs[nx].ev} ${JSON.stringify(st.foot)}`);
+      if (api.length !== 1 || !api[0].endsWith(`/api/v1/events?from=${week[nx]}&until=${nm1}&game=OPCG&pref=JP-13&limit=50`)) fail(where, `next month ${week[nx]}: requests ${api.join(' ')}`);
       await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-strip-nextmonth.png`) });
     } else if (HAS_EVENTS) console.log(`  ${where.padEnd(22)} no next-month day this week: next-month check skipped`);
 
-    // no location: no request, 地域未設定, the panel offers the picker
+    // no location: no request; 地域を設定 in the 表示中 line, one muted line in the panel
     api.length = 0;
     await setStore({ 'tcg.ev.filters': { game: code } });
     await page.reload({ waitUntil: 'networkidle' });
     st = await state();
     if (api.length) fail(where, `API called without a location: ${api.join(' ')}`);
-    if (HAS_EVENTS && (st.loc !== '地域未設定' || !st.locBtn)) fail(where, `no location: "${st.loc}" picker ${st.locBtn}`);
+    if (HAS_EVENTS && (st.loc !== '地域を設定' || !st.locSet || st.evText !== '地域を設定すると、この日のイベントも表示します。')) fail(where, `no location: "${st.loc}" ${st.locSet} "${st.evText}"`);
+    if (HAS_EVENTS) {
+      // 地域を設定 opens the picker; the choice shows in the line and focus returns to 変更
+      await page.locator('#hsLocSet').click();
+      await page.locator('#prefDlg[open] [data-pref="JP-13"]').click();
+      await page.waitForFunction(() => document.getElementById('hsL').textContent === '東京都');
+      if ((await state()).focus !== 'hsBtn') fail(where, 'focus after 地域を設定');
+    }
     strip('no location', st, [name], null, false);
   } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
   for (const b of [...new Set(bad)]) fail(where, b);
@@ -1628,7 +1672,6 @@ if (HAS_EVENTS) {
       // without events the home may show no title at all (no releases today or tomorrow): the 表示の設定 chips have icons
       if (p === '/' && !HAS_EVENTS) await page.locator('#hsBtn').click();
       await page.locator(need).first().waitFor({ state: 'attached', timeout: 5000 });
-      if (p === '/' && HAS_EVENTS && tmr.slice(0, 7) === TODAY.slice(0, 7) && !await page.locator('#wkPanel a.gc .gi').count()) fail(where, 'no icons in the strip panel event chips');
       const r = await page.evaluate(() => [...document.querySelectorAll('.gi')].filter(e => e.getClientRects().length).map(e => {
         const b = e.getBoundingClientRect(), t = e.tagName !== 'IMG' && e.firstChild && document.createRange();
         if (t) t.selectNodeContents(e); const g = t && t.getBoundingClientRect();
