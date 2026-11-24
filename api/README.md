@@ -352,7 +352,7 @@ every scanned row twice). With eight games the busiest 東京都 day has 217 eve
 
 **Today page** (`/`, `src/home.html`): no request without a saved location. With one, 2-3 requests per visit, all
 keys the `/events/` page uses too, with the saved `game`/`type` (not `days`): `/events/days` for this month (calendar
-view; its `by_game` gives each game column's total and 今週のカレンダー's per-day counts and chips, `by_game_type` the column's
+view; its `by_game` gives each game column's total and 今週のカレンダー's per-day counts, `by_game_type` the column's
 per-type line) and `/events` from today to
 the 1st of next month with `limit=50` (first list page). `limit` is fixed at 50 and the page runs in start order across
 all games, so on a busy day one game can fill it: then, and only then, the page asks for the next page with its
@@ -360,8 +360,13 @@ all games, so on a busy day one game can fill it: then, and only then, the page 
 total and a link. Uncached, one prefecture: ≤ ~290 + ~103 (+ ~103) rows (Tokyo, unfiltered; filtered ≤ ~290 + ~444
 (+ ~444)). On the data of 2026-11-19 Tokyo unfiltered needs the third request (PTCG 104 of 157 events), Osaka + PTCG
 and online do not. `/events/meta` (1 row, same key as `/events/`) only when the location picker is opened, for its
-counts; no `/geo`. Days of the next month in 今週のカレンダー (today + 6) link without a count. Changing the titles in
-the page's 表示の設定 changes the saved `game` filter, so the next load uses that key (as a filter change on `/events/`).
+counts; no `/geo`. 今週のカレンダー (today + 6) is the page's day view: choosing another day reuses the loaded rows when
+they cover it (a later row or the month's end is loaded, or all of the day's `/days` count is) and otherwise asks once
+for that day's first page, `/events` from the day to the 1st of the following month with `limit=50` (the `/events/` day
+view's first request, same key; next-month days too, which have no `/days` here and count from those rows). At most
+one request per chosen day, kept for the visit (≤ ~103 rows uncached for Tokyo unfiltered, ≤ ~444 filtered); none
+for today or a covered day. Changing the titles in the page's 表示の設定 changes the saved `game` filter, so the next
+load uses that key (as a filter change on `/events/`).
 
 `/events/days` answer size: `by_game_type` (2026-11-20) grows it but reads no more rows (same `day_counts` search, see
 above). Measured on 大阪府 (JP-27), December 2026: 2.3 → 9.6 KB raw, 0.44 → 1.2 KB gzip. Upper bound for Tokyo (636
