@@ -170,6 +170,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
       <div class="blk-h"><h2 id="wkH">今週のカレンダー</h2><span class="sub" id="wkSub"></span></div>
       <div class="wks" id="wkStrip" role="tablist" aria-labelledby="wkH"></div>
       <div class="wkp" id="wkPanel" role="tabpanel" tabindex="0"></div>
+      <p class="sr" id="wkLive" role="status" aria-live="polite"></p>
     </section>
 <!--VOICES-->
     <section class="blk vtr" id="vtr" aria-labelledby="vtH" hidden>
@@ -300,10 +301,12 @@ async function api(path,query){
 }
 const codesOf = e => Array.isArray(e.game_codes)&&e.game_codes.length ? e.game_codes : [e.game_code];
 // A day's games with events: by_game of /days (this month; it already follows the saved game filter), else what the
-// loaded rows hold; in EV_GAMES order.
+// loaded rows hold, kept to the saved game filter as /days keeps them (a shared event names other games too); in
+// EV_GAMES order.
+const inFilter = c => !evF||!evF.game||evF.game.split(',').includes(c);
 function dayGames(d,list,bg){
   if(bg) return EV_GAMES.filter(g=>bg[g.code]>0).map(g=>({g, n:bg[g.code]}));
-  const n={}; list.filter(e=>e.starts_on===d).forEach(e=>codesOf(e).forEach(c=>n[c]=(n[c]||0)+1));
+  const n={}; list.filter(e=>e.starts_on===d).forEach(e=>codesOf(e).filter(inFilter).forEach(c=>n[c]=(n[c]||0)+1));
   return EV_GAMES.filter(g=>n[g.code]).map(g=>({g, n:n[g.code]}));
 }
 // At most MAX_COLS columns: the games with the most events (ties in EV_GAMES order), still in EV_GAMES order.
@@ -318,15 +321,20 @@ const started = e => e.starts_on===TODAY && e.time_precision==='datetime' && !!e
 const dayRank = e => e.event_status==='cancelled' ? 2 : started(e) ? 1 : 0;
 const rowsFor = (code,d,list) => list.filter(e=>e.starts_on===d && codesOf(e).includes(code)).sort((a,b)=>dayRank(a)-dayRank(b));
 const nextMonth1 = d => addM(d.slice(0,7),1)+'-01';
-// The rows for day d: the loaded pages when they cover it (start order from today: the day is complete once a later
-// row or the end of the month is loaded), else that day's own page (null: not asked for yet). more: rows of d may follow.
+// The rows for day d. A page runs in start order from its first day to the end of that month, so it holds all of d
+// (same month, not before its start) once a later row or the page's end is loaded. The first pages (from today, and
+// all of today) are tried first, then every day page fetched so far; else d's own page (null: not asked for yet).
+// more: rows of d may follow.
+const holds = (pg,from,d) => d>=from && d.slice(0,7)===from.slice(0,7) && (!pg.next || (!!pg.last&&pg.last>d));
 function daySrc(d){
   const main=ev.list, last=main[main.length-1];
-  if(d.slice(0,7)===TODAY.slice(0,7) && (d===TODAY || !ev.next || (last&&last.starts_on>d) || main.filter(e=>e.starts_on===d).length>=(ev.counts[d]||0)))
+  if(d.slice(0,7)===TODAY.slice(0,7) && (d===TODAY || holds({next:ev.next, last:last&&last.starts_on},TODAY,d) || main.filter(e=>e.starts_on===d).length>=(ev.counts[d]||0)))
     return {list:main, more:!!ev.next&&!!last&&last.starts_on===d};
-  return dayPages[d] || null;
+  for(const [from,pg] of Object.entries(dayPages)) if(pg.list && holds(pg,from,d)) return {list:pg.list, more:false};
+  const own=dayPages[d];
+  return own && own.list ? {list:own.list, more:true} : own || null;
 }
-// one request for a day the loaded pages miss: its first /events page (from the day, as the /events/ day view asks)
+// one request for a day no loaded page holds: its first /events page (from the day, as the /events/ day view asks)
 function loadDay(d){
   if(dayPages[d]) return;
   const key=evKey, f=evF;
@@ -334,8 +342,15 @@ function loadDay(d){
   api('/events',q(f,{api:{from:d,until:nextMonth1(d)},tail:{limit:50}})).then(pg=>{
     if(key!==evKey) return;
     const list=pg.events||[], last=list[list.length-1];
-    dayPages[d]={list, more:!!pg.next_cursor&&!!last&&last.starts_on===d};
+    dayPages[d]={list, next:pg.next_cursor||null, last:last&&last.starts_on};
   },e=>{ if(key===evKey) dayPages[d]={error:e}; }).finally(()=>{ if(key===evKey) renderWeek(); });
+}
+// the day's /events count under the saved filter: /days this month; next month the day's rows once all are loaded
+function dayCount(d){
+  if(!ev||!ev.counts) return null;
+  if(d.slice(0,7)===TODAY.slice(0,7)) return ev.counts[d]||0;
+  const src=daySrc(d);
+  return src&&src.list&&!src.more ? src.list.filter(e=>e.starts_on===d).length : null;
 }
 async function loadEvents(force){
   if(!EVENTS) return;
@@ -379,10 +394,12 @@ if(window.snEv) snEv.init({gi, games:EVG});
 const evRow = (e,col,f) => snEv.row(e,{compact:true, col, pref:f.pref, started:started(e)});
 const evItem = (x,col,f,more,d) => x.e ? evRow(x.e,col,f) : snEv.grp(x,{compact:true, col, pref:f.pref, day:d+'-'+col, more, started:started(x.rows[0])});
 // A column's types that day, busiest first: up to 3 named, else 2 and ほか (no type, その他 and unknown codes go to ほか).
-// None when /days has no by_game_type (answers cached before it existed).
+// From /days by_game_type; next month (no /days here) from the day's rows once all are loaded (group.event_type_code).
+// None for /days answers without by_game_type (cached before it existed).
 const TYPES = H.types||{};
-function typeLine(code,d){
-  const bt=(ev.byGameType[d]||{})[code];
+function typeLine(code,d,rows){
+  let bt=(ev.byGameType[d]||{})[code];
+  if(!bt&&rows){ bt={}; rows.forEach(e=>{ const t=e.group&&e.group.event_type_code||''; bt[t]=(bt[t]||0)+1; }); }
   if(!bt) return '';
   const named=Object.entries(bt).filter(([t])=>TYPES[t]&&t!=='other').sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1));
   const total=Object.values(bt).reduce((a,b)=>a+b,0);
@@ -397,15 +414,15 @@ const SK = '<div class="sk" aria-hidden="true"></div><div class="sk" aria-hidden
 // {html, n, min}: n = the day's count for the heading (null when not known), min = 以上 when it is a minimum.
 function evPart(d,f){
   if(!f.pref) return {html:'<p class="q">地域を設定すると、この日のイベントも表示します。</p>', n:null};
-  if(!ev || ev.loading) return {html:SK, n:null};
+  if(!ev || ev.loading) return {html:SK, n:null, loading:true};
   if(ev.error){
     const busy=ev.error.status===429||ev.error.status===503;
-    return {html:`<div class="none err"><b>${busy?'混み合っています':'イベント情報を読み込めませんでした'}</b><span>${busy?'少し時間をおいて、もう一度お試しください。':'通信状況を確認して、もう一度お試しください。'}</span><button class="go" id="evRetry" type="button">再読み込み</button></div>`, n:null};
+    return {html:`<div class="none err"><b>${busy?'混み合っています':'イベント情報を読み込めませんでした'}</b><span>${busy?'少し時間をおいて、もう一度お試しください。':'通信状況を確認して、もう一度お試しください。'}</span><button class="go" id="evRetry" type="button">再読み込み</button></div>`, n:null, error:true};
   }
   const src=daySrc(d);
-  if(!src){ loadDay(d); return {html:SK, n:null}; }
-  if(src.loading) return {html:SK, n:null};
-  if(src.error) return {html:'<p class="q">この日のイベント情報を読み込めませんでした。</p>', n:null};
+  if(!src){ loadDay(d); return {html:SK, n:null, loading:true}; }
+  if(src.loading) return {html:SK, n:null, loading:true};
+  if(src.error) return {html:'<p class="q">この日のイベント情報を読み込めませんでした。</p>', n:null, error:true};
   const known=d.slice(0,7)===TODAY.slice(0,7), bg=known?ev.byGame[d]||null:null, list=src.list;
   const loaded=list.filter(e=>e.starts_on===d).length, total=known?ev.counts[d]||0:loaded;
   if(!total) return {html:`<p class="q">この日、${esc(LOC.locName(f.pref))}で予定されているイベントはありません。</p>`, n:0};
@@ -420,7 +437,7 @@ function evPart(d,f){
     const ul = rows.length ? `<ul class="evs">${rows.map(x=>evItem(x,g.code,f,partial,d)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件${min} ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件${min}</span></h3>${typeLine(g.code,d)}${ul}${more}</section>`;
+    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件${min}</span></h3>${typeLine(g.code,d,!known&&!src.more?rs:null)}${ul}${more}</section>`;
   }).join('')}</div>${others}`};
 }
 
@@ -496,55 +513,28 @@ function applySet(){
 // ---- 今週のカレンダー: today + 6 days as tabs with the saved titles' counts; the chosen day's releases and events in the
 // panel. Strip event counts from this month's /days only (next-month days show –).
 let wkSel=0; // the panel's day (index in WEEK): today at first, this visit only
-function dayData(d,f,sel,ym){
+function dayData(d,f,sel){
   const names=sel.length?new Set(sel.map(c=>TITLES[c])):null, all=covered(d)?relsOn(d):null;
   const its=all&&(names?all.filter(x=>names.has(x.game)||isStar(x)):all);
-  const known=!!(f&&f.pref&&ev&&ev.counts&&d.slice(0,7)===ym);
-  const bg=known?ev.byGame[d]||null:null, total=known?ev.counts[d]||0:0;
-  const gs=known&&bg?EV_GAMES.filter(g=>bg[g.code]>0&&(!names||sel.includes(g.code))):[];
-  const c=known?evCount(d,sel,total,bg):null, n=c&&c.n!=null?c.n:null;
-  return {d, names, all, its, hidden:all?all.length-its.length:0, known, bg, total, gs, c, n, other:n!=null?total-n:null};
+  return {d, names, all, its, hidden:all?all.length-its.length:0, n:f&&f.pref?dayCount(d):null};
 }
-// The selection's events on day d among the /days total: {n} when exact, else {lo, hi}. by_game counts an event shared
-// by several games under each, so a sum over two or more kept games (of fewer than all) can overstate; the loaded rows
-// decide when they cover the whole day.
-function evCount(d,sel,total,bg){
-  if(!sel.length) return {n:total};
-  const evSel=sel.filter(c=>EVG[c]);
-  if(!evSel.length) return {n:0};
-  const q=evF&&evF.game?evF.game.split(','):[], r=evCountQ(d,evSel,total,bg,q);
-  // the query (the /events/ filter) left out some chosen games: what it holds is only a lower bound
-  return q.length&&evSel.some(c=>!q.includes(c)) ? {lo:r.n!=null?r.n:r.lo, hi:null} : r;
-}
-function evCountQ(d,evSel,total,bg,q){
-  const rows=ev.list.filter(e=>e.starts_on===d);
-  if(rows.length===total) return {n:rows.filter(e=>codesOf(e).some(c=>evSel.includes(c))).length};
-  if(!bg){
-    // without by_game the total is the selection's only when the query asked for exactly its games
-    return q.length===evSel.length&&q.every(c=>evSel.includes(c)) ? {n:total} : {lo:0, hi:total};
-  }
-  const kept=EV_GAMES.filter(g=>bg[g.code]>0&&evSel.includes(g.code)), rest=EV_GAMES.filter(g=>bg[g.code]>0&&!evSel.includes(g.code));
-  if(!rest.length) return {n:total};
-  if(kept.length<=1) return {n:kept.length?bg[kept[0].code]:0};
-  const sum=gs=>gs.reduce((a,g)=>a+bg[g.code],0);
-  const lo=Math.max(...kept.map(g=>bg[g.code]), total-sum(rest)), hi=Math.min(sum(kept),total);
-  return lo===hi ? {n:lo} : {lo, hi};
-}
+// the saved /events/ game filter, named (the event counts follow it: the API's query)
+const evGamesLabel = f => f&&f.game ? (gs=>gs.slice(0,4).map(c=>EVG[c].short).join('・')+(gs.length>4?` ほか${gs.length-4}`:''))(f.game.split(',')) : '';
 const dayLabel = i => i===0?'今日':i===1?'明日':'';
 function renderWeek(){
-  const f=EVENTS?(evF||evFilters()):null, ym=TODAY.slice(0,7), sel=homeSel();
+  const f=EVENTS?(evF||evFilters()):null, sel=homeSel();
   const loading=!!(f&&f.pref&&ev&&ev.loading);
   $('wkSub').textContent = `${md(WEEK[0])}〜${md(WEEK[6])}`;
-  const days=WEEK.map(d=>dayData(d,f,sel,ym));
+  const days=WEEK.map(d=>dayData(d,f,sel));
   const strip=$('wkStrip'), focused=strip.contains(document.activeElement), sx=strip.scrollLeft;
   strip.innerHTML = days.map((x,i)=>{
     const d=x.d, w=dowOf(d), [,m,dd]=d.split('-').map(Number), lb=dayLabel(i), on=i===wkSel;
     const rel=x.its?x.its.length:null, star=!!x.its&&x.its.some(isStar);
-    // events: null = no line (no location / no events build); '' = not known here (next month, loading, failed)
-    // a count, あり (some, number unknown), or '' when not known here
-    const en = !f||!f.pref ? null : !x.known ? '' : x.n!=null ? x.n : x.c.lo>0 ? 'あり' : '';
+    // events: null = no line (no location / no events build); '' = not known here (next month until its rows are in,
+    // loading, failed)
+    const en = !f||!f.pref ? null : x.n==null ? '' : x.n;
     const said=[`${m}月${dd}日(${DOW[w]})${lb?' '+lb:''}`, rel==null?'発売は新弾カレンダーで':`発売${rel}件${star?'（お気に入りあり）':''}`]
-      .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):en==='あり'?'イベントあり（件数はイベントカレンダーで）':`イベント${en}件`]);
+      .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):`イベント${en}件${evGamesLabel(f)?`（${evGamesLabel(f)}）`:''}`]);
     return `<button type="button" role="tab" class="wdy${i===0?' today':''}" id="wkT${i}" aria-selected="${on}" tabindex="${on?0:-1}" aria-controls="wkPanel" aria-label="${esc(said.join('、'))}">`
       + `<span class="dt"><b>${m}/${dd}</b><span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}</span>${lb?`<span class="lb">${lb}</span>`:''}</span>`
       + `<span class="ct"><span class="${rel?'':'z'}">発売 <b>${rel==null?'–':rel}</b>${star?'<span class="sm">★</span>':''}</span>`
@@ -563,18 +553,22 @@ function renderPanel(x,f,sel){
   p.setAttribute('aria-labelledby','wkT'+wkSel);
   const head=`<h3>${m}月${dd}日(${DOW[dowOf(d)]})${lb?`<span class="lb">${lb}</span>`:''}</h3>`;
   const rn = x.its&&x.its.length ? `<span class="n"><b>${x.its.length}</b> 件</span>` : '';
-  let evs='', evHref='';
+  let evs='', evHref='', live='';
   if(EVENTS){
     const e=evPart(d,f);
-    evs=`<section class="wps" aria-label="イベント"><h4>イベント${f.pref?`（${esc(LOC.locName(f.pref))}）`:''}${e.n?`<span class="n"><b>${e.n}</b> 件${e.min||''}</span>`:''}</h4><div id="evBody">${e.html}</div></section>`;
-    // an exact count of the chosen games opens their day view; else the saved /events/ filter's
-    const evSel=sel.filter(c=>EVG[c]);
-    evHref = !f.pref ? '/events/' : dayLink(f,d,x.n!=null&&evSel.length?EV_GAMES.filter(g=>evSel.includes(g.code)).map(g=>g.code).join(','):'');
+    const where=[f.pref&&LOC.locName(f.pref), evGamesLabel(f)].filter(Boolean).join('・');
+    evs=`<section class="wps" aria-label="イベント"><h4>イベント${where?`（${esc(where)}）`:''}${e.n?`<span class="n"><b>${e.n}</b> 件${e.min||''}</span>`:''}</h4><div id="evBody">${e.html}</div></section>`;
+    // the day view of the saved /events/ filter (the set counted here); without a location still that day
+    evHref = f.pref ? dayLink(f,d) : '/events/?'+(f.game?`game=${f.game}&`:'')+`range=custom&from=${d}&to=${d}`;
+    live = !f.pref ? '' : e.loading ? `${m}月${dd}日のイベントを読み込み中` : e.error ? `${m}月${dd}日のイベント情報を読み込めませんでした`
+      : e.n ? `${m}月${dd}日のイベント ${e.n}件${e.min||''}` : e.n===0 ? `${m}月${dd}日のイベントはありません` : '';
   }
   const kept=window.snEv?snEv.keep(p):null;
   p.innerHTML = head+`<section class="wps" aria-label="発売"><h4>発売${rn}</h4>${relPart(x)}</section>${evs}`
     + `<div class="wpf"><a class="go" href="/releases/#d=${d}">新弾カレンダーでこの日を見る ›</a>${evHref?`<a class="go" href="${esc(evHref)}">イベントカレンダーでこの日を見る ›</a>`:''}</div>`;
   if(kept) snEv.restore(p,kept);
+  // one polite status for the panel's events: loading, then the count, none or the error
+  const st=$('wkLive'); if(st.textContent!==live) st.textContent=live;
 }
 function selDay(i,focus){
   wkSel=i; renderWeek();
