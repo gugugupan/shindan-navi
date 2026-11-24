@@ -20,6 +20,8 @@ const { values: opts } = parseArgs({
     sqlite: { type: 'string', default: join(API_DIR, '.local', 'events.sqlite3') },
     dist: { type: 'string', default: join(REPO_DIR, 'dist') },
     'dev-login': { type: 'boolean', default: false },
+    // serve the database as it is (e.g. a schema from before a migration, tools/verify/landing.mjs)
+    'no-migrate': { type: 'boolean', default: false },
   },
 });
 
@@ -31,7 +33,7 @@ await build({
 });
 const mod = await import(`${outfile}?t=${Date.now()}`);
 const worker = mod.default;
-const db = new SqliteD1(opts.sqlite).migrate();
+const db = opts['no-migrate'] ? new SqliteD1(opts.sqlite) : new SqliteD1(opts.sqlite).migrate();
 const dist = resolve(opts.dist);
 
 const SECRETS = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'SESSION_SECRET'];

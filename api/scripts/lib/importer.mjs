@@ -260,8 +260,8 @@ function eventRow(ev, now) {
 }
 
 /**
- * State of an empty (freshly migrated) database. `landing` is null while landing_pages does not exist (migration 0007
- * pending, docs/design/event-landing.md): the plan then writes no landing rows.
+ * State of an empty (freshly migrated) database. `landing` is null while landing_pages does not exist (a database
+ * before migration 0007, docs/design/event-landing.md): the plan then writes no landing rows.
  */
 export const emptyState = ({ landing = false } = {}) => ({ events: new Map(), imports: [], siteMeta: {}, dayCounts: new Map(), landing: landing ? new Map() : null, landingContent: landing ? new Map() : null });
 
@@ -302,7 +302,7 @@ export const stateSiteMetaSql = () => 'SELECT key, value FROM site_meta';
 export const stateDayCountsSql = () => 'SELECT loc, starts_on, game_mask, event_type_code, n FROM day_counts';
 export const stateLandingSql = () => 'SELECT game_code, loc, content_hash FROM landing_pages';
 /**
- * landing_pages hashes through `query(sql) -> rows`, or null when the table does not exist (migration 0007 pending).
+ * landing_pages hashes through `query(sql) -> rows`, or null when the table does not exist (before migration 0007).
  * Asks sqlite_master first instead of reading error text, so a missing table never depends on how a client reports it.
  */
 export function readLandingState(query) {

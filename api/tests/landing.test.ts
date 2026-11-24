@@ -16,7 +16,9 @@ const TODAY = '2026-11-18';
 const TEMPLATE = '<!doctype html><html><head><!--LP_HEAD--><title>shell</title>\n<meta name="robots" content="noindex"><!--/LP_HEAD--></head>'
   + '<body><div class="wrap"><!--LP_MAIN--><main>empty</main><!--/LP_MAIN--></div></body></html>';
 
-const pendingDb = () => new SqliteD1().migrate(undefined, { pending: true });
+const landingDb = () => new SqliteD1().migrate();
+/** A database from before migration 0007 (no landing_pages). */
+const pre0007Db = () => new SqliteD1().migrate(undefined, { before: '0007' });
 
 function importInto(db: SqliteD1, events: Ev[], now = NOW, runs: Record<string, Ev> = {}) {
   const accepted = loadAll(writeDataDir(events, runs)).filter((r) => !r.errors.length);
@@ -53,7 +55,7 @@ const tokyo = (n: number, seed = 0): Ev[] => synthetic(n * 4, seed).filter((e) =
 
 describe('landing rows (importer)', () => {
   it('writes 48 rows per imported game, nothing on a same-day re-run, and counts them in the cost', () => {
-    const db = pendingDb();
+    const db = landingDb();
     const plan = importInto(db, synthetic(400));
     expect(plan.stats.landing_pages).toBe(4 * 48);
     expect(plan.notes).toEqual([]);
@@ -72,12 +74,12 @@ describe('landing rows (importer)', () => {
     const evs: Ev[] = GAMES.flatMap((g, gi) => synthetic(4, gi * 10).map((e, i) => ({ ...e, id: `x:${g.code}${i}`, external_id: `${g.code}${i}`, game_code: g.code })));
     const runs = Object.fromEntries(GAMES.map((g) => [g.code, run(g.code, 4)]));
     for (const e of evs) { e.source_code = runs[e.game_code].source_code; e.id = `${{ bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan', bushinavi: 'bnavi' }[e.source_code as string]}:${e.external_id}`; }
-    const plan = importInto(pendingDb(), evs, NOW, runs);
+    const plan = importInto(landingDb(), evs, NOW, runs);
     expect(plan.stats.landing_pages).toBe(624);
   });
 
   it('skips the rows with a note while the table is missing', () => {
-    const db = newDb();
+    const db = pre0007Db();
     const plan = importInto(db, synthetic(40));
     expect(plan.stats.landing_pages).toBe(0);
     expect(plan.notes).toEqual([LANDING_MISSING]);
@@ -124,7 +126,7 @@ describe('landing rows (importer)', () => {
 
 describe('landing rows: review fixes', () => {
   it('an incomplete run keeps counting the events it did not list', () => {
-    const db = pendingDb();
+    const db = landingDb();
     const all = tokyo(80);
     importInto(db, all);
     const row = () => db.db.prepare("SELECT days_json, events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev;
@@ -143,7 +145,7 @@ describe('landing rows: review fixes', () => {
   });
 
   it('an empty incomplete run keeps showing the events D1 keeps', () => {
-    const db = pendingDb();
+    const db = landingDb();
     importInto(db, tokyo(80));
     const row = () => db.db.prepare("SELECT days_json, events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev;
     const before = row();
@@ -157,7 +159,7 @@ describe('landing rows: review fixes', () => {
   });
 
   it('builds rows from the copy D1 keeps when games disagree about a shared event', () => {
-    const db = pendingDb();
+    const db = landingDb();
     const [base] = tokyo(4);
     const id = base.id;
     const opcg = { ...base, name: '【SYNTHETIC】OPCG copy', venue: { ...base.venue, region_code: 'JP-13', region_name: '東京都' } };
@@ -174,7 +176,7 @@ describe('landing rows: review fixes', () => {
   });
 
   it("a one-game import that moves a shared event rebuilds the other game's rows at both locations", () => {
-    const db = pendingDb();
+    const db = landingDb();
     const [first] = tokyo(4);
     const at = (region_code: string, region_name: string) => ({ ...first.venue, region_code, region_name });
     const base: Ev = { ...first, venue: at('JP-13', '東京都') };
@@ -192,7 +194,7 @@ describe('landing rows: review fixes', () => {
   });
 
   it('reads the landing window in keyset pages along idx_events_loc', () => {
-    const db = pendingDb();
+    const db = landingDb();
     importInto(db, synthetic(400));
     const sqls: string[] = [];
     const query = (sql: string) => { sqls.push(sql); return db.db.prepare(sql).all() as Ev[]; };
@@ -222,7 +224,7 @@ describe('landing rows: review fixes', () => {
     const first = planImport(accepted, emptyState({ landing: true }), { now: NOW });
     const empty = loadAll(writeDataDir([], { OPCG: run('OPCG', 0, { complete: false, fetched_at: '2026-11-18T01:00:00Z' }) }));
     const second = planImport(empty, first.state, { now: NOW + 60 });
-    const db = pendingDb();
+    const db = landingDb();
     const shown = () => JSON.parse((db.db.prepare("SELECT events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev).events_json);
     db.execAll(first.statements);
     const before = shown();
@@ -252,7 +254,7 @@ describe('landing rows: review fixes', () => {
     const r = landingRows(run('OPCG', quoty.length), quoty, TODAY).find((x: Ev) => x.loc === 'JP-13')!;
     const lit = (v: string) => Buffer.byteLength(`'${v.replaceAll("'", "''")}'`);
     expect(lit(r.events_json) + lit(r.days_json)).toBeLessThanOrEqual(MAX_LANDING_BYTES);
-    const plan = importInto(pendingDb(), quoty);
+    const plan = importInto(landingDb(), quoty);
     expect(plan.stats.inserted).toBe(quoty.length);
     const ins = plan.statements.filter((x) => x.startsWith('INSERT INTO landing_pages'));
     expect(ins.length).toBeGreaterThanOrEqual(1);
@@ -266,7 +268,7 @@ describe('landing rows: review fixes', () => {
     expect(c).not.toHaveProperty('timezone');
     expect(c).not.toHaveProperty('registration_opens_at');
     expect(c).not.toHaveProperty('ends_at');
-    const db = pendingDb();
+    const db = landingDb();
     importInto(db, tokyo(20));
     const evs = JSON.parse((db.db.prepare("SELECT events_json FROM landing_pages WHERE game_code = 'OPCG' AND loc = 'JP-13'").get() as Ev).events_json);
     evs[0] = { ...evs[0], timezone: 'Not/A_Zone', time_precision: 'datetime', starts_at: `${evs[0].starts_on}T10:00:00+09:00` };
@@ -295,7 +297,7 @@ describe('routing', () => {
   });
 
   it('leaves the paths to the assets while the flag is off', async () => {
-    const db = pendingDb();
+    const db = landingDb();
     importInto(db, tokyo(60));
     for (const env of [{ LANDING_ENABLED: undefined }, { LANDING_ENABLED: '0' }]) {
       for (const p of ['/events/onepiece/tokyo/', '/events/sitemap.xml']) {
@@ -320,7 +322,7 @@ describe('routing', () => {
 describe('pages (flag on)', () => {
   let db: SqliteD1;
   beforeEach(() => {
-    db = pendingDb();
+    db = landingDb();
     importInto(db, tokyo(80));
   });
 
@@ -381,7 +383,7 @@ describe('pages (flag on)', () => {
   });
 
   it('answers 404 noindex while the table is missing, and passes through without a shell', async () => {
-    const bare = newDb();
+    const bare = pre0007Db();
     importInto(bare, tokyo(20));
     const p = await get(bare, '/events/onepiece/tokyo/');
     expect(p.res.status).toBe(404);
@@ -438,7 +440,7 @@ describe('cache and limits', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('caches a page per data version, day and shell; a hit reads no landing row', async () => {
-    const raw = pendingDb();
+    const raw = landingDb();
     importInto(raw, tokyo(40));
     let reads = 0;
     const db = new Proxy(raw, {
@@ -461,7 +463,7 @@ describe('cache and limits', () => {
   });
 
   it('rate-limits misses with an HTML-safe 429 and answers 503 when D1 fails', async () => {
-    const db = pendingDb();
+    const db = landingDb();
     importInto(db, tokyo(20));
     const limiter = { limit: async () => ({ success: false }) } as unknown as RateLimit;
     const r = await get(db, '/events/onepiece/tokyo/', { API_LIMIT: limiter });

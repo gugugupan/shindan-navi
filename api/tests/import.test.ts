@@ -71,7 +71,8 @@ describe('importer', () => {
     const runs = Object.fromEntries(['OPCG', 'UATCG', 'CONAN', 'PTCG'].map((g) => [g, run(g, 5, { fetched_at: '2026-11-19T00:00:00Z' })]));
     const plan = importDir(db, writeDataDir(changed, runs), 2_000).plan;
     expect(plan.stats).toMatchObject({ inserted: 0, rewritten: 1, mask_updates: 0, imports: 4 });
-    expect(estimateCost(plan.stats, emptyState()).rowsWritten).toBe(2 + 4 + 2);
+    // + the 48 landing rows of each game: a new run (fetched_at) rewrites them
+    expect(estimateCost(plan.stats, emptyState()).rowsWritten).toBe(2 + 4 + 2 + 4 * 48);
     const rows = db.db.prepare('SELECT id, updated_at, created_at FROM events ORDER BY id').all();
     expect(rows.filter((r: Ev) => r.updated_at === 2_000).map((r: Ev) => r.id)).toEqual([evs[0].id]);
     expect(rows.every((r: Ev) => r.created_at === 1_000)).toBe(true);

@@ -4,10 +4,9 @@
 //
 //   node scripts/import-events.mjs [--data DIR] [--games OPCG,PTCG] [--target sqlite|wrangler|remote]
 //                                  [--sqlite FILE] [--out FILE] [--dry-run] [--plan] [--yes] [--max-writes N]
-//                                  [--allow-incomplete OPCG,CONAN] [--allow-shrink] [--apply-pending]
+//                                  [--allow-incomplete OPCG,CONAN] [--allow-shrink]
 //
-// sqlite:   node:sqlite file for dev-node / tests (always applied unless --dry-run). --apply-pending also applies
-//           api/migrations-pending/ (local checks only; the other targets never do).
+// sqlite:   node:sqlite file for dev-node / tests (always applied unless --dry-run).
 // wrangler: local D1 (.wrangler/state) through wrangler --local.
 // remote:   the production D1. Needs env D1_DATABASE_ID. Without flags: validate and estimate against an
 //           empty database (first-import cost), no remote call. --plan: also read the remote rows and print
@@ -43,7 +42,6 @@ const { values: opts } = parseArgs({
     'max-writes': { type: 'string', default: '90000' },
     'allow-incomplete': { type: 'string', default: '' },
     'allow-shrink': { type: 'boolean', default: false },
-    'apply-pending': { type: 'boolean', default: false },
   },
 });
 const fail = (msg, code = 1) => {
@@ -51,7 +49,6 @@ const fail = (msg, code = 1) => {
   process.exit(code);
 };
 if (!['wrangler', 'sqlite', 'remote'].includes(opts.target)) fail('--target must be sqlite, wrangler or remote', 2);
-if (opts['apply-pending'] && opts.target !== 'sqlite') fail('--apply-pending works with --target sqlite only: pending migrations are applied by the owner', 2);
 const maxWrites = Number(opts['max-writes']);
 if (!Number.isInteger(maxWrites) || maxWrites < 0) fail('--max-writes must be a non-negative integer', 2);
 const remote = opts.target === 'remote';
@@ -142,7 +139,7 @@ let config = null;
 let stateLabel;
 if (opts.target === 'sqlite') {
   mkdirSync(dirname(resolve(opts.sqlite)), { recursive: true });
-  sqliteDb = new SqliteD1(opts.sqlite).migrate(undefined, { pending: opts['apply-pending'] });
+  sqliteDb = new SqliteD1(opts.sqlite).migrate();
   state = sqliteDb.readState();
   stateLabel = opts.sqlite;
 } else if (opts.target === 'wrangler') {
