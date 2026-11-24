@@ -823,7 +823,7 @@ let dlgItems=null, dlgTitle='';
 function openDetail(items,title,keepOpen){
   dlgItems=items; dlgTitle=title;
   if(!keepOpen) track('view_item', items.length===1 ? {game:items[0].game, item_name:items[0].name} : {item_name:title, count:items.length});
-  document.getElementById('dlgBody').innerHTML=`<h2 class="dl-day">${title}</h2>`+items.map(d=>`<div class="dl-item" style="--h:${HUE[d.game]}">${thumb(d)}<div>
+  document.getElementById('dlgBody').innerHTML=`<h2 class="dl-day">${title}</h2>`+(items.length?'':'<p class="dl-none">この日の発売予定はありません。</p>')+items.map(d=>`<div class="dl-item" style="--h:${HUE[d.game]}">${thumb(d)}<div>
     <div class="dl-head"><span class="tag">${gi(d.game)}${esc(d.game)}</span>${starBtn(d,true)}</div>
     <h4>${esc(d.name)}</h4>
     <dl><dt>発売日</dt><dd>${fmtDate(d.date)}</dd>
@@ -965,6 +965,6 @@ render();
 if(deep){
   history.replaceState(history.state,'',location.pathname+location.search);
   if(deepItems.length) openDetail(deepItems,fmtDate(deepItems[0].date)+(deepItems.length>1?` · ${deepItems.length}件`:''));
-  else if(deepDay){ openDetail([],fmtDate(deepDay)); document.getElementById('dlgBody').insertAdjacentHTML('beforeend','<p class="dl-none">この日の発売予定はありません。</p>'); }
+  else if(deepDay) openDetail([],fmtDate(deepDay));
 }
 </script>
