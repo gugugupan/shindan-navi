@@ -252,7 +252,8 @@ def check_home(today, head, ov):
         fail(f'/: HOME items ({len(got)}) != releases {lo}..{hi} ({len(want)}); missing {sorted(want - set(got))[:3]} extra {sorted(set(got) - want)[:3]}')
     if any(k not in h.get('counts', {}) for k in {i.get('game') for i in h.get('items', [])}): fail('/: HOME counts lack a title')
     events = os.path.exists(os.path.join(DIST, 'events/index.html'))
-    if events != ('id="evBody"' in src): fail(f'/: event block {"missing" if events else "present without /events/"}')
+    # the 表示中 line's location (EVENTS parts) is the page's only static event marker; the day view builds the rest
+    if events != ('id="hsL"' in src): fail(f'/: event parts {"missing" if events else "present without /events/"}')
     # no static release list or about block (owner decision 2026-11-19): the h1 heads the page, the old name stays findable
     if 'class="seo' in src: fail('/: static release list / about block is back')
     h1 = re.findall(r'<h1 class="hbar"><b id="hDate"></b><span>([^<]+)</span></h1>', src)
