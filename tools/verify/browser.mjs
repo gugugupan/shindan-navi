@@ -531,10 +531,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['OPCG', 'UATCG']]]
     .filter(([d]) => d.slice(0, 7) === ym).map(([d, codes], i) => ({ d, codes, i }));
   // nobg: /days answers cached before by_game existed; hold: /days waits for it (a slow answer)
-  let nobg = false, hold = null;
+  let nobg = false, hold = null, metaHold = null;
   await page.route(EVENTS_API, async route => {
     const u = new URL(route.request().url()), gf = (u.searchParams.get('game') || '').split(',').filter(Boolean);
-    if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [], prefectures: [{ code: 'JP-13', count: 7 }, { code: 'JP-27', count: 2 }] } });
+    if (u.pathname.endsWith('/events/meta')) { if (metaHold) await metaHold; return route.fulfill({ json: { games: [], types: [], prefectures: [{ code: 'JP-13', count: 7 }, { code: 'JP-27', count: 2 }] } }); }
     const rows = EVTS.filter(e => !gf.length || e.codes.some(c => gf.includes(c)));
     if (!u.pathname.endsWith('/days')) return route.fulfill({ json: { events: rows.filter(e => e.d <= WEEK1).map(e => ({ id: `s${e.i}`, name: `テスト大会 ${e.i}`,
       game_code: e.codes[0], game_codes: e.codes, starts_on: e.d, time_precision: 'date', timezone: 'Asia/Tokyo', attendance_mode: 'offline',
@@ -757,6 +757,21 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       await page.locator('#hsOk').click();
       st = await state();
       if (JSON.parse(st.saved[1]).game !== code || st.titles !== short(code)) fail(where, `confirm after the picker: "${st.titles}" ${st.saved[1]}`);
+    }
+    // the picker's counts arrive after it opened (first /events/meta): the focused location keeps focus
+    if (HAS_EVENTS) {
+      const p2 = page;
+      await setStore({ 'tcg.ev.filters': { pref: 'JP-13' } });
+      await page.reload({ waitUntil: 'networkidle' });
+      let release; metaHold = new Promise(r => { release = r; });
+      await p2.locator('#locBtn').click();
+      await p2.locator('#prefDlg[open] [data-pref="JP-27"]').focus();
+      if (await p2.locator('#prefDlg [data-pref="JP-27"] em').count()) fail(where, 'meta: counts before the answer');
+      release(); metaHold = null;
+      await p2.waitForFunction(() => document.querySelector('#prefDlg [data-pref="JP-27"] em'));
+      const f2 = await p2.evaluate(() => document.activeElement?.dataset?.pref || document.activeElement?.tagName);
+      if (f2 !== 'JP-27') fail(where, `meta: focus moved to ${f2} when the counts arrived`);
+      await p2.keyboard.press('Escape');
     }
     // account sync while the dialog is open: confirming untouched titles keeps the synced ones; touched ones win
     {
