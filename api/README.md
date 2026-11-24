@@ -360,8 +360,9 @@ all games, so on a busy day one game can fill it: then, and only then, the page 
 total and a link. Uncached, one prefecture: ≤ ~290 + ~103 (+ ~103) rows (Tokyo, unfiltered; filtered ≤ ~290 + ~444
 (+ ~444)). On the data of 2026-11-19 Tokyo unfiltered needs the third request (PTCG 104 of 157 events), Osaka + PTCG
 and online do not. `/events/meta` (1 row, same key as `/events/`) only when the location picker is opened, for its
-counts; no `/geo`. 今週のカレンダー (today + 6) is the page's day view: choosing another day reuses the loaded rows when
-they cover it (a later row or the month's end is loaded, or all of the day's `/days` count is) and otherwise asks once
+counts; no `/geo`. 今週のカレンダー (today + 6) is the page's day view: choosing another day reuses any loaded page that holds
+it (a page runs from its first day to that month's end in start order: it holds a later day of the month once a later
+row or its end is loaded; or all of the day's `/days` count is loaded) and otherwise asks once
 for that day's first page, `/events` from the day to the 1st of the following month with `limit=50` (the `/events/` day
 view's first request, same key; next-month days too, which have no `/days` here and count from those rows). At most
 one request per chosen day, kept for the visit (≤ ~103 rows uncached for Tokyo unfiltered, ≤ ~444 filtered); none
