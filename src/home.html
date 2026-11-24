@@ -538,11 +538,15 @@ function evCount(d,sel,total,bg){
   if(!sel.length) return {n:total};
   const evSel=sel.filter(c=>EVG[c]);
   if(!evSel.length) return {n:0};
+  const q=evF&&evF.game?evF.game.split(','):[], r=evCountQ(d,evSel,total,bg,q);
+  // the query (the /events/ filter) left out some chosen games: what it holds is only a lower bound
+  return q.length&&evSel.some(c=>!q.includes(c)) ? {lo:r.n!=null?r.n:r.lo, hi:null} : r;
+}
+function evCountQ(d,evSel,total,bg,q){
   const rows=ev.list.filter(e=>e.starts_on===d);
   if(rows.length===total) return {n:rows.filter(e=>codesOf(e).some(c=>evSel.includes(c))).length};
   if(!bg){
     // without by_game the total is the selection's only when the query asked for exactly its games
-    const q=evF&&evF.game?evF.game.split(','):[];
     return q.length===evSel.length&&q.every(c=>evSel.includes(c)) ? {n:total} : {lo:0, hi:total};
   }
   const kept=EV_GAMES.filter(g=>bg[g.code]>0&&evSel.includes(g.code)), rest=EV_GAMES.filter(g=>bg[g.code]>0&&!evSel.includes(g.code));
@@ -612,7 +616,8 @@ function renderPanel(x,f,sel,loading,failed){
       const list = evs.length ? `<ul>${evs.map(e=>{ const g=EVG[codesOf(e).find(keep)]||{c:'#8a8f9e',cd:'#8a8f9e'}; const u=snEv.safeUrl(e.source_url); return `<li class="e"><a${u?` href="${esc(u)}" target="_blank" rel="noopener"`:''} style="${gvars(g)}" title="${esc(e.name)}"><i aria-hidden="true"></i>${timeOf(e)?`<b>${timeOf(e)}</b>`:''}${esc(snEv.name(e))}</a></li>`; }).join('')}</ul>` : '';
       // not exact: the per-game chips and the day's total under the saved /events/ filter, never a summed count
       const all=`<a class="rl" href="${esc(dayLink(f,d))}">イベントカレンダーで見る（この日 全 <b>${x.total}</b>件）›</a>`;
-      evp = x.n ? `${list}${chips?`<div class="gcs">${chips}</div>`:''}<a class="rl" href="${esc(dayLink(f,d,one))}">イベント <b>${x.n}</b>件をイベントカレンダーで見る ›</a>`
+      // an exact count opens the day view of the same games
+      evp = x.n ? `${list}${chips?`<div class="gcs">${chips}</div>`:''}<a class="rl" href="${esc(dayLink(f,d,EV_GAMES.filter(g=>evSel.includes(g.code)).map(g=>g.code).join(',')))}">イベント <b>${x.n}</b>件をイベントカレンダーで見る ›</a>`
         : x.n===0 ? `<p class="q">${names?'選択中のタイトルのイベントなし':'イベントなし'}</p>`
         : x.c.lo>0 ? `${list}${chips?`<div class="gcs">${chips}</div>`:''}${all}`
         : `<p class="q">選択中のタイトルの件数はイベントカレンダーでご確認ください。</p>${all}`;

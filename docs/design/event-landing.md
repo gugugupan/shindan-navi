@@ -2,7 +2,7 @@
 
 Status: built dark. Scope approved by the owner 2026-11-20 ("624 event landing pages (new page family) + h1 above
 list exception"). Nothing changes on a push until the repo variable `LANDING_ENABLED=1` is set **and** migration
-0007 is applied (go-live below).
+0007 is applied by an import (go-live below).
 
 ## URLs
 
@@ -14,7 +14,7 @@ list exception"). Nothing changes on a push until the repo variable `LANDING_ENA
 
 Romaji instead of `JP-13`: readable in results and shares; the mapping is a fixed table next to `PREFECTURES`.
 
-## Storage: `api/migrations-pending/0007_landing_pages.sql`
+## Storage: `api/migrations/0007_landing_pages.sql`
 
 ```sql
 landing_pages(game_code TEXT, loc TEXT /* JP-01..JP-47 | online */, fetched_at TEXT /* the game's run */,
@@ -32,9 +32,9 @@ landing_pages(game_code TEXT, loc TEXT /* JP-01..JP-47 | online */, fetched_at T
   Real data 2026-11-23: 624 rows, average 34 KB, largest 72 KB, no day dropped; Tokyo keeps 4 a day of 30-40.
   Rendering filters by today's date, so a row stays correct (only shorter) until the next import.
 - `WITHOUT ROWID` + composite primary key: no secondary index, so 1 written row per row.
-- Pending, not in `api/migrations/`: `import:remote -- --yes` applies `api/migrations/` automatically and the
-  owner approves this one separately. wrangler applies by name, so 0007 after the live 0008 is fine
-  (check with `migrations list` first).
+- Kept in `api/migrations-pending/` until the owner's review, then moved to `api/migrations/` (2026-11-24), so the
+  next `import:remote -- --yes` applies it with its `migrations apply`. wrangler applies by name, so 0007 after the
+  live 0008 is fine (`migrations list` shows it pending first). Code works without it (404 pages, skipped rows).
 
 ## Importer write path and budget
 
@@ -110,7 +110,7 @@ Every landing request (hit or miss) is a Worker invocation (Free: 100k/day), unl
 
 ## Tests
 
-- `api/tests/landing.test.ts` (vitest, SQLite with pending migrations): importer rows (budget, byte cap, re-run
+- `api/tests/landing.test.ts` (vitest, SQLite with every migration, and before 0007 for the missing-table cases): importer rows (budget, byte cap, re-run
   writes 0, missing table skips), routing with the flag off (assets passthrough) and on, 404 / 301, indexable vs
   noindex (0 events, stale), JSON-LD shape, sitemap contents, cache key by version + day, rate-limit, D1 failure.
 - `api/tests/evrow.test.ts`: TS rows == `src/evrow.html` rows for fixture events; palette / icon / slug parity with
@@ -121,8 +121,9 @@ Every landing request (hit or miss) is a Worker invocation (Free: 100k/day), unl
 
 ## Go-live (owner)
 
-1. Merge (no visible change). 2. After review, `git mv api/migrations-pending/0007_landing_pages.sql
-api/migrations/` in a small commit and push. 3. Next import (`import:remote -- --plan`, then `--yes`) applies 0007
-and writes the landing rows (plan shows `landing_pages N`). 4. Set repo variable `LANDING_ENABLED=1`, re-run Deploy.
-5. Spot-check `/events/onepiece/tokyo/` and `/events/sitemap.xml`; submit the sitemap in Search Console.
+1. Merge (no visible change; 0007 is now in `api/migrations/`). 2. Next import (`import:remote -- --plan`, then
+`--yes`): `migrations list` shows 0007 pending, `--yes` applies it and writes the landing rows (the plan shows
+`landing_pages N`; the `--plan` run before the migration still says the table is missing). 3. Set repo variable
+`LANDING_ENABLED=1`, re-run Deploy.
+4. Spot-check `/events/onepiece/tokyo/` and `/events/sitemap.xml`; submit the sitemap in Search Console.
 Rollback: unset `LANDING_ENABLED` and re-run Deploy (the table can stay).

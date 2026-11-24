@@ -2,8 +2,8 @@
 // (docs/design/event-landing.md). Two passes over api/scripts/dev-node.mjs with a throwaway SQLite database:
 //   off: dist/ as built now (flag off) and LANDING_ENABLED unset: the paths are the static 404, robots.txt and the
 //        build have no trace of the pages;
-//   on:  rebuilds dist/ with LANDING_ENABLED=1 (and VOICES_ENABLED=1 as production), imports events with migration
-//        0007 applied, serves with LANDING_ENABLED=1, checks pages, noindex rules, JSON-LD and the sitemap over HTTP,
+//   on:  rebuilds dist/ with LANDING_ENABLED=1 (and VOICES_ENABLED=1 as production), imports events into a database
+//        with every migration and into one from before 0007 (no landing_pages), serves with LANDING_ENABLED=1, checks pages, noindex rules, JSON-LD and the sitemap over HTTP,
 //        then drives one page in headless Chrome at desktop and mobile widths. dist/ is rebuilt without the flag after.
 //
 //   node tools/verify/landing.mjs --today YYYY-MM-DD [--data DIR] [--out .verify]   # needs api/node_modules, .venv
@@ -77,9 +77,10 @@ function syntheticDir() {
   return dir;
 }
 
-function seed(file, pending) {
+/** pre0007: a database from before migration 0007 (no landing_pages), as D1 is until the first import applies it. */
+function seed(file, pre0007) {
   for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });
-  const db = new SqliteD1(file).migrate(undefined, { pending });
+  const db = new SqliteD1(file).migrate(undefined, { before: pre0007 ? '0007' : null });
   const accepted = loadAll(DATA ? path.resolve(DATA) : syntheticDir()).filter((r) => !r.errors.length);
   const plan = planImport(accepted, db.readState({ landingFrom: TODAY }), { now: Math.floor(Date.parse(`${TODAY}T10:00:00+09:00`) / 1000) });
   db.execAll(plan.statements);
@@ -88,8 +89,8 @@ function seed(file, pending) {
   return plan;
 }
 
-async function serve(file, env) {
-  const server = spawn(process.execPath, ['scripts/dev-node.mjs', '--port', String(PORT), '--sqlite', file], {
+async function serve(file, env, args = []) {
+  const server = spawn(process.execPath, ['scripts/dev-node.mjs', '--port', String(PORT), '--sqlite', file, ...args], {
     cwd: API, stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, LANDING_ENABLED: '', DEV_TODAY: TODAY, ...env },
   });
   await new Promise((ok, no) => {
@@ -109,7 +110,7 @@ const ldOf = (html) => [...html.matchAll(/<script type="application\/ld\+json">(
   if (fs.readFileSync(path.join(ROOT, 'dist/robots.txt'), 'utf8').includes('/events/sitemap.xml')) fail('off', 'robots.txt names the landing sitemap');
   if (/id="lpl"|LP_GAMES|<!--\/?LANDING-->/.test(fs.readFileSync(path.join(ROOT, 'dist/events/index.html'), 'utf8'))) fail('off', '/events/ has landing links');
   const file = path.join(OUT, 'landing-off.sqlite3');
-  seed(file, true);
+  seed(file, false);
   const server = await serve(file, {});
   try {
     for (const p of ['/events/onepiece/tokyo/', '/events/sitemap.xml', '/_landing']) {
@@ -129,19 +130,22 @@ try {
   if (!shell.includes('<!--LP_MAIN-->') || !shell.includes('<meta name="robots" content="noindex">') || /\/\*[A-Z_]+\*\//.test(shell)) fail('on', 'dist/_landing.html shell slots');
   if (fs.readFileSync(path.join(ROOT, 'dist/sitemap.xml'), 'utf8').includes('/events/onepiece/')) fail('on', 'static sitemap lists landing pages');
 
-  // migration missing: pages 404 noindex, importer skips with its note
+  // before migration 0007: pages 404 noindex, importer skips with its note
   const bare = path.join(OUT, 'landing-bare.sqlite3');
-  const barePlan = seed(bare, false);
+  const barePlan = seed(bare, true);
   if (barePlan.stats.landing_pages !== 0 || !barePlan.notes.length) fail('on/bare', 'importer wrote landing rows without the table');
-  let server = await serve(bare, { LANDING_ENABLED: '1' });
+  let server = await serve(bare, { LANDING_ENABLED: '1' }, ['--no-migrate']);
   try {
     const r = await get('/events/onepiece/tokyo/');
     if (r.status !== 404 || !noindex(r)) fail('on/bare', `page ${r.status}, noindex ${noindex(r)}`);
     if ((await get('/events/sitemap.xml')).text.includes('<url>')) fail('on/bare', 'sitemap lists pages');
   } finally { server.kill(); }
+  const bareDb = new SqliteD1(bare);
+  if (bareDb.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'landing_pages'").get()) fail('on/bare', 'landing_pages exists: the pre-0007 case did not run');
+  bareDb.close();
 
   const file = path.join(OUT, 'landing-on.sqlite3');
-  const plan = seed(file, true);
+  const plan = seed(file, false);
   if (plan.stats.landing_pages > 624) fail('on', `${plan.stats.landing_pages} landing writes`);
   server = await serve(file, { LANDING_ENABLED: '1' });
   try {
@@ -216,9 +220,22 @@ try {
         const one = await ev.$$eval('#lpl a', (as) => as.map((a) => a.getAttribute('href')));
         if (JSON.stringify(one) !== JSON.stringify(['/events/onepiece/tokyo/'])) fail(`${vp} /events/`, `links with OPCG chosen: ${one}`);
         await ev.evaluate(() => localStorage.clear());
-        await ev.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'networkidle' });
+        // without a title the links wait for /events/meta (held back here until the list has loaded: meta last)
+        let release;
+        const held = new Promise((r) => { release = r; });
+        await ev.route('**/api/v1/events/meta', async (route) => { await held; await route.continue(); });
+        await ev.goto(`${BASE}/events/?pref=JP-13`, { waitUntil: 'domcontentloaded' });
+        await ev.waitForSelector('#list .ev, #calv .cd', { timeout: 15000 }).catch(() => fail(`${vp} /events/`, 'list did not load'));
+        if (await ev.$$eval('#lpl a', (as) => as.length) || !(await ev.locator('#lpl').isHidden())) fail(`${vp} /events/`, 'links shown before meta');
+        release();
+        await ev.waitForSelector('#lpl a', { timeout: 15000 }).catch(() => fail(`${vp} /events/`, 'no links after meta'));
+        await ev.unroute('**/api/v1/events/meta');
         const all = await ev.$$eval('#lpl a', (as) => as.map((a) => a.getAttribute('href')));
-        if (!all.length || !all.every((h) => /^\/events\/[a-z-]+\/tokyo\/$/.test(h))) fail(`${vp} /events/`, `links without a title: ${all}`);
+        // the SYNTHETIC fixture has ONE PIECE and Pokémon events in Tokyo (in /events/ game order)
+        const want = DATA ? null : ['/events/onepiece/tokyo/', '/events/pokemon/tokyo/'];
+        if (want ? JSON.stringify(all) !== JSON.stringify(want) : !all.length || !all.every((h) => /^\/events\/[a-z-]+\/tokyo\/$/.test(h))) {
+          fail(`${vp} /events/`, `links without a title: ${all}`);
+        }
         for (const h of all) if ((await get(h)).status !== 200) fail(`${vp} /events/`, `${h} not 200`);
         const lsmall = await ev.$$eval('#lpl, #lpl *', (els) => els.filter((e) => !e.closest('.gi') && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length);
         if (lsmall) fail(`${vp} /events/`, 'landing links under 12px');
