@@ -116,8 +116,9 @@ def static_list(items,heading,note,show_game=True):
     if not items: return ''
     days={}
     for d in items: days.setdefault(d['date'],[]).append(d)
-    # closed by default (owner 2026-11-24); the full list stays in the HTML for crawlers
-    out=[f'<section class="seo seo-list" aria-labelledby="seo-h"><details class="seo-fold" id="seo-list"><summary><h2 id="seo-h">{esc(heading)}<span class="ct">（{len(items)}件）</span></h2></summary><p>{esc(note)}</p><div class="seo-days">']
+    # closed by default (owner 2026-11-24); the full list stays in the HTML for crawlers. The h2 sits outside the
+    # summary, which some screen readers expose as a button that flattens a heading inside it
+    out=[f'<section class="seo seo-list" aria-labelledby="seo-h"><h2 id="seo-h">{esc(heading)}<span class="ct">（{len(items)}件）</span></h2><details class="seo-fold" id="seo-list"><summary><span class="so">一覧を表示</span><span class="sc">一覧を閉じる</span></summary><p>{esc(note)}</p><div class="seo-days">']
     for k,its in days.items():
         out.append(f'<div class="seo-day"><h3><time datetime="{k}">{fmt(k,True)}</time></h3><ul>')
         for d in its:
