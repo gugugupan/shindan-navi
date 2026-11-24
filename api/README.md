@@ -322,7 +322,7 @@ month per request.
 | `/voices` (話題カレンダー): all snapshots / `/voices/latest` / voices version | 1 per snapshot (≈ 365 a year) / 1 / 1 |
 | Event landing page `/events/<slug>/<pref>/` / `/events/sitemap.xml` (only with `LANDING_ENABLED=1`) | 1 / 624 |
 
-**Event landing pages** (docs/design/event-landing.md, pending migration `migrations-pending/0007_landing_pages.sql`):
+**Event landing pages** (docs/design/event-landing.md, migration `migrations/0007_landing_pages.sql`):
 the importer writes 48 `landing_pages` rows per imported game plus other games' rows touched by moved shared events (≤ 624 in all; 0 for a same-day re-run; one
 written row each, no secondary index) and reads 624 more state rows; while the table is missing it writes none and
 says so. Its state read adds the landing window's events (~23k rows with 13 games, index seeks per location). Pages cache like the API (data version + Japan date + shell, 24 h per colo); the worst case is every page
