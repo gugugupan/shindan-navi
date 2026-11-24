@@ -47,10 +47,10 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 /* today's events: one column per game */
 .gcols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px;align-items:start}
 .gcol{border:1px solid var(--line);border-top:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:10px;background:var(--surface-2);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.gcol h3{margin:0 2px;display:flex;align-items:baseline;gap:8px;font-size:13.5px;line-height:1.35}
-.gcol h3 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)))}
-.gcol h3 .c{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
-.gcol h3 .c b{font-family:var(--mono);color:var(--ink);font-size:13px}
+.gcol h5{margin:0 2px;display:flex;align-items:baseline;gap:8px;font-size:13.5px;line-height:1.35}
+.gcol h5 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)))}
+.gcol h5 .c{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
+.gcol h5 .c b{font-family:var(--mono);color:var(--ink);font-size:13px}
 .gcol .more{align-self:flex-start;font-size:12.5px;padding:3px 10px}
 .gcol .ty{margin:-2px 2px 0;font-size:12px;line-height:1.4;color:var(--muted)}
 .gcol .ty b{font-family:var(--mono);font-weight:700;color:var(--ink)}
@@ -324,10 +324,12 @@ const nextMonth1 = d => addM(d.slice(0,7),1)+'-01';
 // (same month, not before its start) once a later row or the page's end is loaded. The first pages (from today, and
 // all of today) are tried first, then every day page fetched so far; else d's own page (null: not asked for yet).
 // more: rows of d may follow.
-const holds = (pg,from,d) => d>=from && d.slice(0,7)===from.slice(0,7) && (!pg.next || (!!pg.last&&pg.last>d));
+// This month a page also holds d once its rows of d reach the /days count, whatever follows.
+const holds = (pg,from,d) => d>=from && d.slice(0,7)===from.slice(0,7) && (!pg.next || (!!pg.last&&pg.last>d)
+  || (d.slice(0,7)===TODAY.slice(0,7) && pg.list.filter(e=>e.starts_on===d).length>=(ev.counts[d]||0)));
 function daySrc(d){
   const main=ev.list, last=main[main.length-1];
-  if(d.slice(0,7)===TODAY.slice(0,7) && (d===TODAY || holds({next:ev.next, last:last&&last.starts_on},TODAY,d) || main.filter(e=>e.starts_on===d).length>=(ev.counts[d]||0)))
+  if(d.slice(0,7)===TODAY.slice(0,7) && (d===TODAY || holds({list:main, next:ev.next, last:last&&last.starts_on},TODAY,d)))
     return {list:main, more:!!ev.next&&!!last&&last.starts_on===d};
   for(const [from,pg] of Object.entries(dayPages)) if(pg.list && holds(pg,from,d)) return {list:pg.list, more:false};
   const own=dayPages[d];
@@ -393,10 +395,11 @@ if(window.snEv) snEv.init({gi, games:EVG});
 const evRow = (e,col,f) => snEv.row(e,{compact:true, col, pref:f.pref, started:started(e)});
 const evItem = (x,col,f,more,d) => x.e ? evRow(x.e,col,f) : snEv.grp(x,{compact:true, col, pref:f.pref, day:d+'-'+col, more, started:started(x.rows[0])});
 // A column's types that day, busiest first: up to 3 named, else 2 and ほか (no type, その他 and unknown codes go to ほか).
-// From /days by_game_type; next month (no /days here) from the day's rows once all are loaded (group.event_type_code).
+// From /days by_game_type; next month (no /days here) from the day's loaded rows (group.event_type_code), as minimums
+// (min = 以上) while more may follow.
 // None for /days answers without by_game_type (cached before it existed).
 const TYPES = H.types||{};
-function typeLine(code,d,rows){
+function typeLine(code,d,rows,min=''){
   let bt=(ev.byGameType[d]||{})[code];
   if(!bt&&rows){ bt={}; rows.forEach(e=>{ const t=e.group&&e.group.event_type_code||''; bt[t]=(bt[t]||0)+1; }); }
   if(!bt) return '';
@@ -404,7 +407,7 @@ function typeLine(code,d,rows){
   const total=Object.values(bt).reduce((a,b)=>a+b,0);
   const show=named.length<=3&&named.reduce((a,x)=>a+x[1],0)===total ? named : named.slice(0,2);
   const rest=total-show.reduce((a,x)=>a+x[1],0);
-  const parts=show.map(([t,n])=>`${esc(TYPES[t])} <b>${n}</b>件`).concat(rest?[`ほか <b>${rest}</b>件`]:[]);
+  const parts=show.map(([t,n])=>`${esc(TYPES[t])} <b>${n}</b>件${min}`).concat(rest?[`ほか <b>${rest}</b>件${min}`]:[]);
   return show.length ? `<p class="ty" title="${parts.join('・').replace(/<\/?b>/g,'')}">${parts.join('・')}</p>` : '';
 }
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
@@ -436,7 +439,7 @@ function evPart(d,f){
     const ul = rows.length ? `<ul class="evs">${rows.map(x=>evItem(x,g.code,f,partial,d)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件${min} ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件${min}</span></h3>${typeLine(g.code,d,!known&&!src.more?rs:null)}${ul}${more}</section>`;
+    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h5><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件${min}</span></h5>${typeLine(g.code,d,known?null:rs,min)}${ul}${more}</section>`;
   }).join('')}</div>${others}`};
 }
 
@@ -558,7 +561,7 @@ function renderPanel(x,f,sel){
     const where=[f.pref&&LOC.locName(f.pref), evGamesLabel(f)].filter(Boolean).join('・');
     evs=`<section class="wps" aria-label="イベント"><h4>イベント${where?`（${esc(where)}）`:''}${e.n?`<span class="n"><b>${e.n}</b> 件${e.min||''}</span>`:''}</h4><div id="evBody">${e.html}</div></section>`;
     // the day view of the saved /events/ filter (the set counted here); without a location still that day
-    evHref = f.pref ? dayLink(f,d) : '/events/?'+(f.game?`game=${f.game}&`:'')+`range=custom&from=${d}&to=${d}`;
+    evHref = f.pref ? dayLink(f,d) : '/events/?'+new URLSearchParams([...(f.game?[['game',f.game]]:[]),...(f.type?[['type',f.type]]:[]),['range','custom'],['from',d],['to',d]]).toString().replace(/%2C/g,',');
     live = !f.pref ? '' : e.loading ? `${m}月${dd}日のイベントを読み込み中` : e.error ? `${m}月${dd}日のイベント情報を読み込めませんでした`
       : e.n ? `${m}月${dd}日のイベント ${e.n}件${e.min||''}` : e.n===0 ? `${m}月${dd}日のイベントはありません` : '';
   }

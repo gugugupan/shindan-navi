@@ -358,6 +358,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const ev = await page.evaluate(() => ({ rows: document.querySelectorAll('#evBody .ev').length, more: document.querySelector('#evBody a.go')?.getAttribute('href'),
       cols: document.querySelectorAll('#evBody .gcol').length, types: document.querySelectorAll('#evBody .ty').length, where: document.getElementById('hsL').textContent }));
     if (ev.cols !== 1 || ev.rows !== 5) fail(where, `today's events show ${ev.cols} columns / ${ev.rows} rows`);
+    // headings: day h3, 発売 / イベント h4, game columns h5
+    if (await page.locator('#wkPanel .gcol h5').count() !== ev.cols || await page.locator('#wkPanel .gcol h3, #wkPanel .gcol h4').count()) fail(where, 'game column headings are not h5');
     // /days without by_game_type (answers cached before it existed): no type line
     if (ev.types) fail(where, `${ev.types} type lines without by_game_type`);
     if (ev.more !== `/events/?game=OPCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `day view link ${ev.more}`);
@@ -427,7 +429,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const empty = Array.from({ length: 28 }, (_, i) => `${TODAY.slice(0, 8)}${String(i + 1).padStart(2, '0')}`).find(d => !H.items.some(x => x.date === d) && d >= H.from && d <= H.until);
   if (empty) {
     await page.goto(`${BASE}/releases/#d=${empty}`, { waitUntil: 'load' });
-    const e = await page.evaluate(() => ({ open: document.getElementById('dlg').open, none: !!document.querySelector('#dlgBody .dl-none'), hash: location.hash }));
+    // the note survives a rebuild of the open dialog (account sync re-renders it)
+    const e = await page.evaluate(() => { localStorage.setItem('tcg.stars', JSON.stringify(['i-sync-test'])); document.dispatchEvent(new CustomEvent('sn:prefs'));
+      return { open: document.getElementById('dlg').open, none: !!document.querySelector('#dlgBody .dl-none'), hash: location.hash }; });
     if (!e.open || !e.none || e.hash) fail(`${vp} /releases/#d=`, `day without releases ${empty}: ${JSON.stringify(e)}`);
   }
   if (todays.length) {
@@ -563,12 +567,15 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const week = Array.from({ length: 7 }, (_, i) => day(i)), WEEK2 = day(2);
   // Events by day: tomorrow OPCG ×2, PTCG ×1 and one shared OPCG + UATCG event; the day after PTCG ×4 and one shared
   // OPCG + UATCG; the 1st of next month a shared OPCG + PTCG event and one each (typed: their columns' type line comes
-  // from the rows). The first /events page ends with tomorrow; /days answers this month only. The saved game filter
-  // applies as on the API (rows matching any of its games).
+  // from the rows); one OPCG event on each of the next two days. The first /events page ends with tomorrow, the day
+  // after's own page (this month) with the day after that and a cursor; /days answers this month only. The saved
+  // game filter applies as on the API (rows matching any of its games). nmBusy: next month's 1st has more rows than
+  // its page holds.
   const ym = TODAY.slice(0, 7), nm1Of = d => new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 1)).toISOString().slice(0, 10), NM1 = nm1Of(TODAY);
   const EVTS = [[WEEK1, ['OPCG']], [WEEK1, ['OPCG']], [WEEK1, ['PTCG']], [WEEK1, ['OPCG', 'UATCG']],
     [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['PTCG']], [WEEK2, ['OPCG', 'UATCG']],
-    [NM1, ['OPCG', 'PTCG'], 'standard_battle'], [NM1, ['OPCG'], 'standard_battle'], [NM1, ['PTCG'], 'gym_battle']]
+    [NM1, ['OPCG', 'PTCG'], 'standard_battle'], [NM1, ['OPCG'], 'standard_battle'], [NM1, ['PTCG'], 'gym_battle'],
+    [day(3), ['OPCG']], [day(4), ['OPCG']]]
     .map(([d, codes, type], i) => ({ d, codes, type, i }));
   const EV_ORDER = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG', 'WS', 'VG', 'SVE', 'HOCG', 'LLOCG'];
   const EV_NAME = { OPCG: 'ONE PIECE', UATCG: 'UNION ARENA', PTCG: 'ポケモンカード' };
@@ -576,18 +583,20 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   // a day's columns: the games of its matching rows, kept to the filter (as /days by_game)
   const colsFor = (d, gf) => EV_ORDER.filter(c => (!gf.length || gf.includes(c)) && EVTS.some(e => e.d === d && matches(e, gf) && e.codes.includes(c))).map(c => EV_NAME[c]);
   // nobg: /days answers cached before by_game existed; hold: /days waits for it (a slow answer)
-  let nobg = false, hold = null, metaHold = null;
+  let nobg = false, hold = null, metaHold = null, nmBusy = false;
   await page.route(EVENTS_API, async route => {
     const u = new URL(route.request().url()), gf = (u.searchParams.get('game') || '').split(',').filter(Boolean);
     if (u.pathname.endsWith('/events/meta')) { if (metaHold) await metaHold; return route.fulfill({ json: { games: [], types: [], prefectures: [{ code: 'JP-13', count: 7 }, { code: 'JP-27', count: 2 }] } }); }
     const rows = EVTS.filter(e => matches(e, gf));
     if (!u.pathname.endsWith('/days')) {
       const from = u.searchParams.get('from'), until = u.searchParams.get('until'), first = from === TODAY;
-      const inRange = rows.filter(e => e.d >= from && e.d < until), page = inRange.filter(e => !first || e.d <= WEEK1);
+      const inRange = rows.filter(e => e.d >= from && e.d < until);
+      const page = first ? inRange.filter(e => e.d <= WEEK1) : from === WEEK2 && WEEK2.slice(0, 7) === ym ? inRange.filter(e => e.d <= day(3))
+        : nmBusy && from === NM1 ? inRange.filter(e => e.d === NM1).sort((a, b) => !!b.type - !!a.type).slice(0, 2) : inRange;
       return route.fulfill({ json: { events: page.map(e => ({ id: `s${e.i}`, name: `テスト大会 ${e.i}`,
         game_code: e.codes[0], game_codes: e.codes, starts_on: e.d, time_precision: 'date', timezone: 'Asia/Tokyo', attendance_mode: 'offline',
         venue: { name: 'テスト店' }, source_url: 'https://example.com/', event_status: 'scheduled', ...(e.type ? { group: { name: `テスト大会 ${e.i}`, event_type_code: e.type } } : {}) })),
-        next_cursor: page.length < inRange.length ? 'c2' : null } });
+        next_cursor: page.length < inRange.length || (nmBusy && from === NM1) ? 'c2' : null } });
     }
     if (hold) await hold;
     const days = [...new Set(rows.filter(e => e.d.slice(0, 7) === ym).map(e => e.d))].map(date => {
@@ -668,11 +677,15 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       await page.locator('#wkT2').click();
       await state();
       if (api.length !== 3) fail(where, `${WEEK2} asked for again: ${api.slice(3).join(' ')}`);
-      // a later day of the same month is held by that page (it reached the month's end): no request
-      if (week[3].slice(0, 7) === WEEK2.slice(0, 7)) {
+      // the next day is in that page (it stops there with a cursor) and its rows reach its /days count: no request;
+      // the day after that is not: one request
+      if (week[4].slice(0, 7) === ym) {
         await page.locator('#wkT3').click();
         await state();
-        if (api.length !== 3) fail(where, `${week[3]} asked for although ${WEEK2}'s page holds it: ${api.slice(3).join(' ')}`);
+        if (api.length !== 3) fail(where, `${week[3]} asked for although ${WEEK2}'s page holds all of it: ${api.slice(3).join(' ')}`);
+        await page.locator('#wkT4').click();
+        await state();
+        if (api.length !== 4 || !api[3].includes(`from=${week[4]}&`)) fail(where, `${week[4]}: requests ${api.slice(3).join(' ')}`);
       }
       await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-day-busy.png`) });
       await page.locator('#wkT0').click();
@@ -881,12 +894,19 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (st.tabs[nx].ev !== String(nRows) || JSON.stringify(st.foot[1]) !== JSON.stringify(['イベントカレンダーでこの日を見る ›', href])) fail(where, `next month ${week[nx]}: ${st.tabs[nx].ev} ${JSON.stringify(st.foot)}`);
       if (api.length !== 1 || !api[0].endsWith(`/api/v1/events?from=${week[nx]}&until=${nm1Of(week[nx])}&game=OPCG&pref=JP-13&limit=50`)) fail(where, `next month ${week[nx]}: requests ${api.join(' ')}`);
       if (JSON.stringify(st.cols) !== JSON.stringify(['ONE PIECE']) || !st.ty.some(t => t.startsWith(`${H.types.standard_battle} 2件`))) fail(where, `next month ${week[nx]}: columns ${st.cols} type lines ${st.ty}`);
+      // more rows than its page: no count in the strip, the type line's counts are minimums
+      nmBusy = true;
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.locator(`#wkT${nx}`).click();
+      st = await state();
+      if (st.tabs[nx].ev !== '–' || !st.ty.length || !st.ty.every(t => t.includes('件以上'))) fail(where, `next month, more rows: ${st.tabs[nx].ev} type lines ${st.ty}`);
+      nmBusy = false;
       await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-strip-nextmonth.png`) });
     } else if (HAS_EVENTS) console.log(`  ${where.padEnd(22)} no next-month day this week: next-month check skipped`);
 
     // no location: no request; 地域を設定 in the 表示中 line, one muted line in the panel
     api.length = 0;
-    await setStore({ 'tcg.ev.filters': { game: code } });
+    await setStore({ 'tcg.ev.filters': { game: code, type: 'standard_battle' } });
     await page.reload({ waitUntil: 'networkidle' });
     st = await state();
     if (api.length) fail(where, `API called without a location: ${api.join(' ')}`);
@@ -899,7 +919,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if ((await state()).focus !== 'hsBtn') fail(where, 'focus after 地域を設定');
     }
     strip('no location', st, [name], null, false);
-    if (HAS_EVENTS && st.foot[1]?.[1] !== `/events/?game=${code}&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `no location: day-view link ${st.foot[1]?.[1]}`);
+    if (HAS_EVENTS && st.foot[1]?.[1] !== `/events/?game=${code}&type=standard_battle&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `no location: day-view link ${st.foot[1]?.[1]}`);
   } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
   for (const b of [...new Set(bad)]) fail(where, b);
   console.log(`  ${where.padEnd(22)} checked`);
@@ -1646,7 +1666,7 @@ if (HAS_EVENTS) {
     venue: { name: `店 ${i}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
   const evs = Array.from({ length: 8 }, (_, i) => ev(i));
   const tmr = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
-  const targets = [['/releases/', '.gi'], ['/', HAS_EVENTS ? '#evBody .gcol h3 .gi' : '.gi']];
+  const targets = [['/releases/', '.gi'], ['/', HAS_EVENTS ? '#evBody .gcol h5 .gi' : '.gi']];
   if (HAS_EVENTS) targets.push(['/events/?pref=JP-13&view=list', '#list .ev .gi']);
   // phones show dots on the calendar: the day dialog (latest snapshot) has the chips and cards
   const vday = HAS_VOICES && VOICE_SNAPS.at(-1)?.date;
