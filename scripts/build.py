@@ -483,9 +483,9 @@ def home_page():
     # 旧・新弾ナビ in the description and the footer brand (sitenav('/')) keeps the old name findable
     return dict(path='/',og='home',lo=lo,hi=hi,
         title=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}｜トレカカレンダー',
-        desc=('トレカカレンダー（旧・新弾ナビ）で今日発売のTCG・トレカ新弾と、選んだ都道府県で今日開催の店舗大会などTCGイベントをタイトル別にチェック。ポケカ・ワンピ・MTGほか、明日・今週の予定もひと目で。'
+        desc=('トレカカレンダー（旧・新弾ナビ）で今日発売のTCG・トレカ新弾と、選んだ都道府県で今日開催の店舗大会などTCGイベントをタイトル別にチェック。ポケカ・ワンピ・MTGほか、今週のカレンダーで7日分もひと目で。'
               if BUILD_EVENTS else
-              f'トレカカレンダー（旧・新弾ナビ）で今日発売のTCG・トレカ新弾をチェック。ポケカ・ワンピカード・MTG・遊戯王ほか{len(used)}タイトル、明日・今週の発売予定もひと目で確認できます。'),
+              f'トレカカレンダー（旧・新弾ナビ）で今日発売のTCG・トレカ新弾をチェック。ポケカ・ワンピカード・MTG・遊戯王ほか{len(used)}タイトル、今週のカレンダーで7日分の発売予定も確認できます。'),
         keywords=['今日発売','今日 発売 トレカ','TCG 今日','トレカ 新弾 今日','今週 発売 トレカ','新弾ナビ']+(['TCG イベント 今日','店舗大会'] if BUILD_EVENTS else [])+COMMON_KW,
         h1=f'今日発売のTCG・トレカ新弾{"とイベント" if BUILD_EVENTS else ""}',
         lead=f'{len(used)}タイトルの新弾{ev}を、日本時間の「今日」で表示しています（発売情報は{upd_label}更新）。'
@@ -501,7 +501,7 @@ def render_home():
     home={'from':pg['lo'],'until':pg['hi'],'counts':__import__('collections').Counter(d['game'] for d in data),
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
     if VOICES_ENABLED: home['voicesApi']=EVENTS_API_BASE+'/voices/latest'; home['voiceGames']=VOICE_GAME_BLOCK
-    # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (明日・今週の予定 filter)
+    # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (表示中 line, 今週のカレンダー)
     home['titles']={g['code']:g['name'] for g in VOICE_GAME_INFO}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
     if BUILD_EVENTS:
