@@ -1900,6 +1900,36 @@ if (HAS_EVENTS) {
     console.log(`  ${where} checked (${got.bars.length} bars)`);
     await ctx.close();
   }
+  // every hub at 1366 / 390 in both themes: no errors or horizontal scroll, one h1, the switcher lists every hub with the
+  // current one marked; screenshots of the hubs added after the ten former title pages (M3)
+  const FORMER = new Set(['pokemon', 'onepiece', 'mtg', 'yugioh', 'duelmasters', 'weiss', 'unionarena', 'gundam', 'dragonball', 'digimon']);
+  for (const [vp, opt] of Object.entries({ desktop: { width: 1366, height: 900 }, mobile: VIEWPORTS.mobile })) for (const scheme of ['light', 'dark']) {
+    const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+      hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', colorScheme: scheme });
+    for (const h of HUBS) {
+      const where = `${vp} ${scheme} hub ${h.path}`;
+      const page = await ctx.newPage(), bad = [];
+      await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+      page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+      page.on('console', m => { if (m.type() === 'error') bad.push(`console: ${m.text()}`); });
+      try {
+        await page.goto(BASE + h.path, { waitUntil: 'networkidle' });
+        await page.locator('#gameSw').click();
+        const st = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          h1: document.querySelectorAll('h1').length, sw: [...document.querySelectorAll('#swList a')].map(a => [a.getAttribute('href').split('?')[0], a.getAttribute('aria-current')]) }));
+        if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
+        if (st.h1 !== 1) fail(where, `${st.h1} h1`);
+        if (JSON.stringify(st.sw.map(x => x[0])) !== JSON.stringify(HUBS.map(x => x.path)) || st.sw.some(([p, c]) => (c === 'page') !== (p === h.path)))
+          fail(where, `switcher ${JSON.stringify(st.sw)}`);
+        await page.keyboard.press('Escape');
+        if (!FORMER.has(h.path.slice(1, -1))) await page.screenshot({ path: path.join(OUT, `hub-${h.path.slice(1, -1)}-${opt.width}-${scheme}.png`), fullPage: true });
+      } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+      for (const b of [...new Set(bad)]) fail(where, b);
+      await page.close();
+    }
+    console.log(`  ${vp} ${scheme} hubs`.padEnd(24) + `${HUBS.length} checked`);
+    await ctx.close();
+  }
   // /<code>/ answers 301 to the hub (both cases, with and without the slash)
   for (const h of HUBS) {
     const c = h.js.hub.code;

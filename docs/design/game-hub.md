@@ -1,6 +1,6 @@
 # Game hub: one calendar page per game (design)
 
-Status: M0 (registry) live as 757c623. Owner answers 2026-11-25: Q1 yes (hubs replace the 10 title pages), Q2 the
+Status: M0 (registry) live as 757c623; M1 + M2 live as 8bb04a0; M3 (16 hubs, thin-page rule) on `hub-m3`. Owner answers 2026-11-25: Q1 yes (hubs replace the 10 title pages), Q2 the
 16 games (M3), Q3 preselect the IP guess (M2). Revised 2026-11-25 for what changed on `main` since the first draft:
 topics live only in D1 (`/api/v1/voices`, no topic text in built HTML, no `/voices/<date>/` archives), event landing
 pages and the shared event rows (`src/evrow.html`) exist, `/` has one day view. Plan node `game-hub-design` (kb plan

@@ -19,7 +19,7 @@ events importer (`GAME_CODES`, `GAME_BITS`) and the voices importer (valid topic
 | --- | --- |
 | `code` | `^[A-Z][A-Z0-9]{1,7}$`, never renamed: D1 `games.code`, voices topics and saved filters hold it. |
 | `slug` | `/<slug>/` (title page) and `/events/<slug>/<pref>/`; null = none. |
-| `hub` | build.py builds the hub `/<slug>/` (the title page in hub mode; the 10 main titles; owner decision) and `/<code>/` → `/<slug>/` redirects. |
+| `hub` | build.py builds the hub `/<slug>/` (the title page in hub mode; the 10 main titles and the 6 other events games, owner decision 2026-11-25) and `/<code>/` → `/<slug>/` redirects. A new hub also needs `public/og/<slug>.png` (`scripts/og.py <slug>`). |
 | `label` | Display name = items.json `game` = `GAME_ICON` key = `/events/` chip and column name. |
 | `official` | Official name: title pages; for events games D1 `games.name`. |
 | `short` | Common short name: title page `<title>` / h1, event landing pages (ワンピカード, コナンカード). |

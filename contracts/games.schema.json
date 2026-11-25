@@ -17,7 +17,7 @@
       "properties": {
         "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{1,7}$", "description": "Internal id; never renamed (D1 games.code, voices topics, saved filters)." },
         "slug": { "type": ["string", "null"], "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "URL segment of /<slug>/ and /events/<slug>/<pref>/; null = none." },
-        "hub": { "type": "boolean", "description": "build.py builds the title page /<slug>/." },
+        "hub": { "type": "boolean", "description": "build.py builds the hub /<slug>/ (noindex while thin: docs/design/game-hub.md, section 8)." },
         "label": { "type": "string", "minLength": 1, "description": "Display name: items.json `game`, GAME_ICON key, /events/ chip and column name." },
         "official": { "type": ["string", "null"], "minLength": 1, "description": "Official title name (title pages; D1 games.name for events games)." },
         "short": { "type": ["string", "null"], "minLength": 1, "description": "Common short name: title page titles / h1, event landing pages." },

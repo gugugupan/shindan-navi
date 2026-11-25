@@ -470,14 +470,32 @@ def check_index(sitemap, today):
     print(f'  index        sitemap={len(locs)} indexable={len(indexable)} titles={len(titles)} long item titles={len(long_items)}')
 
 
-def check_hubs(hubs):
-    # hub mode (docs/design/game-hub.md): topics only from the voices API, never in the built HTML; /<code>/ redirects
+# the title pages that existed before the hubs keep the 2-release band indexed (docs/design/game-hub.md › 8)
+TITLE_PAGES_BEFORE_HUBS = {'pokemon', 'onepiece', 'mtg', 'yugioh', 'duelmasters', 'weiss', 'unionarena', 'gundam', 'dragonball', 'digimon'}
+
+
+def check_hubs(hubs, n_rel):
+    # hub mode (docs/design/game-hub.md): topics only from the voices API, never in the built HTML; /<code>/ redirects;
+    # thin hubs (build inputs only: visible releases n_rel, events bit) noindex,follow and out of the sitemap and footer
     has_voices = os.path.exists(os.path.join(DIST, 'voices/index.html'))
     reg = {g['slug']: g for g in REGISTRY if g['hub']}
+    sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
+    indexable = []
     for pg in hubs:
         src = open(os.path.join(DIST, pg['path'].strip('/'), 'index.html')).read()
         g = reg.get(pg['js']['hub']['slug'])
-        if not g or pg['js']['game'] != g['label']: fail(f'{pg["path"]}: hub data does not match its registry row')
+        if not g or pg['js']['game'] != g['label']: fail(f'{pg["path"]}: hub data does not match its registry row'); continue
+        n, ev = n_rel.get(g['label'], 0), bool(g['sources']['events'])
+        index = n >= 3 or ev or (n == 2 and g['slug'] in TITLE_PAGES_BEFORE_HUBS)
+        if n == 2 and not ev: warn(f'{pg["path"]}: 2 releases and no events (thin band): {"indexed (former title page)" if index else "noindex"}')
+        robots = re.findall(r'<meta name="robots" content="([^"]*)">', src)
+        if robots != ([] if index else ['noindex,follow']): fail(f'{pg["path"]}: robots {robots}, expected {"none" if index else "noindex,follow"} ({n} releases, events {ev})')
+        if (f'<loc>{SITE}{pg["path"]}</loc>' in sitemap) != index: fail(f'sitemap: hub {pg["path"]} {"missing" if index else "listed while noindex"}')
+        if index: indexable.append(pg['path'])
+        og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
+        ogf = og and os.path.join(DIST, og[1].replace(SITE + '/', '', 1))
+        if not og or og[1] != f'{SITE}/og/{g["slug"]}.png' or not os.path.exists(ogf): fail(f'{pg["path"]}: og:image {og and og[1]} missing')
+        elif open(ogf, 'rb').read(24)[16:24] != (1200).to_bytes(4, 'big') + (630).to_bytes(4, 'big'): fail(f'{pg["path"]}: og image is not 1200x630')
         if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail(f'{pg["path"]}: X URL in a hub')
         if ('"voicesApi"' in src) != (has_voices and g['sources']['voices']): fail(f'{pg["path"]}: voices API {"without" if has_voices else "with"} VOICES_ENABLED')
         if ('id="hubTopics"' in src) != ('"voicesApi"' in src): fail(f'{pg["path"]}: いま話題 section and voices API disagree')
@@ -497,7 +515,11 @@ def check_hubs(hubs):
         got[l[0]] = l[1]
     if got != want: fail(f'_redirects: {len(got)} rules differ from the {len(want)} /<code>/ spellings of the hubs')
     if any(t in got for t in got.values()): fail('_redirects: a target is redirected again')
-    print(f'  hubs {len(hubs)} checked, _redirects {len(got)} rules')
+    # the footer's タイトル別 row: exactly the indexable hubs, in registry order (the switcher lists them all)
+    foot = re.search(r'<div><b>タイトル別</b>(.*?)</div>', open(os.path.join(DIST, 'releases/index.html')).read())
+    row = re.findall(r'href="(/[^"]+/)"', foot[1]) if foot else None
+    if row != indexable: fail(f'footer タイトル別: {row}, expected the indexable hubs {indexable}')
+    print(f'  hubs {len(hubs)} checked ({len(indexable)} indexable), _redirects {len(got)} rules')
 
 def check_dist(today, head, ov, arch):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
@@ -514,16 +536,19 @@ def check_dist(today, head, ov, arch):
     hubs = {f'/{g["slug"]}/' for g in REGISTRY if g['hub']}
     if set(titles) != hubs: fail(f'dist: title pages {sorted(titles)} differ from the data/games.json hub rows {sorted(hubs)}')
     if not months: fail('dist: no month pages')
-    check_hubs([p for p in pages if (p.get('js') or {}).get('hub')])
+    canon = {l: g['label'] for g in REGISTRY for l in g['sources']['releases']}
+    n_rel = collections.Counter(canon.get(i['game'], i['game']) for i in head if not ov.get(i['id'], {}).get('hide'))
+    hub_pages = [p for p in pages if (p.get('js') or {}).get('hub')]
+    check_hubs(hub_pages, n_rel)
+    noindex = {p['path'] for p in hub_pages if re.search(r'<meta name="robots"[^>]*noindex', open(os.path.join(DIST, p['path'].strip('/'), 'index.html')).read())}
 
     hidden = [k for k, v in ov.items() if v.get('hide')]
     sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
     paths = ['/'] + paths
     for p in paths:
-        if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
+        if p not in noindex and f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
     # lastmod: item pages their item's `changed` (meta.updated until the updater stamps one), calendar pages the newest
     # of their items', / meta.updated
-    canon = {l: g['label'] for g in REGISTRY for l in g['sources']['releases']}
     vis = [{**i, 'game': canon.get(i['game'], i['game']), **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date',)}} for i in head if not ov.get(i['id'], {}).get('hide')]
     ch = lambda xs: max((x.get('changed') or meta['updated'] for x in xs), default=meta['updated'])
     want_lastmod = {f'{SITE}/item/{i["id"]}/': i.get('changed') or meta['updated'] for i in arch + vis}

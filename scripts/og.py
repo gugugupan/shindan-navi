@@ -1,7 +1,6 @@
 """Render 1200x630 OGP images into public/og/ with headless Chrome. Run after build.py (needs scripts/.pages.json).
 python3 -I scripts/og.py [name ...]   (names = public/og/<name>.png to render; default all)"""
 import html
-import re
 import json
 import os
 import subprocess
@@ -10,9 +9,8 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHROME = os.environ.get('CHROME', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
-SHORT = {'pokemon': 'ポケカ', 'onepiece': 'ワンピカード', 'mtg': 'MTG', 'yugioh': '遊戯王', 'duelmasters': 'デュエマ',
-         'weiss': 'ヴァイス', 'unionarena': 'ユニアリ', 'gundam': 'ガンダムカード', 'dragonball': 'フュージョンワールド',
-         'digimon': 'デジカ'}
+# hub slug -> (short name, official name) from the game registry (contracts/games.md)
+HUB = {g['slug']: (g['short'], g['official']) for g in json.load(open(os.path.join(ROOT, 'data/games.json'))) if g['hub']}
 
 pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
 items = json.load(open(os.path.join(ROOT, 'data/items.json')))
@@ -116,6 +114,6 @@ for p in pages:
         continue
     else:
         game = p['js']['game']
-        full = re.sub(r'(（[^）]*）)?\s*新弾 発売日カレンダー$', '', p['h1'])
-        big, sub = f'<em>{html.escape(SHORT[name])}</em>\n新弾 発売日カレンダー', full
+        short, full = HUB[name]
+        big, sub = f'<em>{html.escape(short)}</em>\n新弾 発売日カレンダー', full
     render(name, card_html(name, big, sub, thumbs_for(game)))

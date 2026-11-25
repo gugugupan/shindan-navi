@@ -121,6 +121,16 @@ archived.sort(key=lambda d:(d['date'],d['game']))
 CHANGED={i['id']:i.get('changed') or UPDATED for i in ARCHIVE+it}
 def lastmod(items): return max((CHANGED[d['id']] for d in items),default=UPDATED)
 used={d['game'] for d in data}
+# Thin hubs (docs/design/game-hub.md › 8) are noindex,follow and out of the sitemap and the footer's タイトル別 row. The
+# rule reads build inputs only (visible releases, the registry's events bit), so it cannot flap with D1; topics never
+# count. Index: ≥ 3 releases or events collected. Thin: < 2 releases without events. Exactly 2 without events: the ten
+# title pages that existed before the hubs stay indexed, later hubs do not.
+TITLE_PAGES_BEFORE_HUBS={'pokemon','onepiece','mtg','yugioh','duelmasters','weiss','unionarena','gundam','dragonball','digimon'}
+_n_rel=__import__('collections').Counter(d['game'] for d in data)
+def hub_indexable(g):
+    n=_n_rel[g['label']]
+    return n>=3 or bool(g['sources']['events']) or (n==2 and g['slug'] in TITLE_PAGES_BEFORE_HUBS)
+HUB_INDEX={g['slug']:hub_indexable(g) for g in REG if g['hub']}
 _unmapped=sorted({i['game'] for i in it}-{l for g in REG for l in g['sources']['releases']})
 if _unmapped: print('WARN: items.json titles without a data/games.json row (sources.releases): '+', '.join(_unmapped),file=sys.stderr)
 off={k:v for k,v in OFFICIAL.items() if k in used}
@@ -197,7 +207,7 @@ def page_def():
     pages=[]
     up=[d for d in data if d['date']>=TODAY]
     soon=[d for d in up if d['date']<=(jd(TODAY)+datetime.timedelta(days=30)).isoformat()]
-    gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if k in used)
+    gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if k in used and HUB_INDEX[s])
     pages.append(dict(path='/releases/',slug='releases',og='home',
         title='TCG・トレカ新弾 発売日カレンダー（ポケカ・ワンピ・MTGほか）｜トレカカレンダー',
         desc=f'TCG・トレカ新弾の発売日カレンダー。ポケカ（ポケモンカード）・ワンピカード・MTG・遊戯王・デュエマ・ヴァイス・ユニアリなど{len(used)}タイトルの拡張パック・スターターデッキの発売日と価格を一覧でチェック。お気に入り登録・Googleカレンダー追加にも対応。',
@@ -242,7 +252,7 @@ def page_def():
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
                   f'カレンダーでは{esc(short)}の発売予定{"と、Xで話題になっていること" if VOICES_ENABLED else ""}を表示しています。ほかのタイトルへはカレンダー上のタイトル名から切り替えられ、全タイトルの新弾は<a href="/releases/">新弾カレンダー</a>でまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。']),
-            ld_items=lst,lastmod=lastmod(its)))
+            ld_items=lst,lastmod=lastmod(its),noindex=not HUB_INDEX[slug]))
     for ym in months:
         its=[d for d in data if d['date'].startswith(ym)]
         cnt=__import__('collections').Counter(d['game'] for d in its)
@@ -322,7 +332,8 @@ def toolrow(cur):
     return '<div><b>ツール</b>'+''.join(f'<a href="{p}"{" aria-current=\"page\"" if cur==p else ""}>{a}{b}</a>' for p,a,b,ic in TOOLS)+'</div>'
 
 def sitenav(cur):
-    g=''.join(f'<a href="/{s}/"{" aria-current=\"page\"" if cur==f"/{s}/" else ""}>{esc(short)}</a>' for s,k,n,short in GAMES if k in used)
+    # thin hubs stay out of the footer (the game switcher still lists every hub)
+    g=''.join(f'<a href="/{s}/"{" aria-current=\"page\"" if cur==f"/{s}/" else ""}>{esc(short)}</a>' for s,k,n,short in GAMES if k in used and HUB_INDEX[s])
     m=''.join(f'<a href="/{ym}/"{" aria-current=\"page\"" if cur==f"/{ym}/" else ""}>{mlabel(ym)}</a>' for ym in months)
     return f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(cur)}<div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div>{siterow(cur)}</nav>'
 
@@ -357,7 +368,7 @@ def render(pg):
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{esc(pg['title'])}</title>
 <meta name="description" content="{esc(pg['desc'])}">
-<meta name="theme-color" content="#3a43d0">
+{'<meta name="robots" content="noindex,follow">'+chr(10) if pg.get('noindex') else ''}<meta name="theme-color" content="#3a43d0">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -915,7 +926,8 @@ if FEEDBACK_ENABLED:
 sm=['<?xml version="1.0" encoding="UTF-8"?>','<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 sm.append(f'<url><loc>{SITE}/</loc><lastmod>{UPDATED}</lastmod></url>')
 # calendar pages: the newest change among their items; item pages: their own (contracts/releases.md › changed)
-for pg in pages: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{pg["lastmod"]}</lastmod></url>')
+for pg in pages:
+    if not pg.get('noindex'): sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{pg["lastmod"]}</lastmod></url>')
 for pg in items: sm.append(f'<url><loc>{SITE}{pg["path"]}</loc><lastmod>{CHANGED[pg["d"]["id"]]}</lastmod></url>')
 if BUILD_EVENTS: sm.append(f'<url><loc>{SITE}{EVENTS_PAGE["path"]}</loc></url>')
 if VOICES_ENABLED: sm.append(f'<url><loc>{SITE}{VOICES_PAGE["path"]}</loc></url>')  # the data is in D1: no lastmod at build time
