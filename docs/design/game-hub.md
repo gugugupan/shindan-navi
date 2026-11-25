@@ -1,13 +1,26 @@
 # Game hub: one calendar page per game (design)
 
-Status: design for owner review, 2026-11-20 (revised after review). Nothing here is built. Plan node
-`game-hub-design` (kb plan `2026-11-20-seo-1-4-for`).
+Status: design for owner review, 2026-11-20 (revised after review). M0 (registry) built on `feat/game-hub`
+(2026-11-25); M1-M5 not built. Plan node `game-hub-design` (kb plan `2026-11-20-seo-1-4-for`).
 
-**Base.** `main` (bb0c86f) does not yet have the branches `ev-bushi-int` (5 commits: WS / VG / SVE / HOCG / LLOCG
-events, migration 0006) and `voices` (on top of it). Both touch the files the registry rewrites
-(`api/src/constants.ts`, `api/scripts/lib/importer.mjs`, `src/events.html`, `src/home.html`, `src/voices.html`).
-Implementation starts only after both are merged to `main` (or rebases on them); the registry is written against
-that state: 13 events games, WS / VG / SVE / HOCG / LLOCG at bits 256-4096 and `sort_order` 9-13 as in 0006.
+**Base.** Written against `main` bb0c86f plus the then-unmerged `ev-bushi-int` (migration 0006) and `voices`. Both
+are on `main` now (13 events games, WS / VG / SVE / HOCG / LLOCG at bits 256-4096 and `sort_order` 9-13 as in 0006).
+
+**Changes on `main` since this design (checked 2026-11-25, M0).** Sections 1, 5, 6 and 8 still describe topics as
+static and need revising before M1:
+- 話題 lives in D1 only (`voice_snapshots`, migration 0008, `import-voices.mjs`); `/voices/` and the home block fetch
+  `/api/v1/voices` / `/voices/latest`. The built HTML has no topic text (owner 2026-11-21) and there are no
+  `/voices/<date>/` archive pages (static mode removed 2026-11-22). So a hub's topics cannot be in `HUB`,
+  `/<slug>/data.json` or the static HTML, cannot link archive cards, and cannot feed the thin-page rule or `lastmod`
+  from committed snapshots without reopening that decision; they would come from the voices API (a D1 read budget
+  question like the events layer).
+- Event landing pages are built (dark behind `LANDING_ENABLED`): migration 0007, `api/src/landing.ts`, shell
+  `src/landing.html`; section 10's "Not built" no longer holds.
+- Event rows are shared already: `src/evrow.html` (`window.snEv`) on `/events/` and `/`, mirrored by `api/src/evrow.ts`
+  (held equal by `api/tests/evrow.test.ts`); section 10's proposed `src/evcard.html` is that file.
+- `/` is simpler (owner 2026-11-24): one day view (今週のカレンダー + the chosen day's 発売 / イベント panel), titles and
+  location set only in the 表示中 line; no separate 今日 blocks. Footer: one note line + プライバシーポリシー link on
+  every page (owner 2026-11-24), no note paragraphs above it.
 
 Owner's ask: "a calendar view per game showing all information related to it". Generic: every game has a code, one
 template, the game in the path, and switching to another game only loads that game's data.
@@ -33,22 +46,28 @@ template, the game in the path, and switching to another game only loads that ga
 
 ## 2. Today: where game lists live
 
-| List | Where | Key | Used for |
+| List (before M0) | Where | Key | Used for |
 | --- | --- | --- | --- |
 | `GAMES` (10 rows) + `ALIAS`, `TITLE_ALT`, `SLUG` | `scripts/build.py` | release label (`ONE PIECE`) → slug | title pages, sitenav, item-page crumbs |
-| `OFFICIAL` (36 rows) | `scripts/build.py` | release label | 公式 links |
+| `OFFICIAL` (38 rows) | `scripts/build.py` | release label | 公式 links |
 | `GAME_ICON` (36 rows) | `scripts/build.py` → `GICON_JS` | display name | `gi()` on every page |
-| `GAMES` (8 rows; 13 on `ev-bushi-int`) | `api/src/constants.ts` | `OPCG` + `bit`, `slug` | API validation, `game_mask`, meta |
-| `games` table | D1, migrations 0001 / 0005 / 0006 (branch) | `code`, `slug`, `bit`, `sort_order` | `imports.game_code` FK |
-| `GAMES` (palette) | `src/events.html`, `EV_GAMES` in `src/home.html` | code + `c` / `cd` | chips, dots, columns |
-| `GAMES` (16 rows) | `src/voices.html`; build.py regex-parses it into `VOICE_GAMES` / `VOICE_GAME_INFO` | code + `short`, `c` / `cd` | voices pages, build checks |
+| `GAMES` (13 rows) | `api/src/constants.ts` | `OPCG` + `bit`, `slug` | API validation, `game_mask`, meta |
+| `LANDING_GAMES` (13 rows) | `api/src/landing.ts` | code + label, short, `c` / `cd`, icon | landing pages |
+| `GAME_CODES`, `GAME_BITS` | `api/scripts/lib/importer.mjs` | code + bit | events importer |
+| `games` table | D1, migrations 0001 / 0005 / 0006 | `code`, `slug`, `bit`, `sort_order` | `imports.game_code` FK |
+| `GAMES` (palette), `LP_GAMES` | `src/events.html` | code + `c` / `cd`, `bit`; code → slug, short | chips, dots, landing links |
+| `EV_GAMES`, `SHORT` | `src/home.html` | code + chip, `c` / `cd`, `bit`; label → chip | columns, 表示中 line |
+| `GAMES` (16 rows) | `src/voices.html`; build.py and `api/scripts/lib/voices.mjs` regex-parse it | code + `short`, `c` / `cd` | voices pages, home block, voices importer |
+| `GAMES` | `scripts/events_dev_server.py` | code, name, slug | dev mock API |
+| `gameCode` enum | `contracts/event.schema.json`, `run.schema.json` | code | collectors, importer |
 
 They already disagree in small ways: the short name is ワンピカード on title pages and ワンピ on chips; VG is
 `ヴァンガード` (release label) and `カードファイト!! ヴァンガード` (API name). The registry keeps each of these as a
-named field rather than forcing one spelling. One real conflict needs a pick: HOCG's chip is ホロライブ in
-`src/home.html` / `src/events.html` on `ev-bushi-int` and ホロカ in `src/voices.html`. Proposal: `chip: "ホロカ"`
-(short, like ラブカ / ヴァンガ), so M0 changes visible text on `/` and `/events/` for HOCG only; any other field the
-merge of lists changes is listed in the M0 PR and checked against the built pages.
+named field rather than forcing one spelling. The HOCG conflict this design expected (ホロライブ vs ホロカ chips) was
+resolved on `main` before M0: every chip that uses a short name says ホロカ (and ラブカ), `/events/` chips and columns
+use the label ホロライブ everywhere, so M0 changes no visible text. One spelling stays page-specific: the home page's
+表示中 line says フュージョンワールド for DBFW while its chips say DBFW (kept in `src/home.html`; owner to pick).
+The release-only label その他 (only in `items-archive.json`) has no row.
 
 The 16 voices codes are exactly the 10 main titles + the 6 other event games (CONAN, BS, VG, SVE, HOCG, LLOCG). That
 set is the natural hub set (see Q2).
@@ -57,7 +76,8 @@ set is the natural hub set (see Q2).
 
 ### Where it lives
 
-`data/games.json` (committed; pretty JSON, rows in display order), contract `contracts/games.md`, schema
+`data/games.json` (committed; one row per line, rows in title-page order, then the other events games, then
+release-only titles), contract `contracts/games.md`, schema
 `contracts/games.schema.json`. It is data, not code, so build.py (Python), the Worker (TS, bundled JSON import via
 esbuild), the importer (Node `readFileSync`) and the release collectors can all read one file without generation
 steps.
@@ -77,14 +97,13 @@ steps.
   "aliases": ["ワンピースカード", "ワンピカード", "ワンピ"],
   "icon": "opcg.png",              // public/gi/ file or a 1-char monogram
   "colour": { "slot": 1, "light": "#be362d", "dark": "#de837c" },  // null = computed release hue;
-                                   // slot may be null with a direct pair (YGO #562d29, DM #4d19e6: outside the 14 slots)
+                                   // slots 1-14 CLAUDE.md palette, 15 DM / 16 YGO from contracts/voices.md
   "official_url": "https://www.onepiece-cardgame.com/",
   "sources": {
     "releases": ["ONE PIECE"],     // items.json `game` labels (normally just [label])
     "events": { "bit": 1, "sort": 1 },   // null = no events collected
     "voices": true                 // topics may use this code
   },
-  "links": { "events_official": null }   // e.g. YGO: KONAMI tournament search (ev-bushi-int link-out)
 }
 ```
 
@@ -110,9 +129,11 @@ These codes are internal (not in any URL) until a title gets a hub.
 
 | Consumer | Change |
 | --- | --- |
-| `scripts/build.py` | `GAMES`, `ALIAS`, `TITLE_ALT`, `SLUG`, `OFFICIAL`, `GAME_ICON` derive from the registry. Page scripts get a `/*GAMES*/` slot with the fields they need (code, label, short, chip, slug, c, cd, bit, icon); `src/events.html`, `src/home.html`, `src/voices.html` drop their literal lists. `VOICE_GAMES` comes from `sources.voices`, no more regex over `voices.html`. |
-| `api/src/constants.ts` | `GAMES = registry.filter(g => g.sources.events)` mapped to `{code, name: official, slug, bit}` in `events.sort` order. |
-| `api/scripts/lib/importer.mjs` | `GAME_BITS` from the registry. |
+| `scripts/build.py` | `GAMES`, `ALIAS`, `TITLE_ALT`, `SLUG`, `OFFICIAL`, `GAME_ICON` derive from the registry. Page scripts get slots with the shape they already read (`/*EV_GAMES*/[]`, `/*LP_GAMES*/{}`, `/*SHORT*/{}`, `/*VOICE_GAMES*/[]`; `name` = label, `short` = chip); `src/events.html`, `src/home.html`, `src/voices.html` drop their literal lists. Voices games come from `sources.voices` (events games in `/events/` order, then the rest), no more regex over `voices.html`. |
+| `api/src/constants.ts`, `api/src/landing.ts` | `GAMES` = the events rows in `events.sort` order as `{code, name: official, slug, bit}`; `LANDING_GAMES` from the same rows (bundled JSON import). |
+| `api/scripts/lib/importer.mjs`, `voices.mjs` | `GAME_CODES`, `GAME_BITS` and the voices codes from the registry (`readFileSync`). |
+| `scripts/events_dev_server.py`, `scripts/verify_release.py` | Dev mock games; hub count and voices codes from the registry. |
+| `contracts/event.schema.json`, `run.schema.json` | Keep their `gameCode` enums (JSON Schema cannot import); `api/tests/games.test.ts` holds them equal to the events rows. |
 | `tools/release-collectors/lib/common.py` | Keeps its source-label map (`ヴァンガ` → `ヴァンガード`; a scraping concern), and a test checks that every target is a registry `label`. |
 | `contracts/voices.md`, CLAUDE.md palette table | Point at the registry as the list; the palette table stays as the rationale. |
 
@@ -398,9 +419,9 @@ would give. GA: a `page_view` with the new path.
 
 ## 10. Relation to the event landing pages
 
-Planned (`event-design`, approved scope 2026-11-20): Worker-rendered `/events/<game>/<pref>/` (13 games × 48
-locations = 624), from precomputed `landing_pages` rows (migration **0007**, written by the importer, ≤ 624 writes
-per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data > 14 days old. Not built.
+Built, dark behind `LANDING_ENABLED` (`docs/design/event-landing.md`): Worker-rendered `/events/<game>/<pref>/` (13
+games × 48 locations = 624), from precomputed `landing_pages` rows (migration **0007**, written by the importer, ≤ 624
+writes per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data > 14 days old.
 
 - **Links, M1-M3.** No static per-prefecture links (48 per hub × 16 hubs ≈ 768 parameter URLs into `/events/`, which
   crawlers render and which would read D1 on every miss). Only one script-generated link, for the visitor's own
@@ -414,9 +435,9 @@ per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data >
   今週のイベント can read it through a strict endpoint (`/api/v1/events/landing?game=G&pref=P`, exactly those two
   params, same version-keyed edge cache): **1 row per miss instead of ≈ 890-1,250**. The row must then carry ≥ 7 days of
   events (or the first 50), which the event-build node should design for.
-- **Shared code.** The event card markup moves from `src/events.html` into an include (`src/evcard.html`, slot like
-  `<!--LOCPICK-->`) used by `/events/`, `/`, the hub, and mirrored in the Worker renderer's TS (one fixture test that
-  renders the same event both ways and compares the text).
+- **Shared code.** The event row renderer is already shared: `src/evrow.html` (`<!--EVROW-->` slot, `window.snEv`) on
+  `/events/` and `/`, mirrored by `api/src/evrow.ts` for the landing pages and held equal by a fixture test. The hub
+  uses the same include.
 - Not shared: the landing page is location-scoped and server-rendered; the hub is location-free static HTML plus
   client data. Neither replaces the other.
 
@@ -452,7 +473,7 @@ per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or data >
 
 | # | Ships | Visible change | Needs |
 | --- | --- | --- | --- |
-| M0 | Registry: `data/games.json` (13 events games, bits / sort from 0005-0006), contract, build.py / Worker / importer / page scripts read it; migration test | None but the HOCG chip name (section 2); the gate diffs dist against the previous build | `ev-bushi-int` and `voices` merged to `main` (or M0 rebased on them) |
+| M0 | Registry: `data/games.json` (13 events games, bits / sort from 0001 / 0005 / 0006), contract, build.py / Worker / importers / page scripts read it; migration test | None (the HOCG chip was settled on `main`; section 2); the gate diffs dist against the previous build | Done on `feat/game-hub` |
 | M1 | Hub template for the 10 existing slugs: releases + topics (static), calendar, day dialog, sections, switcher, `data.json`, `/<code>/` redirects, gates; titles / h1 / ItemList unchanged | Title pages get the hub body (no events yet) | Owner OK on Q1; redirect check on the preview URL |
 | M2 | Events layer: location, `/days` counts, lazy 今週のイベント, day events, `src/evcard.html`; D1 budget paragraph | Event counts on the 6 event-game hubs of `main` (OPCG, UATCG, PTCG, GCG, DBFW, DCG), plus WS once its Bushi Navi data is imported | M2 D1 gate (section 6) |
 | M3 | Hubs beyond the 10: CONAN, BS, VG, SVE, HOCG, LLOCG; og images; thin-page rule (two stateless thresholds) | New URLs in the sitemap | Explicit owner answer to Q2 and the CLAUDE.md line "Only the 10 main titles get landing pages for now" updated in the same PR; Bushi Navi games imported |
