@@ -1681,6 +1681,21 @@ if (HAS_EVENTS) {
   }
   // a day dialog shows each topic as /voices/ does: the first snapshot on or after that day, else the latest
   const titlesOn = d => [...topics.values()].filter(t => t.first <= d && d <= t.last).map(x => (x.vs.find(v => v.snap >= d) || x.vs.at(-1)).t.title);
+  // the bars a week shows, as the hub draws them: topics by first day (longer first), greedy lanes, lanes 4+ only counted
+  // per day (list: [{id, first, last}] in the answer's order; weeks: [[first day, last day]])
+  const laneBars = (list, weeks) => {
+    const bars = [], hid = {};
+    for (const [ws, we] of weeks) {
+      const segs = list.filter(x => x.first <= we && x.last >= ws).sort((a, b) => a.first.localeCompare(b.first) || b.last.localeCompare(a.last))
+        .map(x => ({ id: x.id, s: x.first > ws ? x.first : ws, e: x.last < we ? x.last : we }));
+      const end = [];
+      for (const sg of segs) {
+        let l = end.findIndex(e => e < sg.s); if (l < 0) { l = end.length; end.push(''); } end[l] = sg.e;
+        if (l < 4) bars.push([sg.id, sg.s, sg.e]); else for (let k = sg.s; k <= sg.e; k = addDay(k, 1)) hid[k] = (hid[k] || 0) + 1;
+      }
+    }
+    return { bars, hid };
+  };
   const onDay = d => [...topics.values()].filter(t => t.first <= d && d <= t.last).length;
   const addDay = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
   const nowN = HAS_VOICES && latest && (Date.parse(TODAY) - Date.parse(latest.date)) / 864e5 <= 7 ? latest.topics.filter(t => t.game === code).length : null;
@@ -1710,11 +1725,8 @@ if (HAS_EVENTS) {
       // topics as a timeline: desktop one bar per topic and week of the grid (≤ 4 lanes), phones one row per topic of the month
       const want = HAS_VOICES ? days => days.filter(d => onDay(d)) : () => [];
       if (vp === 'desktop') {
-        const exp = [];
-        for (let w = 0; w * 7 < st.grid.length; w++) {
-          const ws = st.grid[w * 7], we = st.grid[w * 7 + 6];
-          for (const [id, x] of topics) if (HAS_VOICES && x.first <= we && x.last >= ws) exp.push([id, x.first > ws ? x.first : ws, x.last < we ? x.last : we]);
-        }
+        const weeks = Array.from({ length: st.grid.length / 7 }, (_, w) => [st.grid[w * 7], st.grid[w * 7 + 6]]);
+        const exp = HAS_VOICES ? laneBars([...topics].map(([id, x]) => ({ id, ...x })), weeks).bars : [];
         const key = a => JSON.stringify([...a].sort());
         if (key(st.bars) !== key(exp)) fail(where, `topic bars ${JSON.stringify(st.bars)}, expected ${JSON.stringify(exp)}`);
       } else {
@@ -1788,7 +1800,7 @@ if (HAS_EVENTS) {
       return { date: d, count: 99, by_game: { [G]: Object.values(bt).reduce((a, b) => a + b, 0), OTHER: 5 }, by_game_type: { [G]: bt } }; };
     const short = x => { const named = Object.entries(x.by_game_type[G]).filter(([c]) => T[c] && c !== 'other').map(([c, n]) => [T[c], n]).sort((a, b) => b[1] - a[1]);
       const n = x.by_game[G], rest = n - named.reduce((t, [, k]) => t + k, 0), top = named.length <= 3 && !rest ? named : named.slice(0, 2), r = n - top.reduce((t, [, k]) => t + k, 0);
-      return top.map(([l, k]) => `${l} ${k}`).join('・') + (r ? `・ほか ${r}` : ''); };
+      return top.map(([l, k]) => `${l}\u00a0${k}`).join('') + (r ? `ほか\u00a0${r}` : ''); };
     const ym = TODAY.slice(0, 7), nx = new Date(Date.parse(`${ym}-28T00:00:00Z`) + 4 * 864e5).toISOString().slice(0, 7);
     const mdays = Array.from({ length: 31 }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`).filter(d => new Date(`${d}T00:00:00Z`).toISOString().startsWith(d));
     for (const [vp, opt] of Object.entries({ desktop: { width: 1366, height: 900 }, mobile: VIEWPORTS.mobile })) for (const scheme of ['light', 'dark']) {
@@ -1880,16 +1892,7 @@ if (HAS_EVENTS) {
         more: Object.fromEntries([...document.querySelectorAll('.tmore')].map(b => [b.dataset.openDay, b.textContent])) };
     });
     // expected: per week, topics by first day then longer first, greedy lanes; lanes 4+ only counted
-    const exp = [], hid = {};
-    for (const [ws, we] of [[addDay(sat, -6), sat], [addDay(sat, 1), addDay(sat, 7)]]) {
-      const segs = fx.map(t => ({ id: t.id, s: t.first_seen > ws ? t.first_seen : ws, e: last < we ? last : we, f: t.first_seen }))
-        .sort((a, b) => a.f.localeCompare(b.f) || 0);
-      const end = [];
-      for (const sg of segs) {
-        let l = end.findIndex(e => e < sg.s); if (l < 0) { l = end.length; end.push(''); } end[l] = sg.e;
-        if (l < 4) exp.push([sg.id, sg.s, sg.e]); else for (let k = sg.s; k <= sg.e; k = addDay(k, 1)) hid[k] = (hid[k] || 0) + 1;
-      }
-    }
+    const { bars: exp, hid } = laneBars(fx.map(t => ({ id: t.id, first: t.first_seen, last })), [[addDay(sat, -6), sat], [addDay(sat, 1), addDay(sat, 7)]]);
     const key = a => JSON.stringify([...a].map(String).sort());
     if (key(got.bars) !== key(exp)) fail(where, `bars ${JSON.stringify(got.bars)}, expected ${JSON.stringify(exp)}`);
     const wantMore = Object.fromEntries(Object.entries(hid).map(([k, n]) => [k, `ほか${n}件の話題`]));

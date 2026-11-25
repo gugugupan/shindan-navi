@@ -347,8 +347,9 @@ tbody tr.starred td.nm{font-weight:700}
 .tlanes{flex:none;display:block}
 .tmore{align-self:flex-start;border:0;background:none;padding:0;font:inherit;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer}
 /* per-type event counts (M2): a line at the foot of the cell, the location under the toolbar */
-.evc{display:flex;flex-wrap:wrap;margin:auto 0 0;padding-top:4px;border-top:1px dashed var(--line);font-size:12px;line-height:1.5;color:var(--muted)}
-.evc span{white-space:nowrap}
+.evc{display:flex;flex-wrap:wrap;gap:0 8px;margin:auto 0 0;padding-top:4px;border-top:1px dashed var(--line);font-size:12px;line-height:1.5;color:var(--muted)}
+/* a "type N" pair breaks only when it alone is wider than the cell */
+.evc span{max-width:100%;word-break:keep-all;overflow-wrap:anywhere}
 .evc b{font-family:var(--mono);color:var(--ink)}
 .agn{border:0;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline dotted 2px;text-underline-offset:4px;cursor:pointer}
 .evag{align-self:flex-start;justify-self:start;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:700;color:var(--accent)}
@@ -772,7 +773,7 @@ function renderCal(list){
     const tl=lanes[wk]?`<span class="tlanes" style="height:${lanes[wk]*26-4}px"></span>`:'';
     const tm=hidden[key]?`<button class="tmore" data-open-day="${key}" tabindex="-1">ほか${hidden[key]}件の話題</button>`:'';
     const shown=items.slice(0,PER_DAY);
-    h+=`<div class="${cls.join(' ')}" ${pos}><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}${items.length?`<span class="c">${items.length}件</span>`:''}</div>${tl}${tm}${shown.map(pkBtn).join('')}${items.length>PER_DAY?`<button class="more" data-day="${key}">+${items.length-PER_DAY}件をすべて表示</button>`:''}${evOn(key)?`<p class="evc" aria-hidden="true">${evShort(evOn(key)).map((p,i)=>`<span>${i?'・':''}${esc(p[0])} <b>${p[1]}</b></span>`).join('')}</p>`:''}</div>`;
+    h+=`<div class="${cls.join(' ')}" ${pos}><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}${items.length?`<span class="c">${items.length}件</span>`:''}</div>${tl}${tm}${shown.map(pkBtn).join('')}${items.length>PER_DAY?`<button class="more" data-day="${key}">+${items.length-PER_DAY}件をすべて表示</button>`:''}${evOn(key)?`<p class="evc" aria-hidden="true">${evShort(evOn(key)).map(p=>`<span>${esc(p[0])}&nbsp;<b>${p[1]}</b></span>`).join('')}</p>`:''}</div>`;
   }
   calEl.innerHTML=h;
 
@@ -1159,7 +1160,7 @@ async function loadEv(ym){
     j.days.forEach(d=>{
       // by_game_type is newer than by_game: answers cached before it give a total only
       const cnt=v=>Number.isSafeInteger(v)&&v>=0, raw=d&&d.by_game_type&&d.by_game_type[HUB.code];
-      const bt=raw&&typeof raw==='object'?Object.fromEntries(Object.entries(raw).filter(([c,v])=>/^[a-z0-9_]+$/.test(c)&&cnt(v))):null;
+      const bt=raw&&typeof raw==='object'?Object.fromEntries(Object.entries(raw).filter(([c,v])=>/^[a-z0-9_]*$/.test(c)&&cnt(v))):null;
       const n=d&&d.by_game&&cnt(d.by_game[HUB.code])?d.by_game[HUB.code]:bt?Object.values(bt).reduce((a,b)=>a+b,0):0;
       if(d&&typeof d.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d.date)&&n>0) out[d.date]={n, types:bt};
     });
@@ -1188,6 +1189,8 @@ function evPart(k){
   const {named,rest}=x?evSplit(x):{named:[],rest:0};
   return `<section class="dl-ev"><h3>イベント ${x?x.n:0}件（${loc}）</h3>${x?`<ul>${named.map(([l,n])=>`<li>${esc(l)} <b>${n}</b></li>`).join('')}${rest?`<li>ほか <b>${rest}</b></li>`:''}</ul>`:'<p class="dl-none">この日のイベントはありません。</p>'}<a href="${evDayLink(k)}">イベントカレンダーでこの日を見る ›</a></section>`;
 }
+// the location in effect changed: its line, the counts and an open day dialog follow
+function locChanged(){ renderLoc(); render(); if(dlg.open&&dlgDay) openDay(dlgDay,true); }
 function renderLoc(){
   const el=document.getElementById('locLine');
   if(!EVH){ el.hidden=true; return; }
@@ -1203,7 +1206,7 @@ if(EVH){
     EVH.open({current:()=>evGuess?'':evPref, onPick:c=>{
       const s=store.get(EV_KEY,null), o=s&&typeof s==='object'?{...s}:{};
       o.pref=c; store.set(EV_KEY,o); if(window.snPrefs) window.snPrefs.changed();
-      evPref=c; evGuess=false; renderLoc(); render();
+      evPref=c; evGuess=false; locChanged();
       document.getElementById('hubLoc').focus();
     }});
   });
@@ -1213,10 +1216,10 @@ if(EVH){
   // the location from the saved filters, else the guess; re-run when they change (account sync, another tab)
   async function syncLoc(){
     const p=savedPref();
-    if(p){ if(p!==evPref||evGuess){ evPref=p; evGuess=false; renderLoc(); render(); } return; }
-    if(evPref&&!evGuess){ evPref=''; renderLoc(); render(); }
+    if(p){ if(p!==evPref||evGuess){ evPref=p; evGuess=false; locChanged(); } return; }
+    if(evPref&&!evGuess){ evPref=''; locChanged(); }
     const g=await guess();
-    if(!savedPref()&&g&&(g!==evPref||!evGuess)){ evPref=g; evGuess=true; renderLoc(); render(); }
+    if(!savedPref()&&g&&(g!==evPref||!evGuess)){ evPref=g; evGuess=true; locChanged(); }
   }
   document.addEventListener('sn:prefs',syncLoc);
   window.addEventListener('storage',e=>{ if(e.key===EV_KEY||e.key===null) syncLoc(); });
