@@ -646,18 +646,22 @@ const curMonth = TODAY.slice(0,7);
 const homeMonth = months.includes(curMonth) ? curMonth : (months.find(m=>m>curMonth) || months[months.length-1]);
 // A title page whose title has nothing this month opens on its nearest month with releases: the next one, else the latest.
 const pageMonths = PAGE&&PAGE.game ? [...new Set(DATA.filter(d=>d.game===PAGE.game).map(d=>d.date.slice(0,7)))].sort() : [];
-// An events hub with nothing upcoming stays on this month instead (its event counts show there).
-const pageHome = pageMonths.length && !pageMonths.includes(curMonth) ? (pageMonths.find(m=>m>curMonth) || (PAGE.eventsApi ? null : pageMonths[pageMonths.length-1])) : null;
+// An events hub with nothing upcoming stays on this (Tokyo) month instead, where its event counts show, even when no
+// title has a release in it; navMonths then includes it.
+const evStay = !!(PAGE&&PAGE.eventsApi) && !pageMonths.some(m=>m>=curMonth);
+const pageHome = !evStay && pageMonths.length && !pageMonths.includes(curMonth) ? (pageMonths.find(m=>m>curMonth) || pageMonths[pageMonths.length-1]) : null;
+const navMonths = evStay ? [...new Set([...months,curMonth])].sort() : months;
+const todayMonth = evStay ? curMonth : homeMonth;
 const CHIP_LIMIT = 5;
 // hub mode (title pages, docs/design/game-hub.md): PAGE.hub, the other hubs for the switcher, PAGE.voicesApi for 話題.
 // ?m=YYYY-MM is the shown month (kept in the URL, carried by the switcher).
 const HUB = PAGE&&PAGE.hub || null;
-const hubDefault = pageHome || homeMonth;
+const hubDefault = pageHome || todayMonth;
 const hubM = HUB ? new URLSearchParams(location.search).get('m') : null;
 const state = {
   view: store.get('tcg.view','cal'),
   sel: PAGE&&PAGE.game ? new Set([PAGE.game]) : new Set(store.get('tcg.sel',[]).filter(g=>counts[g])),
-  month: PAGE&&PAGE.month&&months.includes(PAGE.month) ? PAGE.month : hubM&&months.includes(hubM) ? hubM : pageHome || homeMonth,
+  month: PAGE&&PAGE.month&&months.includes(PAGE.month) ? PAGE.month : hubM&&navMonths.includes(hubM) ? hubM : pageHome || todayMonth,
   sort: {k:'date',dir:1},
   chipsOpen: !!store.get('tcg.chipsOpen',false),
   showPast: false,
@@ -888,8 +892,8 @@ function render(){
   const sb=document.getElementById('starBtn'), sbb=document.getElementById('starBadge');
   sb.setAttribute('aria-pressed',state.starOnly); sb.querySelector('.ic').textContent=state.starOnly||stars.size?'★':'☆';
   sbb.hidden=!stars.size; sbb.textContent=stars.size;
-  document.getElementById('prev').disabled=state.month<=months[0];
-  document.getElementById('nextM').disabled=state.month>=months[months.length-1];
+  document.getElementById('prev').disabled=state.month<=navMonths[0];
+  document.getElementById('nextM').disabled=state.month>=navMonths[navMonths.length-1];
   const mnote=document.getElementById('mnote');
   mnote.hidden=!(isCal && pageHome && state.month===pageHome && state.sel.size===1 && state.sel.has(PAGE.game));
   if(!mnote.hidden) mnote.textContent = pageHome>curMonth ? `今月の発売はありません。次の発売月（${+pageHome.slice(5)}月）を表示しています` : '今月以降の発売はありません。最近の発売月を表示しています';
@@ -948,7 +952,7 @@ document.getElementById('agenda').addEventListener('click',e=>{
 });
 document.getElementById('prev').onclick=()=>shiftMonth(-1);
 document.getElementById('nextM').onclick=()=>shiftMonth(1);
-document.getElementById('goToday').onclick=()=>{state.month=homeMonth; if(state.view==='tbl') state.sort={k:'date',dir:1}; render(); scrollToToday();};
+document.getElementById('goToday').onclick=()=>{state.month=todayMonth; if(state.view==='tbl') state.sort={k:'date',dir:1}; render(); scrollToToday();};
 document.getElementById('vCal').onclick=()=>{state.view='cal';store.set('tcg.view','cal');track('switch_view',{view:'calendar'});render()};
 document.getElementById('vTbl').onclick=()=>{state.view='tbl';store.set('tcg.view','tbl');track('switch_view',{view:'table'});render()};
 

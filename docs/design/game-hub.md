@@ -205,7 +205,8 @@ links every hub too, so crawlers and no-JS visitors reach them.
 | Events loading / API error / 429 / 503 / month outside the event window / no events | Cells show no counts; releases and topics unaffected; no error box (counts are extra). |
 
 Default month: the title-page rule (today's month; if the game has no release in it, the next month with one, else its
-latest), with the same note; an events hub with nothing upcoming opens on the current month (as built). A registered hub
+latest), with the same note; an events hub with nothing upcoming opens on the current (Tokyo) month, also when no title has a release in it, and
+month navigation and 今日 include that month (as built). A registered hub
 is built even with no visible release. Only releases count: the build cannot see topics or events.
 
 ## 6. Data loading per source

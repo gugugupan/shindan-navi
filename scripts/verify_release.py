@@ -570,7 +570,8 @@ def check_dist(today, head, ov, arch):
         if p not in noindex and f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
     # lastmod: item pages their item's `changed` (meta.updated until the updater stamps one), calendar pages the newest
     # of their items', / meta.updated
-    vis = [{**i, 'game': canon.get(i['game'], i['game']), **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date',)}} for i in head if not ov.get(i['id'], {}).get('hide')]
+    vis = [{**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date', 'game')}} for i in head if not ov.get(i['id'], {}).get('hide')]
+    vis = [{**i, 'game': canon.get(i['game'], i['game'])} for i in vis]
     ch = lambda xs: max((x.get('changed') or meta['updated'] for x in xs), default=meta['updated'])
     want_lastmod = {f'{SITE}/item/{i["id"]}/': i.get('changed') or meta['updated'] for i in arch + vis}
     for pg in pages:

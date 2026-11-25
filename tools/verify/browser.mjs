@@ -1900,6 +1900,34 @@ if (HAS_EVENTS) {
       console.log(`  ${where.padEnd(22)} checked`);
       await ctx.close();
     }
+    // an events hub with nothing upcoming opens on the Tokyo month even when no title has a release in it (fixture: the
+    // page's DATA without this month and without the game's later items): that month's /days, no note, 今日 stays there
+    {
+      const where = `hub events ${evHub.path} nothing upcoming`;
+      const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+      const page = await ctx.newPage(), days = [], bad = [];
+      await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+      page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+      await page.route('**/api/v1/geo', r => r.fulfill({ json: { region_code: 'JP-13' } }));
+      await page.route('**/api/v1/events/days?*', r => { const u = new URL(r.request().url()); days.push(u.searchParams.get('from')); r.fulfill({ json: { days: [] } }); });
+      await page.route(BASE + evHub.path, async r => {
+        const html = await (await r.fetch()).text(), game = evHub.js.game;
+        const out = html.replace(/const DATA = (\[.*?\]);\n/, (_, j) => `const DATA = ${JSON.stringify(JSON.parse(j).filter(d => !d.date.startsWith(ym) && !(d.game === game && d.date >= ym)))};\n`);
+        if (out === html) fail(where, 'DATA not found in the page');
+        r.fulfill({ body: out, contentType: 'text/html; charset=utf-8' });
+      });
+      try {
+        await page.goto(BASE + evHub.path, { waitUntil: 'networkidle' });
+        const st = await page.evaluate(() => ({ month: state.month, note: !document.getElementById('mnote').hidden, prev: document.getElementById('prev').disabled }));
+        if (st.month !== ym || st.note || days[0] !== `${ym}-01`) fail(where, `${JSON.stringify(st)} days ${days.join(' ')}`);
+        await page.locator('#nextM').click();
+        await page.locator('#goToday').click();
+        if (await page.evaluate(() => state.month) !== ym) fail(where, '今日 left the current month');
+      } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+      for (const b of [...new Set(bad)]) fail(where, b);
+      console.log(`  ${where} checked`);
+      await ctx.close();
+    }
     // a game without events: no location line, no geo or events request
     const noEv = HUBS.find(h => !h.js.eventsApi);
     if (noEv) {

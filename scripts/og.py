@@ -102,7 +102,8 @@ render('voices', card_html('voices', 'TCG<em>話題</em>\nカレンダー', 'X �
 
 done = set()
 for p in pages:
-    name = p['og']
+    # a hub's image is og/<slug>.png even while its page still points at the og/home.png fallback
+    name = p['js']['hub']['slug'] if (p.get('js') or {}).get('hub') else p['og']
     if name in done:
         continue
     done.add(name)
