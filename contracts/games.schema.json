@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://shindan-navi.app/contracts/games.schema.json",
+  "title": "Game registry (data/games.json)",
+  "description": "One row per title; rules that span rows (unique keys, migrations, icon files, built paths) are in contracts/games.md.",
+  "type": "array",
+  "minItems": 1,
+  "items": { "$ref": "#/definitions/game" },
+  "definitions": {
+    "colour": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+    "game": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "slug", "hub", "label", "official", "short", "chip", "title_alt", "aliases", "icon", "colour", "official_url", "sources"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{1,7}$", "description": "Internal id; never renamed (D1 games.code, voices topics, saved filters)." },
+        "slug": { "type": ["string", "null"], "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "URL segment of /<slug>/ and /events/<slug>/<pref>/; null = none." },
+        "hub": { "type": "boolean", "description": "build.py builds the title page /<slug>/." },
+        "label": { "type": "string", "minLength": 1, "description": "Display name: items.json `game`, GAME_ICON key, /events/ chip and column name." },
+        "official": { "type": ["string", "null"], "minLength": 1, "description": "Official title name (title pages; D1 games.name for events games)." },
+        "short": { "type": ["string", "null"], "minLength": 1, "description": "Common short name: title page titles / h1, event landing pages." },
+        "chip": { "type": ["string", "null"], "minLength": 1, "description": "Tight label: / and /voices/ chips." },
+        "title_alt": { "type": ["string", "null"], "minLength": 1, "description": "Second name in a title page's <title>." },
+        "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Names people search with (title page keywords and about text)." },
+        "icon": { "type": ["string", "null"], "pattern": "^([a-z0-9-]+\\.(png|svg)|.)$", "description": "public/gi/ file or a one-character monogram; null = first character of the label." },
+        "colour": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object", "additionalProperties": false, "required": ["slot", "light", "dark"],
+              "properties": {
+                "slot": { "type": "integer", "minimum": 1, "description": "Palette slot: CLAUDE.md › Event game palette, contracts/voices.md › Game codes." },
+                "light": { "$ref": "#/definitions/colour" },
+                "dark": { "$ref": "#/definitions/colour" }
+              }
+            }
+          ],
+          "description": "null = the release calendar's computed hue."
+        },
+        "official_url": { "type": ["string", "null"], "pattern": "^https://", "description": "公式 link of the title's releases." },
+        "sources": {
+          "type": "object", "additionalProperties": false, "required": ["releases", "events", "voices"],
+          "properties": {
+            "releases": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "description": "items.json `game` labels of this title (normally [label])." },
+            "events": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object", "additionalProperties": false, "required": ["bit", "sort"],
+                  "properties": {
+                    "bit": { "type": "integer", "minimum": 1, "maximum": 536870912, "description": "Power of two; D1 games.bit; never changes." },
+                    "sort": { "type": "integer", "minimum": 1, "description": "D1 games.sort_order = /events/ order." }
+                  }
+                }
+              ]
+            },
+            "voices": { "type": "boolean", "description": "Topics (data/voices/) may use this code." }
+          }
+        }
+      }
+    }
+  }
+}

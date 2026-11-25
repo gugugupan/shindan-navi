@@ -4,7 +4,6 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { renderer, type Ev, type Group } from '../src/evrow';
 import { hydrate, LANDING_GAMES, PREF_SLUGS } from '../src/landing';
-import { GAMES } from '../src/constants';
 import { landingEvent, locOf, REPO_DIR } from '../scripts/lib/importer.mjs';
 import { asApi, conflicting, sampleEvents, synthetic } from './helpers';
 
@@ -97,29 +96,10 @@ describe('landing rows keep what the rows show', () => {
   });
 });
 
-describe('landing registry matches the pages', () => {
-  it('uses the /events/ palette and display names', () => {
-    const block = read('src/events.html').split('const GAMES = [')[1].split('];')[0];
-    const rows = [...block.matchAll(/\{code:'(\w+)', name:'([^']+)', c:'(#[0-9a-f]{6})', cd:'(#[0-9a-f]{6})', bit:(\d+)\}/g)];
-    expect(rows.map((m) => m[1])).toEqual(GAMES.map((g) => g.code));
-    for (const [, code, label, c, cd] of rows) expect(LANDING_GAMES[code]).toMatchObject({ label, c, cd });
-  });
-
-  it('gives /events/ the same landing slugs and short names', () => {
+describe('landing links on /events/', () => {
+  it('use the landing location slugs', () => {
     const src = read('src/events.html');
-    const games = Object.fromEntries([...src.split('const LP_GAMES = {')[1].split('};')[0].matchAll(/(\w+):\['([a-z-]+)','([^']+)'\]/g)].map((m) => [m[1], [m[2], m[3]]]));
-    expect(games).toEqual(Object.fromEntries(GAMES.map((g) => [g.code, [g.slug, LANDING_GAMES[g.code].short]])));
     const prefs = [...src.split('const LP_PREFS = [')[1].split('];')[0].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
     expect(prefs).toEqual(PREF_SLUGS);
-  });
-
-  it('uses the GAME_ICON icons and the build.py title pages', () => {
-    const build = read('scripts/build.py');
-    const icons = Object.fromEntries([...build.split('GAME_ICON={')[1].split('}')[0].matchAll(/'([^']+)':'([^']+)'/g)].map((m) => [m[1], m[2]]));
-    const titles = new Set([...build.split('GAMES=[')[1].split(']\n')[0].matchAll(/\('([a-z]+)','/g)].map((m) => m[1]));
-    for (const g of GAMES) {
-      expect(LANDING_GAMES[g.code].icon).toBe(icons[LANDING_GAMES[g.code].label]);
-      expect(LANDING_GAMES[g.code].releases).toBe(titles.has(g.slug));
-    }
   });
 });

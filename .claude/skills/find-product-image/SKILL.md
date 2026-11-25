@@ -10,7 +10,7 @@ Goal: the real package (pack / box / deck) image of that exact product, from an 
 ## Where to look, in order
 
 1. **The item's own `url`** in `data/items.json` — usually the official product page; check `og:image` and the main product image.
-2. **The title's official site** (`OFFICIAL` in `scripts/build.py`), its products and news pages. Announcements often carry the package art before the product page does.
+2. **The title's official site** (`official_url` of its row in `data/games.json`), its products and news pages. Announcements often carry the package art before the product page does.
 3. **トレカの地図** (`https://torecamap.co.jp/release-schedule?year=YYYY&month=M`) — the updater already pulls these, so only useful if a run was missed.
 4. **カードラボ online shop** (`https://www.c-labo-online.jp/product/<n>`), 駿河屋, Amazon.co.jp product pages.
 

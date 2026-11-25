@@ -33,7 +33,7 @@ A `WARNING: … lost "official" from sources` line means the official step ran a
 
 | Section | What to do |
 |---|---|
-| 未対応のタイトル名 | A source used a title label `GAME` doesn't know. Add it to `GAME` in `tools/release-collectors/lib/common.py`, mapped to the existing display name (check `data/items.json` for spelling), so one title doesn't split into two chips. Labels only change on the next collect: rerun without `--skip-collect`. |
+| 未対応のタイトル名 | A source used a title label `GAME` doesn't know. Add it to `GAME` in `tools/release-collectors/lib/common.py`, mapped to the existing display name (check `data/items.json` for spelling), so one title doesn't split into two chips; a new title also needs a `data/games.json` row (`contracts/games.md`; `verify_release.py` fails without one). Labels only change on the next collect: rerun without `--skip-collect`. |
 | 新規 | Sanity-check names and dates. |
 | 発売日の変更 / 価格の変更 | Usually real (延期, price announced). If a match looks wrong (two different products merged), propose `date` / `name` / `pack` / `box` overrides to the owner (see below). |
 | ソースから消えた今後の商品 | Check the official site. If cancelled, propose `"hide": true` for that id to the owner; if still on sale, leave it. |

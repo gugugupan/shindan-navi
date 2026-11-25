@@ -47,7 +47,7 @@ The files are the importer's input and the backup of what D1 holds; nothing read
 
 ## Game codes
 
-Every code has a fixed light/dark colour pair in `GAMES`, from the `/events/` game palette (CLAUDE.md › Event game
+Every code has a fixed light/dark colour pair (registry `colour`), from the `/events/` game palette (CLAUDE.md › Event game
 palette, slots 1-13: `OPCG`, `UATCG`, `CONAN`, `PTCG`, `GCG`, `BS`, `DCG`, `DBFW`, `WS`, `VG`, `SVE`, `HOCG`, `LLOCG`).
 The titles without events take the next slots, so `/events/` can adopt the same ones if it ever lists them:
 
@@ -59,8 +59,10 @@ The titles without events take the next slots, so `/events/` can adopt the same 
 
 15 and 16 were picked (2026-11-20) the palette's way: greedily maximising the worst OKLab ΔE×100 against slots 1-14 in
 both themes (normal ≥10.0, simulated protan / deutan ≥5.4), ≥3:1 on white (light) and on `#181b27` (dark).
-The list lives in `GAMES` in `src/voices.html`; the importer reads the codes from there and
-refuses unknown ones (build.py embeds the palette for the home block). Add a code there (and here) before writing topics for a new game.
+The list is the rows with `sources.voices` of the game registry (`data/games.json`, `contracts/games.md`; the events
+games in `/events/` order, then the others); the importer refuses other codes, build.py embeds the codes, names, chips
+and colours into `/voices/` and the home block. Add or flag a row there (and the colour here) before writing topics for
+a new game.
 
 ## How the page reads it
 

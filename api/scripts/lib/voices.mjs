@@ -23,10 +23,10 @@ const realDate = (v) => typeof v === 'string' && DATE.test(v) && new Date(`${v}T
 const len = (s) => [...s].length;
 export const todayJst = (nowMs = Date.now()) => new Date(nowMs + 9 * 3_600_000).toISOString().slice(0, 10);
 
-/** Game codes from GAMES in src/voices.html. */
-export function voiceGames(src = readFileSync(join(REPO_DIR, 'src/voices.html'), 'utf8')) {
-  const block = src.split('const GAMES = [')[1].split('];')[0];
-  return [...block.matchAll(/\{code:'([A-Z]+)'/g)].map((m) => m[1]);
+/** Voices game codes of the game registry (contracts/games.md): the events games in /events/ order, then the others. */
+export function voiceGames(reg = JSON.parse(readFileSync(join(REPO_DIR, 'data', 'games.json'), 'utf8'))) {
+  const ev = reg.filter((g) => g.sources.events).sort((a, b) => a.sources.events.sort - b.sources.events.sort);
+  return [...ev, ...reg.filter((g) => !g.sources.events)].filter((g) => g.sources.voices).map((g) => g.code);
 }
 
 let schema;
@@ -97,7 +97,7 @@ export function checkSnapshot(name, text, { games = voiceGames(), today = todayJ
     }
     if (typeof tid !== 'string' || !ID.test(tid) || ids.has(tid)) tbad('bad or duplicate id');
     ids.add(tid);
-    if (!games.includes(t.game)) tbad(`unknown game ${t.game} (GAMES in src/voices.html)`);
+    if (!games.includes(t.game)) tbad(`unknown game ${t.game} (voices games in data/games.json)`);
     for (const [k, n] of [['title', 40], ['summary', 160]]) {
       if (typeof t[k] !== 'string' || !t[k].trim() || len(t[k]) > n) tbad(`${k} empty or over ${n} characters`);
     }

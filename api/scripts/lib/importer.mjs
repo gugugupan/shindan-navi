@@ -12,7 +12,10 @@ export const REPO_DIR = resolve(API_DIR, '..');
 export const CONTRACTS_DIR = join(REPO_DIR, 'contracts');
 export const DEFAULT_DATA_DIR = join(REPO_DIR, 'data', 'events');
 
-export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG', 'WS', 'VG', 'SVE', 'HOCG', 'LLOCG'];
+// The events games of the game registry (contracts/games.md), in /events/ order.
+const EVENT_GAMES = JSON.parse(readFileSync(join(REPO_DIR, 'data', 'games.json'), 'utf8'))
+  .filter((g) => g.sources.events).sort((a, b) => a.sources.events.sort - b.sources.events.sort);
+export const GAME_CODES = EVENT_GAMES.map((g) => g.code);
 const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan', bushinavi: 'bnavi' };
 // 9999-12-31T23:59:59Z: date-only events sort after timed ones on the same day.
 export const NULL_SORT = 253402300799;
@@ -178,9 +181,7 @@ export function sqlLiteral(v) {
 }
 
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;
-export const GAME_BITS = {
-  OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8, GCG: 16, DBFW: 32, BS: 64, DCG: 128, WS: 256, VG: 512, SVE: 1024, HOCG: 2048, LLOCG: 4096,
-};
+export const GAME_BITS = Object.fromEntries(EVENT_GAMES.map((g) => [g.code, g.sources.events.bit]));
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'];
 const VENUE_KEYS = ['name', 'source_id', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code', 'geo'];
 

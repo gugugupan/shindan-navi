@@ -1,5 +1,6 @@
 // Event landing pages /events/<slug>/<pref>/ and /events/sitemap.xml (docs/design/event-landing.md). Rendered from one
 // landing_pages row (written by the events importer, migration 0007) into the shell dist/_landing.html.
+import REGISTRY from '../../data/games.json';
 import { GAMES, PREFECTURES, TYPE_LABELS } from './constants';
 import { esc, name as displayName, renderer, safeUrl, venueLabel, type Ev, type Group, type RowGame } from './evrow';
 
@@ -9,24 +10,12 @@ export const TEMPLATE_PATH = '/_landing';
 export const STALE_DAYS = 14;
 const MAX_LD_EVENTS = 50;
 
-// Display name (= GAME_ICON key and the /events/ chip name), common short name, palette (CLAUDE.md › Event game
-// palette), icon (GAME_ICON in build.py) and whether build.py has a 新弾 page at /<slug>/. tests/evrow.test.ts checks
-// these against src/events.html and scripts/build.py.
-export const LANDING_GAMES: Record<string, { label: string; short: string; c: string; cd: string; icon: string; releases: boolean }> = {
-  OPCG: { label: 'ONE PIECE', short: 'ワンピカード', c: '#be362d', cd: '#de837c', icon: 'opcg.png', releases: true },
-  UATCG: { label: 'UNION ARENA', short: 'ユニアリ', c: '#7a2dbe', cd: '#b17cde', icon: 'ua.png', releases: true },
-  CONAN: { label: '名探偵コナン', short: 'コナンカード', c: '#2d81be', cd: '#7cb6de', icon: 'conan.svg', releases: false },
-  PTCG: { label: 'ポケモンカード', short: 'ポケカ', c: '#be972d', cd: '#dec47c', icon: 'ptcg.svg', releases: true },
-  GCG: { label: 'ガンダム', short: 'ガンダムカード', c: '#1d357c', cd: '#3b60ce', icon: 'ガ', releases: true },
-  DBFW: { label: 'DBフュージョンワールド', short: 'フュージョンワールド', c: '#8a2e0f', cd: '#e45525', icon: 'dbfw.png', releases: true },
-  BS: { label: 'バトルスピリッツ', short: 'バトスピ', c: '#7c1d4d', cd: '#ce3b85', icon: 'バ', releases: false },
-  DCG: { label: 'デジモン', short: 'デジカ', c: '#12a581', cd: '#40e7be', icon: 'dcg.png', releases: true },
-  WS: { label: 'ヴァイスシュヴァルツ', short: 'ヴァイス', c: '#d31785', cd: '#ed6eb8', icon: 'ws.png', releases: true },
-  VG: { label: 'ヴァンガード', short: 'ヴァンガード', c: '#808a0f', cd: '#d4e425', icon: 'vg.png', releases: false },
-  SVE: { label: 'Shadowverse EVOLVE', short: 'シャドバエボルヴ', c: '#4d6f2a', cd: '#85b950', icon: 'シ', releases: false },
-  HOCG: { label: 'ホロライブ', short: 'ホロカ', c: '#a96660', cd: '#cfadaa', icon: 'hocg.png', releases: false },
-  LLOCG: { label: 'ラブライブ！OCG', short: 'ラブカ', c: '#366063', cd: '#62a1a7', icon: 'llocg.png', releases: false },
-};
+// Display name (= GAME_ICON key and the /events/ chip name), common short name, palette, icon and whether build.py has a
+// 新弾 page at /<slug>/: the events games' rows of the game registry (contracts/games.md).
+export const LANDING_GAMES: Record<string, { label: string; short: string; c: string; cd: string; icon: string; releases: boolean }> =
+  Object.fromEntries(REGISTRY.filter((g) => g.sources.events)
+    .sort((a, b) => a.sources.events!.sort - b.sources.events!.sort)
+    .map((g) => [g.code, { label: g.label, short: g.short!, c: g.colour!.light, cd: g.colour!.dark, icon: g.icon ?? [...g.label][0].toUpperCase(), releases: g.hub }]));
 
 // URL segment per location, JIS order (JP-01..JP-47), then online.
 export const PREF_SLUGS = [

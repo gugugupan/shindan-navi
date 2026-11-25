@@ -214,10 +214,9 @@ const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m>12){
 const WEEK = Array.from({length:7},(_,i)=>addD(TODAY,i));
 // releases are known for H.from..H.until only (build day -1 .. +14)
 const covered = d => d>=H.from && d<=H.until;
-// short title labels for the strip panel and the 表示中 line (other titles show their full name)
-const SHORT = {'ポケモンカード':'ポケカ','ONE PIECE':'ワンピ','遊戯王OCG':'遊戯王','遊戯王ラッシュデュエル':'ラッシュデュエル','デュエル・マスターズ':'デュエマ',
-  'ヴァイスシュヴァルツ':'ヴァイス','UNION ARENA':'ユニアリ','DBフュージョンワールド':'フュージョンワールド','デジモン':'デジカ','バトルスピリッツ':'バトスピ',
-  'ヴァンガード':'ヴァンガ','Shadowverse EVOLVE':'シャドバ','ホロライブ':'ホロカ','ラブライブ！OCG':'ラブカ','名探偵コナン':'コナン'};
+// short title labels for the 表示中 line (data/games.json chips; other titles show their full name); here DBフュージョンワールド
+// reads フュージョンワールド, not its chip DBFW
+const SHORT = {.../*SHORT*/{}, 'DBフュージョンワールド':'フュージョンワールド'};
 
 // same colours as the release calendar (src/template.html: titles by count, golden-angle hues)
 const games = Object.keys(H.counts).sort((a,b)=>H.counts[b]-H.counts[a]||a.localeCompare(b,'ja'));
@@ -251,23 +250,9 @@ function relPart(x){
 // ---- events (BUILD_EVENTS)
 const EVENTS = !!window.snLoc;
 const LOC = window.snLoc;
-// the /events/ games in its order (columns and chips keep it every day); c / cd = light / dark colour (palette in
-// CLAUDE.md), bit = meta's game mask
-const EV_GAMES = [
-  {code:'OPCG', name:'ONE PIECE', short:'ワンピ', c:'#be362d', cd:'#de837c', bit:1},
-  {code:'UATCG', name:'UNION ARENA', short:'ユニアリ', c:'#7a2dbe', cd:'#b17cde', bit:2},
-  {code:'CONAN', name:'名探偵コナン', short:'コナン', c:'#2d81be', cd:'#7cb6de', bit:4},
-  {code:'PTCG', name:'ポケモンカード', short:'ポケカ', c:'#be972d', cd:'#dec47c', bit:8},
-  {code:'GCG', name:'ガンダム', short:'ガンダム', c:'#1d357c', cd:'#3b60ce', bit:16},
-  {code:'DBFW', name:'DBフュージョンワールド', short:'DBFW', c:'#8a2e0f', cd:'#e45525', bit:32},
-  {code:'BS', name:'バトルスピリッツ', short:'バトスピ', c:'#7c1d4d', cd:'#ce3b85', bit:64},
-  {code:'DCG', name:'デジモン', short:'デジカ', c:'#12a581', cd:'#40e7be', bit:128},
-  {code:'WS', name:'ヴァイスシュヴァルツ', short:'ヴァイス', c:'#d31785', cd:'#ed6eb8', bit:256},
-  {code:'VG', name:'ヴァンガード', short:'ヴァンガ', c:'#808a0f', cd:'#d4e425', bit:512},
-  {code:'SVE', name:'Shadowverse EVOLVE', short:'シャドバ', c:'#4d6f2a', cd:'#85b950', bit:1024},
-  {code:'HOCG', name:'ホロライブ', short:'ホロカ', c:'#a96660', cd:'#cfadaa', bit:2048},
-  {code:'LLOCG', name:'ラブライブ！OCG', short:'ラブカ', c:'#366063', cd:'#62a1a7', bit:4096}
-];
+// the /events/ games in its order (columns and chips keep it every day; data/games.json): short = chip, c / cd = light /
+// dark palette colour, bit = meta's game mask
+const EV_GAMES = /*EV_GAMES*/[];
 const EVG = Object.fromEntries(EV_GAMES.map(g=>[g.code,g]));
 const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
 const SAVED_KEY = 'tcg.ev.filters';

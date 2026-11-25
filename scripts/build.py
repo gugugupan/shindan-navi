@@ -1,20 +1,6 @@
 import json,sys,os,urllib.parse,shutil,html,datetime,re,unicodedata
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from sourcekey import product_code
-OFFICIAL={'遊戯王OCG':'https://www.yugioh-card.com/japan/','ヴァイスシュヴァルツ':'https://ws-tcg.com/','ヴァンガード':'https://cf-vanguard.com/tcg/',
-'MTG':'https://mtg-jp.com/','バトルスピリッツ':'https://www.battlespirits.com/','デュエル・マスターズ':'https://dm.takaratomy.co.jp/','リセ':'https://lycee-tcg.com/',
-'ポケモンカード':'https://www.pokemon-card.com/','FFTCG':'https://www.square-enix-shop.com/jp/ff-tcg/','Z/X':'https://www.zxtcg.com/',
-'WIXOSS':'https://www.takaratomy.co.jp/products/wixoss/','バボカ!!':'https://www.takaratomy.co.jp/products/haikyuvobacabreak/','Reバース':'https://rebirth-fy.com/',
-'デジモン':'https://digimoncard.com/','遊戯王ラッシュデュエル':'https://www.konami.com/yugioh/rushduel/','DIVINE CROSS':'https://divinecross.jp/',
-'Shadowverse EVOLVE':'https://shadowverse-evolve.com/','ONE PIECE':'https://www.onepiece-cardgame.com/','OSICA':'https://www.osicatcg.com/',
-'ヴァイスシュヴァルツブラウ':'https://ws-blau.com/','ビルディバイド':'https://tcg.build-divide.com/bright','UNION ARENA':'https://www.unionarena-tcg.com/jp/',
-'Flesh and Blood':'https://fabtcg.com/jp','DBフュージョンワールド':'https://www.dbs-cardgame.com/fw/jp/','名探偵コナン':'https://www.takaratomy.co.jp/products/conan-cardgame/',
-'五等分の花嫁':'https://5hanayome-cardgame.com/','ウルトラマン':'https://ultraman-cardgame.com/page/jp/top','ラブライブ！OCG':'https://llofficial-cardgame.com/',
-'ロルカナ':'https://www.takaratomy.co.jp/products/disneylorcana/','ガンダム':'https://www.gundam-gcg.com/jp/','ゴジラ':'https://godzilla-cardgame.com/',
-'KAMITSUBAKI':'https://tcg.kamitsubaki.jp/','Xross Stars':'https://xross-stars.com/','アニマルカードゲーム':'https://acgtcg.com/',
-'ファンスターズリーグ':'https://www.fanstars-league.com/','Harry Potter':'https://tcg.movic.jp/harrypotter/','パルワールド':'https://palworld-official-cardgame.com/',
-'ホロビート':'https://www.takaratomy.co.jp/products/horobeat-cardgame/'}
-OFFDOM=[urllib.parse.urlparse(u).netloc.replace('www.','') for u in OFFICIAL.values()]+['ws-rose.com','magic.wizards.com','pokemon-card.com']
 
 ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GA_ID=os.environ.get('GA_ID','')
@@ -25,30 +11,57 @@ UPDATED=META['updated']
 TODAY=os.environ.get('BUILD_TODAY') or datetime.date.today().isoformat()
 DOW='月火水木金土日'
 
+# Game registry (contracts/games.md): one row per title; every game list below and in the page scripts comes from it.
+REG=json.load(open(os.path.join(ROOT,'data/games.json')))
+# paths a hub slug or a lowercased code must not take (built pages, public/ entries)
+RESERVED={'releases','events','voices','item','privacy','feedback','api','fonts','sitemap.xml','robots.txt',*os.listdir(os.path.join(ROOT,'public'))}
+def registry_errors(reg):
+    err=[]
+    def uniq(name,vals):
+        vals=[v for v in vals if v is not None]
+        for v in {v for v in vals if vals.count(v)>1}: err.append(f'duplicate {name} {v!r}')
+    uniq('code',[g['code'] for g in reg]); uniq('slug',[g['slug'] for g in reg]); uniq('label',[g['label'] for g in reg])
+    uniq('release label',[l for g in reg for l in g['sources']['releases']])
+    uniq('events.bit',[(g['sources']['events'] or {}).get('bit') for g in reg]); uniq('events.sort',[(g['sources']['events'] or {}).get('sort') for g in reg])
+    uniq('colour.slot',[(g['colour'] or {}).get('slot') for g in reg])
+    slugs={g['slug'] for g in reg}
+    for g in reg:
+        c,ev=g['code'],g['sources']['events']
+        if not re.fullmatch(r'[A-Z][A-Z0-9]{1,7}',c): err.append(f'{c}: bad code')
+        if g['slug'] is not None and not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',g['slug']): err.append(f'{c}: bad slug')
+        for p in {g['slug'],c.lower()}-{None}:
+            if p in RESERVED or re.fullmatch(r'\d{4}-\d{2}',p): err.append(f'{c}: {p!r} is a built path')
+        if c.lower() in slugs and c.lower()!=g['slug']: err.append(f'{c}: lowercased code is another game\'s slug')
+        if ev and not (isinstance(ev['bit'],int) and 0<ev['bit']<2**30 and ev['bit']&(ev['bit']-1)==0): err.append(f'{c}: events.bit not a power of two < 2^30')
+        need=(['slug','short','title_alt','official'] if g['hub'] else [])+(['slug','official','short','chip','colour'] if ev else [])+(['chip','colour'] if g['sources']['voices'] else [])
+        for k in dict.fromkeys(need):
+            if not g[k]: err.append(f'{c}: {k} missing')
+        if g['label'] not in g['sources']['releases']: err.append(f'{c}: label not in sources.releases')
+        ic=g['icon']
+        if ic and (not os.path.exists(os.path.join(ROOT,'public/gi',ic)) if ic.endswith(('.png','.svg')) else len(ic)!=1): err.append(f'{c}: icon {ic!r} is neither a public/gi/ file nor one character')
+    return err
+if (_e:=registry_errors(REG)): sys.exit('data/games.json: '+'; '.join(_e))
+# events games in /events/ order (events.sort = D1 games.sort_order); voices games: those, then the rest in registry order
+EV_REG=sorted((g for g in REG if g['sources']['events']),key=lambda g:g['sources']['events']['sort'])
+VOICE_REG=[g for g in EV_REG if g['sources']['voices']]+[g for g in REG if g['sources']['voices'] and not g['sources']['events']]
+# page-script game lists (slots like /*EV_GAMES*/[]) with the keys the scripts read: name = label, short = chip,
+# c / cd = palette colours, bit = events.bit
+PAGE_KEY={'code':lambda g:g['code'],'name':lambda g:g['label'],'short':lambda g:g['chip'],'c':lambda g:g['colour']['light'],
+    'cd':lambda g:g['colour']['dark'],'bit':lambda g:g['sources']['events']['bit']}
+def page_games(rows,keys): return [{k:PAGE_KEY[k](g) for k in keys} for g in rows]
+def js(v): return json.dumps(v,ensure_ascii=False).replace('</','<\\/')
+OFFICIAL={l:g['official_url'] for g in REG if g['official_url'] for l in g['sources']['releases']}
 # slug, data game key, official name, common short name
-GAMES=[('pokemon','ポケモンカード','ポケモンカードゲーム','ポケカ'),
-       ('onepiece','ONE PIECE','ONE PIECEカードゲーム','ワンピカード'),
-       ('mtg','MTG','マジック：ザ・ギャザリング','MTG'),
-       ('yugioh','遊戯王OCG','遊戯王OCG デュエルモンスターズ','遊戯王'),
-       ('duelmasters','デュエル・マスターズ','デュエル・マスターズ','デュエマ'),
-       ('weiss','ヴァイスシュヴァルツ','ヴァイスシュヴァルツ','ヴァイス'),
-       ('unionarena','UNION ARENA','UNION ARENA','ユニアリ'),
-       ('gundam','ガンダム','ガンダムカードゲーム','ガンダムカード'),
-       ('dragonball','DBフュージョンワールド','ドラゴンボールスーパーカードゲーム フュージョンワールド','フュージョンワールド'),
-       ('digimon','デジモン','デジモンカードゲーム','デジカ')]
-
+GAMES=[(g['slug'],g['label'],g['official'],g['short']) for g in REG if g['hub']]
+# extra names people search with, and the second name in a title page's <title>
+ALIAS={g['slug']:g['aliases'] for g in REG if g['hub']}
+TITLE_ALT={g['slug']:g['title_alt'] for g in REG if g['hub']}
 # Icon next to every game name on every page, by display name (owner decision 2026-11-20): `x.png` = official site
 # favicon kept in public/gi/ (identification only, never hotlinked), `x.svg` = an icon we drew ourselves (no official
 # asset), otherwise a one-character monogram tile in the game's colour. Never a KONAMI asset for 遊戯王. Titles
-# missing here get their first character.
-GAME_ICON={'UNION ARENA':'ua.png','DBフュージョンワールド':'dbfw.png','デジモン':'dcg.png','ヴァイスシュヴァルツ':'ws.png',
-    'ヴァンガード':'vg.png','ホロライブ':'hocg.png','ラブライブ！OCG':'llocg.png','MTG':'mtg.png',
-    'ONE PIECE':'opcg.png','ポケモンカード':'ptcg.svg','ガンダム':'ガ','バトルスピリッツ':'バ','Shadowverse EVOLVE':'シ','デュエル・マスターズ':'デ',
-    '遊戯王OCG':'遊','遊戯王ラッシュデュエル':'ラ','名探偵コナン':'conan.svg','DIVINE CROSS':'D','Flesh and Blood':'F','ビルディバイド':'ビ',
-    'ウルトラマン':'ウ','KAMITSUBAKI':'K','アニマルカードゲーム':'ア','パルワールド':'パ','ゴジラ':'ゴ','FFTCG':'F','Xross Stars':'X',
-    'ホロビート':'ホ','Z/X':'Z','バボカ!!':'ボ','リセ':'リ','OSICA':'O','ファンスターズリーグ':'フ','Harry Potter':'H',
-    '五等分の花嫁':'五','WIXOSS':'W'}
-for _v in GAME_ICON.values(): assert not _v.endswith(('.png','.svg')) or os.path.exists(os.path.join(ROOT,'public/gi',_v)),_v
+# without an icon get their first character.
+GAME_ICON={l:g['icon'] for g in REG if g['icon'] for l in g['sources']['releases']}
+OFFDOM=[urllib.parse.urlparse(u).netloc.replace('www.','') for u in OFFICIAL.values()]+['ws-rose.com','magic.wizards.com','pokemon-card.com']
 # gi(name) in every page script (slot /*GICON*/); decorative, the name always sits next to it
 GICON_JS=('const GICON = '+json.dumps(GAME_ICON,ensure_ascii=False)+';\n'
     "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.(png|svg)$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };")
@@ -99,6 +112,8 @@ archived.sort(key=lambda d:(d['date'],d['game']))
 CHANGED={i['id']:i.get('changed') or UPDATED for i in ARCHIVE+it}
 def lastmod(items): return max((CHANGED[d['id']] for d in items),default=UPDATED)
 used={d['game'] for d in data}
+_unmapped=sorted({i['game'] for i in it}-{l for g in REG for l in g['sources']['releases']})
+if _unmapped: print('WARN: items.json titles without a data/games.json row (sources.releases): '+', '.join(_unmapped),file=sys.stderr)
 off={k:v for k,v in OFFICIAL.items() if k in used}
 template=open(os.path.join(ROOT,'src/template.html')).read()
 template=template.replace('/*GICON*/',GICON_JS).replace('/*DATA*/',json.dumps(data,ensure_ascii=False).replace('</','<\\/')).replace('/*OFFICIAL*/',json.dumps(off,ensure_ascii=False))
@@ -131,17 +146,7 @@ def static_list(items,heading,note,show_game=True):
     out.append('</div></details></section>')
     return ''.join(out)
 
-# extra names people search with, per main title
-ALIAS={'pokemon':['ポケモンカード','ポケカ','PTCG'],'onepiece':['ワンピースカード','ワンピカード','ワンピ'],
-       'mtg':['マジック','MTG','ギャザ'],'yugioh':['遊戯王','遊戯王OCG','OCG'],'duelmasters':['デュエマ','デュエル・マスターズ'],
-       'weiss':['ヴァイス','ヴァイスシュヴァルツ','WS'],'unionarena':['ユニアリ','ユニオンアリーナ','UNION ARENA'],
-       'gundam':['ガンダムカード','ガンダムTCG','GCG'],'dragonball':['フュージョンワールド','DBFW','ドラゴンボールカード'],
-       'digimon':['デジカ','デジモンカード']}
 SLUG={k:s for s,k,n,sh in GAMES}
-# the second name in a title page's <title>: the full or other common name people search with next to the short one
-TITLE_ALT={'pokemon':'ポケモンカード','onepiece':'ワンピースカード','mtg':'マジック：ザ・ギャザリング','yugioh':'遊戯王OCG',
-           'duelmasters':'デュエル・マスターズ','weiss':'ヴァイスシュヴァルツ','unionarena':'UNION ARENA','gundam':'ガンダムカードゲーム',
-           'dragonball':'ドラゴンボール','digimon':'デジモンカード'}
 COMMON_KW=['TCG','トレカ','トレーディングカードゲーム','新弾','発売日','発売スケジュール','カレンダー','拡張パック','ブースターパック','スターターデッキ','予約']
 
 def about_block(heading,paras):
@@ -359,7 +364,9 @@ def render_events():
     src=flags(open(os.path.join(ROOT,'src/events.html')).read())
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
-    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW),('/*GICON*/',GICON_JS)):
+    for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW),('/*GICON*/',GICON_JS),
+                     ('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','c','cd','bit']))))+(
+                     (('/*LP_GAMES*/{}',js({g['code']:[g['slug'],g['short']] for g in EV_REG})),) if LANDING_ENABLED else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=src.replace('<!--CORNER-->',corner('/events/')).replace('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/events/")}{siterow("/events/")}</nav>')
@@ -506,7 +513,7 @@ def render_home():
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
     if VOICES_ENABLED: home['voicesApi']=EVENTS_API_BASE+'/voices/latest'; home['voiceGames']=VOICE_GAME_BLOCK
     # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (表示中 line, 今週のカレンダー)
-    home['titles']={g['code']:g['name'] for g in VOICE_GAME_INFO}
+    home['titles']={g['code']:g['label'] for g in VOICE_REG}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
     if BUILD_EVENTS:
         cts=open(os.path.join(ROOT,'api/src/constants.ts')).read()
@@ -518,7 +525,8 @@ def render_home():
             sys.exit(f"api/src/constants.ts: parsed {len(home['types'])} of {len(lines)} TYPE_LABELS lines (one `code: 'name',` per line)")
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),
-                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
+                     ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS),
+                     ('/*SHORT*/{}',js({g['label']:g['chip'] for g in VOICE_REG})),('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','short','c','cd','bit']))))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
@@ -642,9 +650,8 @@ def render_landing():
     return head+src[:split]+'</head>\n<body>\n'+src[split:]+'\n</body>\n</html>\n'
 # ---- 話題カレンダー (/voices/): the page and the home block fetch the snapshots from /api/v1/voices* (contracts/voices.md)
 VOICES_SRC=open(os.path.join(ROOT,'src/voices.html')).read()
-VOICE_GAME_INFO=[dict(re.findall(r"(\w+):'([^']*)'",x)) for x in re.findall(r'\{code:[^}]*\}',VOICES_SRC.split('const GAMES = [',1)[1].split('];',1)[0])]
-# the game palette the home block draws the fetched topics with
-VOICE_GAME_BLOCK=[{k:g[k] for k in ('code','name','short','c','cd') if k in g} for g in VOICE_GAME_INFO]
+# the voices games and palette of /voices/ and of the home block's topics
+VOICE_GAME_BLOCK=page_games(VOICE_REG,['code','name','short','c','cd'])
 VOICES_PAGE=dict(path='/voices/',og='voices',
     desc='ポケカ・ワンピ・ユニアリなどTCGのタイトルごとに、X（旧Twitter）のプレイヤーのあいだで話題になっていることをAIが要約。好意的・否定的な反応の割合や代表的な意見をカレンダーで振り返れます。')
 def render_voices():
@@ -656,7 +663,7 @@ def render_voices():
     v={'counts':counts,'api':EVENTS_API_BASE+'/voices'}
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner('/voices/')),
                      ('<!--SITENAV-->',f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow("/voices/")}{siterow("/voices/")}</nav>'),
-                     ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/')),('/*GICON*/',GICON_JS)):
+                     ('/*VOICES*/null',json.dumps(v,ensure_ascii=False).replace('</','<\\/')),('/*GICON*/',GICON_JS),('/*VOICE_GAMES*/[]',js(VOICE_GAME_BLOCK))):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     assert src.count('/*PAGE_FONTS*/')==1  # filled by fonts.py

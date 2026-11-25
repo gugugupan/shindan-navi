@@ -21,13 +21,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, 'dist')
 FIXTURE = os.path.join(ROOT, 'contracts/fixtures/sample-events.json')
 WINDOW = ('2026-11-18', '2027-02-18')
-GAMES = [('OPCG', 'ONE PIECEカードゲーム', 'onepiece'), ('UATCG', 'UNION ARENA', 'unionarena'),
-         ('CONAN', '名探偵コナンTCG', 'conan'), ('PTCG', 'ポケモンカードゲーム', 'pokemon'),
-         ('GCG', 'ガンダムカードゲーム', 'gundam'), ('DBFW', 'ドラゴンボールスーパーカードゲーム フュージョンワールド', 'dragonball'),
-         ('BS', 'バトルスピリッツ', 'battlespirits'), ('DCG', 'デジモンカードゲーム', 'digimon'),
-         ('WS', 'ヴァイスシュヴァルツ', 'weiss'), ('VG', 'カードファイト!! ヴァンガード', 'vanguard'),
-         ('SVE', 'Shadowverse EVOLVE', 'shadowverse-evolve'), ('HOCG', 'hololive OFFICIAL CARD GAME', 'hololive'),
-         ('LLOCG', 'ラブライブ！シリーズ オフィシャルカードゲーム', 'lovelive')]
+# the events games of data/games.json in /events/ order: (code, official name, slug)
+GAMES = [(g['code'], g['official'], g['slug']) for g in sorted((g for g in json.load(open(os.path.join(ROOT, 'data/games.json')))
+                                                              if g['sources']['events']), key=lambda g: g['sources']['events']['sort'])]
 # where each game's events come from (contracts/README.md › Sources)
 SOURCE = {'PTCG': ('pokemon_players', 'ptcg'), 'CONAN': ('conan_official', 'conan'),
           **{g: ('bushinavi', 'bnavi') for g in ('WS', 'VG', 'SVE', 'HOCG', 'LLOCG')}}

@@ -1,18 +1,9 @@
-export const GAMES = [
-  { code: 'OPCG', name: 'ONE PIECEカードゲーム', slug: 'onepiece', bit: 1 },
-  { code: 'UATCG', name: 'UNION ARENA', slug: 'unionarena', bit: 2 },
-  { code: 'CONAN', name: '名探偵コナン カードゲーム', slug: 'conan', bit: 4 },
-  { code: 'PTCG', name: 'ポケモンカードゲーム', slug: 'pokemon', bit: 8 },
-  { code: 'GCG', name: 'ガンダムカードゲーム', slug: 'gundam', bit: 16 },
-  { code: 'DBFW', name: 'ドラゴンボールスーパーカードゲーム フュージョンワールド', slug: 'dragonball', bit: 32 },
-  { code: 'BS', name: 'バトルスピリッツ', slug: 'battlespirits', bit: 64 },
-  { code: 'DCG', name: 'デジモンカードゲーム', slug: 'digimon', bit: 128 },
-  { code: 'WS', name: 'ヴァイスシュヴァルツ', slug: 'weiss', bit: 256 },
-  { code: 'VG', name: 'カードファイト!! ヴァンガード', slug: 'vanguard', bit: 512 },
-  { code: 'SVE', name: 'Shadowverse EVOLVE', slug: 'shadowverse-evolve', bit: 1024 },
-  { code: 'HOCG', name: 'hololive OFFICIAL CARD GAME', slug: 'hololive', bit: 2048 },
-  { code: 'LLOCG', name: 'ラブライブ！シリーズ オフィシャルカードゲーム', slug: 'lovelive', bit: 4096 },
-] as const;
+import REGISTRY from '../../data/games.json';
+
+// The events games of the game registry (contracts/games.md) in /events/ order; name = the official name in D1 `games`.
+export const GAMES = REGISTRY.filter((g) => g.sources.events)
+  .sort((a, b) => a.sources.events!.sort - b.sources.events!.sort)
+  .map((g) => ({ code: g.code, name: g.official!, slug: g.slug!, bit: g.sources.events!.bit }));
 export const GAME_CODES = GAMES.map((g) => g.code);
 // events.game_mask allows bits 2^0..2^29 (migrations/0005): masks stay positive 32-bit integers in JS bit operations.
 export const MAX_GAMES = 30;

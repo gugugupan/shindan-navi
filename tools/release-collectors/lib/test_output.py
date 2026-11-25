@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import cardlabo.parse  # noqa: E402
 import torecamap.parse  # noqa: E402
-from lib import output  # noqa: E402
+from lib import common, output  # noqa: E402
 
 CONTRACTS = os.path.join(output.ROOT, 'contracts')
 FIXTURES = {'cardlabo': os.path.join(output.ROOT, 'tools/release-collectors/cardlabo/test/fixtures/hatsubai-trimmed.html'),
@@ -76,6 +76,13 @@ class WriteReleaseFiles(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(os.path.join(self.root, 'cardlabo'))), before)
         with open(os.path.join(self.root, 'cardlabo', '_run.json')) as f:
             self.assertEqual(json.load(f)['today'], '2026-11-19')
+
+
+class TitleLabels(unittest.TestCase):
+    def test_every_display_name_has_a_registry_row(self):
+        with open(os.path.join(output.ROOT, 'data/games.json')) as f:
+            labels = {l for g in json.load(f) for l in g['sources']['releases']}
+        self.assertEqual(sorted(set(common.GAME.values()) - labels - {'その他'}), [])
 
 
 if __name__ == '__main__':

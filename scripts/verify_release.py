@@ -6,6 +6,7 @@ Exit code 1 if any FAIL. WARN lines are for the owner to review, not blockers.
 import argparse, collections, datetime, glob, hashlib, html.parser, json, os, re, subprocess, sys, unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REGISTRY = json.load(open(os.path.join(ROOT, 'data/games.json')))
 sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 from sourcekey import product_code  # noqa: E402
 DIST = os.path.join(ROOT, 'dist')
@@ -103,6 +104,10 @@ def check_data(base, today):
     ids = collections.Counter(i['id'] for i in head)
     for k, n in ids.items():
         if n > 1: fail(f'data: id {k} appears {n} times')
+    # build.py only warns, so a data refresh still builds; a title label needs a data/games.json row before merging
+    labels = {l for g in REGISTRY for l in g['sources']['releases']}
+    for g in sorted({i['game'] for i in head} - labels):
+        fail(f'data: title {g!r} has no data/games.json row (add it to sources.releases of a row, or a new row)')
     a = {i['id']: i for i in old}
     b = {i['id']: i for i in head}
 
@@ -289,7 +294,7 @@ def check_home(today, head, ov):
     if 'voices' in h: fail('/: HOME embeds voices data')
     if VOICES_ON:
         if h.get('voicesApi') != '/api/v1/voices/latest': fail(f'/: HOME voicesApi {h.get("voicesApi")}')
-        if [g.get('code') for g in h.get('voiceGames') or []] != voice_games(): fail('/: HOME voiceGames differ from GAMES in src/voices.html')
+        if [g.get('code') for g in h.get('voiceGames') or []] != voice_games(): fail('/: HOME voiceGames differ from the data/games.json voices games')
     elif 'voicesApi' in h or 'voiceGames' in h: fail('/: HOME voicesApi / voiceGames while voices are off')
     print(f'  {"/":<12} home window {lo}..{hi} items={len(got)} events={events} voices={VOICES_ON}')
 
@@ -347,8 +352,8 @@ def check_voices():
 
 
 def voice_games():
-    src = open(os.path.join(ROOT, 'src/voices.html')).read()
-    return re.findall(r"\{code:'([A-Z]+)'", src.split('const GAMES = [', 1)[1].split('];', 1)[0])
+    ev = sorted((g for g in REGISTRY if g['sources']['events']), key=lambda g: g['sources']['events']['sort'])
+    return [g['code'] for g in ev if g['sources']['voices']] + [g['code'] for g in REGISTRY if g['sources']['voices'] and not g['sources']['events']]
 
 
 def check_items(head, ov, arch, calendar_pages):
@@ -467,7 +472,7 @@ def check_dist(today, head, ov, arch):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
     paths = [p['path'] for p in pages]
-    titles = [p for p in paths if re.fullmatch(r'/[a-z]+/', p) and p not in TOOL_PAGES and p != '/releases/']
+    titles = [p for p in paths if re.fullmatch(r'/[a-z][a-z0-9-]*/', p) and p not in TOOL_PAGES and p != '/releases/']
     months = [p for p in paths if re.fullmatch(r'/\d{4}-\d{2}/', p)]
     if '/releases/' not in paths: fail('dist: release calendar /releases/ missing')
     if '/' in paths: fail('dist: / is built as a release calendar page')
@@ -475,7 +480,8 @@ def check_dist(today, head, ov, arch):
     check_footer()
     check_voices()
     check_items(head, ov, arch, ['/'] + paths)
-    if len(titles) != 10: fail(f'dist: expected 10 title pages, got {len(titles)} {titles}')
+    hubs = {f'/{g["slug"]}/' for g in REGISTRY if g['hub']}
+    if set(titles) != hubs: fail(f'dist: title pages {sorted(titles)} differ from the data/games.json hub rows {sorted(hubs)}')
     if not months: fail('dist: no month pages')
 
     hidden = [k for k, v in ov.items() if v.get('hide')]
