@@ -375,6 +375,27 @@ tbody tr.starred td.nm{font-weight:700}
 .dl-tp{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .dl-tp h3{margin:0 0 8px;font-size:15px}
 .hubtp h2{margin-bottom:10px}
+/* いま話題 as cards (the home block's grid, without its game chip: the hub is one game): as many 240px+ columns as fit */
+.hubtp{--pos:#1d7f4c;--mix:#94580a;--neg:var(--sun)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hubtp{--pos:#5fd39a;--mix:#f0b44c}}
+:root[data-theme="dark"] .hubtp{--pos:#5fd39a;--mix:#f0b44c}
+.hubtp .a-positive{--a:var(--pos)} .hubtp .a-negative{--a:var(--neg)} .hubtp .a-mixed{--a:var(--mix)} .hubtp .a-neutral{--a:var(--muted)}
+.vts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:10px}
+.vts>li{display:flex;min-width:0}
+.vt{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-top:3px solid var(--g);border-radius:10px;padding:9px 12px 10px;color:var(--ink);text-decoration:none}
+.vt:hover{border-color:var(--accent);border-top-color:var(--g)}
+.vt:hover .tt{color:var(--accent);text-decoration:underline}
+.vt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.vt .vh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px;font-weight:700}
+.vt .am{color:var(--a);white-space:nowrap}
+.vt .badge{margin-left:auto;font-size:12px;font-weight:700;border-radius:4px;padding:0 6px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
+.vt .badge.new{border-color:transparent;background:var(--accent-soft);color:var(--accent)}
+.vt .badge.hot{border-color:var(--foil);background:var(--foil-soft);color:var(--ink)}
+.vt .badge.cool{color:var(--muted)}
+.vt .tt,.vt .sm{font-family:var(--runtime);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+.vt .tt{font-size:14px;font-weight:700;line-height:1.45;-webkit-line-clamp:2}
+.vt .sm{font-size:12.5px;line-height:1.6;color:var(--ink);-webkit-line-clamp:3}
+.vt .tr{margin-top:auto;padding-top:6px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted)}
 .tp-f{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;margin:12px 0 0;font-size:12px;color:var(--muted)}
 .tp-f a{color:var(--accent);font-weight:700;text-decoration:none}
 .tp-f a:hover{text-decoration:underline}
@@ -1111,13 +1132,23 @@ function topicBadge(v){
   return v.t.status==='new'&&VSNAPS>1 ? '🆕 新' : '';
 }
 const topicCard = v => { const b=topicBadge(v), t=v.t; return `<li class="tp"><a href="${VT_PAGE}#t=${encodeURIComponent(t.id)}">${esc(t.title)}</a>${b?`<span class="tb">${b}</span>`:''}<p>${esc(t.summary)}</p>${ATT[t.attitude]?`<small>${ATT[t.attitude]}</small>`:''}</li>`; };
+// いま話題 cards (as on /): one link per card, 新 whenever the topic is new
+const ATT_L = {positive:'好意的', negative:'否定的', mixed:'賛否両論', neutral:'中立'};
+const nowBadge = v => v.t.status==='continuing' ? `<span class="badge hot"><span aria-hidden="true">🔥 </span>${dnum(v.snap)-dnum(v.t.first_seen)+1}日連続</span>`
+  : v.t.status==='cooling' ? '<span class="badge cool"><span aria-hidden="true">📉 </span>落ち着き</span>'
+  : v.t.status==='new' ? '<span class="badge new"><span aria-hidden="true">🆕 </span>新</span>' : '';
+const nowCard = (v,i) => { const t=v.t, k=ATT[t.attitude]?t.attitude:'neutral';
+  return `<li><a class="vt" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}" aria-labelledby="htT${i}" aria-describedby="htM${i} htS${i}">`
+    +`<span class="vh" id="htM${i}"><span class="am a-${k}"><span aria-hidden="true">${ATT_M[k]}</span>${ATT_L[k]}</span>${nowBadge(v)}</span>`
+    +`<span class="tt" id="htT${i}">${esc(t.title)}</span><span class="sm" id="htS${i}">${esc(t.summary)}</span>`
+    +`<span class="tr">反応の傾向（推定）：${ATT[k]}</span></a></li>`; };
 function renderHubTopics(){
   const sec=document.getElementById('hubTopics'); if(!sec) return;
   // the snapshot dates are Tokyo days (as on /)
   if(!VLATEST || dnum(TODAY)-dnum(VLATEST)>7){ sec.hidden=true; return; }
   const now=TOPICS.filter(x=>x.last===VLATEST).map(x=>x.vs[x.vs.length-1]).sort((a,b)=>a.rank-b.rank);
   sec.setAttribute('style',hubVars);
-  document.getElementById('hubTopicsBody').innerHTML=(now.length?`<ul class="tps">${now.slice(0,5).map(topicCard).join('')}</ul>`
+  document.getElementById('hubTopicsBody').innerHTML=(now.length?`<ul class="vts">${now.slice(0,5).map(nowCard).join('')}</ul>`
       : `<p class="dl-none">最新のまとめ（${fmtDate(VLATEST,false)}）に${esc(HUB.short)}の話題はありません。</p>`)
     +`<p class="tp-f"><span>X（旧Twitter）の話題をAIが要約（${fmtDate(VLATEST,false)}時点）</span><a href="${VT_PAGE}">話題カレンダーで見る ›</a></p>`;
   sec.hidden=false;

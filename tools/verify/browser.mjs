@@ -1719,7 +1719,7 @@ if (HAS_EVENTS) {
         bars: [...document.querySelectorAll('.tbar')].filter(e => e.offsetParent).map(e => [e.dataset.topic, e.dataset.s, e.dataset.e]),
         rows: [...document.querySelectorAll('#tline .tlr')].filter(e => e.offsetParent).map(e => e.dataset.topic),
         grid: [...document.querySelectorAll('.day button.n')].map(b => b.dataset.openDay),
-        sec: document.getElementById('hubTopics') ? { hidden: document.getElementById('hubTopics').hidden, n: document.querySelectorAll('#hubTopics .tp').length,
+        sec: document.getElementById('hubTopics') ? { hidden: document.getElementById('hubTopics').hidden, n: document.querySelectorAll('#hubTopics .vt').length,
           xurl: /x\.com|twitter\.com/.test(document.getElementById('hubTopics').innerHTML.replace('X（旧Twitter）', '')) } : null }));
       if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
       if (st.cur) fail(where, 'a tool tab is marked current on a hub');
@@ -1933,6 +1933,59 @@ if (HAS_EVENTS) {
       await page.close();
     }
     console.log(`  ${vp} ${scheme} hubs`.padEnd(24) + `${HUBS.length} checked`);
+    await ctx.close();
+  }
+  // いま話題 as cards (as on /): a snapshot of today with five topics of the hub's game; >= 3 columns at 1366, one on
+  // phones (also at 280px), one link per card named by its title, no game chip, 新 on the new topic, the runtime font,
+  // equal heights per row; a snapshot over 7 days old hides the section
+  if (HAS_VOICES) {
+    const where = 'hub いま話題 cards';
+    const st5 = ['new', 'continuing', 'cooling', 'new', 'continuing'];
+    const fx = st5.map((status, i) => ({ id: `fx-now-${i}`, game: code, title: `カード${i}の話題（検証用）`, summary: '要約'.repeat(20 + i * 8), attitude: ['positive', 'negative', 'mixed', 'neutral', 'positive'][i],
+      status, first_seen: status === 'new' ? TODAY : addDay(TODAY, -3), voices: [], share: { positive: 1, negative: 1, neutral: 1 }, volume: 'mid', reacting_to: null, source: 'grok-app' }));
+    let snapDate = TODAY;
+    const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await ctx.newPage(), bad = [];
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    await page.route('**/api/v1/voices', r => r.fulfill({ json: { version: 'fx', snapshots: [{ date: snapDate, window: { from: addDay(snapDate, -2), to: snapDate },
+      topics: fx.map(t => ({ ...t, window: { from: addDay(snapDate, -2), to: snapDate } })) }] } }));
+    const state = () => page.evaluate(() => {
+      const sec = document.getElementById('hubTopics'), lis = [...sec.querySelectorAll('ul.vts > li')], rs = lis.map(li => li.querySelector('a.vt').getBoundingClientRect());
+      const rows = Object.values(rs.reduce((m, r) => ((m[Math.round(r.top)] ||= []).push(Math.round(r.height)), m), {})), box = sec.getBoundingClientRect();
+      const runtime = getComputedStyle(document.documentElement).getPropertyValue('--runtime').trim();
+      return { hidden: sec.hidden, n: lis.length, cols: new Set(rs.map(r => Math.round(r.left))).size, unequal: rows.some(h => Math.max(...h) - Math.min(...h) > 1),
+        outside: rs.some(r => r.left < box.left - 0.5 || r.right > box.right + 0.5), chip: sec.querySelectorAll('.gm').length,
+        links: lis.map(li => { const a = li.querySelectorAll('a'); return [a.length, a[0]?.getAttribute('href'), (a[0]?.getAttribute('aria-labelledby') || '').split(' ').map(i => document.getElementById(i)?.textContent).join(' '), li.querySelector('.tt')?.textContent]; }),
+        fresh: lis.map(li => li.querySelector('.badge.new') ? 'new' : ''), font: lis.every(li => getComputedStyle(li.querySelector('.tt')).fontFamily.replace(/\s/g, '') === runtime.replace(/\s/g, '')),
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    });
+    const ok = (st, w, min, max) => {
+      if (st.hidden || st.n !== 5) fail(where, `${w}px: ${st.n} cards, hidden ${st.hidden}`);
+      if (st.cols < min || st.cols > max) fail(where, `${w}px: ${st.cols} columns`);
+      // the hub page is laid out for 344px and up (docs/design/game-hub.md › 9); at 280 only the cards are checked
+      if (st.unequal || st.outside || (w >= 344 && st.overflow > 1)) fail(where, `${w}px: unequal ${st.unequal} outside ${st.outside} overflow ${st.overflow}`);
+      if (st.chip) fail(where, `${w}px: game chip on a one-game hub`);
+      if (st.links.some(([n, h, name, t], i) => n !== 1 || h !== `/voices/#t=fx-now-${i}` || name !== t)) fail(where, `${w}px: links ${JSON.stringify(st.links)}`);
+      if (JSON.stringify(st.fresh) !== JSON.stringify(st5.map(x => x === 'new' ? 'new' : ''))) fail(where, `${w}px: 新 badges ${st.fresh}`);
+      if (!st.font) fail(where, `${w}px: card text not in the runtime font`);
+    };
+    try {
+      await page.goto(BASE + pick.path, { waitUntil: 'networkidle' });
+      ok(await state(), 1366, 3, 5);
+      for (const scheme of ['light', 'dark']) { await page.emulateMedia({ colorScheme: scheme }); await page.locator('#hubTopics').screenshot({ path: path.join(OUT, `hub-topics-1366${scheme === 'dark' ? '-dark' : ''}.png`) }); }
+      await page.emulateMedia({ colorScheme: 'light' });
+      for (const w of [390, 280]) {
+        await page.setViewportSize({ width: w, height: 844 });
+        ok(await state(), w, 1, 1);
+        if (w === 390) await page.locator('#hubTopics').screenshot({ path: path.join(OUT, 'hub-topics-390.png') });
+      }
+      snapDate = addDay(TODAY, -8);
+      await page.reload({ waitUntil: 'networkidle' });
+      if (!(await state()).hidden) fail(where, 'shown for a snapshot over 7 days old');
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where} checked`);
     await ctx.close();
   }
   // /<code>/ answers 301 to the hub (both cases, with and without the slash)
