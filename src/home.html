@@ -24,11 +24,13 @@
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 /* top row: today's date (h1), the 表示の設定 pill, the week strip on the right (below the date on phones / tablets) */
 .htop{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:2px}
-.hbar{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
-.hbar .hsub{font-family:var(--body);font-size:12.5px;font-weight:700;color:var(--muted)}
+/* date + 今日 on one line, the heading text under them (the h1 stays as wide as the longer line) */
+.hbar{margin:0;display:grid;grid-template-columns:auto auto;justify-content:start;align-items:center;gap:2px 8px}
+.hbar .tb{justify-self:start}
+.hbar .hsub{grid-column:1/-1;font-family:var(--body);font-size:12.5px;font-weight:700;color:var(--muted)}
 .hbar b{font-family:var(--display);font-weight:400;font-size:clamp(22px,3vw,28px);line-height:1.2}
 .tb{font-family:var(--body);font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--foil-ink);background:var(--foil);border-radius:4px;padding:2px 6px}
-.pill{font:inherit;font-size:13px;font-weight:700;color:var(--ink);display:inline-flex;align-items:center;gap:6px;max-width:min(320px,100%);min-width:0;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:4px 10px 4px 12px;cursor:pointer}
+.pill{font:inherit;font-size:13px;font-weight:700;color:var(--ink);display:inline-flex;align-items:center;gap:6px;max-width:min(260px,100%);min-width:0;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:4px 10px 4px 12px;cursor:pointer}
 .pill:hover{border-color:var(--accent)}
 .pill #hsT{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill .loc{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;color:var(--muted)}
@@ -78,9 +80,9 @@
 .go{font:inherit;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--surface);white-space:nowrap;cursor:pointer}
 .go:hover{border-color:var(--accent)}
 .hint{margin:0;font-size:12px;color:var(--muted)}
-.none{margin:0;padding:18px 12px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--muted);font-size:13px;display:grid;gap:8px;justify-items:center}
-.none b{color:var(--ink);font-size:14px}
-.none.err{border-color:var(--sun);border-style:solid}
+div.none{margin:0;padding:18px 12px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--muted);font-size:13px;display:grid;gap:8px;justify-items:center}
+div.none b{color:var(--ink);font-size:14px}
+div.none.err{border-color:var(--sun);border-style:solid}
 .q{margin:0;font-size:13px;color:var(--muted)}
 /* 発売: one group per title (icon + name once), rows of thumbnail, name without the repeated title / series, price */
 .rels{display:grid;gap:12px}
@@ -175,11 +177,13 @@
 .vt .badge.cool{color:var(--muted)}
 .vt .tt{font-family:var(--runtime);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;font-size:14px;font-weight:700;line-height:1.45;-webkit-line-clamp:2}
 .vtr .blk-f .dayl{margin-left:auto}
-@media (max-width:900px){
+@media (max-width:1023px){
   .wkw{flex:1 1 100%;margin-left:0;flex-direction:column-reverse;align-items:stretch}
   .wkl{justify-content:flex-end}
   .wks{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
   .wdy{min-width:0;border-color:var(--line);background:var(--surface)}
+}
+@media (max-width:900px){
   .hgrid{grid-template-columns:minmax(0,1fr);grid-template-rows:none}
   .hgrid>.wkp{grid-column:auto;grid-row:auto;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:none;gap:12px}
   .wkp>.rel,.wkp>.evb,.hgrid>.vtr{grid-column:auto;grid-row:auto}
@@ -306,7 +310,8 @@ const relRow = r => {
   const sr = r.pre.length ? `<span class="sr">${esc(r.pre.join(' '))} </span>` : '';
   return `<li class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}">${thumb(d)}<span class="t">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}<a class="n pko" href="/releases/#i=${d.id}">${sr}${esc(r.w.join(' '))}</a></span>${pr}</li>`;
 };
-const relCards = its => `<div class="rels">${relGroups(its).map(({game,rows})=>
+// favourites first: the starred rows are grouped on their own, ahead of the rest (a title can then head two groups)
+const relCards = its => `<div class="rels">${[...relGroups(its.filter(isStar)), ...relGroups(its.filter(d=>!isStar(d)))].map(({game,rows})=>
   `<section class="rg" data-game="${esc(game)}" style="--h:${HUE[game]||0}" aria-label="${esc(game)}"><h3>${gl(game,gi(game)+esc(game),'gn')}</h3><ul class="rows">${rows.map(r=>r.series
     ? `<li class="rsg"><h4>${esc(r.series)}</h4><ul class="rows">${r.rows.map(relRow).join('')}</ul></li>` : relRow(r)).join('')}</ul></section>`).join('')}</div>`;
 function relPart(x){
@@ -587,7 +592,10 @@ function renderWeek(){
   const days=WEEK.map(d=>dayData(d,f,sel));
   const strip=$('wkStrip'), focused=strip.contains(document.activeElement), sx=strip.scrollLeft, evOn=!!(f&&f.pref);
   strip.setAttribute('aria-label',`今週の発売${evOn?'・イベント':''}（${md(WEEK[0])}〜${md(WEEK[6])}）`);
-  $('wkLg').innerHTML = '<span><span class="cr"></span>発売数</span>'+(evOn?'<span><span class="ce"></span>イベント数</span>':'');
+  // the event counts follow /events/' game filter (the API's query): named here when it is not what the pill shows
+  const evSel=f&&f.game?f.game.split(','):[], pillEv=sel.filter(c=>EVG[c]);
+  const evNote = evOn && [...evSel].sort().join()!==[...pillEv].sort().join() ? `（${esc(evGamesLabel(f)||'すべてのタイトル')}）` : '';
+  $('wkLg').innerHTML = '<span><span class="cr"></span>発売数</span>'+(evOn?`<span><span class="ce"></span>イベント数${evNote}</span>`:'');
   strip.innerHTML = days.map((x,i)=>{
     const d=x.d, w=dowOf(d), [,m,dd]=d.split('-').map(Number), lb=dayLabel(i), on=i===wkSel;
     const rel=x.its?x.its.length:null, star=!!x.its&&x.its.some(isStar);

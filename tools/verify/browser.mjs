@@ -670,7 +670,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     // a tab's counts (data-rel / data-ev; '' = no events line); badges only for counts above 0
     const zeroBadge = tabs.some(t => (t.dataset.rel === '0' && t.querySelector('.cr')) || (t.dataset.ev === '0' && t.querySelector('.ce')));
     return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null, zeroBadge,
-      tabs: tabs.map(t => ({ sel: t.getAttribute('aria-selected'), ti: t.tabIndex, rel: t.dataset.rel ?? null, ev: t.dataset.ev || null, label: t.getAttribute('aria-label') })),
+      // badge: the rendered number (the ★ left out), null without a badge
+      tabs: tabs.map(t => ({ sel: t.getAttribute('aria-selected'), ti: t.tabIndex, rel: t.dataset.rel ?? null, ev: t.dataset.ev || null, label: t.getAttribute('aria-label'),
+        relB: t.querySelector('.cr')?.firstChild?.textContent ?? null, evB: t.querySelector('.ce')?.textContent ?? null })),
+      legend: document.getElementById('wkLg')?.textContent ?? null,
       by: p.getAttribute('aria-labelledby'), live: document.getElementById('wkLive')?.textContent ?? null,
       evHead: p.querySelector('.evb .blk-h') ? p.querySelector('.evb .blk-h .sub')?.textContent ?? '' : null, ty: [...p.querySelectorAll('.gcol .ty')].map(t => t.textContent), rels: [...p.querySelectorAll('.rels .pk')].map(e => e.closest('.rg').dataset.game),
       cols: [...p.querySelectorAll('.gcol')].map(c => c.getAttribute('aria-label')), others: p.querySelector('.relo .rl')?.textContent || null,
@@ -699,6 +702,11 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (st.overflow > 1) fail(where, `${label}: page scrolls horizontally by ${st.overflow}px`);
       if (st.small.length) fail(where, `${label}: text under 12px: ${st.small.slice(0, 3).join(' | ')}`);
       if (st.zeroBadge) fail(where, `${label}: a zero day shows a count badge`);
+      // the shown badge and the tab's label say the same count as the data
+      const shown = c => c === '0' ? null : c;
+      const badBadge = st.tabs.filter(t => t.relB !== shown(t.rel) || (t.ev != null && t.evB !== shown(t.ev))
+        || (t.rel !== '–' && !t.label.includes(`発売${t.rel}件`)) || (t.ev != null && /^\d+$/.test(t.ev) && !t.label.includes(`イベント${t.ev}件`)));
+      if (badBadge.length) fail(where, `${label}: badge text / tab label ${JSON.stringify(badBadge.map(t => [t.rel, t.relB, t.ev, t.evB, t.label]))}`);
     };
     const REL_LINK = '日別一覧（新弾カレンダーでこの日を見る） ›', EV_LINK = '日別一覧（イベントカレンダーでこの日を見る） ›';
     // a title with releases this week (an /events/ game, so the /events/ filter can hold it too)
@@ -813,6 +821,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       st = await state();
       strip('filtered query', st, two.map(c => H.titles[c]), null, true, ['OPCG', 'PTCG']);
       if (HAS_EVENTS && st.evHead !== '') fail(where, `panel heading names "${st.evHead}"`);
+      // the event filter differs from the pill's titles: the legend names it
+      if (HAS_EVENTS && st.legend !== '発売数イベント数（ワンピ・ポケカ）') fail(where, `legend "${st.legend}"`);
     }
 
     // 変更: the dialog writes the titles (other saved filters kept), cancel writes nothing
@@ -2147,7 +2157,7 @@ if (HAS_EVENTS) {
       : (p => { const a = p.querySelector('a.n'), c = a.cloneNode(true); c.querySelectorAll('.sr').forEach(e => e.remove()); return [c.textContent, a.textContent]; })(li))]));
   try {
     await page.goto(`${BASE}/`);
-    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); localStorage.setItem('tcg.stars', JSON.stringify(['ifxb3'])); });
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); localStorage.setItem('tcg.stars', JSON.stringify(['ifxb3', 'ifxb1'])); });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
     // today: one title; the two スペシャルセット share a subheading, the bare title name stays, vol.2 stays
@@ -2183,14 +2193,18 @@ if (HAS_EVENTS) {
     if (await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gt').getAttribute('aria-expanded') !== 'true') fail(where, 'event row closed by a re-render');
     await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gt').click();
     if (await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gb').isVisible()) fail(where, 'event row did not close');
-    // the multi-title day: the favourite's title first; series subheadings per title; Vol.2 kept
+    // the multi-title day: the favourites (two titles; one of them a series member) grouped first, then the rest;
+    // series subheadings per part; Vol.2 kept
     await page.locator('#wkT2').click();
     await page.waitForFunction(() => !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
     const r2 = await rows();
-    const want2 = [['ポケモンカード', 'ポケモンカード', [['拡張パック「ハドウシーカー」', '拡張パック「ハドウシーカー」']]],
-      ['UNION ARENA', 'UNION ARENA', [{ series: 'ブースターパック', rows: [['D.Gray-man【UA58BT】', 'UNION ARENA ブースターパック D.Gray-man【UA58BT】'], ['〈物語〉シリーズ Vol.2【EX18BT】', 'UNION ARENA ブースターパック 〈物語〉シリーズ Vol.2【EX18BT】']] }]],
+    const want2 = [['UNION ARENA', 'UNION ARENA', [['ブースターパック 〈物語〉シリーズ Vol.2【EX18BT】', 'UNION ARENA ブースターパック 〈物語〉シリーズ Vol.2【EX18BT】']]],
+      ['ポケモンカード', 'ポケモンカード', [['拡張パック「ハドウシーカー」', '拡張パック「ハドウシーカー」']]],
+      ['UNION ARENA', 'UNION ARENA', [['ブースターパック D.Gray-man【UA58BT】', 'UNION ARENA ブースターパック D.Gray-man【UA58BT】']]],
       ['アニマルカードゲーム', 'アニマルカードゲーム', [{ series: '構築済みトライアルデッキ', rows: [['「狸の宴」', '構築済みトライアルデッキ 「狸の宴」'], ['「狼の夜」', '構築済みトライアルデッキ 「狼の夜」']] }]]];
     if (JSON.stringify(r2) !== JSON.stringify(want2)) fail(where, `multi-title day ${JSON.stringify(r2)}`);
+    const starOrder = await page.evaluate(() => [...document.querySelectorAll('#wkPanel .pk')].map(p => p.classList.contains('on') ? 1 : 0).join(''));
+    if (starOrder !== '11000') fail(where, `favourites not all first: ${starOrder}`);
     const dd = await page.evaluate(() => [...document.querySelectorAll('#wkPanel .blk-h .dd')].map(e => e.textContent));
     if (dd.length !== 2 || !dd.every(t => t.startsWith(`${+D2.slice(5, 7)}/${+D2.slice(8)}(`))) fail(where, `other day not named in the headings ${JSON.stringify(dd)}`);
     if (sameMonth) {
@@ -2204,7 +2218,10 @@ if (HAS_EVENTS) {
       for (const scheme of ['light', 'dark']) {
         await page.emulateMedia({ colorScheme: scheme });
         const st = await page.evaluate(() => { const rel = document.querySelector('#wkPanel .rel').getBoundingClientRect(), evb = document.querySelector('#wkPanel .evb')?.getBoundingClientRect();
-          return { ov: document.documentElement.scrollWidth - document.documentElement.clientWidth, stacked: !evb || evb.top >= rel.bottom - 1 }; });
+          const h1 = document.querySelector('.hbar').getBoundingClientRect(), strip = document.getElementById('wkStrip').getBoundingClientRect();
+          return { ov: document.documentElement.scrollWidth - document.documentElement.clientWidth, stacked: !evb || evb.top >= rel.bottom - 1, beside: strip.left > h1.right && strip.top < h1.bottom }; });
+        // the strip sits beside the date from 1024px, under it below
+        if ((w >= 1024) !== st.beside) fail(where, `${w}px: the strip is ${st.beside ? 'beside' : 'under'} the date`);
         if (st.ov > 1) fail(where, `${w}px ${scheme}: page scrolls sideways by ${st.ov}px`);
         if ((w <= 900) !== st.stacked) fail(where, `${w}px: ${st.stacked ? 'stacked' : 'two columns'}`);
         await page.screenshot({ path: path.join(OUT, `home-a-${w}${scheme === 'dark' ? '-dark' : ''}.png`), fullPage: true });
