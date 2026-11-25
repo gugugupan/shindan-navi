@@ -1822,7 +1822,7 @@ if (HAS_EVENTS) {
         }
         await page.screenshot({ path: path.join(OUT, `hub-events-${vp}-${opt.width}-${scheme}.png`), fullPage: true });
         // day dialog: every type with its count and the /events/ day view of this game and location
-        await page.locator(vp === 'desktop' ? `.day [data-open-day="${TODAY}"].n` : `.ag [data-open-day="${TODAY}"]`).click();
+        await page.locator(vp === 'desktop' ? `.day [data-open-day="${TODAY}"].n` : `.ag [data-open-day="${TODAY}"].agn`).click();
         const dl = await page.evaluate(() => ({ h: document.querySelector('#dlg .dl-ev h3')?.textContent, li: [...document.querySelectorAll('#dlg .dl-ev li')].map(l => l.textContent),
           href: document.querySelector('#dlg .dl-ev a')?.getAttribute('href') }));
         const x = stubDay(TODAY);
@@ -1834,6 +1834,7 @@ if (HAS_EVENTS) {
         await page.locator('#hubLoc').click();
         await page.locator('#prefDlg [data-pref="JP-27"]').click();
         await page.waitForLoadState('networkidle');
+        if (await page.evaluate(() => document.activeElement?.id) !== 'hubLoc') fail(where, 'focus did not return to the location button after a pick');
         const pk = await page.evaluate(() => ({ loc: document.getElementById('locLine').textContent, saved: JSON.parse(localStorage.getItem('tcg.ev.filters') || '{}').pref }));
         if (pk.saved !== 'JP-27' || !pk.loc.includes('大阪府') || pk.loc.includes('推定') || !days.at(-1).endsWith('&pref=JP-27')) fail(where, `pick: ${JSON.stringify(pk)} ${days.at(-1)}`);
         // a failed answer: no counts, releases stay
@@ -1856,6 +1857,46 @@ if (HAS_EVENTS) {
       if (reqs.length || !(await page.locator('#locLine').isHidden())) fail(`hub ${noEv.path}`, `events parts on a game without events: ${reqs.join(' ')}`);
       await ctx.close();
     }
+  }
+  // more topics than lanes, crossing a week boundary: 4 bars a week in the right grid columns, the rest counted per day
+  if (HAS_VOICES) {
+    const where = 'hub lanes';
+    const code = pick.js.hub.code, ym = TODAY.slice(0, 7);
+    // the first Saturday of the month on or after the 8th: every fixture topic runs Thu..Mon across that week end
+    let sat = `${ym}-08`; while (new Date(`${sat}T00:00:00Z`).getUTCDay() !== 6) sat = addDay(sat, 1);
+    const fx = Array.from({ length: 6 }, (_, i) => ({ id: `fx-lane-${i}`, game: code, title: `レーン${i}`, summary: 's', attitude: 'neutral', status: 'continuing',
+      first_seen: addDay(sat, -2 + (i % 2)), voices: [], share: { positive: 1, negative: 1, neutral: 1 }, volume: 'mid', reacting_to: null, source: 'grok-app' }));
+    const last = addDay(sat, 2);
+    const snap = { date: last, window: { from: addDay(last, -2), to: last }, topics: fx.map(t => ({ ...t, window: { from: addDay(last, -2), to: last } })) };
+    const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    await page.route('**/api/v1/voices', r => r.fulfill({ json: { version: 'fx', snapshots: [snap] } }));
+    await page.goto(`${BASE}${pick.path}?m=${ym}`, { waitUntil: 'networkidle' });
+    const got = await page.evaluate(() => {
+      const days = [...document.querySelectorAll('.day button.n')].map(b => b.dataset.openDay);
+      return { bars: [...document.querySelectorAll('.tbar')].map(a => { const cs = getComputedStyle(a), row = +cs.gridRowStart - 2;
+        return [a.dataset.topic, days[row * 7 + +cs.gridColumnStart - 1], days[row * 7 + +cs.gridColumnEnd - 2]]; }),
+        more: Object.fromEntries([...document.querySelectorAll('.tmore')].map(b => [b.dataset.openDay, b.textContent])) };
+    });
+    // expected: per week, topics by first day then longer first, greedy lanes; lanes 4+ only counted
+    const exp = [], hid = {};
+    for (const [ws, we] of [[addDay(sat, -6), sat], [addDay(sat, 1), addDay(sat, 7)]]) {
+      const segs = fx.map(t => ({ id: t.id, s: t.first_seen > ws ? t.first_seen : ws, e: last < we ? last : we, f: t.first_seen }))
+        .sort((a, b) => a.f.localeCompare(b.f) || 0);
+      const end = [];
+      for (const sg of segs) {
+        let l = end.findIndex(e => e < sg.s); if (l < 0) { l = end.length; end.push(''); } end[l] = sg.e;
+        if (l < 4) exp.push([sg.id, sg.s, sg.e]); else for (let k = sg.s; k <= sg.e; k = addDay(k, 1)) hid[k] = (hid[k] || 0) + 1;
+      }
+    }
+    const key = a => JSON.stringify([...a].map(String).sort());
+    if (key(got.bars) !== key(exp)) fail(where, `bars ${JSON.stringify(got.bars)}, expected ${JSON.stringify(exp)}`);
+    const wantMore = Object.fromEntries(Object.entries(hid).map(([k, n]) => [k, `ほか${n}件の話題`]));
+    if (JSON.stringify(Object.entries(got.more).sort()) !== JSON.stringify(Object.entries(wantMore).sort())) fail(where, `hidden ${JSON.stringify(got.more)}, expected ${JSON.stringify(wantMore)}`);
+    await page.screenshot({ path: path.join(OUT, 'hub-lanes.png') });
+    console.log(`  ${where} checked (${got.bars.length} bars)`);
+    await ctx.close();
   }
   // /<code>/ answers 301 to the hub (both cases, with and without the slash)
   for (const h of HUBS) {
