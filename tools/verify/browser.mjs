@@ -1675,8 +1675,10 @@ if (HAS_EVENTS) {
   const code = pick.js.hub.code;
   const topics = new Map();
   for (const s of VOICE_SNAPS) for (const t of s.topics) if (t.game === code) {
-    const x = topics.get(t.id) || { first: t.first_seen, last: s.date }; x.last = s.date; if (t.first_seen < x.first) x.first = t.first_seen; topics.set(t.id, x);
+    const x = topics.get(t.id) || { first: t.first_seen, last: s.date, vs: [] }; x.last = s.date; x.vs.push({ snap: s.date, t }); if (t.first_seen < x.first) x.first = t.first_seen; topics.set(t.id, x);
   }
+  // a day dialog shows each topic as /voices/ does: the first snapshot on or after that day, else the latest
+  const titlesOn = d => [...topics.values()].filter(t => t.first <= d && d <= t.last).map(x => (x.vs.find(v => v.snap >= d) || x.vs.at(-1)).t.title);
   const onDay = d => [...topics.values()].filter(t => t.first <= d && d <= t.last).length;
   const addDay = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
   const nowN = HAS_VOICES && latest && (Date.parse(TODAY) - Date.parse(latest.date)) / 864e5 <= 7 ? latest.topics.filter(t => t.game === code).length : null;
@@ -1717,19 +1719,28 @@ if (HAS_EVENTS) {
       if (tday) {
         await page.locator(vp === 'desktop' ? `.day [data-open-day="${tday}"].n` : `.ag [data-open-day="${tday}"]`).click();
         const dl = await page.evaluate(() => ({ open: document.getElementById('dlg').open, tp: document.querySelectorAll('#dlg .dl-tp .tp').length,
-          links: [...document.querySelectorAll('#dlg .dl-tp a')].map(a => a.getAttribute('href')) }));
-        if (!dl.open || dl.tp !== onDay(tday) || dl.links.some(h => !h.startsWith('/voices/#t='))) fail(where, `day dialog ${tday}: ${JSON.stringify(dl)}, expected ${onDay(tday)} topics`);
+          links: [...document.querySelectorAll('#dlg .dl-tp a')].map(a => a.getAttribute('href')), titles: [...document.querySelectorAll('#dlg .dl-tp a')].map(a => a.textContent),
+          name: document.getElementById(document.getElementById('dlg').getAttribute('aria-labelledby'))?.textContent }));
+        if (!dl.open || dl.tp !== onDay(tday) || dl.links.some(h => !h.startsWith('/voices/#t=')) || JSON.stringify(dl.titles) !== JSON.stringify(titlesOn(tday)) || !dl.name)
+          fail(where, `day dialog ${tday}: ${JSON.stringify(dl)}, expected ${JSON.stringify(titlesOn(tday))}`);
         await page.screenshot({ path: path.join(OUT, `hub-${vp}-${scheme}-day.png`) });
         await page.keyboard.press('Escape');
+        if (vp === 'desktop' && await page.evaluate(() => document.activeElement?.dataset.openDay) !== tday) fail(where, 'focus did not return to the day');
       }
       await page.screenshot({ path: path.join(OUT, `hub-${vp}-${opt.width}-${scheme}.png`), fullPage: true });
-      // switcher: every hub as a link, the current one marked; the shown month is carried
+      // switcher: every hub as a link, the current one marked; the shown month is carried, also the default one
+      const other = HUBS.find(h => h !== pick);
+      const m1 = await page.evaluate(() => state.month);
+      await page.locator('#gameSw').click();
+      await page.locator(`#swList a[href^="${other.path}"]`).click();
+      await page.waitForURL(u => u.pathname === other.path);
+      if (await page.evaluate(() => state.month) !== m1) fail(where, `switch to ${other.path} at the default month did not keep ${m1}`);
+      await page.goto(BASE + pick.path, { waitUntil: 'networkidle' });
       await page.locator('#nextM').click();
       const m2 = await page.evaluate(() => state.month);
       if (new URL(page.url()).search !== `?m=${m2}`) fail(where, `URL ${page.url()} after 次月`);
       await page.locator('#gameSw').click();
       const sw = await page.evaluate(() => ({ open: document.getElementById('swDlg').open, links: [...document.querySelectorAll('#swList a')].map(a => [a.getAttribute('href'), a.getAttribute('aria-current')]) }));
-      const other = HUBS.find(h => h !== pick);
       if (!sw.open || sw.links.length !== HUBS.length || sw.links.some(([h, c]) => !h.endsWith(`/?m=${m2}`) || (c === 'page') !== h.startsWith(pick.path)))
         fail(where, `switcher ${JSON.stringify(sw)}`);
       if (scheme === 'light') await page.screenshot({ path: path.join(OUT, `hub-${vp}-switcher.png`) });

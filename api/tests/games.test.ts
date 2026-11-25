@@ -42,6 +42,8 @@ describe('game registry', () => {
     // an official_url needs a host; a voices game's code must fit the topics' game pattern
     const row = REG.find((g) => g.sources.voices && g.official_url)!;
     expect(validate([{ ...row, official_url: 'https:///x' }])).toBe(false);
+    expect(validate([{ ...row, official_url: 'https://example.jp?lang=ja' }])).toBe(true);
+    expect(validate([{ ...row, official_url: 'https://example.jp:443/' }])).toBe(true);
     expect(validate([{ ...row, code: 'AB1' }])).toBe(false);
   });
 

@@ -346,7 +346,7 @@ tbody tr.starred td.nm{font-weight:700}
 .tp p{margin:2px 0 0;font-size:13px;line-height:1.6}
 .tp small{display:block;margin-top:2px;font-size:12px;color:var(--muted)}
 .tp .tb{margin-left:6px;font-size:12px;font-weight:700;color:var(--gt);white-space:nowrap}
-.dl-tp{padding-top:14px;border-top:1px solid var(--line)}
+.dl-tp{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .dl-tp h3{margin:0 0 8px;font-size:15px}
 .hubtp h2{margin-bottom:10px}
 .tp-f{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;margin:12px 0 0;font-size:12px;color:var(--muted)}
@@ -551,7 +551,7 @@ tbody tr.starred td.nm{font-weight:700}
   <!--SITENAV-->
 </div>
 
-<dialog id="dlg"><div class="dlg"><button class="ib close" id="dlgClose" aria-label="閉じる">×</button><div id="dlgBody"></div></div></dialog>
+<dialog id="dlg" aria-labelledby="dlgH"><div class="dlg"><button class="ib close" id="dlgClose" aria-label="閉じる">×</button><div id="dlgBody"></div></div></dialog>
 <dialog id="swDlg" aria-labelledby="swH"><div class="dlg"><button class="ib close" id="swClose" aria-label="閉じる">×</button><h2 class="dl-day" id="swH">タイトルを切り替え</h2><ul class="swlist" id="swList"></ul><p class="dl-none"><a href="/releases/">すべてのタイトルを新弾カレンダーで見る ›</a></p></div></dialog>
 <dialog id="calDlg" class="caldlg"><div class="dlg"><button class="ib close" id="calClose" aria-label="閉じる">×</button><div id="calBody"></div></div></dialog>
 
@@ -871,7 +871,7 @@ function openDetail(items,title,keepOpen,day){
   dlgItems=items; dlgTitle=title; dlgDay=day||null;
   const tps=day?topicsOn(day):[];
   if(!keepOpen) track('view_item', items.length===1 ? {game:items[0].game, item_name:items[0].name} : {item_name:title, count:items.length});
-  document.getElementById('dlgBody').innerHTML=`<h2 class="dl-day">${title}</h2>`+(items.length?'':'<p class="dl-none">この日の発売予定はありません。</p>')+items.map(d=>`<div class="dl-item" style="--h:${HUE[d.game]}">${thumb(d)}<div>
+  document.getElementById('dlgBody').innerHTML=`<h2 class="dl-day" id="dlgH">${title}</h2>`+(items.length?'':'<p class="dl-none">この日の発売予定はありません。</p>')+items.map(d=>`<div class="dl-item" style="--h:${HUE[d.game]}">${thumb(d)}<div>
     <div class="dl-head"><span class="tag">${gi(d.game)}${esc(d.game)}</span>${starBtn(d,true)}</div>
     <h4>${esc(d.name)}</h4>
     <dl><dt>発売日</dt><dd>${fmtDate(d.date)}</dd>
@@ -880,7 +880,7 @@ function openDetail(items,title,keepOpen,day){
     ${d.per_pack?`<dt>内容</dt><dd>${d.per_box||(d.packN||0)<1000?'1パック':'1セット'}${d.per_pack}枚入り</dd>`:''}</dl>
     ${d.approx?'<p class="ap" style="display:inline-block;margin:8px 0 0">参考画像（実際の商品と異なる場合あり）</p><p class="dl-none">シリーズのキービジュアル等のため、実際のパッケージと異なる場合があります。</p>':''}
     <p class="dl-links">${d.date>=TODAY?`<button class="calbtn" data-cal-id="${d.id}">📅 カレンダーに追加</button>`:''}<a class="itempg" href="/item/${d.id}/">商品ページ</a>${linkList(d).join('')}</p>
-  </div></div>`).join('')+(tps.length?`<section class="dl-tp" style="${hubVars}"><h3>話題 ${tps.length}件</h3><ul class="tps">${tps.map(topicCard).join('')}</ul></section>`:'');
+  </div></div>`).join('')+(tps.length?`<section class="dl-tp" style="${hubVars}"><h3>話題 ${tps.length}件</h3><ul class="tps">${tps.map(x=>topicCard(versionOn(x,day))).join('')}</ul></section>`:'');
   if(keepOpen) return;
   if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open','');
 }
@@ -904,10 +904,11 @@ document.addEventListener('click',e=>{
   const mo=e.target.closest('.more');
   if(mo){openDay(mo.dataset.day); return}
   const od=e.target.closest('[data-open-day]');
-  if(od) openDay(od.dataset.openDay);
+  if(od){ openDay(od.dataset.openDay); dayOpener=od.dataset.openDay; }
 });
 function openDay(k,keepOpen){
-  const list=filtered().filter(d=>d.date===k).sort(starFirst);
+  const list=filtered().filter(d=>d.date===k);
+  if(HUB) list.sort(starFirst);
   openDetail(list,fmtDate(k)+(list.length>1?` · ${list.length}件`:''),keepOpen,k);
 }
 
@@ -1011,7 +1012,8 @@ function copyStars(btn){
 // ---- hub: 話題 from the voices API (the request /voices/ makes; docs/design/game-hub.md › 6). Releases never wait for
 // it; a failed or malformed answer leaves the 話題 parts hidden.
 let TOPICS=[], VLATEST=null;
-const hubVars = HUB ? `--gl:${HUB.c};--gd:${HUB.cd}` : '';
+// a hub without a palette colour uses the release calendar's computed hue
+const hubVars = !HUB ? '' : HUB.c ? `--gl:${HUB.c};--gd:${HUB.cd}` : `--gl:hsl(${HUE[PAGE.game]} 55% 42%);--gd:hsl(${HUE[PAGE.game]} 60% 68%)`;
 const topicsOn = k => TOPICS.filter(t=>t.first<=k && k<=t.last);
 const monthDays = ym => { const [y,m]=ym.split('-').map(Number); return Array.from({length:new Date(y,m,0).getDate()},(_,i)=>ym+'-'+String(i+1).padStart(2,'0')); };
 const dnum = s => { const [y,m,d]=s.split('-').map(Number); return Date.UTC(y,m-1,d)/864e5; };
@@ -1020,16 +1022,20 @@ const dayLabel = (k,n,t) => { const [,m,d]=k.split('-').map(Number); return `${m
 const VT_PAGE = '/'+'voices/';
 const ATT = {positive:'好意的な声が多い', negative:'否定的な声が多い', mixed:'賛否が分かれている', neutral:'目立った賛否はない'};
 let VSNAPS = 0;
-function topicBadge(t){
-  if(t.status==='continuing') return `🔥 ${dnum(t.snap)-dnum(t.first)+1}日連続`;
-  if(t.status==='cooling') return '📉 落ち着き';
-  return t.status==='new'&&VSNAPS>1 ? '🆕 新' : '';
+// what a topic looked like on day k, as on /voices/: the first snapshot on or after k, else the latest
+const versionOn = (x,k) => x.vs.find(v=>v.snap>=k) || x.vs[x.vs.length-1];
+function topicBadge(v){
+  if(v.t.status==='continuing') return `🔥 ${dnum(v.snap)-dnum(v.t.first_seen)+1}日連続`;
+  if(v.t.status==='cooling') return '📉 落ち着き';
+  return v.t.status==='new'&&VSNAPS>1 ? '🆕 新' : '';
 }
-const topicCard = t => { const b=topicBadge(t); return `<li class="tp"><a href="${VT_PAGE}#t=${encodeURIComponent(t.id)}">${esc(t.title)}</a>${b?`<span class="tb">${b}</span>`:''}<p>${esc(t.summary)}</p>${ATT[t.attitude]?`<small>${ATT[t.attitude]}</small>`:''}</li>`; };
+const topicCard = v => { const b=topicBadge(v), t=v.t; return `<li class="tp"><a href="${VT_PAGE}#t=${encodeURIComponent(t.id)}">${esc(t.title)}</a>${b?`<span class="tb">${b}</span>`:''}<p>${esc(t.summary)}</p>${ATT[t.attitude]?`<small>${ATT[t.attitude]}</small>`:''}</li>`; };
 function renderHubTopics(){
   const sec=document.getElementById('hubTopics'); if(!sec) return;
-  if(!VLATEST || dnum(TODAY)-dnum(VLATEST)>7){ sec.hidden=true; return; }
-  const now=TOPICS.filter(t=>t.last===VLATEST).sort((a,b)=>a.rank-b.rank);
+  // the snapshot dates are Tokyo days (as on /)
+  const jst=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  if(!VLATEST || dnum(jst)-dnum(VLATEST)>7){ sec.hidden=true; return; }
+  const now=TOPICS.filter(x=>x.last===VLATEST).map(x=>x.vs[x.vs.length-1]).sort((a,b)=>a.rank-b.rank);
   sec.setAttribute('style',hubVars);
   document.getElementById('hubTopicsBody').innerHTML=(now.length?`<ul class="tps">${now.slice(0,5).map(topicCard).join('')}</ul>`
       : `<p class="dl-none">最新のまとめ（${fmtDate(VLATEST,false)}）に${esc(HUB.short)}の話題はありません。</p>`)
@@ -1046,8 +1052,8 @@ async function loadTopics(){
     // a topic is active from first_seen to the last snapshot that lists it, shown as that snapshot has it
     [...snaps].sort((a,b)=>a.date.localeCompare(b.date)).forEach(s=>s.topics.forEach((t,i)=>{
       if(t.game!==HUB.code) return;
-      const x=by.get(t.id)||{id:t.id, first:t.first_seen};
-      Object.assign(x,{title:t.title, summary:t.summary, attitude:t.attitude, status:t.status, snap:s.date, last:s.date, rank:i});
+      const x=by.get(t.id)||{id:t.id, first:t.first_seen, vs:[]};
+      x.vs.push({snap:s.date, t, rank:i}); x.last=s.date;
       if(t.first_seen<x.first) x.first=t.first_seen;
       by.set(t.id,x);
     }));
@@ -1056,6 +1062,15 @@ async function loadTopics(){
   render(); renderHubTopics();
   if(dlg.open && dlgDay) openDay(dlgDay,true);
 }
+// render() replaces the day buttons: a dialog opened from one returns focus to the same day's button
+let dayOpener=null;
+dlg.addEventListener('close',()=>{
+  if(!dayOpener) return;
+  const k=dayOpener; dayOpener=null;
+  if(document.activeElement&&document.activeElement!==document.body) return;
+  const b=[...document.querySelectorAll(`button[data-open-day="${k}"]`)].find(e=>e.offsetParent);
+  if(b) b.focus();
+});
 const swDlg=document.getElementById('swDlg');
 if(HUB){
   const sw=document.getElementById('gameSw');
@@ -1063,7 +1078,7 @@ if(HUB){
   sw.innerHTML=`${gi(PAGE.game)}<span class="gn">${esc(HUB.chip)}</span><span class="cv" aria-hidden="true">▾</span>`;
   sw.setAttribute('aria-label',`タイトルを切り替え（表示中: ${HUB.short}）`);
   sw.onclick=()=>{
-    const q=state.month!==hubDefault?'?m='+state.month:'';
+    const q='?m='+state.month;
     document.getElementById('swList').innerHTML=(PAGE.hubs||[]).map(h=>`<li><a href="/${h.slug}/${q}"${h.slug===HUB.slug?' aria-current="page"':''}>${gi(h.label)}${esc(h.short)}</a></li>`).join('');
     if(swDlg.showModal) swDlg.showModal(); else swDlg.setAttribute('open','');
   };

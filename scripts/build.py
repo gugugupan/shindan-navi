@@ -166,7 +166,8 @@ def about_block(heading,paras):
 HUB_REG=[g for g in REG if g['hub']]
 def hub_js(slug,key):
     g=next(g for g in HUB_REG if g['slug']==slug)
-    js={'game':key,'hub':{'slug':slug,'code':g['code'],'chip':g['chip'],'short':g['short'],'c':g['colour']['light'],'cd':g['colour']['dark']},
+    c=g['colour'] or {}
+    js={'game':key,'hub':{'slug':slug,'code':g['code'],'chip':g['chip'] or g['short'],'short':g['short'],'c':c.get('light'),'cd':c.get('dark')},
         'hubs':[{'slug':h['slug'],'label':h['label'],'short':h['short']} for h in HUB_REG if h['label'] in used]}
     if VOICES_ENABLED and g['sources']['voices']: js['voicesApi']=EVENTS_API_BASE+'/voices'
     return js

@@ -370,12 +370,13 @@ to what crawlers get without a second render path. Revisit only if switching pro
 
 ## 9. Accessibility
 
-- The calendar is a grid with one tab stop per day (roving tabindex; markers `tabindex=-1`), arrow keys move days.
+- Each day number is a button and its own tab stop (simplified from a roving tabindex, M1); markers are not focusable.
   Each day's accessible name says everything the markers show: 「12月6日(土) 発売1件・イベント42件・話題2件」.
 - Markers are `aria-hidden`; colour is never the only cue (■ / ● / ◆ shapes + the legend; counts as text on desktop).
 - Game-coloured text is mixed towards black / white for ≥ 4.5:1 in both themes (as `/voices/`); icons stay
   decorative (`gi()`).
-- Dialog: `role=dialog`, labelled by its date heading, focus trapped, Esc closes, focus returns to the day.
+- Dialog: native `<dialog>` labelled by its date heading, Esc closes, focus returns to that day's button (also after
+  the topics arrive and the calendar re-renders).
 - Switcher dialog is a list of links; the current game has `aria-current="page"`. Live region for switch and for
   loading / error states of the events area.
 - `prefers-reduced-motion`: no sheet animation. Touch targets ≥ 44px on phones; no horizontal scroll at 344-393px.

@@ -39,7 +39,7 @@
           ],
           "description": "null = the release calendar's computed hue."
         },
-        "official_url": { "type": ["string", "null"], "pattern": "^https://[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+(/|$)", "description": "公式 link of the title's releases (a host is required)." },
+        "official_url": { "type": ["string", "null"], "pattern": "^https://[^/?#@:\\s]+(:[0-9]+)?([/?#]|$)", "description": "公式 link of the title's releases (a host is required)." },
         "sources": {
           "type": "object", "additionalProperties": false, "required": ["releases", "events", "voices"],
           "properties": {
