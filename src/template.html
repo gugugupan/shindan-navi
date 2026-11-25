@@ -902,9 +902,9 @@ document.addEventListener('click',e=>{
   const p=e.target.closest('.pk[data-id]');
   if(p){const d=DATA.find(x=>x.id===p.dataset.id); openDetail([d],fmtDate(d.date)); return}
   const mo=e.target.closest('.more');
-  if(mo){openDay(mo.dataset.day); return}
+  if(mo){openDay(mo.dataset.day); dayOpener=`.more[data-day="${mo.dataset.day}"]`; return}
   const od=e.target.closest('[data-open-day]');
-  if(od){ openDay(od.dataset.openDay); dayOpener=od.dataset.openDay; }
+  if(od){ openDay(od.dataset.openDay); dayOpener=`button[data-open-day="${od.dataset.openDay}"]`; }
 });
 function openDay(k,keepOpen){
   const list=filtered().filter(d=>d.date===k);
@@ -1062,13 +1062,13 @@ async function loadTopics(){
   render(); renderHubTopics();
   if(dlg.open && dlgDay) openDay(dlgDay,true);
 }
-// render() replaces the day buttons: a dialog opened from one returns focus to the same day's button
+// render() replaces the day buttons: a dialog opened from one returns focus to that day's matching button (selector)
 let dayOpener=null;
 dlg.addEventListener('close',()=>{
   if(!dayOpener) return;
   const k=dayOpener; dayOpener=null;
   if(document.activeElement&&document.activeElement!==document.body) return;
-  const b=[...document.querySelectorAll(`button[data-open-day="${k}"]`)].find(e=>e.offsetParent);
+  const b=[...document.querySelectorAll(k)].find(e=>e.offsetParent);
   if(b) b.focus();
 });
 const swDlg=document.getElementById('swDlg');
