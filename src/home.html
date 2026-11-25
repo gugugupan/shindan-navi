@@ -130,7 +130,7 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 :root[data-theme="dark"] .vtr [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff)}
 .vtr[hidden]{display:none}
 /* one card per topic: as many 240px+ columns as fit (5 at 1366, 3 at ~1000, 1 on phones), equal heights per row */
-.vts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.vts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:10px}
 .vts>li{display:flex;min-width:0}
 .vt{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-top:3px solid var(--g);border-radius:10px;padding:9px 12px 10px;color:var(--ink);text-decoration:none}
 .vt:hover{border-color:var(--accent);border-top-color:var(--g)}
@@ -641,11 +641,9 @@ function renderVt(){
     .sort((a,b)=>(VOLW[b.t.volume]||0)-(VOLW[a.t.volume]||0)||(a.t.first_seen<b.t.first_seen?1:a.t.first_seen>b.t.first_seen?-1:0)||a.i-b.i);
   const cap=sel.length===1?5:2, per={}, rows=[];
   for(const {t} of pool){ if(rows.length>=5) break; if((per[t.game]=(per[t.game]||0)+1)>cap) continue; rows.push(t); }
-  // 新 only when an earlier snapshot exists (a topic in this one is not new): the /voices/ rule, from one snapshot
-  const seen=VT.topics.some(t=>t.status!=='new');
   const badge=t=>t.status==='continuing' ? `<span class="badge hot"><span aria-hidden="true">🔥 </span>${daysBetween(t.first_seen,VT.date)+1}日連続</span>`
     : t.status==='cooling' ? '<span class="badge cool"><span aria-hidden="true">📉 </span>落ち着き</span>'
-    : t.status==='new'&&seen ? '<span class="badge new"><span aria-hidden="true">🆕 </span>新</span>' : '';
+    : t.status==='new' ? '<span class="badge new"><span aria-hidden="true">🆕 </span>新</span>' : '';
   $('vtBody').innerHTML = `<ul class="vts">${rows.map((t,i)=>{
     const g=vtGame[t.game]||{name:t.game,short:t.game}, a=ATT[t.attitude]||ATT.neutral, k=ATT[t.attitude]?t.attitude:'neutral';
     return `<li><a class="vt" style="${vtvars(t.game)}" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}" aria-labelledby="vtT${i}" aria-describedby="vtM${i} vtS${i}">`

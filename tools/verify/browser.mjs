@@ -471,9 +471,11 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
       rows: [...document.querySelectorAll('#vtBody a.vt')].map(a => a.getAttribute('href').replace('/voices/#t=', '')),
       asof: document.getElementById('vtAsOf')?.textContent, saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')],
       cards: (() => {
-        const lis = [...document.querySelectorAll('#vtBody ul.vts > li')], rs = lis.map(li => li.getBoundingClientRect());
+        const lis = [...document.querySelectorAll('#vtBody ul.vts > li')], rs = lis.map(li => li.querySelector('a.vt')?.getBoundingClientRect() || li.getBoundingClientRect());
         const rows = Object.values(rs.reduce((m, r) => ((m[Math.round(r.top)] ||= []).push(Math.round(r.height)), m), {}));
+        const box = document.getElementById('vtr').getBoundingClientRect();
         return { n: lis.length, cols: new Set(rs.map(r => Math.round(r.left))).size, unequal: rows.some(h => Math.max(...h) - Math.min(...h) > 1),
+          outside: rs.some(r => r.left < box.left - 0.5 || r.right > box.right + 0.5),
           links: lis.map(li => { const a = li.querySelectorAll('a'), n = a[0] && (a[0].getAttribute('aria-labelledby') || '').split(' ').map(i => document.getElementById(i)?.textContent).join(' ');
             return { n: a.length, name: n, title: li.querySelector('.tt')?.textContent, meta: Math.min(...[...li.querySelectorAll('.vh,.vh :not(.gi),.tr')].map(e => parseFloat(getComputedStyle(e).fontSize))) }; }) };
       })(),
@@ -499,13 +501,14 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (st.buttons) fail(where, `${st.buttons} buttons in the read-only block`);
     if (!allOk(st)) fail(where, `all games: sub "${st.sub}" rows ${st.rows.join(' ')}`);
     if (st.asof !== `${mm}/${dd} 時点・AI要約`) fail(where, `footer ${st.asof}`);
-    // cards: one per row topic in a list, one link each named by the title, metadata >= 12px, equal heights per row;
-    // 1 column on phones, >= 3 at 1366 and 1024 (desktop also shot at those widths, light and dark)
+    // cards: one per row topic in a list, one link each named by the title, metadata >= 12px, equal heights per row,
+    // inside the section; 1 column on phones (also at 280px), >= 3 at 1366 and 1024 (desktop also shot at those widths, light and dark)
     const cardsOk = (st, w, min, max) => {
       const c = st.cards;
       if (c.n !== st.rows.length) fail(where, `${w}px: ${c.n} cards for ${st.rows.length} links`);
       if (c.cols < min || c.cols > max) fail(where, `${w}px: ${c.cols} columns`);
       if (c.unequal) fail(where, `${w}px: cards in a row differ in height`);
+      if (c.outside) fail(where, `${w}px: a card sticks out of the section`);
       if (c.links.some(l => l.n !== 1 || !l.title || l.name !== l.title)) fail(where, `${w}px: card links ${JSON.stringify(c.links.map(l => [l.n, l.name]))}`);
       if (c.links.some(l => !(l.meta >= 12))) fail(where, `${w}px: card metadata under 12px`);
       if (st.overflow > 1) fail(where, `${w}px: page scrolls horizontally by ${st.overflow}px`);
@@ -518,7 +521,13 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
       }
       await page.emulateMedia({ colorScheme: 'light' });
     };
-    if (opt.width <= 760) { cardsOk(st, opt.width, 1, 1); await shot(String(opt.width)); }
+    if (opt.width <= 760) {
+      cardsOk(st, opt.width, 1, 1); await shot(String(opt.width));
+      // the narrowest phones: the 240px column minimum gives way to the section width
+      await page.setViewportSize({ width: 280, height: opt.height });
+      cardsOk(await state(), 280, 1, 1);
+      await page.setViewportSize({ width: opt.width, height: opt.height });
+    }
     else for (const w of [1366, 1024]) {
       await page.setViewportSize({ width: w, height: opt.height });
       const sw = await state();
