@@ -278,8 +278,7 @@ def check_home(today, head, ov):
     if events != ('id="hsL"' in src): fail(f'/: event parts {"missing" if events else "present without /events/"}')
     # no static release list or about block (owner decision 2026-11-19): the h1 heads the page, the old name stays findable
     if 'class="seo' in src: fail('/: static release list / about block is back')
-    # the h1 shows the date and 今日; the page heading stays in it for screen readers and crawlers (visually hidden)
-    h1 = re.findall(r'<h1 class="hbar"><b id="hDate"></b><span class="tb">今日</span><span class="sr">([^<]+)</span></h1>', src)
+    h1 = re.findall(r'<h1 class="hbar"><b id="hDate"></b><span class="tb">今日</span><span class="hsub">([^<]+)</span></h1>', src)
     if len(h1) != 1 or len(re.findall(r'<h1[ >]', src)) != 1: fail(f'/: expected one h1 with the page heading, got {h1}')
     desc = re.search(r'<meta name="description" content="([^"]+)"', src)
     if not desc or '旧・新弾ナビ' not in desc[1]: fail('/: meta description lacks 旧・新弾ナビ')

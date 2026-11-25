@@ -672,7 +672,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null, zeroBadge,
       tabs: tabs.map(t => ({ sel: t.getAttribute('aria-selected'), ti: t.tabIndex, rel: t.dataset.rel ?? null, ev: t.dataset.ev || null, label: t.getAttribute('aria-label') })),
       by: p.getAttribute('aria-labelledby'), live: document.getElementById('wkLive')?.textContent ?? null,
-      evHead: p.querySelector('.evb .blk-h .sub')?.textContent ?? null, ty: [...p.querySelectorAll('.gcol .ty')].map(t => t.textContent), rels: [...p.querySelectorAll('.rels .pk')].map(e => e.closest('.rg').dataset.game),
+      evHead: p.querySelector('.evb .blk-h') ? p.querySelector('.evb .blk-h .sub')?.textContent ?? '' : null, ty: [...p.querySelectorAll('.gcol .ty')].map(t => t.textContent), rels: [...p.querySelectorAll('.rels .pk')].map(e => e.closest('.rg').dataset.game),
       cols: [...p.querySelectorAll('.gcol')].map(c => c.getAttribute('aria-label')), others: p.querySelector('.relo .rl')?.textContent || null,
       foot: [...p.querySelectorAll('a.dayl')].map(a => [a.textContent, a.getAttribute('href')]),
       locSet: !!document.getElementById('hsLocSet'), evText: document.getElementById('evBody')?.textContent ?? null,
@@ -807,12 +807,12 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         strip('without by_game', await state(), two.map(c => H.titles[c]), null, true, []);
         nobg = false;
       }
-      // the /events/ filter names its games next to the panel's event count
+      // the pill names the /events/ filter; the panel's イベント header does not repeat it
       await setStore({ 'tcg.voices': { game: two.join(',') }, 'tcg.ev.filters': { pref: 'JP-13', game: 'OPCG,PTCG' } });
       await page.reload({ waitUntil: 'networkidle' });
       st = await state();
       strip('filtered query', st, two.map(c => H.titles[c]), null, true, ['OPCG', 'PTCG']);
-      if (HAS_EVENTS && st.evHead !== '東京都・ワンピ・ポケカ') fail(where, `panel heading "${st.evHead}"`);
+      if (HAS_EVENTS && st.evHead !== '') fail(where, `panel heading names "${st.evHead}"`);
     }
 
     // 変更: the dialog writes the titles (other saved filters kept), cancel writes nothing

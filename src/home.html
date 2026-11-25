@@ -24,7 +24,8 @@
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 /* top row: today's date (h1), the 表示の設定 pill, the week strip on the right (below the date on phones / tablets) */
 .htop{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:2px}
-.hbar{margin:0;display:flex;align-items:center;gap:8px}
+.hbar{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.hbar .hsub{font-family:var(--body);font-size:12.5px;font-weight:700;color:var(--muted)}
 .hbar b{font-family:var(--display);font-weight:400;font-size:clamp(22px,3vw,28px);line-height:1.2}
 .tb{font-family:var(--body);font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--foil-ink);background:var(--foil);border-radius:4px;padding:2px 6px}
 .pill{font:inherit;font-size:13px;font-weight:700;color:var(--ink);display:inline-flex;align-items:center;gap:6px;max-width:min(320px,100%);min-width:0;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:4px 10px 4px 12px;cursor:pointer}
@@ -202,7 +203,7 @@
 
   <main class="home" id="home">
     <div class="htop">
-      <h1 class="hbar"><b id="hDate"></b><span class="tb">今日</span><span class="sr"><!--H1--></span></h1>
+      <h1 class="hbar"><b id="hDate"></b><span class="tb">今日</span><span class="hsub"><!--H1--></span></h1>
       <button type="button" class="pill" id="hsBtn" aria-haspopup="dialog"><span class="sr">表示の設定：</span><span id="hsT">すべてのタイトル</span><!--EVENTS--><span class="loc" id="hsL"></span><!--/EVENTS--><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
       <div class="wkw"><div class="wks" id="wkStrip" role="tablist"></div><p class="wkl" id="wkLg" aria-hidden="true"></p></div>
     </div>
@@ -621,10 +622,9 @@ function renderPanel(x,f,sel){
   let evs='', live='';
   if(EVENTS){
     const e=evPart(d,f);
-    const where=[f.pref&&LOC.locName(f.pref), evGamesLabel(f)].filter(Boolean).join('・');
     // the day view of the saved /events/ filter (the set counted here); without a location still that day
     const evHref = f.pref ? dayLink(f,d) : '/events/?'+new URLSearchParams([...(f.game?[['game',f.game]]:[]),...(f.type?[['type',f.type]]:[]),['range','custom'],['from',d],['to',d]]).toString().replace(/%2C/g,',');
-    evs=`<section class="blk wps evb" aria-labelledby="wkEH"><div class="blk-h"><h2 id="wkEH">イベント</h2>${day}${where?`<span class="sub">${esc(where)}</span>`:''}${e.n?`<span class="n"><b>${e.n}</b>件${e.min||''}</span>`:''}`
+    evs=`<section class="blk wps evb" aria-labelledby="wkEH"><div class="blk-h"><h2 id="wkEH">イベント</h2>${day}${e.n?`<span class="n"><b>${e.n}</b>件${e.min||''}</span>`:''}`
       + `<a class="dayl" href="${esc(evHref)}">日別一覧<span class="sr">（イベントカレンダーでこの日を見る）</span> ›</a></div><div id="evBody">${e.html}</div></section>`;
     live = !f.pref ? '' : e.loading ? `${m}月${dd}日のイベントを読み込み中` : e.error ? `${m}月${dd}日のイベント情報を読み込めませんでした`
       : e.n ? `${m}月${dd}日のイベント ${e.n}件${e.min||''}` : e.n===0 ? `${m}月${dd}日のイベントはありません` : '';
