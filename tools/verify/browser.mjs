@@ -31,6 +31,8 @@ const REDIRECTS = fs.existsSync(path.join(DIST, '_redirects')) ? Object.fromEntr
   .split('\n').map(l => l.trim().split(/\s+/)).filter(x => x.length === 3).map(([a, b, c]) => [a, [b, +c]])) : {};
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  // no IP guess, as for visitors (and crawlers) outside Japan: hubs then send no events request
+  if (p === '/api/v1/geo') { res.writeHead(200, { 'content-type': 'application/json' }).end('{"region_code":null}'); return; }
   if (REDIRECTS[p]) { res.writeHead(REDIRECTS[p][1], { location: REDIRECTS[p][0] + new URL(req.url, 'http://x').search }).end(); return; }
   if (VOICES_API[p]) { res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(VOICES_API[p])); return; }
   let f = path.join(DIST, p);
@@ -1693,7 +1695,8 @@ if (HAS_EVENTS) {
     page.on('request', r => { if (r.url().startsWith(BASE + '/api/')) api.push(r.url().slice(BASE.length)); });
     try {
       await page.goto(BASE + pick.path, { waitUntil: 'networkidle' });
-      const wantApi = HAS_VOICES ? ['/api/v1/voices'] : [];
+      const wantApi = [...(HAS_VOICES ? ['/api/v1/voices'] : []), ...(HAS_EVENTS && pick.js.eventsApi ? ['/api/v1/geo'] : [])].sort();
+      api.sort();
       if (JSON.stringify(api) !== JSON.stringify(wantApi)) fail(where, `API requests ${JSON.stringify(api)}, expected ${JSON.stringify(wantApi)}`);
       const st = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         month: state.month, cur: !!document.querySelector('.tooltabs a[aria-current]'),
@@ -1775,6 +1778,84 @@ if (HAS_EVENTS) {
     if (st.tmk || !st.sec || !st.cards) fail('hub voices 503', JSON.stringify(st));
     for (const b of bad) fail('hub voices 503', b);
     await ctx.close();
+  }
+  // per-type event counts (M2): the IP-guessed location, one /events/days per month with the /events/ query, cell and
+  // day-dialog counts, picking a location saves it, a failed answer leaves no counts; a game without events asks nothing
+  const evHub = HUBS.find(h => h.js.eventsApi);
+  if (HAS_EVENTS && evHub) {
+    const G = evHub.js.hub.code, T = evHub.js.types, tc = Object.keys(T).filter(c => c !== 'other').slice(0, 3);
+    const stubDay = d => { const n = +d.slice(8), bt = { [tc[0]]: n % 5 + 1, ...(n % 3 ? { [tc[1]]: n % 3 } : {}), ...(n % 2 ? {} : { [tc[2]]: 1, other: 2 }) };
+      return { date: d, count: 99, by_game: { [G]: Object.values(bt).reduce((a, b) => a + b, 0), OTHER: 5 }, by_game_type: { [G]: bt } }; };
+    const short = x => { const named = Object.entries(x.by_game_type[G]).filter(([c]) => T[c] && c !== 'other').map(([c, n]) => [T[c], n]).sort((a, b) => b[1] - a[1]);
+      const n = x.by_game[G], rest = n - named.reduce((t, [, k]) => t + k, 0), top = named.length <= 3 && !rest ? named : named.slice(0, 2), r = n - top.reduce((t, [, k]) => t + k, 0);
+      return top.map(([l, k]) => `${l} ${k}`).join('・') + (r ? `・ほか ${r}` : ''); };
+    const ym = TODAY.slice(0, 7), nx = new Date(Date.parse(`${ym}-28T00:00:00Z`) + 4 * 864e5).toISOString().slice(0, 7);
+    const mdays = Array.from({ length: 31 }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`).filter(d => new Date(`${d}T00:00:00Z`).toISOString().startsWith(d));
+    for (const [vp, opt] of Object.entries({ desktop: { width: 1366, height: 900 }, mobile: VIEWPORTS.mobile })) for (const scheme of ['light', 'dark']) {
+      const where = `${vp} ${scheme} hub events ${evHub.path}`;
+      const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+        hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', colorScheme: scheme });
+      const page = await ctx.newPage(), bad = [], days = [];
+      let fail500 = false;
+      await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+      page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+      await page.route('**/api/v1/geo', r => r.fulfill({ json: { region_code: 'JP-13' } }));
+      await page.route('**/api/v1/events/days?*', r => { const u = new URL(r.request().url()); days.push(u.pathname + u.search);
+        if (fail500) return r.fulfill({ status: 500, body: 'x' });
+        r.fulfill({ json: { days: u.searchParams.get('from').startsWith(ym) ? mdays.map(stubDay) : [] } }); });
+      try {
+        await page.goto(`${BASE}${evHub.path}?m=${ym}`, { waitUntil: 'networkidle' });
+        const want = `/api/v1/events/days?from=${ym}-01&until=${nx}-01&game=${G}&pref=JP-13`;
+        if (JSON.stringify(days) !== JSON.stringify([want])) fail(where, `events requests ${JSON.stringify(days)}, expected [${want}]`);
+        const st = await page.evaluate(() => ({ loc: document.getElementById('locLine').textContent, saved: localStorage.getItem('tcg.ev.filters'),
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          cells: [...document.querySelectorAll('.day')].filter(e => e.querySelector('.evc') && !e.classList.contains('out')).map(e => [e.querySelector('button.n').dataset.openDay, e.querySelector('.evc').textContent]),
+          ag: [...document.querySelectorAll('.ag .evag')].filter(e => e.offsetParent).map(e => [e.dataset.openDay, e.textContent]) }));
+        if (!st.loc.includes('東京都（推定）') || st.saved) fail(where, `location line "${st.loc}", saved ${st.saved}`);
+        if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
+        if (vp === 'desktop') {
+          const exp = mdays.map(d => [d, short(stubDay(d))]);
+          if (JSON.stringify(st.cells) !== JSON.stringify(exp)) fail(where, `cell counts ${JSON.stringify(st.cells.slice(0, 3))}…, expected ${JSON.stringify(exp.slice(0, 3))}…`);
+        } else {
+          const exp = mdays.filter(d => d >= TODAY).map(d => [d, `イベント ${stubDay(d).by_game[G]}件 ›`]);
+          if (JSON.stringify(st.ag) !== JSON.stringify(exp)) fail(where, `day list counts ${JSON.stringify(st.ag.slice(0, 3))}…, expected ${JSON.stringify(exp.slice(0, 3))}…`);
+        }
+        await page.screenshot({ path: path.join(OUT, `hub-events-${vp}-${opt.width}-${scheme}.png`), fullPage: true });
+        // day dialog: every type with its count and the /events/ day view of this game and location
+        await page.locator(vp === 'desktop' ? `.day [data-open-day="${TODAY}"].n` : `.ag [data-open-day="${TODAY}"]`).click();
+        const dl = await page.evaluate(() => ({ h: document.querySelector('#dlg .dl-ev h3')?.textContent, li: [...document.querySelectorAll('#dlg .dl-ev li')].map(l => l.textContent),
+          href: document.querySelector('#dlg .dl-ev a')?.getAttribute('href') }));
+        const x = stubDay(TODAY);
+        if (dl.h !== `イベント ${x.by_game[G]}件（東京都（推定））` || dl.li.length !== Object.keys(x.by_game_type[G]).filter(c => T[c] && c !== 'other').length + (x.by_game_type[G].other ? 1 : 0)
+          || dl.href !== `/events/?game=${G}&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `day dialog ${JSON.stringify(dl)}`);
+        if (scheme === 'light') await page.screenshot({ path: path.join(OUT, `hub-events-${vp}-day.png`) });
+        await page.keyboard.press('Escape');
+        // picking a location saves it and asks for that location
+        await page.locator('#hubLoc').click();
+        await page.locator('#prefDlg [data-pref="JP-27"]').click();
+        await page.waitForLoadState('networkidle');
+        const pk = await page.evaluate(() => ({ loc: document.getElementById('locLine').textContent, saved: JSON.parse(localStorage.getItem('tcg.ev.filters') || '{}').pref }));
+        if (pk.saved !== 'JP-27' || !pk.loc.includes('大阪府') || pk.loc.includes('推定') || !days.at(-1).endsWith('&pref=JP-27')) fail(where, `pick: ${JSON.stringify(pk)} ${days.at(-1)}`);
+        // a failed answer: no counts, releases stay
+        fail500 = true;
+        await page.reload({ waitUntil: 'networkidle' });
+        const f = await page.evaluate(() => ({ evc: document.querySelectorAll('.evc,.evag').length, cards: document.querySelectorAll('.pk').length }));
+        if (f.evc || !f.cards) fail(where, `after a failed answer ${JSON.stringify(f)}`);
+      } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+      for (const b of [...new Set(bad)]) fail(where, b);
+      console.log(`  ${where.padEnd(22)} checked`);
+      await ctx.close();
+    }
+    // a game without events: no location line, no geo or events request
+    const noEv = HUBS.find(h => !h.js.eventsApi);
+    if (noEv) {
+      const ctx = await browser.newContext({ viewport: VIEWPORTS.mobile, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+      const page = await ctx.newPage(), reqs = [];
+      page.on('request', r => { if (/\/api\/v1\/(geo|events)/.test(r.url())) reqs.push(r.url()); });
+      await page.goto(BASE + noEv.path, { waitUntil: 'networkidle' });
+      if (reqs.length || !(await page.locator('#locLine').isHidden())) fail(`hub ${noEv.path}`, `events parts on a game without events: ${reqs.join(' ')}`);
+      await ctx.close();
+    }
   }
   // /<code>/ answers 301 to the hub (both cases, with and without the slash)
   for (const h of HUBS) {

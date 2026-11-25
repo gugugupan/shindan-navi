@@ -350,6 +350,12 @@ pages + meta, the cap) ≈ 7,100 rows. That is ~700 uncached worst-case day view
 every scanned row twice). With eight games the busiest 東京都 day has 217 events (11/21): `/days` + 5 pages
 ≈ 1,000 rows uncached; with 13 games 271 events: `/days` + 6 pages ≈ 1,500 rows.
 
+**Game hubs** (`/<slug>/` of the events games, docs/design/game-hub.md › 6): per-type event counts only, one
+`/events/days?from=M-01&until=M+1-01&game=G&pref=P` per shown month and visit (the `/events/` calendar's key with that one
+game, so the caches are shared): uncached ≤ 887 rows for 東京都 with 13 games (above), a median prefecture about a fifth,
+0 for months outside the data window. No `/events` row pages, no `/events/meta` (the picker shows no numbers there).
+Without a saved location the hub asks `/geo` (no D1); no guess (most crawlers) means no events request at all.
+
 **Today page** (`/`, `src/home.html`): no request without a saved location. With one, 2-3 requests per visit, all
 keys the `/events/` page uses too, with the saved `game`/`type` (not `days`): `/events/days` for this month (calendar
 view; its `by_game` gives each game column's total and 今週のカレンダー's per-day counts, `by_game_type` the column's

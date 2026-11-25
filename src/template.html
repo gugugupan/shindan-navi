@@ -346,6 +346,15 @@ tbody tr.starred td.nm{font-weight:700}
 .tbar .tt{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .tlanes{flex:none;display:block}
 .tmore{align-self:flex-start;border:0;background:none;padding:0;font:inherit;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer}
+/* per-type event counts (M2): a line at the foot of the cell, the location under the toolbar */
+.evc{margin:auto 0 0;font-size:12px;line-height:1.4;color:var(--muted)}
+.evag{align-self:flex-start;justify-self:start;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:700;color:var(--accent)}
+.locline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.dl-ev{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.dl-ev h3{margin:0 0 8px;font-size:15px}
+.dl-ev ul{margin:0 0 10px;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 12px;font-size:13px}
+.dl-ev ul b{font-family:var(--mono)}
+.dl-ev a{color:var(--accent);font-weight:700;font-size:13px}
 /* phones: the month's topics as a compact timeline above the day list */
 .tline{display:none}
 .tps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
@@ -540,6 +549,7 @@ tbody tr.starred td.nm{font-weight:700}
   </div></div>
 
   <div class="starbar" id="starbar" hidden></div>
+  <p class="mnote locline" id="locLine" hidden></p>
   <p class="mnote" id="mnote" hidden></p>
   <p class="mnote" id="nextnote" hidden></p>
   <div id="calView">
@@ -572,6 +582,7 @@ tbody tr.starred td.nm{font-weight:700}
 <dialog id="swDlg" aria-labelledby="swH"><div class="dlg"><button class="ib close" id="swClose" aria-label="閉じる">×</button><h2 class="dl-day" id="swH">タイトルを切り替え</h2><ul class="swlist" id="swList"></ul><p class="dl-none"><a href="/releases/">すべてのタイトルを新弾カレンダーで見る ›</a></p></div></dialog>
 <dialog id="calDlg" class="caldlg"><div class="dlg"><button class="ib close" id="calClose" aria-label="閉じる">×</button><div id="calBody"></div></div></dialog>
 
+<!--LOCPICK-->
 <script>
 const DATA = /*DATA*/;
 const OFFICIAL = /*OFFICIAL*/;
@@ -720,7 +731,7 @@ function renderCal(list){
   const byDate={}; list.forEach(d=>(byDate[d.date]=byDate[d.date]||[]).push(d));
   Object.values(byDate).forEach(a=>a.sort(starFirst));
   const busy=new Set();
-  for(let i=0;i<weeks*7;i++){ const dt=new Date(start); dt.setDate(start.getDate()+i); if(byDate[keyOf(dt)]||topicsOn(keyOf(dt)).length) busy.add(dt.getDay()); }
+  for(let i=0;i<weeks*7;i++){ const dt=new Date(start); dt.setDate(start.getDate()+i); if(byDate[keyOf(dt)]||topicsOn(keyOf(dt)).length||evOn(keyOf(dt))) busy.add(dt.getDay()); }
   const todayDow=new Date().getDay();
   const todayInView=TODAY>=keyOf(start) && TODAY<=keyOf(new Date(start.getFullYear(),start.getMonth(),start.getDate()+weeks*7-1));
   const slim=w=>busy.size>0 && !busy.has(w);
@@ -752,18 +763,19 @@ function renderCal(list){
     if(slim(w)) cls.push('slim'); if(w===6) cls.push('lastcol');
     const badge=key===TODAY?`<span class="tbadge">TODAY</span>`:'';
     const wk=Math.floor(i/7), pos=`style="--r:${wk+2};grid-column:${w+1}"`;
-    const n=HUB?`<button class="n" data-open-day="${key}" aria-label="${dayLabel(key,items.length,topicsOn(key).length)}">${dt.getDate()}</button>`:`<span class="n">${dt.getDate()}</span>`;
+    const n=HUB?`<button class="n" data-open-day="${key}" aria-label="${dayLabel(key,items.length,topicsOn(key).length,evOn(key)?.n)}">${dt.getDate()}</button>`:`<span class="n">${dt.getDate()}</span>`;
     if(slim(w)){ h+=`<div class="${cls.join(' ')}" ${pos}><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}</div></div>`; continue; }
     const tl=lanes[wk]?`<span class="tlanes" style="height:${lanes[wk]*26-4}px"></span>`:'';
     const tm=hidden[key]?`<button class="tmore" data-open-day="${key}" tabindex="-1">ほか${hidden[key]}件の話題</button>`:'';
     const shown=items.slice(0,PER_DAY);
-    h+=`<div class="${cls.join(' ')}" ${pos}><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}${items.length?`<span class="c">${items.length}件</span>`:''}</div>${tl}${tm}${shown.map(pkBtn).join('')}${items.length>PER_DAY?`<button class="more" data-day="${key}">+${items.length-PER_DAY}件をすべて表示</button>`:''}</div>`;
+    h+=`<div class="${cls.join(' ')}" ${pos}><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}${items.length?`<span class="c">${items.length}件</span>`:''}</div>${tl}${tm}${shown.map(pkBtn).join('')}${items.length>PER_DAY?`<button class="more" data-day="${key}">+${items.length-PER_DAY}件をすべて表示</button>`:''}${evOn(key)?`<p class="evc" aria-hidden="true">${esc(evShort(evOn(key)))}</p>`:''}</div>`;
   }
   calEl.innerHTML=h;
 
   const inMonth=list.filter(d=>d.date.startsWith(state.month));
   renderTimeline();
-  const days=[...new Set(inMonth.map(d=>d.date))].sort();
+  // hub: upcoming days with events are listed too (past ones stay out of the folded past list)
+  const days=[...new Set([...inMonth.map(d=>d.date),...monthDays(state.month).filter(k=>k>=TODAY&&evOn(k))])].sort();
   let ag='', lineDone=!TODAY.startsWith(state.month);
   const pastDays=days.filter(k=>k<TODAY);
   if(pastDays.length && !state.showPast && days.some(k=>k>=TODAY))
@@ -774,10 +786,11 @@ function renderCal(list){
     if(k===TODAY) lineDone=true;
     const its=inMonth.filter(d=>d.date===k).sort(starFirst);
     const [,,dd]=k.split('-').map(Number), w=new Date(k+'T00:00').getDay();
-    ag+=`<section data-day="${k}" class="ag${k===TODAY?' today':k<TODAY?' past':''}"><h3>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${its.length?`<span class="ct">${its.length}件</span>`:''}${its.length>Math.max(DAY_PEEK,its.filter(isStar).length)&&state.openDays.has(k)?`<button class="daytoggle mini" data-day="${k}" aria-expanded="true">閉じる</button>`:''}</h3><div class="list">${dayList(k,its)}</div></section>`;
+    ag+=`<section data-day="${k}" class="ag${k===TODAY?' today':k<TODAY?' past':''}"><h3>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${its.length?`<span class="ct">${its.length}件</span>`:''}${its.length>Math.max(DAY_PEEK,its.filter(isStar).length)&&state.openDays.has(k)?`<button class="daytoggle mini" data-day="${k}" aria-expanded="true">閉じる</button>`:''}</h3><div class="list">${dayList(k,its)}${evOn(k)?`<button class="evag" data-open-day="${k}">イベント ${evOn(k).n}件 ›</button>`:''}</div></section>`;
   });
   if(!lineDone) ag+=`<div class="todayline"><span>今日 ${fmtDate(TODAY,false)}</span></div>`;
   document.getElementById('agenda').innerHTML = days.length ? ag : `<div class="empty">この月に該当する発売予定はありません</div>`;
+  if(EVH) loadEv(state.month);
 }
 
 function renderTable(list){
@@ -915,7 +928,7 @@ function openDetail(items,title,keepOpen,day){
     ${d.per_pack?`<dt>内容</dt><dd>${d.per_box||(d.packN||0)<1000?'1パック':'1セット'}${d.per_pack}枚入り</dd>`:''}</dl>
     ${d.approx?'<p class="ap" style="display:inline-block;margin:8px 0 0">参考画像（実際の商品と異なる場合あり）</p><p class="dl-none">シリーズのキービジュアル等のため、実際のパッケージと異なる場合があります。</p>':''}
     <p class="dl-links">${d.date>=TODAY?`<button class="calbtn" data-cal-id="${d.id}">📅 カレンダーに追加</button>`:''}<a class="itempg" href="/item/${d.id}/">商品ページ</a>${linkList(d).join('')}</p>
-  </div></div>`).join('')+(tps.length?`<section class="dl-tp" style="${hubVars}"><h3>話題 ${tps.length}件</h3><ul class="tps">${tps.map(x=>topicCard(versionOn(x,day))).join('')}</ul></section>`:'');
+  </div></div>`).join('')+(tps.length?`<section class="dl-tp" style="${hubVars}"><h3>話題 ${tps.length}件</h3><ul class="tps">${tps.map(x=>topicCard(versionOn(x,day))).join('')}</ul></section>`:'')+(day?evPart(day):'');
   if(keepOpen) return;
   if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open','');
 }
@@ -1052,7 +1065,7 @@ const hubVars = !HUB ? '' : HUB.c ? `--gl:${HUB.c};--gd:${HUB.cd}` : `--gl:hsl($
 const topicsOn = k => TOPICS.filter(t=>t.first<=k && k<=t.last);
 const monthDays = ym => { const [y,m]=ym.split('-').map(Number); return Array.from({length:new Date(y,m,0).getDate()},(_,i)=>ym+'-'+String(i+1).padStart(2,'0')); };
 const dnum = s => { const [y,m,d]=s.split('-').map(Number); return Date.UTC(y,m-1,d)/864e5; };
-const dayLabel = (k,n,t) => { const [,m,d]=k.split('-').map(Number); return `${m}月${d}日(${DOW[new Date(k+'T00:00').getDay()]})`+(n?` 発売${n}件`:'')+(t?`・話題${t}件`:''); };
+const dayLabel = (k,n,t,e) => { const [,m,d]=k.split('-').map(Number); return `${m}月${d}日(${DOW[new Date(k+'T00:00').getDay()]})`+(n?` 発売${n}件`:'')+(t?`・話題${t}件`:'')+(e?`・イベント${e}件`:''); };
 // assembled, so builds without 話題 carry no link to the page, not even in this script
 const VT_PAGE = '/'+'voices/';
 const ATT_M = {positive:'＋', negative:'－', mixed:'±', neutral:'・'};
@@ -1121,6 +1134,82 @@ dlg.addEventListener('close',()=>{
   const b=[...document.querySelectorAll(k)].find(e=>e.offsetParent);
   if(b) b.focus();
 });
+// ---- hub: per-type event counts of this game in the player's location (M2, docs/design/game-hub.md › 6). One
+// /events/days per shown month with the query /events/ sends for this one game, so both share cache keys. The location
+// is the saved /events/ one, else the IP guess, saved only when the player picks. Any failure: no counts.
+const EVH = HUB&&PAGE.eventsApi&&window.snLoc || null;
+const EV_KEY = 'tcg.ev.filters';
+const savedPref = () => { const s=store.get(EV_KEY,null); return (s&&typeof s.pref==='string'?s.pref.split(',').filter(EVH.isLoc)[0]:'')||''; };
+let evPref=EVH?savedPref():'', evGuess=false;
+const EVD={}; // `${pref}|${YYYY-MM}` -> 'loading' | 'error' | {date: {n, types}}
+const evOn = k => { if(!EVH||!evPref) return null; const m=EVD[evPref+'|'+k.slice(0,7)]; return m&&typeof m==='object'&&m[k]||null; };
+const evMonthLoaded = k => { const m=EVD[evPref+'|'+k.slice(0,7)]; return !!m&&typeof m==='object'; };
+const nextYm = ym => addDay(ym+'-28',4).slice(0,7);
+async function loadEv(ym){
+  const key=evPref+'|'+ym; if(!evPref||EVD[key]) return;
+  EVD[key]='loading';
+  try{
+    const r=await fetch(`${PAGE.eventsApi}/events/days?${new URLSearchParams({from:ym+'-01',until:nextYm(ym)+'-01',game:HUB.code,pref:evPref})}`,{headers:{accept:'application/json'}});
+    if(!r.ok) throw new Error(r.status);
+    const j=await r.json(), out={};
+    if(!j||!Array.isArray(j.days)) throw new Error('shape');
+    j.days.forEach(d=>{
+      // by_game_type is newer than by_game: answers cached before it give a total only
+      const bt=d&&d.by_game_type&&d.by_game_type[HUB.code], n=d&&d.by_game&&typeof d.by_game[HUB.code]==='number'?d.by_game[HUB.code]:bt?Object.values(bt).reduce((a,b)=>a+b,0):0;
+      if(d&&typeof d.date==='string'&&n>0) out[d.date]={n, types:bt&&typeof bt==='object'?bt:null};
+    });
+    EVD[key]=out;
+  }catch(e){ EVD[key]='error'; return; }
+  if(key===evPref+'|'+state.month){ render(); if(dlg.open&&dlgDay) openDay(dlgDay,true); }
+}
+// [[name, n]] busiest first; types without a name (untyped, その他) go to ほか
+function evSplit(x){
+  const T=PAGE.types||{}, named=[]; let rest=0;
+  Object.entries(x.types||{}).forEach(([c,n])=>{ if(T[c]&&c!=='other') named.push([T[c],n]); else rest+=n; });
+  named.sort((a,b)=>b[1]-a[1]);
+  return {named, rest: x.types?rest:x.n};
+}
+// a cell: up to 3 named types, else the top 2 + ほか N
+function evShort(x){
+  const {named,rest}=evSplit(x);
+  if(!named.length) return `イベント ${x.n}`;
+  const top=named.length<=3&&!rest?named:named.slice(0,2), r=x.n-top.reduce((t,[,n])=>t+n,0);
+  return top.map(([l,n])=>`${l} ${n}`).join('・')+(r?`・ほか ${r}`:'');
+}
+const evDayLink = k => '/events/?'+new URLSearchParams({game:HUB.code,pref:evPref,range:'custom',from:k,to:k});
+function evPart(k){
+  if(!EVH||!evPref||!evMonthLoaded(k)) return '';
+  const x=evOn(k), loc=esc(EVH.locName(evPref)+(evGuess?'（推定）':''));
+  const {named,rest}=x?evSplit(x):{named:[],rest:0};
+  return `<section class="dl-ev"><h3>イベント ${x?x.n:0}件（${loc}）</h3>${x?`<ul>${named.map(([l,n])=>`<li>${esc(l)} <b>${n}</b></li>`).join('')}${rest?`<li>ほか <b>${rest}</b></li>`:''}</ul>`:'<p class="dl-none">この日のイベントはありません。</p>'}<a href="${evDayLink(k)}">イベントカレンダーでこの日を見る ›</a></section>`;
+}
+function renderLoc(){
+  const el=document.getElementById('locLine');
+  if(!EVH){ el.hidden=true; return; }
+  const name=evPref?EVH.locName(evPref)+(evGuess?'（推定）':''):'';
+  el.innerHTML=evPref
+    ? `<button type="button" class="locbtn" id="hubLoc" aria-haspopup="dialog" aria-label="イベントの地域: ${esc(name)}（変更）">📍${esc(name)}<small>変更</small></button><span>の${esc(HUB.short)}イベント数を日ごとに表示</span>`
+    : `<button type="button" class="locbtn" id="hubLoc" aria-haspopup="dialog">📍地域を選ぶ</button><span>選ぶと日ごとのイベント数を表示します</span>`;
+  el.hidden=false;
+}
+if(EVH){
+  document.getElementById('locLine').addEventListener('click',e=>{
+    if(!e.target.closest('#hubLoc')) return;
+    EVH.open({current:()=>evGuess?'':evPref, onPick:c=>{
+      const s=store.get(EV_KEY,null), o=s&&typeof s==='object'?{...s}:{};
+      o.pref=c; store.set(EV_KEY,o); if(window.snPrefs) window.snPrefs.changed();
+      evPref=c; evGuess=false; renderLoc(); render();
+    }});
+  });
+  // an account sync can change the saved location
+  document.addEventListener('sn:prefs',()=>{ const p=savedPref(); if(p&&p!==evPref){ evPref=p; evGuess=false; renderLoc(); render(); } });
+  renderLoc();
+  if(!evPref) (async()=>{
+    let code=null;
+    try{ const r=await fetch(`${PAGE.eventsApi}/geo`,{headers:{accept:'application/json'}}); if(r.ok) code=((await r.json())||{}).region_code; }catch(e){}
+    if(!evPref&&EVH.PREF[code]){ evPref=code; evGuess=true; renderLoc(); render(); }
+  })();
+}
 const swDlg=document.getElementById('swDlg');
 if(HUB){
   const sw=document.getElementById('gameSw');

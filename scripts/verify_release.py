@@ -479,6 +479,9 @@ def check_hubs(hubs):
         if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail(f'{pg["path"]}: X URL in a hub')
         if ('"voicesApi"' in src) != (has_voices and g['sources']['voices']): fail(f'{pg["path"]}: voices API {"without" if has_voices else "with"} VOICES_ENABLED')
         if ('id="hubTopics"' in src) != ('"voicesApi"' in src): fail(f'{pg["path"]}: いま話題 section and voices API disagree')
+        has_events = os.path.exists(os.path.join(DIST, 'events/index.html'))
+        if ('"eventsApi"' in src) != (has_events and bool(g['sources']['events'])): fail(f'{pg["path"]}: event counts {"on a game without events or a build without /events/" if '"eventsApi"' in src else "missing"}')
+        if ('id="prefDlg"' in src) != ('"eventsApi"' in src): fail(f'{pg["path"]}: location picker and event counts disagree')
         for s in os.listdir(os.path.join(ROOT, 'data/voices')) if os.path.isdir(os.path.join(ROOT, 'data/voices')) else []:
             for t in json.load(open(os.path.join(ROOT, 'data/voices', s))).get('topics', []):
                 if t['summary'] in src or f'"{t["id"]}"' in src: fail(f'{pg["path"]}: topic {t["id"]} text in the built HTML'); break

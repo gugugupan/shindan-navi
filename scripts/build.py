@@ -162,6 +162,16 @@ def about_block(heading,paras):
     body=''.join(f'<p>{x}</p>' for x in paras)
     return f'<section class="seo about"><h2>{esc(heading)}</h2>{body}</section>'
 
+# event type names (the API's TYPE_LABELS) for the per-type lines on / and the hubs
+def type_labels():
+    cts=open(os.path.join(ROOT,'api/src/constants.ts')).read()
+    assert 'TYPE_LABELS: Record<string, string> = {' in cts,'TYPE_LABELS not found in api/src/constants.ts'
+    block=cts.split('TYPE_LABELS: Record<string, string> = {',1)[1].split('};',1)[0]
+    types=dict(re.findall(r"^\s+(\w+): '([^']*)',$",block,re.M))
+    lines=[l for l in block.splitlines() if l.strip()]
+    if not types or len(types)!=len(lines):
+        sys.exit(f"api/src/constants.ts: parsed {len(types)} of {len(lines)} TYPE_LABELS lines (one `code: 'name',` per line)")
+    return types
 # hub mode of the release app on the title pages (docs/design/game-hub.md): switcher list, and the voices API for 話題
 HUB_REG=[g for g in REG if g['hub']]
 def hub_js(slug,key):
@@ -170,6 +180,8 @@ def hub_js(slug,key):
     js={'game':key,'hub':{'slug':slug,'code':g['code'],'chip':g['chip'] or g['short'],'short':g['short'],'c':c.get('light'),'cd':c.get('dark')},
         'hubs':[{'slug':h['slug'],'label':h['label'],'short':h['short']} for h in HUB_REG if h['label'] in used]}
     if VOICES_ENABLED and g['sources']['voices']: js['voicesApi']=EVENTS_API_BASE+'/voices'
+    # per-type event counts for the player's location (M2): events games on builds with the Worker API
+    if BUILD_EVENTS and g['sources']['events']: js['eventsApi']=EVENTS_API_BASE; js['types']=type_labels()
     return js
 # /<code>/ -> /<slug>/ for hub games whose code differs from the slug; both spellings and cases, since hosts differ on
 # case and trailing-slash matching
@@ -382,6 +394,7 @@ def render(pg):
     # a hub spans releases, topics and events: no tool tab is the current one
     page=page.replace('<!--CORNER-->',corner(None if hub else '/releases/'))
     page=page.replace('<!--HUBTOPICS-->',HUB_TOPICS if hub and pg['js'].get('voicesApi') else '')
+    page=page.replace('<!--LOCPICK-->',LOCPICK if hub and pg['js'].get('eventsApi') else '')
     page=re.sub(r'<title>.*?</title>\n?','',page,count=1)
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
@@ -547,14 +560,7 @@ def render_home():
     # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (表示中 line, 今週のカレンダー)
     home['titles']={g['code']:g['label'] for g in HOME_REG}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
-    if BUILD_EVENTS:
-        cts=open(os.path.join(ROOT,'api/src/constants.ts')).read()
-        assert 'TYPE_LABELS: Record<string, string> = {' in cts,'TYPE_LABELS not found in api/src/constants.ts'
-        block=cts.split('TYPE_LABELS: Record<string, string> = {',1)[1].split('};',1)[0]
-        home['types']=dict(re.findall(r"^\s+(\w+): '([^']*)',$",block,re.M))
-        lines=[l for l in block.splitlines() if l.strip()]
-        if not home['types'] or len(home['types'])!=len(lines):
-            sys.exit(f"api/src/constants.ts: parsed {len(home['types'])} of {len(lines)} TYPE_LABELS lines (one `code: 'name',` per line)")
+    if BUILD_EVENTS: home['types']=type_labels()
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS),
