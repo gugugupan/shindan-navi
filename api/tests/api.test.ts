@@ -103,6 +103,8 @@ describe('GET /api/v1/events', () => {
     expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, 'nope'])}`)).body.error).toMatch(/invalid cursor/);
     // The key is checked before anything reaches SQL: a NUL, a space or an empty id is a 400, not a 500.
     for (const id of ['tcgp:\u0000x', 'tcgp:a b', 'tcgp:']) expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, id])}`)).body.error).toMatch(/invalid cursor/);
+    // Every importer id prefix is a valid cursor key.
+    for (const id of ['tcgp:1', 'ptcg:1', 'conan:a', 'bnavi:1']) expect((await api(db, `${q}&cursor=${forge([v, fp, '2026-11-20', 0, id])}`)).status, id).toBe(200);
   });
 
   it('clamps ranges to the data window and answers ranges outside it without data', async () => {
@@ -232,12 +234,19 @@ describe('GET /api/v1/events/days', () => {
   const daysOf = (evs: Ev[]) => {
     const m = new Map<string, Ev>();
     for (const e of evs) {
-      const d = m.get(e.starts_on) ?? { date: e.starts_on, count: 0, by_game: {} };
+      const d = m.get(e.starts_on) ?? { date: e.starts_on, count: 0, by_game: {}, by_game_type: {} };
       d.count++;
-      d.by_game[e.game_code] = (d.by_game[e.game_code] ?? 0) + 1;
+      for (const g of e.game_codes) {
+        d.by_game[g] = (d.by_game[g] ?? 0) + 1;
+        const bt = (d.by_game_type[g] ??= {}), t = e.group.event_type_code ?? ''; // no type: "" as in day_counts
+        bt[t] = (bt[t] ?? 0) + 1;
+      }
       m.set(e.starts_on, d);
     }
-    return [...m.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+    // key order is part of the answer (cache-friendly, stable): games and types sorted
+    const sorted = (o: Ev) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : 1)));
+    return [...m.values()].sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map((d) => ({ ...d, by_game: sorted(d.by_game), by_game_type: sorted(Object.fromEntries(Object.entries(d.by_game_type).map(([g, bt]) => [g, sorted(bt as Ev)]))) }));
   };
 
   for (const q of ['', '&game=OPCG,PTCG', '&pref=JP-13&days=weekend', '&type=standard_battle&days=weekday']) {
@@ -248,8 +257,25 @@ describe('GET /api/v1/events/days', () => {
       expect(expected.length).toBeGreaterThan(0);
       expect(r.body).toEqual({ days: expected });
       expect(r.body.days.every((d: Ev) => d.count > 0)).toBe(true);
+      // per game, the type counts add up to by_game
+      for (const d of r.body.days) for (const [g, n] of Object.entries(d.by_game))
+        expect(Object.values(d.by_game_type[g]).reduce((a: number, b) => a + (b as number), 0)).toBe(n);
     });
   }
+
+  it('reads the same day_counts rows for by_game_type as without it (same index search, one query)', async () => {
+    const { daysSql, parseFilters } = await import('../src/events');
+    const search = (sql: string, binds: unknown[]) => db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(binds as never[]))
+      .map((r: Ev) => r.detail as string).filter((d) => /day_counts/.test(d));
+    for (const q of ['pref=JP-13', 'pref=JP-13&game=OPCG&type=standard_battle', 'pref=JP-13,JP-27&days=weekend']) {
+      const { sql, binds } = daysSql(parseFilters(new URLSearchParams(`from=2026-12-01&until=2027-01-01&${q}`), 'days'));
+      const before = sql.replace(', event_type_code AS t', '').replace(/, event_type_code$/, '');
+      expect(before).not.toBe(sql);
+      const plan = search(sql, binds);
+      expect(plan).toEqual(search(before, binds));
+      expect(plan.join(' ')).toMatch(/SEARCH day_counts USING PRIMARY KEY \(loc=\? AND starts_on>\? AND starts_on<\?\)/);
+    }
+  });
 
   it('includes cancelled and postponed events in days and count', async () => {
     expect(all.some((e) => e.event_status === 'cancelled') && all.some((e) => e.event_status === 'postponed')).toBe(true);
@@ -272,7 +298,8 @@ describe('GET /api/v1/events/meta', () => {
     expect(r.status).toBe(200);
     const m = r.body;
     expect(m.games.map((g: Ev) => [g.code, g.slug])).toEqual([['OPCG', 'onepiece'], ['UATCG', 'unionarena'], ['CONAN', 'conan'], ['PTCG', 'pokemon'],
-      ['GCG', 'gundam'], ['DBFW', 'dragonball'], ['BS', 'battlespirits'], ['DCG', 'digimon']]);
+      ['GCG', 'gundam'], ['DBFW', 'dragonball'], ['BS', 'battlespirits'], ['DCG', 'digimon'], ['WS', 'weiss'], ['VG', 'vanguard'],
+      ['SVE', 'shadowverse-evolve'], ['HOCG', 'hololive'], ['LLOCG', 'lovelive']]);
     expect(m.games.find((g: Ev) => g.code === 'DCG')).toMatchObject({ record_count: 0, fetched_at: null, complete: false, window: null });
     const opcg = m.games[0];
     expect(opcg).toMatchObject({ name: 'ONE PIECEカードゲーム', fetched_at: '2026-11-18T00:00:00Z', complete: true, window: { from: '2026-11-18', until: '2027-02-18' } });

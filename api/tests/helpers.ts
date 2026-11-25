@@ -14,8 +14,9 @@ export const sampleEvents = (): Ev[] =>
 export const SOURCE: Record<string, string> = {
   OPCG: 'bandai_tcg_plus', UATCG: 'bandai_tcg_plus', CONAN: 'conan_official', PTCG: 'pokemon_players',
   GCG: 'bandai_tcg_plus', DBFW: 'bandai_tcg_plus', BS: 'bandai_tcg_plus', DCG: 'bandai_tcg_plus',
+  WS: 'bushinavi', VG: 'bushinavi', SVE: 'bushinavi', HOCG: 'bushinavi', LLOCG: 'bushinavi',
 };
-const PREFIX: Record<string, string> = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan' };
+const PREFIX: Record<string, string> = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan', bushinavi: 'bnavi' };
 
 export function run(game: string, count: number, extra: Ev = {}): Ev {
   return {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALL_PREFS, api, apiAll, importDir, newDb, run, sampleEvents, SOURCE, synthetic, writeDataDir, type Ev } from './helpers';
-import { emptyState, estimateCost, GAME_BITS, GAME_CODES, loadAll, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
+import { emptyState, estimateCost, GAME_BITS, GAME_CODES, loadAll, MAX_SITE_META_BYTES, MAX_STATEMENT_BYTES, planImport, toSqlFile } from '../scripts/lib/importer.mjs';
 import { GAMES, MAX_GAMES } from '../src/constants';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
@@ -71,7 +71,8 @@ describe('importer', () => {
     const runs = Object.fromEntries(['OPCG', 'UATCG', 'CONAN', 'PTCG'].map((g) => [g, run(g, 5, { fetched_at: '2026-11-19T00:00:00Z' })]));
     const plan = importDir(db, writeDataDir(changed, runs), 2_000).plan;
     expect(plan.stats).toMatchObject({ inserted: 0, rewritten: 1, mask_updates: 0, imports: 4 });
-    expect(estimateCost(plan.stats, emptyState()).rowsWritten).toBe(2 + 4 + 2);
+    // + the 48 landing rows of each game: a new run (fetched_at) rewrites them
+    expect(estimateCost(plan.stats, emptyState()).rowsWritten).toBe(2 + 4 + 2 + 4 * 48);
     const rows = db.db.prepare('SELECT id, updated_at, created_at FROM events ORDER BY id').all();
     expect(rows.filter((r: Ev) => r.updated_at === 2_000).map((r: Ev) => r.id)).toEqual([evs[0].id]);
     expect(rows.every((r: Ev) => r.created_at === 1_000)).toBe(true);
@@ -211,6 +212,10 @@ describe('shared events', () => {
     expect(day.by_game.UATCG).toBe(others.filter((e) => e.game_code === 'UATCG').length + 1);
     const opcgOnly = (await apiAll(db, `/api/v1/events/days?${ALL_PREFS}&game=OPCG&${oneDay}`)).body.days[0];
     expect(Object.keys(opcgOnly.by_game)).toEqual(['OPCG']);
+    expect(Object.keys(opcgOnly.by_game_type)).toEqual(['OPCG']);
+    const t = shared.group.event_type_code ?? '', sameType = (g: string) => others.filter((e) => e.game_code === g && (e.group.event_type_code ?? '') === t).length;
+    expect(day.by_game_type.OPCG[t]).toBe(sameType('OPCG') + 1);
+    expect(day.by_game_type.UATCG[t]).toBe(sameType('UATCG') + 1);
   });
 
   it('keeps per-game meta and missing handling separate', async () => {
@@ -275,6 +280,45 @@ describe('games with bits above 8', () => {
     expect(meta.games.find((g: Ev) => g.code === 'BS').record_count).toBe(6);
     const rows: number[] = Object.values(meta.loc_counts.rows).flat() as number[];
     expect(rows.filter((_, i) => i % 5 === 0)).toContain(145);
+  });
+
+  it('imports Bushi Navi games (bnavi ids, bushinavi geo) with bits 256-4096', async () => {
+    // WS has more than one page (limit 50) in one month, so a cursor carries a bnavi id.
+    const n = (g: string) => (g === 'WS' ? 240 : 4);
+    const bnavi = ['WS', 'VG', 'SVE', 'HOCG', 'LLOCG'].flatMap((g, i) => synthetic(n(g), 2_000 + i * 300).map((e) => ({
+      ...e, game_code: g, source_code: 'bushinavi', id: `bnavi:${i}${e.external_id}`, external_id: `${i}${e.external_id}`,
+      registration_platform: 'bushinavi', group: { ...e.group, event_type_code: 'shop_tournament' },
+      venue: e.venue && { ...e.venue, geo: { lat: 35.697890, lng: 139.772187, source: 'bushinavi', precision: null, place_id: null, geocoded_at: null } },
+    })));
+    const db = newDb();
+    const results = importDir(db, writeDataDir([...evs, ...bnavi]), 1_000);
+    expect(results.flatMap((r) => [...r.errors, ...r.warnings])).toEqual([]);
+    expect(mask(db, bnavi.find((e) => e.game_code === 'LLOCG')!.id)).toBe(4096);
+    for (const g of ['WS', 'VG', 'SVE', 'HOCG', 'LLOCG']) {
+      expect((await apiAll(db, `${Q}&game=${g}`)).body.events).toHaveLength(n(g));
+    }
+    const meta = (await api(db, '/api/v1/events/meta')).body;
+    expect(meta.types).toContainEqual(expect.objectContaining({ game_code: 'HOCG', code: 'shop_tournament', name: 'ショップ大会' }));
+    const withGeo = (await apiAll(db, `${Q}&game=WS`)).body.events.find((e: Ev) => e.venue);
+    if (withGeo) expect(withGeo.venue.geo.source).toBe('bushinavi');
+  });
+
+  it('refuses a plan whose site_meta statement would be too large for D1', () => {
+    const accepted = loadAll(writeDataDir(evs)).filter((r) => r.errors.length === 0);
+    expect(() => planImport(accepted, emptyState(), { now: 1_000, maxSiteMetaBytes: 2_000 })).toThrow(/site_meta statement is [\d,]+ bytes/);
+    const sql = planImport(accepted, emptyState(), { now: 1_000 }).statements.find((s: string) => s.startsWith('INSERT INTO site_meta'))!;
+    expect(Buffer.byteLength(sql)).toBeLessThan(MAX_SITE_META_BYTES);
+  });
+
+  it('a re-import of only the games imported last writes nothing (meta does not depend on import order)', () => {
+    const db = newDb();
+    const dir = writeDataDir(evs);
+    const accepted = loadAll(dir).filter((r) => r.errors.length === 0);
+    const late = (r: Ev) => ['GCG', 'DBFW', 'BS', 'DCG'].includes(r.game);
+    db.execAll(planImport(accepted.filter((r) => !late(r)), db.readState(), { now: 1_000 }).statements);
+    db.execAll(planImport(accepted.filter(late), db.readState(), { now: 2_000 }).statements);
+    expect(planImport(accepted.filter(late), db.readState(), { now: 3_000 }).statements).toEqual([]);
+    expect(planImport(accepted, db.readState(), { now: 4_000 }).statements).toEqual([]);
   });
 
   it('game bits: one power of two per game below 2^30, the same in the importer, Worker and schema', () => {

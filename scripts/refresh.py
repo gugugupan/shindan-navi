@@ -6,7 +6,7 @@
   python3 -I scripts/refresh.py --no-official    # aggregators only: no official collector, no official merge, no enrich
 
 TODAY (env, else today in Asia/Tokyo) is fixed once and passed to every step. The merge always starts from HEAD's
-data/items.json, meta.json and public/thumbs, so a re-run reports against the committed data, not against the
+data/items.json, items-archive.json, meta.json and public/thumbs, so a re-run reports against the committed data, not against the
 previous run: new thumbnails (untracked or staged) are kept when data/overrides.json references them (add_thumb.py),
 others are moved to out/refresh-<TODAY>/thumbs.before-refresh/. --dry-run resets nothing.
 Stops at the first failing step with its exit code. Never commits or pushes. The packet and per-step logs go to
@@ -112,7 +112,10 @@ def run_step(name, cmd, env, logdir, n):
     return p.returncode, ''.join(out)
 
 
-def head_file(rel):
+def head_file(rel, optional=False):
+    """rel at HEAD; with optional, None when HEAD does not have it."""
+    if optional and subprocess.run(['git', '-C', ROOT, 'cat-file', '-e', f'HEAD:{rel}'], capture_output=True).returncode:
+        return None
     r = subprocess.run(['git', '-C', ROOT, 'show', f'HEAD:{rel}'], capture_output=True)
     if r.returncode or not r.stdout:
         sys.exit(f'git show HEAD:{rel} failed ({r.stderr.decode(errors="replace").strip() or "empty"}): nothing reset')
@@ -139,6 +142,9 @@ def reset_merge_base(logdir):
     to logdir (a staged one is unstaged first)."""
     keep = override_thumbs()
     heads = {rel: head_file(rel) for rel in ('data/items.json', 'data/meta.json')}
+    archive = head_file('data/items-archive.json', optional=True)
+    if archive is not None:
+        heads['data/items-archive.json'] = archive
     for rel, head in heads.items():
         path = os.path.join(ROOT, rel)
         cur = open(path, 'rb').read() if os.path.exists(path) else None
@@ -265,6 +271,13 @@ def item_change_lines(today):
             lost_official += 1
     lines = [f'- items.json vs HEAD: {len(new.keys() - old.keys())} added, {len(old.keys() - new.keys())} removed; changed fields: '
              + (', '.join(f'{f} {n}' for f, n in sorted(fields.items(), key=lambda x: -x[1])) or 'none')]
+    archive = os.path.join(ROOT, 'data/items-archive.json')
+    if os.path.exists(archive):
+        r = subprocess.run(['git', '-C', ROOT, 'show', 'HEAD:data/items-archive.json'], capture_output=True, text=True)
+        was = {a['id'] for a in json.loads(r.stdout)} if r.returncode == 0 else set()
+        now = {a['id'] for a in json.load(open(archive))}
+        lines.append(f'- items-archive.json vs HEAD: {len(now - was)} archived (released, out of the calendar), '
+                     f'{len(was - now)} dropped; {len(now)} in all')
     if lost_official:
         # a skipped official step keeps "official"; only a run that checked and did not match loses it
         lines.append(f'- WARNING: {lost_official} upcoming items lost "official" from sources: the official step ran '
@@ -290,7 +303,8 @@ def main():
     check_prereqs(args, keys)
     logdir = os.path.join(ROOT, 'out', f'refresh-{today}')
     os.makedirs(logdir, exist_ok=True)
-    env = dict(os.environ, TODAY=today, BUILD_TODAY=today)
+    # build and verify as production does (voices on); VOICES_ENABLED=0 in the environment turns them off
+    env = dict(os.environ, TODAY=today, BUILD_TODAY=today, VOICES_ENABLED=os.environ.get('VOICES_ENABLED', '1'))
     print(f'TODAY {today} · branch {branch} · HEAD {git("rev-parse", "--short", "HEAD")} · '
           f'API keys: {", ".join(sorted(keys)) or "none"} · logs {os.path.relpath(logdir, ROOT)}/')
 

@@ -1,9 +1,10 @@
 # 話題カレンダー contract (`/voices/`)
 
-What TCG players on X talk about, per game, as a calendar. Static: `scripts/build.py` reads the snapshots and embeds
-them in `/voices/`; no Worker, no D1. The page is built only with `VOICES_ENABLED=1` (off by default: no page, no tool
-tab, no privacy section, no link anywhere). The data pipeline that writes the snapshots comes later; until then the
-only file is a sample.
+What TCG players on X talk about, per game, as a calendar. The snapshots are committed as files, imported into D1 by
+`api/scripts/import-voices.mjs` and served by the Worker (`GET /api/v1/voices`, `/api/v1/voices/latest`;
+docs/design/voices-db.md); `/voices/` and the home page's いま話題 fetch them in the browser. The page is built only with
+`VOICES_ENABLED=1` on the Worker build (off by default and always off with `BUILD_EVENTS=0`: no page, no tool tab, no
+privacy section, no link anywhere).
 
 ## Files (`data/voices/`, committed)
 
@@ -11,12 +12,13 @@ only file is a sample.
 data/voices/<YYYY-MM-DD>.json   one snapshot (voices.schema.json); the name is its date
 ```
 
+The files are the importer's input and the backup of what D1 holds; nothing reads them at build time except
+`scripts/fonts.py` (glyphs for the `/voices/` font faces).
+
 - `date` = the snapshot date in Asia/Tokyo = `window.to` = the file name. A snapshot covers the posts of a ~3-day window
   ending on that day (`window` dates are inclusive).
 - Pretty JSON, 2-space indent, trailing newline, topics in the order the page should list them (busiest first).
-- `sample: true` marks hand-made sample data. The page shows it with a サンプル notice, noindex, out of the sitemap.
-  As soon as one snapshot without `sample` exists, the build drops every sample snapshot and the page becomes
-  indexable and listed in the sitemap.
+- `sample: true` marks hand-made sample data; the importer skips it with a warning, so it never reaches the site.
 - Never store post text, players' post URLs or handles, user names, images or any other personal data: only our own
   summaries / paraphrases and, per topic, at most the official post it reacts to (`reacting_to`).
 - Owner decision 2026-11-20: the site never links a topic to the individual players who posted. The player posts the
@@ -57,8 +59,8 @@ The titles without events take the next slots, so `/events/` can adopt the same 
 
 15 and 16 were picked (2026-11-20) the palette's way: greedily maximising the worst OKLab ΔE×100 against slots 1-14 in
 both themes (normal ≥10.0, simulated protan / deutan ≥5.4), ≥3:1 on white (light) and on `#181b27` (dark).
-The list lives in `GAMES` in `src/voices.html`; the build reads the codes from there and
-refuses unknown ones. Add a code there (and here) before writing topics for a new game.
+The list lives in `GAMES` in `src/voices.html`; the importer reads the codes from there and
+refuses unknown ones (build.py embeds the palette for the home block). Add a code there (and here) before writing topics for a new game.
 
 ## How the page reads it
 
@@ -75,34 +77,29 @@ refuses unknown ones. Add a code there (and here) before writing topics for a ne
 - An open day / topic dialog is in the URL hash (`#d=YYYY-MM-DD` / `#t=<id>`, replaced, not a new history entry; cleared
   on close); each card has リンクをコピー (`/voices/#t=<id>`).
 - The list view shows every snapshot, newest first, with its topics.
-- The page embeds `{snapshots, counts}` as `const V = …;` (`counts` = release counts per title, for the title colours).
-  `voices_data()` in `scripts/build.py` returns the same snapshots for other pages; the home page's いま話題 block embeds only the latest real snapshot's
-  `{id, game, title, summary, attitude, volume, first_seen}` plus its date and games (`home_voices()`). The block only reads the
-  saved title filters (`tcg.voices`, else `tcg.ev.filters`) and never writes them.
+- The page embeds only `{counts, api}` as `const V = …;` (`counts` = release counts per title, for the title colours) and
+  fetches the snapshots from `api`; the answer is shape-checked before anything renders, and a failed or malformed
+  answer shows an error with 再読み込み. The home page's いま話題 block fetches `/api/v1/voices/latest` once (the game
+  palette is embedded as `H.voiceGames`) and stays hidden on any failure. The block only reads the saved title filters
+  (`tcg.voices`, else `tcg.ev.filters`) and never writes them.
+- The list view's この日のまとめ opens that day on the calendar (`/voices/#d=<date>`). There are no per-day pages: the
+  `/voices/<date>/` archive pages of the former static build were removed on 2026-11-22 and answer 404.
 
-## Archive pages (`/voices/<YYYY-MM-DD>/`)
+## Takedowns
 
-Owner decision 2026-11-20: each real snapshot (not `sample`) gets an indexable static page with our own text, built by
-`render_voices_day()` (`src/voices-day.html`). It lists every topic of that snapshot, one section per game in GAMES
-order (snapshot order inside a game), as the same cards `/voices/` draws: title, summary, attitude, the estimated
-tendency (約N% / the small-sample phrase, rules above), the paraphrased voices and the 反応元の公式投稿 link when there is one
-(`rel="nofollow noopener noreferrer"`; never links to players' posts). Never post text, quotes or embeds. Each card links `/voices/#t=<id>`; the page
-links `/voices/#d=<date>`, the previous / next real snapshot and `/voices/`. Head: canonical, `og/voices.png`,
-BreadcrumbList JSON-LD only; sitemap lastmod = the snapshot date. `/voices/` carries the latest real snapshot's titles as a
-static list below the calendar, linking `/voices/<date>/#topic-<id>`. Title and h1 carry the year
-(「YYYY年M月D日のTCG話題…」).
+Snapshot files are never renamed. A topic, or a whole snapshot, may be removed on a takedown / deletion request (the
+privacy page promises deletion): `cd api && D1_DATABASE_ID=… npm run import:voices -- --remove-topic ID --target remote`
+(or `--remove-snapshot DATE`) shows the plan, and the same command with `--yes` removes it from D1 (every date that
+lists the id; a date left without topics is deleted) and from the local files, which are then committed (operations:
+docs/design/voices-db.md). Search caches and archives may lag, as the privacy page says.
 
-Snapshot dates are URLs: never rename a published snapshot file. A topic, or a whole snapshot, may still be removed on a
-takedown / deletion request (the privacy page promises deletion): delete the topic from every snapshot file that lists
-it (the same id runs across snapshots), or delete the whole file.
-The next build drops the card or the page (a removed snapshot answers 404) and its sitemap entry; a snapshot left
-without topics counts as removed, and prev / next links skip it.
+## Checks
 
-## Build checks (scripts/build.py)
-
-Refuses: a file whose name, `date` and `window.to` differ; `window.from` > `window.to`; an unknown game code; a duplicate
-id inside one snapshot; a topic whose `first_seen` is after the snapshot date; a `reacting_to` that is not an x.com status URL; a `posts`
-field (player post URLs are never committed); more than 3 voices; `share` all zero; missing or extra fields. `verify_release.py` checks the built page and
-the archive pages (one per real snapshot, none for samples, cards in GAMES order matching the data, no post text or
-embeds, no X link but the topics' `reacting_to` on `/voices/` and the archive pages, X links nofollow, canonical, BreadcrumbList only, prev / next, sitemap lastmod); `tools/verify/browser.mjs`
-renders each archive page at desktop and mobile width.
+`import-voices.mjs` refuses: a file whose name, `date` and `window.to` differ; `window.from` > `window.to`; an unknown game
+code; a duplicate id inside one snapshot; a topic whose `first_seen` is after the snapshot date; a `reacting_to` that is
+not an x.com status URL; a `posts` field (player post URLs are never committed); any other X / Twitter URL in a decoded
+string; more than 3 voices; `share` all zero; missing or extra fields (also `contracts/voices.schema.json`); a date after
+today (JST). Across snapshots an id keeps its `game` and `first_seen`, and `new` is only its first appearance.
+`verify_release.py` checks that the built `/voices/` embeds no snapshot, topic text or X URL and is in the sitemap;
+`tools/verify/voices-d1.mjs` runs the page and the home block against the importer and the Worker code, and
+`tools/verify/browser.mjs` drives the page with the API answer served from `data/voices/`.

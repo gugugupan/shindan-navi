@@ -7,7 +7,7 @@ export class SqliteD1 {
   batch(statements: unknown[]): Promise<unknown[]>;
   exec(sql: string): Promise<{ count: number; duration: number }>;
   execAll(statements: string[]): void;
-  migrate(): this;
-  readState(): import('./importer.mjs').ImportState;
+  migrate(dir?: string, opts?: { before?: string | null }): this;
+  readState(opts?: { landingFrom?: string }): import('./importer.mjs').ImportState;
   close(): void;
 }

@@ -72,6 +72,8 @@ window.snLoc=(function(){
   }
   // opts.counts() returns null or {n, label (what the numbers are), filtered}
   function render(){
+    // a refresh (counts arriving, account sync) keeps the focused location
+    const had=body.contains(document.activeElement)?document.activeElement.dataset.pref:null;
     const cn=opts.counts?opts.counts():null;
     const what=cn?`数字は${cn.filtered&&cn.all?'いまの絞り込み条件での':''}${cn.label}です。`:'';
     body.innerHTML=`<p class="note">都道府県かオンラインを1つ選びます。選んだ地域は次回も使われます。${what}</p>`+
@@ -80,6 +82,7 @@ window.snLoc=(function(){
         return `<fieldset><legend><span>${esc(r)}</span></legend><div class="fc">${codes.map(c=>chip(c,cn)).join('')}</div></fieldset>`;
       }).join('')+
       `<fieldset><legend><span>会場なし</span></legend><div class="fc">${chip(ONLINE,cn)}</div></fieldset>`;
+    if(had) body.querySelector(`[data-pref="${had}"]`)?.focus();
   }
   function open(o){
     opts=o; render();

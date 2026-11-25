@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import {
   API_DIR, DEFAULT_DATA_DIR, loadAll, planImport, toSqlFile, estimateCost, emptyState, stateFromRows, stateEventsSql, stateImportsSql,
-  stateSiteMetaSql, stateDayCountsSql,
+  stateSiteMetaSql, stateDayCountsSql, readLandingState, readLandingContent, jstDay,
 } from './lib/importer.mjs';
 import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mjs';
 
@@ -94,11 +94,14 @@ if (remote && incomplete.length) {
 
 function wrangler(args, capture = false) {
   // CI=1 makes wrangler skip its interactive confirmations.
-  const r = spawnSync('npx', ['wrangler', ...args], {
+  // IMPORT_WRANGLER=<script.mjs> runs a stand-in under node instead (tests/import-wrangler.test.ts).
+  const [cmd, argv] = process.env.IMPORT_WRANGLER ? [process.execPath, [process.env.IMPORT_WRANGLER, ...args]] : ['npx', ['wrangler', ...args]];
+  const r = spawnSync(cmd, argv, {
     cwd: API_DIR, env: { ...process.env, CI: '1' }, ...(capture ? { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 } : { stdio: 'inherit' }),
   });
   if (r.status !== 0) {
-    if (capture) throw new Error((r.stderr || r.stdout || '').trim());
+    // D1 errors can be on either stream (stdout as JSON with --json): keep both so callers can match them.
+    if (capture) throw new Error([r.stderr, r.stdout].filter(Boolean).join('\n').trim());
     process.exit(r.status ?? 1);
   }
   return r.stdout;
@@ -119,8 +122,10 @@ function readWranglerState(where, config) {
       if (page.length < STATE_PAGE) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, wranglerQuery(where, config, stateImportsSql()), wranglerQuery(where, config, stateSiteMetaSql()),
-      wranglerQuery(where, config, stateDayCountsSql()));
+    const query = (sql) => wranglerQuery(where, config, sql);
+    const landing = readLandingState(query);
+    return stateFromRows(events, query(stateImportsSql()), query(stateSiteMetaSql()), query(stateDayCountsSql()),
+      landing, landing ? readLandingContent(query, jstDay(Math.floor(Date.now() / 1000))) : null);
   } catch (e) {
     if (/no such table/.test(e.message)) return emptyState();
     throw e;
@@ -170,8 +175,10 @@ if (remote && shrunk.length && !opts['allow-shrink']) {
   fail(`complete run(s) shrink what D1 shows (${shrunk.join('; ')}): more than ${MAX_SHRINK * 100}% fewer events for the same window, or a window ending earlier than the previous import. Check the collector output; pass --allow-shrink if the drop is real`);
 }
 console.log(`  ${Object.entries(plan.stats).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+for (const n of plan.notes) console.log(`  note: ${n}`);
 console.log(`  D1 rows written ~${cost.rowsWritten.toLocaleString('en-US')} (${Object.entries(cost.writes).filter(([, n]) => n).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ') || 'nothing'})`);
-console.log(`  D1 rows read    ~${cost.rowsRead.toLocaleString('en-US')} (${Object.entries(cost.reads).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ')})`);
+// a lower bound: D1 may count more rows than are returned (index pages a query re-seeks)
+console.log(`  D1 rows read    >=${cost.rowsRead.toLocaleString('en-US')} (${Object.entries(cost.reads).map(([k, n]) => `${k} ${n.toLocaleString('en-US')}`).join(', ')})`);
 if (cost.rowsWritten > FREE_WRITES_PER_DAY) console.log(`  over the D1 Free limit of ${FREE_WRITES_PER_DAY.toLocaleString('en-US')} rows written/day: split with --games across UTC days`);
 
 if (!plan.statements.length) {

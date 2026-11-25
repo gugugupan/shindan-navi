@@ -1,0 +1,578 @@
+{
+  "version": 1,
+  "date": "2026-11-23",
+  "window": {
+    "from": "2026-11-21",
+    "to": "2026-11-23"
+  },
+  "note": "Grok app answers for 2026-11-21..23 JST, one prompt per game (14 answered; デジモン and ヴァイス returned nothing). Every supporting player post and every reacting_to URL was checked via X oEmbed (exists, posted inside the window by snowflake time, on topic, not shop/sales/video/note promo/tournament report/bot/official); topics need 2+ distinct authors. Player post URLs are kept locally, never committed. share counts only the validated posts (Grok's numbers are not used), so topics with fewer than 5 validated posts show the small-sample tendency phrase. Scored draft / tournament result posts are excluded. ONE PIECE and MTG ban-culture topics fell below 2 validated authors and are absent; Grok's duplicate Gundam / DBFW / hololive topics were merged or split by the official post they quote.",
+  "topics": [
+    {
+      "id": "llocg-sunshine-duo-art",
+      "game": "LLOCG",
+      "title": "サンシャイン!! DUOの描きおろしイラスト",
+      "summary": "12/19発売のプレミアムブースター収録の桜内梨子＜PP＞が公開され、新規描きおろしイラストと箔押しデザインをかわいいと喜ぶ声が続いている。",
+      "attitude": "positive",
+      "share": {
+        "positive": 8,
+        "negative": 0,
+        "neutral": 0
+      },
+      "volume": "high",
+      "voices": [
+        "新しいイラストがとにかくかわいいという声",
+        "対戦で使われても許せるほど絵が良いという声",
+        "描きおろしの出来を絶賛する声"
+      ],
+      "reacting_to": "https://x.com/LL_cardgame/status/2124427676341457349",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-volmeteus-book",
+      "game": "DM",
+      "title": "『ボルメテウスの書』の評価",
+      "summary": "11/21発売の構築済みデッキ『ボルメテウスの書』を実際に回した感想が多く、無改造でも強く、中身だけで自分好みのハイランダー構築が組めると好評。多色による色事故を気にする声もある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 6,
+        "negative": 1,
+        "neutral": 1
+      },
+      "volume": "high",
+      "voices": [
+        "ほぼそのままでも十分強くて驚いたという声",
+        "同梱カードだけで好みのデッキに組み替えられるのが良いという声",
+        "多色カードが多く色事故しやすいので入れ替えたいという声"
+      ],
+      "reacting_to": "https://x.com/t2duema/status/2123929384922796157",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-18",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "uatcg-umamusume-power-meta",
+      "game": "UATCG",
+      "title": "ウマ娘新弾のカードパワー",
+      "summary": "12/11発売予定のウマ娘のカード公開が進み、これまでより一段強くなったという見方が広がっている。インフレを仕方ないと受け止める声と、強すぎて後から規制する流れを心配する声がある。",
+      "attitude": "mixed",
+      "share": {
+        "positive": 1,
+        "negative": 3,
+        "neutral": 4
+      },
+      "volume": "high",
+      "voices": [
+        "これまでの作品よりはっきり強くなっていると感じる声",
+        "強くするのはよいが、後から規制で調整するやり方は避けてほしいという声",
+        "強いと言われすぎて始める気が少し引いたという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "gcg-gd07-0-gundam",
+      "game": "GCG",
+      "title": "GD07「0ガンダム実戦配備型」への反応",
+      "summary": "GD07収録の「0ガンダム実戦配備型」が公開され、リンク先が広く使いやすいスタッツを評価する声が多い。今さらの性能だという声や、収録機体の選び方を不思議がる声もある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 4,
+        "negative": 1,
+        "neutral": 3
+      },
+      "volume": "mid",
+      "voices": [
+        "リンク先が広く、使いやすい数値だと評価する声",
+        "赤のデッキに乗せ先が増えたのを喜ぶ声",
+        "既存デッキには今さら感があるという声"
+      ],
+      "reacting_to": "https://x.com/GUNDAM_GCG_JP/status/2124412566470328645",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-23",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dbfw-fb12-parallel-art",
+      "game": "DBFW",
+      "title": "FB12パラレル版イラストの賛否",
+      "summary": "FB12のパラレル版カードの公開が続き、ベジータは既存と似た構図だと不満が出る一方、神龍は新しい構図や塗りが良いと好評で、評価が分かれている。",
+      "attitude": "mixed",
+      "share": {
+        "positive": 3,
+        "negative": 4,
+        "neutral": 1
+      },
+      "volume": "mid",
+      "voices": [
+        "見覚えのある構図ばかりなのでイラストを工夫してほしいという声",
+        "新しい構図や絵画のような塗りがとても良いという声",
+        "名場面の再現より日常的な絵柄を増やしてほしいという声"
+      ],
+      "reacting_to": "https://x.com/dbfw_cardgameJP/status/2124337320761733501",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-22",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "ptcg-current-regulation-deflation",
+      "game": "PTCG",
+      "title": "現レギュの物足りなさ・デフレへの不満",
+      "summary": "カードパワーを抑える調整が続き、ゲームとしての面白さが失われているという不満の声が多い。スタン制なのだから強いカードを出してよいのではという意見もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 0,
+        "negative": 7,
+        "neutral": 0
+      },
+      "volume": "high",
+      "voices": [
+        "パワーを抑える調整は今のプレイヤーの不満を募らせるという声",
+        "インフレではなくデフレで面白さを失うのは珍しいという声",
+        "ローテーションがあるのだから強いカードを出してよいのではという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "ptcg-hadou-seeker-weak",
+      "game": "PTCG",
+      "title": "新弾『ハドウシーカー』の弱さ",
+      "summary": "新弾『ハドウシーカー』のカードリストに対し、収録カードが弱く、今の環境を変える気が感じられないという否定的な声が多い。トレーナーズの少なさなど構成の偏りを疑問視する声もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 0,
+        "negative": 7,
+        "neutral": 0
+      },
+      "volume": "high",
+      "voices": [
+        "今の一強環境を新カードで調整する気が見えないという声",
+        "テキストはしっかりあるのに弱く、かえって残念という声",
+        "トレーナーズの収録数が少なすぎて構成が偏っているという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-21",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "vg-inflation-soft-rotation",
+      "game": "VG",
+      "title": "インフレと実質スタン落ちの懸念",
+      "summary": "カードパワーのインフレが限界に来ているという声や、新シリーズで既存カードが実質使えなくなるのではという不安が続いている。今のシリーズの強化が続くかが焦点だという見方もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 0,
+        "negative": 4,
+        "neutral": 2
+      },
+      "volume": "mid",
+      "voices": [
+        "インフレが行き着くところまで来てやる気が下がったという声",
+        "スタン落ちしないと言われても、強化が来なければ実質同じだという声",
+        "すぐには使えなくしないという言い方が逆に不安だという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "llocg-aqours-heroes-l-power",
+      "game": "LLOCG",
+      "title": "Aqours☆HEROES＜L＞の性能",
+      "summary": "DUO収録のライブカード「Aqours☆HEROES＜L＞」が公開され、効果が良い・性能が高いと評価する声が多く、場面で役割を変えられる点を挙げる声もある。必要なハートが重く、既存カードには及ばないという見方もある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 3,
+        "negative": 1,
+        "neutral": 2
+      },
+      "volume": "mid",
+      "voices": [
+        "効果が良く、性能も高いと評価する声",
+        "一枚で複数の役割をこなせる点を挙げる声",
+        "必要なハートが重く、既存の強いカードには届かないという声"
+      ],
+      "reacting_to": "https://x.com/LL_cardgame/status/2124774965249798583",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-23",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "conan-premium-mystery-best-reprint",
+      "game": "CONAN",
+      "title": "EXパック「PREMIUM MYSTERY BEST」の再録",
+      "summary": "1/30発売の初EXパックで人気カードの再録が発表され、安く組めて始めやすくなると歓迎する声が多い。プレイヤーの間では1パックにMRが1枚入るとの受け止めもある。一方、MRを全種再録するより選んでほしかったという声もある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 3,
+        "negative": 1,
+        "neutral": 1
+      },
+      "volume": "high",
+      "voices": [
+        "安く組めてコレクションもしやすくなる良い商品だという声",
+        "1パックにMRが入るなら大盤振る舞いだと喜ぶ声",
+        "MRを全部再録するより、人気や使用率の高いものに絞ってほしかったという声"
+      ],
+      "reacting_to": "https://x.com/CONAN_tcg/status/2124050223068860821",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-21",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "llocg-riko-pp-power",
+      "game": "LLOCG",
+      "title": "桜内梨子＜PP＞の性能",
+      "summary": "桜内梨子＜PP＞は起動能力でエネルギーを増やせることが注目され、強い・実戦で使えそうという声が出ている。条件が厳しいと慎重に見る声もある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 3,
+        "negative": 0,
+        "neutral": 2
+      },
+      "volume": "mid",
+      "voices": [
+        "エネルギーを加速できる梨子が来て嬉しいという声",
+        "うまく回せば早いターンに大きな形を作れそうという声",
+        "狙う動きをするには要求が厳しいかもという声"
+      ],
+      "reacting_to": "https://x.com/LL_cardgame/status/2124427676341457349",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-22",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "ygo-rv02-new-themes",
+      "game": "YGO",
+      "title": "RV02組の新規カードの評価",
+      "summary": "REVOLUTION BOOSTERで新規を得た方界・マリンセス・ゴーストリックについて、方界は他のテーマの強化より弱いという声や、3テーマとも厳しいという見方がある。原作に近い動きができて良かったという声や、構築に迷う声もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 1,
+        "negative": 2,
+        "neutral": 2
+      },
+      "volume": "mid",
+      "voices": [
+        "方界の強化は同じ時期の他のテーマより見劣りするという声",
+        "先攻型と後攻型のどちらで組むか迷うという声",
+        "映画のような動きができるようになって良かったという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-23",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "uatcg-new-set-illustrations",
+      "game": "UATCG",
+      "title": "新弾カードのイラスト評価",
+      "summary": "新弾のカードイラストがきれい・かわいいと好評で、D.Gray-manは原作の絵の美しさが生きているという声が出ている。描きおろしを欲しがる声もある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 4,
+        "negative": 0,
+        "neutral": 0
+      },
+      "volume": "mid",
+      "voices": [
+        "描きおろしがきれいなので手に入れたいという声",
+        "原作の絵が美しく、流用でも描きおろしに見えるという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-18",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "mtg-star-trek-limited",
+      "game": "MTG",
+      "title": "『スター・トレック』リミテッドの評価",
+      "summary": "『スター・トレック』のリミテッドを遊んだ感想として、シールドやドラフトを楽しむ声が出ている。ドラフトでは赤が強く取り合いになるという分析もある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 2,
+        "negative": 0,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "店舗でのシールドとドラフトがとても楽しかったという声",
+        "赤が強い分取り合いになり、別の色を足して補う工夫が要るという分析",
+        "シールドはドラフトより奥が深く、長く遊べそうという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-22",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "bs-zekuga-standard-dominance",
+      "game": "BS",
+      "title": "ゼクーガと環境の多様性",
+      "summary": "スタンダードの大会で同じゼクーガのデッキばかり見かけて楽しめないという声が出ている。ゼクーガを使う側からは、扱いが難しく使い方を誤るとすぐ負けるという体験談もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 0,
+        "negative": 2,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "ゲーム自体ではなく同じデッキばかりの環境がつまらないという声",
+        "いろいろなデッキが勝てる大会であってほしいという声",
+        "使い手として、扱いを誤ってゼクーガで負けたことも多いという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "gcg-gd07-reveals-underpowered",
+      "game": "GCG",
+      "title": "GD07公開カードの性能評価",
+      "summary": "GD07の収録カード公開が続き、コストが重く効果の割に弱いという声と、ドローできる点を喜ぶ声がある。",
+      "attitude": "mixed",
+      "share": {
+        "positive": 1,
+        "negative": 1,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "効果は目立つがコストが重くて弱いという声",
+        "ドローできるのは嬉しいという声",
+        "強くても今の上位デッキには勝てなさそうという声"
+      ],
+      "reacting_to": "https://x.com/GUNDAM_GCG_JP/status/2124050189824499919",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "hocg-moona-strength",
+      "game": "HOCG",
+      "title": "ムーナデッキの強さ",
+      "summary": "今はムーナのデッキが強いと聞くという声や、練習で色々なデッキを回した感想、新しいカードとムーナで盤面の取りやすさを比べる声が出ている。",
+      "attitude": "neutral",
+      "share": {
+        "positive": 0,
+        "negative": 0,
+        "neutral": 3
+      },
+      "volume": "low",
+      "voices": [
+        "環境に詳しくないが、今はムーナが強いと聞くという声",
+        "色々なデッキを回し、ムーナは引き次第で楽しさが変わるという声",
+        "新しいカードは一面だけならムーナより強いが、二面を取るのは難しそうという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-21",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "sve-attribute-limit-break",
+      "game": "SVE",
+      "title": "新要素「属性」の偏り",
+      "summary": "グランブルーファンタジーとのコラボで入る新要素「属性」について、火属性だけ収録が少ないなど属性ごとの差や、6属性に分ける仕組み自体の難しさを指摘する声が出ている。",
+      "attitude": "negative",
+      "share": {
+        "positive": 0,
+        "negative": 3,
+        "neutral": 0
+      },
+      "volume": "low",
+      "voices": [
+        "火属性のカードが他より明らかに少ないという声",
+        "カードプールが多い中で6属性に分けるのは厳しいという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-18",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "vg-current-format-health",
+      "game": "VG",
+      "title": "現環境の健全性",
+      "summary": "今の環境は整備がうまくいっておらず、システム面にも問題があるという声が出ている。遅い環境も速いだけの環境も不健全だという意見もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 0,
+        "negative": 2,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "以前のような多様なデッキが見られなくなったという声",
+        "今期のシステムが良くないという声",
+        "遅く硬い環境が問題と言われるが、速すぎるのも良くないという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-22",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-inflation-fatigue",
+      "game": "DM",
+      "title": "インフレとゲーム体験",
+      "summary": "インフレについて、全体が揃って強くなっているので置いていかれにくく、試合も面白くなっているという肯定的な見方が出ている。",
+      "attitude": "positive",
+      "share": {
+        "positive": 2,
+        "negative": 0,
+        "neutral": 0
+      },
+      "volume": "low",
+      "voices": [
+        "インフレしていても試合が長くなって面白くなったという声",
+        "全体が揃って強くなるので遊ぶ人が離れにくいという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "cooling",
+      "source": "grok-app"
+    },
+    {
+      "id": "bs-eternal-booster-anticipation",
+      "game": "BS",
+      "title": "新弾『戦神の轟臨』の評価",
+      "summary": "11/21に発売された新弾について、環境がとても面白い、新しいカードとの対戦が楽しいという声が出ている。",
+      "attitude": "positive",
+      "share": {
+        "positive": 2,
+        "negative": 0,
+        "neutral": 0
+      },
+      "volume": "low",
+      "voices": [
+        "新弾が入って環境がとても楽しくなったという声",
+        "新しいカードが強く、久しぶりの対戦が楽しかったという声"
+      ],
+      "reacting_to": "https://x.com/bs_official/status/2123929393986756625",
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "sve-granblue-collab-power",
+      "game": "SVE",
+      "title": "グラブルコラボ新弾の強さ予想",
+      "summary": "グラブルコラボのカードについて、どの属性が強いか、既存クラスと組み合わせられるかを予想する声や、発売を楽しみにする声が出ている。",
+      "attitude": "neutral",
+      "share": {
+        "positive": 1,
+        "negative": 0,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "闇と風が強そうで、ロイヤルと組む形もありそうという声",
+        "コラボ弾を楽しみにしている声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-11-21",
+        "to": "2026-11-23"
+      },
+      "first_seen": "2026-11-19",
+      "status": "cooling",
+      "source": "grok-app"
+    }
+  ]
+}

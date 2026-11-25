@@ -13,11 +13,20 @@ SRC = os.path.join(ROOT, 'brand/fonts')
 OWN = [(os.path.join(DIST, 'events/index.html'), '/*EVENT_FONTS*/', 'events'),
        (os.path.join(DIST, 'privacy/index.html'), '/*PAGE_FONTS*/', 'privacy'),
        (os.path.join(DIST, 'feedback/index.html'), '/*PAGE_FONTS*/', 'feedback'),
-       (os.path.join(DIST, 'voices/index.html'), '/*PAGE_FONTS*/', 'voices')]
-# the /voices/<date>/ archive pages share the /voices/ faces (same topic text)
-SHARE = {'voices': sorted(glob.glob(os.path.join(DIST, 'voices/*/index.html')))}
-own_files = [o[0] for o in OWN] + [f for fs in SHARE.values() for f in fs]
+       (os.path.join(DIST, 'voices/index.html'), '/*PAGE_FONTS*/', 'voices'),
+       (os.path.join(DIST, '_landing.html'), '/*PAGE_FONTS*/', 'landing')]
+own_files = [o[0] for o in OWN]
 text = ''.join(open(f, encoding='utf-8').read() for f in glob.glob(os.path.join(DIST, '**/*.html'), recursive=True) if f not in own_files)
+# /voices/ and the home block fetch their topic text from D1, so the built HTML has none: take it from the local
+# data/voices/ files (the importer's input), the latest snapshot's titles / summaries for the home block (shared
+# subsets), every snapshot for the /voices/ faces. Topics imported later fall back to the system font for glyphs these lack.
+voices_text = ''
+if os.path.exists(os.path.join(DIST, 'voices/index.html')):
+    import json
+    snaps = [json.load(open(f, encoding='utf-8')) for f in sorted(glob.glob(os.path.join(ROOT, 'data/voices/*.json')))]
+    snaps = [x for x in snaps if not x.get('sample') and x['topics']]
+    voices_text = ''.join(json.dumps(x['topics'], ensure_ascii=False) for x in snaps)
+    if snaps: text += ''.join(t['title'] + t['summary'] for t in snaps[-1]['topics'])
 # kana, ASCII and common punctuation are always kept so text that arrives with a data refresh still renders in the same face
 always = ''.join(chr(c) for c in range(0x20, 0x7f)) + ''.join(chr(c) for c in range(0x3000, 0x3100)) + \
     ''.join(chr(c) for c in range(0x30a0, 0x3100)) + ''.join(chr(c) for c in range(0xff01, 0xff5f)) + '・〜ー円年月日曜件'
@@ -53,8 +62,9 @@ for path, slot, prefix in OWN:
     if not os.path.exists(path):
         continue
     page = open(path, encoding='utf-8').read()
-    shared = SHARE.get(prefix, [])
-    extra = sorted(c for c in set(page).union(*(open(f, encoding='utf-8').read() for f in shared)) - set(chars) if ord(c) > 0x7f)
+    # the landing pages' fixed wording (headings, prefecture and game names) lives in the Worker renderer
+    more = voices_text if prefix == 'voices' else open(os.path.join(ROOT, 'api/src/landing.ts'), encoding='utf-8').read() if prefix == 'landing' else ''
+    extra = sorted(c for c in set(page + more) - set(chars) if ord(c) > 0x7f)
     faces = []
     if extra:
         rng = ','.join(f'U+{ord(c):X}' for c in extra)
@@ -63,8 +73,6 @@ for path, slot, prefix in OWN:
                                          ('ZenKakuGothicNew-Bold.ttf', f'{prefix}-zen-kaku-700.woff2', 'Zen Kaku Gothic New', 700)]:
             write_subset(src, out, ''.join(extra))
             faces.append(f'@font-face{{font-family:"{family}";src:url("/fonts/{out}") format("woff2");font-weight:{weight};font-display:swap;unicode-range:{rng}}}')
-    for f in [path] + shared:
-        p = page if f == path else open(f, encoding='utf-8').read()
-        assert p.count(slot) == 1, f
-        open(f, 'w', encoding='utf-8').write(p.replace(slot, ''.join(faces)))
+    assert page.count(slot) == 1, path
+    open(path, 'w', encoding='utf-8').write(page.replace(slot, ''.join(faces)))
     print(prefix, 'extra glyphs', len(extra))

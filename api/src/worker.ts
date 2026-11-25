@@ -6,6 +6,8 @@ import { FEEDBACK_PATH, handleFeedback, type FeedbackEnv } from './feedback';
 import { guessRegion } from './geo';
 
 import { getMeta, readState, type DataState } from './meta';
+import { latestVoices, listVoices, RawJson, readVoicesState, type VoicesState } from './voices';
+import { jstToday, landingRoute, landingSitemap, readLandingRow, renderLanding, TEMPLATE_PATH, type LandingRoute } from './landing';
 
 export interface Env extends FeedbackEnv {
   DB: D1Database;
@@ -13,6 +15,10 @@ export interface Env extends FeedbackEnv {
   /** Workers Rate Limiting bindings (uncached requests only); absent locally, where nothing is limited. */
   API_LIMIT?: RateLimit;
   API_BREAKER?: RateLimit;
+  /** "1" serves the event landing pages (docs/design/event-landing.md); remote-config.mjs sets it with the routes. */
+  LANDING_ENABLED?: string;
+  /** dev-node only: the Asia/Tokyo date the landing pages treat as today. */
+  DEV_TODAY?: string;
 }
 
 const HEADERS = {
@@ -29,14 +35,20 @@ export const BROWSER_TTL = 300;
 const BROWSER_CACHE = `public, max-age=${BROWSER_TTL}`;
 // How long an isolate trusts its last read of the data version (one D1 row).
 export const STATE_TTL_MS = 60_000;
-// Last good data state, kept in the colo cache so a cold isolate can still find cached answers while D1 fails.
-const STATE_PATH = '/api/__state';
+// Last good data state per kind, kept in the colo cache so a cold isolate can still find cached answers while D1 fails.
+// Events and voices have separate versions (site_meta 'state' / voice_meta 'version'), bumped by their own importers.
+type StateKind = 'events' | 'voices';
+type AnyState = DataState | VoicesState;
+const STATES: Record<StateKind, { path: string; read: (db: D1Database) => Promise<AnyState | null> }> = {
+  events: { path: '/api/__state', read: readState },
+  voices: { path: '/api/__state/voices', read: readVoicesState },
+};
 const STATE_EDGE_TTL = 7 * 86_400;
 // After a failed D1 read, wait this long before trying D1 again for the data version.
 export const STATE_RETRY_MS = 5_000;
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
+  return new Response(body instanceof RawJson ? body.text : JSON.stringify(body), { status, headers: { ...HEADERS, ...extra } });
 }
 
 interface Parsed {
@@ -44,12 +56,19 @@ interface Parsed {
 }
 
 interface Route {
+  /** Whose data version keys the cache (default events). */
+  state?: StateKind;
   /** Validates the query (throws BadRequest), clamped to the data window. */
   parse(params: URLSearchParams, window: DataWindow | null): Parsed;
   /** Canonical query used in the cache key. */
   key(parsed: Parsed): string;
-  run(db: D1Database, parsed: Parsed, state: DataState | null): Promise<unknown>;
+  run(db: D1Database, parsed: Parsed, state: AnyState | null): Promise<unknown>;
 }
+
+const noParams = (p: URLSearchParams): Parsed => {
+  for (const k of p.keys()) throw new BadRequest(`unknown parameter: ${k}`);
+  return {};
+};
 
 type EventQ = ReturnType<typeof parseEventQuery>;
 type DaysQ = ReturnType<typeof parseFilters>;
@@ -58,7 +77,7 @@ const ROUTES: Record<string, Route> = {
   '/api/v1/events': {
     parse: (p, w) => parseEventQuery(p, w),
     key: (q) => canonicalEventQuery(q as EventQ).toString(),
-    run: (db, q, state) => listEvents(db, q as EventQ, state?.fetched_at ?? {}),
+    run: (db, q, state) => listEvents(db, q as EventQ, (state as DataState | null)?.fetched_at ?? {}),
   },
   '/api/v1/events/days': {
     parse: (p, w) => parseFilters(p, 'days', w),
@@ -66,12 +85,21 @@ const ROUTES: Record<string, Route> = {
     run: (db, q) => listDays(db, q as DaysQ),
   },
   '/api/v1/events/meta': {
-    parse: (p) => {
-      for (const k of p.keys()) throw new BadRequest(`unknown parameter: ${k}`);
-      return {};
-    },
+    parse: noParams,
     key: () => '',
     run: (db) => getMeta(db),
+  },
+  '/api/v1/voices': {
+    state: 'voices',
+    parse: noParams,
+    key: () => '',
+    run: (db, _q, state) => listVoices(db, state as VoicesState | null),
+  },
+  '/api/v1/voices/latest': {
+    state: 'voices',
+    parse: noParams,
+    key: () => '',
+    run: (db, _q, state) => latestVoices(db, state as VoicesState | null),
   },
 };
 
@@ -79,26 +107,35 @@ function edgeCache(): Cache | null {
   return typeof caches !== 'undefined' && caches.default ? caches.default : null;
 }
 
-const stateMemo = new WeakMap<D1Database, { at: number; state: DataState | null }>();
-const stateFailedAt = new WeakMap<D1Database, number>();
+// Per database object and state kind, so the events and voices versions never mix.
+const stateMemos = new WeakMap<D1Database, Map<StateKind, { at: number; state: AnyState | null }>>();
+const stateFails = new WeakMap<D1Database, Map<StateKind, number>>();
+const perDb = <T>(m: WeakMap<D1Database, Map<StateKind, T>>, db: D1Database) => {
+  let x = m.get(db);
+  if (!x) m.set(db, (x = new Map()));
+  return x;
+};
 
 /**
- * The data version. With the Cache API it is memoized per isolate for STATE_TTL_MS and, when D1 fails,
+ * The data version of one kind. With the Cache API it is memoized per isolate for STATE_TTL_MS and, when D1 fails,
  * the last known state (memo, then the colo cache) is used so cached answers keep being served.
  */
-async function dataState(db: D1Database, cache: Cache | null, origin: string, ctx?: ExecutionContext): Promise<DataState | null> {
-  if (!cache) return readState(db);
-  const memo = stateMemo.get(db);
+async function dataState(kind: StateKind, db: D1Database, cache: Cache | null, origin: string, ctx?: ExecutionContext): Promise<AnyState | null> {
+  const { path, read } = STATES[kind];
+  if (!cache) return read(db);
+  const stateMemo = perDb(stateMemos, db);
+  const stateFailedAt = perDb(stateFails, db);
+  const memo = stateMemo.get(kind);
   if (memo && Date.now() - memo.at < STATE_TTL_MS) return memo.state;
-  const stateKey = new Request(`${origin}${STATE_PATH}`, { method: 'GET' });
-  if (!memo && Date.now() - (stateFailedAt.get(db) ?? 0) < STATE_RETRY_MS) {
+  const stateKey = new Request(`${origin}${path}`, { method: 'GET' });
+  if (!memo && Date.now() - (stateFailedAt.get(kind) ?? 0) < STATE_RETRY_MS) {
     const hit = await cache.match(stateKey);
-    if (hit) return (await hit.json()) as DataState;
+    if (hit) return (await hit.json()) as AnyState;
     throw new Error('D1 unavailable (retrying shortly)');
   }
   try {
-    const state = await readState(db);
-    stateMemo.set(db, { at: Date.now(), state });
+    const state = await read(db);
+    stateMemo.set(kind, { at: Date.now(), state });
     if (state) {
       const put = cache.put(stateKey, json(state, 200, { 'cache-control': `public, max-age=${STATE_EDGE_TTL}` }));
       if (ctx) ctx.waitUntil(put);
@@ -107,17 +144,17 @@ async function dataState(db: D1Database, cache: Cache | null, origin: string, ct
     return state;
   } catch (e) {
     console.error(e);
-    stateFailedAt.set(db, Date.now());
+    stateFailedAt.set(kind, Date.now());
     // Keep using the last known version; try D1 again after STATE_RETRY_MS rather than on every request.
     const retryAt = Date.now() - STATE_TTL_MS + STATE_RETRY_MS;
     if (memo) {
-      stateMemo.set(db, { at: retryAt, state: memo.state });
+      stateMemo.set(kind, { at: retryAt, state: memo.state });
       return memo.state;
     }
     const hit = await cache.match(stateKey);
     if (!hit) throw e;
-    const state = (await hit.json()) as DataState;
-    stateMemo.set(db, { at: retryAt, state });
+    const state = (await hit.json()) as AnyState;
+    stateMemo.set(kind, { at: retryAt, state });
     return state;
   }
 }
@@ -172,8 +209,8 @@ async function handleApi(request: Request, env: Env, url: URL, ctx?: ExecutionCo
   const cache = edgeCache();
   let res: Response;
   try {
-    const state = await dataState(env.DB, cache, url.origin, ctx);
-    const parsed = route.parse(url.searchParams, state?.window ?? null);
+    const state = await dataState(route.state ?? 'events', env.DB, cache, url.origin, ctx);
+    const parsed = route.parse(url.searchParams, (state as DataState | null)?.window ?? null);
     // Nothing is cached before the first import (no version) or for ranges outside the data (no D1 read).
     const key = cache && state && !parsed.outside ? cacheKey(url.origin, url.pathname, state.version, route.key(parsed)) : null;
     const hit = key ? await cache!.match(key) : undefined;
@@ -196,10 +233,82 @@ async function handleApi(request: Request, env: Env, url: URL, ctx?: ExecutionCo
   return head ? withHeaders(res, {}, false) : res;
 }
 
+// ---- Event landing pages (docs/design/event-landing.md)
+const PAGE_HEADERS = { 'content-type': 'text/html; charset=utf-8', 'x-content-type-options': 'nosniff' };
+const fnv = (s: string) => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+};
+// The shell per assets binding (one per isolate in production; a deploy starts new isolates, so the hash in the
+// cache key changes with the shell).
+const templates = new WeakMap<Fetcher, { text: string; hash: string }>();
+async function landingTemplate(env: Env, origin: string): Promise<{ text: string; hash: string } | null> {
+  if (!env.ASSETS) return null;
+  const memo = templates.get(env.ASSETS);
+  if (memo) return memo;
+  const res = await env.ASSETS.fetch(new Request(`${origin}${TEMPLATE_PATH}`));
+  if (!res.ok) return null;
+  const text = await res.text();
+  if (!text.includes('<!--LP_MAIN-->')) return null;
+  const t = { text, hash: fnv(text) };
+  templates.set(env.ASSETS, t);
+  return t;
+}
+
+function page(body: string | null, status: number, headers: Record<string, string>): Response {
+  return new Response(body, { status, headers: { ...PAGE_HEADERS, ...headers } });
+}
+
+async function handleLanding(request: Request, env: Env, url: URL, route: LandingRoute, ctx?: ExecutionContext): Promise<Response> {
+  const head = request.method === 'HEAD';
+  if (request.method !== 'GET' && !head) return page('method not allowed', 405, { allow: 'GET, HEAD', 'content-type': 'text/plain; charset=utf-8' });
+  if (route.kind === 'redirect') return new Response(null, { status: 301, headers: { location: route.to, 'cache-control': `public, max-age=${BROWSER_TTL}` } });
+  const tpl = route.kind === 'page' ? await landingTemplate(env, url.origin) : null;
+  // No shell in this build (flag off at build time): the same static 404 as without the Worker.
+  if (route.kind === 'page' && !tpl) return env.ASSETS ? env.ASSETS.fetch(request) : page('Not found', 404, {});
+  const today = env.DEV_TODAY && /^\d{4}-\d{2}-\d{2}$/.test(env.DEV_TODAY) ? env.DEV_TODAY : jstToday();
+  const cache = edgeCache();
+  const plain = { 'content-type': 'text/plain; charset=utf-8', 'x-robots-tag': 'noindex', 'cache-control': 'no-store' };
+  let res: Response;
+  try {
+    const state = await dataState('events', env.DB, cache, url.origin, ctx);
+    const path = route.kind === 'page' ? route.path : url.pathname;
+    // Keyed by the data version, the Japan date (pages drop past days) and the shell.
+    const key = cache && state ? cacheKey(url.origin, path, state.version, `d=${today}${tpl ? `&t=${tpl.hash}` : ''}`) : null;
+    const hit = key ? await cache!.match(key) : undefined;
+    if (hit) return withHeaders(hit, { 'cache-control': BROWSER_CACHE, 'x-edge-cache': 'hit' }, !head, ['age']);
+    const limited = await rateLimited(request, env);
+    if (limited) {
+      const r = page(limited.status === 429 ? 'アクセスが集中しています。1分ほど待ってから再読み込みしてください。' : '混み合っています。1分ほど待ってから再読み込みしてください。',
+        limited.status, { ...plain, 'retry-after': '60' });
+      return head ? withHeaders(r, {}, false) : r;
+    }
+    if (route.kind === 'sitemap') {
+      res = page(await landingSitemap(env.DB, today), 200, { 'content-type': 'application/xml; charset=utf-8', 'x-robots-tag': 'noindex' });
+    } else {
+      const out = renderLanding(tpl!.text, route.code, route.loc, await readLandingRow(env.DB, route.code, route.loc), today);
+      res = page(out.html, out.status, out.indexable ? {} : { 'x-robots-tag': 'noindex' });
+    }
+    if (key && res.status === 200) {
+      const stored = cache!.put(key, withHeaders(res.clone(), { 'cache-control': `public, max-age=${EDGE_TTL}` }));
+      if (ctx) ctx.waitUntil(stored);
+      else await stored;
+      res = withHeaders(res, { 'cache-control': BROWSER_CACHE, 'x-edge-cache': 'miss' });
+    } else res = withHeaders(res, { 'cache-control': res.status === 200 ? BROWSER_CACHE : 'no-store' });
+  } catch (e) {
+    console.error(e);
+    res = page('一時的に表示できません。しばらくしてから再読み込みしてください。', 503, { ...plain, 'retry-after': '60' });
+  }
+  return head ? withHeaders(res, {}, false) : res;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return handleApi(request, env, url, ctx);
+    const route = env.LANDING_ENABLED === '1' && url.pathname.startsWith('/events/') ? landingRoute(url.pathname) : null;
+    if (route) return handleLanding(request, env, url, route, ctx);
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response('Not found', { status: 404 });
   },

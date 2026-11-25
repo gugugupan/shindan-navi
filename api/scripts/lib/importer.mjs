@@ -12,8 +12,8 @@ export const REPO_DIR = resolve(API_DIR, '..');
 export const CONTRACTS_DIR = join(REPO_DIR, 'contracts');
 export const DEFAULT_DATA_DIR = join(REPO_DIR, 'data', 'events');
 
-export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG'];
-const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan' };
+export const GAME_CODES = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG', 'WS', 'VG', 'SVE', 'HOCG', 'LLOCG'];
+const ID_PREFIX = { bandai_tcg_plus: 'tcgp', pokemon_players: 'ptcg', conan_official: 'conan', bushinavi: 'bnavi' };
 // 9999-12-31T23:59:59Z: date-only events sort after timed ones on the same day.
 export const NULL_SORT = 253402300799;
 const MAX_ERRORS = 50;
@@ -30,6 +30,9 @@ export function withoutExpiredGeo(ev, cutoff) {
 }
 // D1 rejects statements over 100 KB (UTF-8 bytes); stay well below.
 export const MAX_STATEMENT_BYTES = 60_000;
+// The site_meta statement holds the whole meta JSON in one row, so it cannot be chunked: refuse to plan one D1 would
+// reject (100 KB), with some margin. ~50 KB with the 13 games of 2026-11-19 (loc_counts grows with games and types).
+export const MAX_SITE_META_BYTES = 90_000;
 const MAX_ROWS_PER_STATEMENT = 200;
 
 let validators;
@@ -175,7 +178,9 @@ export function sqlLiteral(v) {
 }
 
 export const importId = (run) => `${run.game_code}:${run.fetched_at}`;
-export const GAME_BITS = { OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8, GCG: 16, DBFW: 32, BS: 64, DCG: 128 };
+export const GAME_BITS = {
+  OPCG: 1, UATCG: 2, CONAN: 4, PTCG: 8, GCG: 16, DBFW: 32, BS: 64, DCG: 128, WS: 256, VG: 512, SVE: 1024, HOCG: 2048, LLOCG: 4096,
+};
 export const CATEGORIES = ['tournament', 'casual', 'teaching', 'festival', 'other', 'unknown'];
 const VENUE_KEYS = ['name', 'source_id', 'country_code', 'region_code', 'region_name', 'city', 'address', 'postal_code', 'geo'];
 
@@ -254,16 +259,25 @@ function eventRow(ev, now) {
   };
 }
 
-/** State of an empty (freshly migrated) database. */
-export const emptyState = () => ({ events: new Map(), imports: [], siteMeta: {}, dayCounts: new Map() });
+/**
+ * State of an empty (freshly migrated) database. `landing` is null while landing_pages does not exist (a database
+ * before migration 0007, docs/design/event-landing.md): the plan then writes no landing rows.
+ */
+export const emptyState = ({ landing = false } = {}) => ({ events: new Map(), imports: [], siteMeta: {}, dayCounts: new Map(), landing: landing ? new Map() : null, landingContent: landing ? new Map() : null });
 
-/** Builds the importer's view of a database from rows of STATE_EVENT_COLS / STATE_IMPORT_COLS / site_meta. */
-export function stateFromRows(eventRows, importRows, siteMetaRows = [], dayCountRows = []) {
+/**
+ * Builds the importer's view of a database from rows of STATE_EVENT_COLS / STATE_IMPORT_COLS / site_meta /
+ * day_counts / landing_pages (STATE_LANDING_SQL; null = the table does not exist).
+ */
+export function stateFromRows(eventRows, importRows, siteMetaRows = [], dayCountRows = [], landingRows = null, landingContent = null) {
   return {
     events: new Map(eventRows.map((r) => [r.id, { ...r, game_mask: Number(r.game_mask) }])),
     imports: importRows.map((r) => ({ ...r, record_count: Number(r.record_count), complete: Number(r.complete) })),
     siteMeta: Object.fromEntries(siteMetaRows.map((r) => [r.key, r.value])),
     dayCounts: new Map(dayCountRows.map((r) => [dayKey(r.loc, r.starts_on, Number(r.game_mask), r.event_type_code), Number(r.n)])),
+    landing: landingRows === null ? null : new Map(landingRows.map((r) => [`${r.game_code}\t${r.loc}`, r.content_hash])),
+    // readLandingContent: stored rows of the events shown in the landing window
+    landingContent,
   };
 }
 
@@ -286,8 +300,162 @@ export const stateEventsSql = (afterId, pageSize) =>
 export const stateImportsSql = () => `SELECT ${STATE_IMPORT_COLS.join(', ')} FROM imports`;
 export const stateSiteMetaSql = () => 'SELECT key, value FROM site_meta';
 export const stateDayCountsSql = () => 'SELECT loc, starts_on, game_mask, event_type_code, n FROM day_counts';
+export const stateLandingSql = () => 'SELECT game_code, loc, content_hash FROM landing_pages';
+/**
+ * landing_pages hashes through `query(sql) -> rows`, or null when the table does not exist (before migration 0007).
+ * Asks sqlite_master first instead of reading error text, so a missing table never depends on how a client reports it.
+ */
+export function readLandingState(query) {
+  const t = query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'landing_pages'");
+  return t.length ? query(stateLandingSql()) : null;
+}
+export const LANDING_MISSING = 'landing_pages: table missing (migration 0007 not applied), landing rows skipped';
 
-function chunked(head, items, tail = '') {
+// ---- Event landing pages (docs/design/event-landing.md): one row per game and location, built from the game's run.
+export const LANDING_DAYS = 28;
+export const LANDING_PER_DAY = 8;
+// events_json of one row; with the other columns and quote escaping one INSERT stays under MAX_LANDING_STATEMENT_BYTES
+// (D1 rejects statements over 100 KB). Real data (2026-11-23): ~500 bytes an event, Tokyo days have 10-50 events.
+export const MAX_LANDING_BYTES = 72_000;
+const MAX_LANDING_STATEMENT_BYTES = 90_000;
+export const LANDING_LOCS = [...Array.from({ length: 47 }, (_, i) => `JP-${String(i + 1).padStart(2, '0')}`), 'online'];
+const LANDING_COLS = ['game_code', 'loc', 'fetched_at', 'built_on', 'days_json', 'events_json', 'content_hash'];
+const LANDING_VENUE_KEYS = ['name', 'source_id', 'region_code', 'region_name', 'city', 'address'];
+const LANDING_GROUP_KEYS = ['name', 'category', 'event_type_code'];
+const LANDING_EVENT_KEYS = ['id', 'name', 'source_url', 'attendance_mode', 'starts_on', 'ends_on', 'starts_at', 'ends_at', 'timezone',
+  'time_precision', 'capacity', 'fee_amount', 'fee_currency', 'registration_method', 'registration_status', 'registration_opens_at', 'event_status'];
+/** Asia/Tokyo calendar day of a unix time in seconds. */
+export const jstDay = (sec) => new Date(sec * 1000 + 9 * 3_600_000).toISOString().slice(0, 10);
+const addDays = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const pick = (o, keys) => {
+  const out = {};
+  for (const k of keys) if (o[k] !== null && o[k] !== undefined) out[k] = o[k];
+  return out;
+};
+
+/**
+ * What a landing row stores per event: the fields the row renderer and the Event JSON-LD use, nulls dropped,
+ * timezone only when not Asia/Tokyo; game_codes only for events other games list too.
+ */
+export function landingEvent(ev, codes, loc) {
+  const out = pick(ev, LANDING_EVENT_KEYS);
+  // The renderer formats these with Intl: a zone it cannot use falls back to Asia/Tokyo, an unparseable time is left out.
+  if (out.timezone === 'Asia/Tokyo' || !validZone(out.timezone)) delete out.timezone;
+  for (const k of ['ends_at', 'registration_opens_at']) if (out[k] !== undefined && Number.isNaN(Date.parse(out[k]))) delete out[k];
+  // group.name equal to the name and the venue's region equal to the row's location are implied (api/src/landing.ts
+  // hydrate() restores them)
+  if (ev.group) out.group = pick(ev.group, LANDING_GROUP_KEYS.filter((k) => k !== 'name' || ev.group.name !== ev.name));
+  if (ev.venue) out.venue = pick(ev.venue, LANDING_VENUE_KEYS.filter((k) => !(k.startsWith('region_') && ev.venue.region_code === loc)));
+  if (codes && codes.length > 1) out.game_codes = codes;
+  return out;
+}
+
+function validZone(tz) {
+  if (tz === undefined) return true;
+  try {
+    new Intl.DateTimeFormat('ja-JP', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// events columns a landing row needs, read for the shown events the import does not rewrite (readLandingContent)
+export const LANDING_CONTENT_COLS = ['id', 'loc', 'starts_on', 'starts_sort', 'game_mask', 'name', 'source_url', 'attendance_mode', 'ends_on',
+  'starts_at', 'ends_at', 'timezone', 'time_precision', 'capacity', 'fee_amount', 'fee_currency', 'registration_method', 'registration_status',
+  'registration_opens_at', 'event_status', 'group_name', 'category', 'event_type_code', 'venue_json'];
+// rows per landing-window page: a few MB of JSON, far below D1's result limit
+export const LANDING_CONTENT_PAGE = 2000;
+
+/**
+ * Stored events (eventRow / LANDING_CONTENT_COLS shape) shown in the landing window starting at `fromDay` (with a
+ * day's margin each side), through `query(sql) -> rows`. Keyset pages in idx_events_loc order (loc, starts_on,
+ * starts_sort, id): each page seeks the index per remaining location, so it reads about the window's rows (~23k
+ * with 13 games) plus at most the part of one location a page re-seeks.
+ */
+export function readLandingContent(query, fromDay, pageSize = LANDING_CONTENT_PAGE) {
+  const from = addDays(fromDay, -1);
+  const until = addDays(fromDay, LANDING_DAYS + 1);
+  const locs = [...LANDING_LOCS].sort();
+  const out = new Map();
+  for (let key = null; ; ) {
+    const rest = key ? locs.filter((l) => l >= key.loc) : locs;
+    const after = key ? ` AND (loc, starts_on, starts_sort, id) > (${[key.loc, key.starts_on, Number(key.starts_sort), key.id].map(sqlLiteral).join(', ')})` : '';
+    const page = query(`SELECT ${LANDING_CONTENT_COLS.join(', ')} FROM events WHERE loc IN (${rest.map(sqlLiteral).join(', ')}) AND starts_on >= ${sqlLiteral(from)} `
+      + `AND starts_on < ${sqlLiteral(until)} AND game_mask <> 0${after} ORDER BY loc, starts_on, starts_sort, id LIMIT ${pageSize}`);
+    for (const r of page) out.set(r.id, r);
+    if (page.length < pageSize) return out;
+    key = page[page.length - 1];
+  }
+}
+
+/** A stored event row as the landing event shape (what landingEvent reads). */
+function rowEvent(r) {
+  return {
+    id: r.id, name: r.name, source_url: r.source_url, attendance_mode: r.attendance_mode, starts_on: r.starts_on, ends_on: r.ends_on,
+    starts_at: r.starts_at, ends_at: r.ends_at, timezone: r.timezone, time_precision: r.time_precision,
+    capacity: r.capacity === null ? null : Number(r.capacity), fee_amount: r.fee_amount === null ? null : Number(r.fee_amount),
+    fee_currency: r.fee_currency, registration_method: r.registration_method, registration_status: r.registration_status,
+    registration_opens_at: r.registration_opens_at, event_status: r.event_status,
+    group: { name: r.group_name, category: r.category, event_type_code: r.event_type_code },
+    venue: r.venue_json ? JSON.parse(r.venue_json) : null,
+  };
+}
+
+/**
+ * The 48 landing rows of one game: every location, also empty ones, days built_on .. built_on + LANDING_DAYS, from
+ * what the database shows for the game after the import. `shown`: the planned state's rows (id, loc, starts_on,
+ * game_mask); `contentOf(id)`: the stored row the database will hold (the import's winning copy, else D1's). Without
+ * them (tests), the run's `events` alone. days_json counts every shown event; events_json holds the shown events of
+ * each day in API order whose content is known: LANDING_PER_DAY, fewer a day (down to 1) while the row's SQL text is
+ * over MAX_LANDING_BYTES, so every day stays covered; only then whole days go from the end.
+ * `codesOf(id)` names the games listing an event (for the tags of shared events).
+ */
+export function landingRows(run, events, builtOn, codesOf = () => null, shown = null, contentOf = null) {
+  const until = addDays(builtOn, LANDING_DAYS);
+  const bit = GAME_BITS[run.game_code];
+  if (!contentOf) {
+    const own = new Map(events.map((ev) => [ev.id, eventRow(ev, 0)]));
+    contentOf = (id) => own.get(id);
+    shown ??= [...own.values()].map((r) => ({ ...r, game_mask: bit }));
+  }
+  const counts = new Map(LANDING_LOCS.map((l) => [l, {}]));
+  const byLoc = new Map(LANDING_LOCS.map((l) => [l, []]));
+  for (const e of shown) {
+    if (!(e.game_mask & bit) || e.starts_on < builtOn || e.starts_on >= until || !counts.has(e.loc)) continue;
+    const c = counts.get(e.loc);
+    c[e.starts_on] = (c[e.starts_on] ?? 0) + 1;
+    const r = contentOf(e.id);
+    if (r) byLoc.get(e.loc).push(r);
+  }
+  return LANDING_LOCS.map((loc) => {
+    const rs = byLoc.get(loc).sort((a, b) => (a.starts_on < b.starts_on ? -1 : a.starts_on > b.starts_on ? 1
+      : Number(a.starts_sort) - Number(b.starts_sort) || (a.id < b.id ? -1 : 1)));
+    const daysJson = JSON.stringify(Object.fromEntries(Object.entries(counts.get(loc)).sort()));
+    const nth = [];
+    const seen = {};
+    for (const r of rs) nth.push((seen[r.starts_on] = (seen[r.starts_on] ?? 0) + 1));
+    const compact = rs.map((r) => landingEvent(rowEvent(r), codesOf(r.id), loc));
+    // measured as SQL literals: quote doubling can grow the text
+    const sqlBytes = (json) => Buffer.byteLength(sqlLiteral(json)) + Buffer.byteLength(sqlLiteral(daysJson));
+    let kept, eventsJson;
+    for (let per = LANDING_PER_DAY; per >= 1; per--) {
+      kept = compact.filter((_, i) => nth[i] <= per);
+      eventsJson = JSON.stringify(kept);
+      if (sqlBytes(eventsJson) <= MAX_LANDING_BYTES) break;
+    }
+    while (kept.length && sqlBytes(eventsJson) > MAX_LANDING_BYTES) {
+      const last = kept[kept.length - 1].starts_on;
+      while (kept.length && kept[kept.length - 1].starts_on === last) kept.pop();
+      eventsJson = JSON.stringify(kept);
+    }
+    const row = { game_code: run.game_code, loc, fetched_at: run.fetched_at, built_on: builtOn, days_json: daysJson, events_json: eventsJson };
+    row.content_hash = sha1(JSON.stringify([row.fetched_at, row.built_on, row.days_json, row.events_json]));
+    return row;
+  });
+}
+
+function chunked(head, items, tail = '', maxBytes = MAX_STATEMENT_BYTES) {
   const fixed = Buffer.byteLength(head) + Buffer.byteLength(tail);
   const out = [];
   let batch = [];
@@ -299,8 +467,8 @@ function chunked(head, items, tail = '') {
   };
   for (const item of items) {
     const size = Buffer.byteLength(item) + 2;
-    if (fixed + size > MAX_STATEMENT_BYTES) throw new Error(`a single row needs ${fixed + size} bytes, over the ${MAX_STATEMENT_BYTES}-byte statement budget`);
-    if (batch.length && (fixed + bytes + size > MAX_STATEMENT_BYTES || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
+    if (fixed + size > maxBytes) throw new Error(`a single row needs ${fixed + size} bytes, over the ${maxBytes}-byte statement budget`);
+    if (batch.length && (fixed + bytes + size > maxBytes || batch.length >= MAX_ROWS_PER_STATEMENT)) flush();
     batch.push(item);
     bytes += size;
   }
@@ -343,11 +511,14 @@ export function computeLocCounts(events, window) {
 
 /** The /events/meta body without labels, over each game's latest import window. */
 export function computeMeta(events, imports) {
-  const latest = {};
+  const newest = {};
   for (const imp of imports) {
-    const cur = latest[imp.game_code];
-    if (!cur || imp.fetched_at > cur.fetched_at) latest[imp.game_code] = imp;
+    const cur = newest[imp.game_code];
+    if (!cur || imp.fetched_at > cur.fetched_at) newest[imp.game_code] = imp;
   }
+  // Keyed in GAME_CODES order: the stored JSON must not depend on the order imports were read, or a re-import after
+  // a `--games` import would see stale meta and rewrite it.
+  const latest = Object.fromEntries(GAME_CODES.filter((g) => newest[g]).map((g) => [g, newest[g]]));
   const games = {};
   for (const [g, imp] of Object.entries(latest)) {
     games[g] = { record_count: imp.record_count, fetched_at: imp.fetched_at, complete: imp.complete === 1, window: { from: imp.window_from, until: imp.window_until } };
@@ -398,7 +569,7 @@ export function computeMeta(events, imports) {
  * - new runs get an imports row; site_meta ('meta', 'state') is rewritten when anything changed.
  * Nothing is deleted. Statements stay under D1's 100 KB limit.
  */
-export function planImport(accepted, state = emptyState(), { now = Math.floor(Date.now() / 1000) } = {}) {
+export function planImport(accepted, state = emptyState(), { now = Math.floor(Date.now() / 1000), maxSiteMetaBytes = MAX_SITE_META_BYTES } = {}) {
   const rows = new Map();
   const listed = new Map();
   const cutoff = googleCutoff(now * 1000);
@@ -503,6 +674,51 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
   statements.push(...chunked('DELETE FROM day_counts WHERE (loc, starts_on, game_mask, event_type_code) IN (VALUES ',
     countDeletes.map((k) => `${tuple(k)})`), ')'));
 
+  // Landing rows of every accepted game, diffed by content hash; none while the table is missing.
+  const notes = [];
+  const landingNext = state.landing ? new Map(state.landing) : null;
+  const landingUpserts = [];
+  if (landingNext) {
+    const builtOn = jstDay(now);
+    const codesOf = (id) => {
+      const m = next.get(id)?.game_mask ?? 0;
+      return GAME_CODES.filter((g) => m & GAME_BITS[g]);
+    };
+    // the import's winning copy of an event (what D1 gets), else the stored one
+    const contentOf = (id) => rows.get(id) ?? state.landingContent?.get(id);
+    const add = (row) => {
+      const k = `${row.game_code}\t${row.loc}`;
+      if (landingNext.get(k) === row.content_hash) return;
+      landingUpserts.push(row);
+      landingNext.set(k, row.content_hash);
+    };
+    for (const { run, events: evs } of accepted) for (const row of landingRows(run, evs, builtOn, codesOf, next.values(), contentOf)) add(row);
+    // Other games' rows that show an event this import rewrote or re-masked (a shared event moved by one game's run):
+    // rebuilt at the event's old and new location, with the game's own latest fetch date.
+    const done = new Set(accepted.map((r) => r.run.game_code));
+    const touched = new Map();
+    const changedIds = [...upserts.map((r) => r.id), ...[...masks.values()].flat()];
+    for (const id of changedIds) {
+      const old = state.events.get(id);
+      const cur = next.get(id);
+      const m = (old?.game_mask ?? 0) | (cur?.game_mask ?? 0);
+      for (const g of GAME_CODES) {
+        if (!(m & GAME_BITS[g]) || done.has(g)) continue;
+        const locs = touched.get(g) ?? new Set();
+        for (const l of [old?.loc, cur?.loc]) if (l) locs.add(l);
+        touched.set(g, locs);
+      }
+    }
+    for (const [g, locs] of touched) {
+      const fetched = state.imports.filter((i) => i.game_code === g).map((i) => i.fetched_at).sort().pop();
+      if (!fetched) continue;
+      for (const row of landingRows({ game_code: g, fetched_at: fetched }, [], builtOn, codesOf, next.values(), contentOf)) if (locs.has(row.loc)) add(row);
+    }
+    statements.push(...chunked(`INSERT INTO landing_pages (${LANDING_COLS.join(', ')}) VALUES\n`,
+      landingUpserts.map((r) => `(${LANDING_COLS.map((c) => sqlLiteral(r[c])).join(', ')})`),
+      `\nON CONFLICT(game_code, loc) DO UPDATE SET ${LANDING_COLS.slice(2).map((c) => `${c} = excluded.${c}`).join(', ')}`, MAX_LANDING_STATEMENT_BYTES));
+  } else if (accepted.length) notes.push(LANDING_MISSING);
+
   const meta = computeMeta(next, [...state.imports, ...newImports]);
   const { fetched_at, window, ...body } = meta;
   const metaJson = JSON.stringify(body);
@@ -517,10 +733,13 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
   const changed = statements.length > 0 || metaStale;
   const version = String(now);
   if (changed) {
-    statements.push(
-      `INSERT INTO site_meta (key, value) VALUES ('meta', ${sqlLiteral(metaJson)}), ('state', ${sqlLiteral(JSON.stringify({ version, fetched_at, window }))})\n` +
-        'ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-    );
+    const sql = `INSERT INTO site_meta (key, value) VALUES ('meta', ${sqlLiteral(metaJson)}), ('state', ${sqlLiteral(JSON.stringify({ version, fetched_at, window }))})\n` +
+      'ON CONFLICT(key) DO UPDATE SET value = excluded.value';
+    const bytes = Buffer.byteLength(sql, 'utf8');
+    if (bytes > maxSiteMetaBytes) {
+      throw new Error(`site_meta statement is ${bytes.toLocaleString('en-US')} bytes (limit ${maxSiteMetaBytes.toLocaleString('en-US')}; D1 rejects statements over 100 KB): shrink the meta (loc_counts) before importing`);
+    }
+    statements.push(sql);
   }
   const stats = {
     inserted,
@@ -529,15 +748,19 @@ export function planImport(accepted, state = emptyState(), { now = Math.floor(Da
     imports: newImports.length,
     day_counts: countUpserts.length + countDeletes.length,
     site_meta: changed ? 2 : 0,
+    landing_pages: landingUpserts.length,
     unchanged: rows.size - upserts.length - [...masks.values()].flat().filter((id) => rows.has(id)).length,
   };
   return {
-    statements, stats, perGame, meta, version: changed ? version : null,
+    statements, stats, perGame, meta, notes, version: changed ? version : null,
     state: {
       events: next,
       imports: [...state.imports, ...newImports],
       siteMeta: changed ? { meta: metaJson, state: JSON.stringify({ version, fetched_at, window }) } : state.siteMeta,
       dayCounts: counts,
+      landing: landingNext,
+      // stored rows of the landing window as they are after this plan
+      landingContent: state.landingContent ? new Map([...state.landingContent, ...rows]) : null,
     },
   };
 }
@@ -548,8 +771,8 @@ const EVENT_INDEXES = 1;
 /**
  * D1 rows written / read by applying a plan. Writes: an inserted or rewritten event costs the row plus
  * its index entry (upper bound: a rewrite that keeps loc/starts_on may not touch the index), a mask-only
- * update costs the row, imports and site_meta one each. Reads: the state read (one row per existing event
- * and import) plus one primary-key lookup per written row.
+ * update costs the row, imports and site_meta one each. Reads (a lower bound): the state read (one row per existing
+ * event, import, day_counts / landing row and landing-window event) plus one primary-key lookup per written row.
  */
 export function estimateCost(stats, state) {
   const writes = {
@@ -559,9 +782,12 @@ export function estimateCost(stats, state) {
     imports: stats.imports,
     day_counts: stats.day_counts,
     site_meta: stats.site_meta,
+    // WITHOUT ROWID with only its primary key: one written row per landing row
+    ...(stats.landing_pages ? { landing_pages: stats.landing_pages } : {}),
   };
-  const stateRead = state.events.size + state.imports.length + Object.keys(state.siteMeta ?? {}).length + (state.dayCounts?.size ?? 0);
-  const lookups = stats.inserted + stats.rewritten + stats.mask_updates + stats.imports + stats.day_counts + stats.site_meta;
+  const stateRead = state.events.size + state.imports.length + Object.keys(state.siteMeta ?? {}).length + (state.dayCounts?.size ?? 0) + (state.landing?.size ?? 0)
+    + (state.landingContent?.size ?? 0);
+  const lookups = stats.inserted + stats.rewritten + stats.mask_updates + stats.imports + stats.day_counts + stats.site_meta + (stats.landing_pages ?? 0);
   return {
     writes,
     rowsWritten: Object.values(writes).reduce((a, b) => a + b, 0),

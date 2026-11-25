@@ -6,8 +6,8 @@ export const PAGE_LIMIT = 50;
 // Worker; a page that hits the cap returns what matched plus a cursor to continue. Above the busiest
 // location-day so far (178 events), so a page normally covers its first matching day.
 export const SCAN_LIMIT = 200;
-// Printable ASCII only: ids are tcgp:/ptcg:/conan: + digits or hex; anything else (NUL, quotes…) is a forgery.
-const ID_RE = /^(tcgp|ptcg|conan):[\x21-\x7e]{1,200}$/;
+// Printable ASCII only: ids are tcgp:/ptcg:/conan:/bnavi: + digits or hex; anything else (NUL, quotes…) is a forgery.
+const ID_RE = /^(tcgp|ptcg|conan|bnavi):[\x21-\x7e]{1,200}$/;
 // 9999-12-31T23:59:59Z, the starts_sort of date-only events.
 const MAX_SORT = 253402300799;
 // Keeps the bound-parameter total under D1's 100 per query.
@@ -329,29 +329,43 @@ function dayCountsWhere(q: Filters, from: string): { parts: string[]; binds: unk
   return { parts, binds };
 }
 
-/** /days reads day_counts (one row per location, day, game mask and type), not the events. */
+/** /days reads day_counts (one row per location, day, game mask and type), not the events. Grouping by the type too
+ * reads the same rows (the primary key's order) and only returns more of them. */
 export function daysSql(q: Filters): { sql: string; binds: unknown[] } {
   const { parts, binds } = dayCountsWhere(q, q.from);
-  return { sql: `SELECT starts_on AS date, game_mask AS m, SUM(n) AS n FROM day_counts\nWHERE ${parts.join(' AND ')}\nGROUP BY starts_on, game_mask`, binds };
+  return {
+    sql: `SELECT starts_on AS date, game_mask AS m, event_type_code AS t, SUM(n) AS n FROM day_counts\nWHERE ${parts.join(' AND ')}\nGROUP BY starts_on, game_mask, event_type_code`,
+    binds,
+  };
 }
+
+type Day = { date: string; count: number; by_game: Record<string, number>; by_game_type: Record<string, Record<string, number>> };
+const sortKeys = <T>(o: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : 1)));
 
 export async function listDays(db: D1Database, q: Filters) {
   if (q.outside) return { days: [] };
   const { sql, binds } = daysSql(q);
   const rows = (await db.prepare(sql).bind(...binds).all<Row>()).results;
-  // A shared event counts once in count and once per member game in by_game; with a game filter, by_game
-  // reports only the selected games.
+  // A shared event counts once in count and once per member game in by_game / by_game_type; with a game filter,
+  // both report only the selected games.
   const shown = q.games.length ? gameBits(q.games) : ALL_GAME_BITS;
-  const byDate = new Map<string, { date: string; count: number; by_game: Record<string, number> }>();
+  const byDate = new Map<string, Day>();
   for (const r of rows) {
-    const date = r.date as string;
-    const d = byDate.get(date) ?? { date, count: 0, by_game: {} };
-    d.count += Number(r.n);
-    for (const g of gamesOf(Number(r.m) & shown)) d.by_game[g] = (d.by_game[g] ?? 0) + Number(r.n);
+    const date = r.date as string, t = r.t as string, n = Number(r.n);
+    const d = byDate.get(date) ?? { date, count: 0, by_game: {}, by_game_type: {} };
+    d.count += n;
+    for (const g of gamesOf(Number(r.m) & shown)) {
+      d.by_game[g] = (d.by_game[g] ?? 0) + n;
+      const bt = (d.by_game_type[g] ??= {});
+      bt[t] = (bt[t] ?? 0) + n;
+    }
     byDate.set(date, d);
   }
   const days = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
-  for (const d of days) d.by_game = Object.fromEntries(Object.entries(d.by_game).sort());
+  for (const d of days) {
+    d.by_game = sortKeys(d.by_game);
+    d.by_game_type = sortKeys(Object.fromEntries(Object.entries(d.by_game_type).map(([g, bt]) => [g, sortKeys(bt)])));
+  }
   return { days };
 }
 export const gamesOf = (mask: number): string[] => GAMES.filter((g) => mask & g.bit).map((g) => g.code).sort();

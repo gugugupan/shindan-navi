@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-export const GEO_SOURCES = ['tcgplus', 'ptcg', 'google'];
+export const GEO_SOURCES = ['tcgplus', 'ptcg', 'google', 'bushinavi'];
 export const CACHE_VERSION = 1;
 export const GOOGLE_MAX_AGE_DAYS = 30;
 export const NEGATIVE_RETRY_DAYS = 30;

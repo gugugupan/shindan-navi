@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -9,6 +9,11 @@ import { run as runOf, synthetic, writeDataDir } from './helpers';
 
 const API_DIR = join(__dirname, '..');
 const FAKE_ID = '12345678-90ab-4cde-8f01-23456789abcd';
+// copy + remove: the temp dir may be on another volume than the repo
+const move = (from: string, to: string) => {
+  copyFileSync(from, to);
+  rmSync(from);
+};
 
 describe('remote-config', () => {
   it('keeps the placeholder and no custom domain in the committed config', () => {
@@ -61,14 +66,15 @@ describe('import --target remote', () => {
     chmodSync(join(bin, 'npx'), 0o755);
     data = writeDataDir(synthetic(30));
     if (existsSync(REMOTE_CONFIG)) {
-      saved = `${REMOTE_CONFIG}.bak-test`;
-      renameSync(REMOTE_CONFIG, saved);
+      // the backup holds the real id: keep it in the temp dir, never next to the git-ignored file
+      saved = join(bin, 'wrangler.remote.json.bak');
+      move(REMOTE_CONFIG, saved);
     }
   });
 
   afterAll(() => {
     rmSync(REMOTE_CONFIG, { force: true });
-    if (saved) renameSync(saved, REMOTE_CONFIG);
+    if (saved) move(saved, REMOTE_CONFIG);
   });
 
   const run = (args: string[], env: Record<string, string> = {}, dir = data) => {
@@ -157,5 +163,71 @@ describe('import --target remote', () => {
     expect(r.status).toBe(1);
     expect(r.stdout).toMatch(/more than --max-writes 10/);
     expect(r.calls.some((c) => c.includes('--file'))).toBe(false);
+  });
+});
+
+// Same file as the events remote tests: both write wrangler.remote.json, so they must not run in parallel.
+describe('import-voices --target remote', () => {
+  let bin: string;
+  let log: string;
+  let data: string;
+  let saved: string | null = null;
+  const SNAP = {
+    version: 1, date: '2026-11-20', window: { from: '2026-11-18', to: '2026-11-20' },
+    topics: [{ id: 'opcg-fixture', game: 'OPCG', title: 't', summary: 's', attitude: 'neutral', share: { positive: 1, negative: 0, neutral: 1 },
+      volume: 'low', voices: [], reacting_to: null, window: { from: '2026-11-18', to: '2026-11-20' }, first_seen: '2026-11-19', status: 'new', source: 'grok-app' }],
+  };
+
+  beforeAll(() => {
+    // A fake npx that, like the real wrangler, prints the database id: on stderr for queries, on stdout for --file.
+    bin = mkdtempSync(join(tmpdir(), 'fake-npx-voices-'));
+    log = join(bin, 'calls.log');
+    writeFileSync(join(bin, 'npx'), `#!/bin/sh
+echo "$@" >> "${log}"
+echo "database shindan-navi-events ($D1_DATABASE_ID)" >&2
+if [ -n "$FAKE_FAIL" ]; then echo "error on $D1_DATABASE_ID" >&2; exit 1; fi
+case "$*" in
+  *sqlite_master*) echo '[{"results":[{"name":"voice_snapshots"},{"name":"voice_meta"}],"success":true}]';;
+  *--file*) echo "Executing on remote database shindan-navi-events ($D1_DATABASE_ID):"; echo "uuid ${FAKE_ID}";;
+  *) echo '[{"results":[],"success":true}]';;
+esac
+`);
+    chmodSync(join(bin, 'npx'), 0o755);
+    data = mkdtempSync(join(tmpdir(), 'voices-remote-'));
+    writeFileSync(join(data, '2026-11-20.json'), JSON.stringify(SNAP, null, 2));
+    if (existsSync(REMOTE_CONFIG)) {
+      saved = join(bin, 'wrangler.remote.json.bak');
+      move(REMOTE_CONFIG, saved);
+    }
+  });
+
+  afterAll(() => {
+    rmSync(REMOTE_CONFIG, { force: true });
+    if (saved) move(saved, REMOTE_CONFIG);
+  });
+
+  const run = (args: string[], env: Record<string, string> = {}) => {
+    rmSync(log, { force: true });
+    const r = spawnSync(process.execPath, ['scripts/import-voices.mjs', '--target', 'remote', '--data', data, '--out', join(bin, 'voices.sql'), ...args], {
+      cwd: API_DIR, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, D1_DATABASE_ID: FAKE_ID, ...env },
+    });
+    return { ...r, calls: existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [] };
+  };
+
+  it('writes through wrangler without ever printing the database id', () => {
+    const r = run(['--yes']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.calls.some((c) => c.includes('migrations'))).toBe(false);
+    expect(r.calls.at(-1)).toBe(`wrangler d1 execute shindan-navi-events --remote --yes --config ${REMOTE_CONFIG} --file ${join(bin, 'voices.sql')}`);
+    expect(r.stdout).toMatch(/Executing on remote database shindan-navi-events \(<redacted>\)/);
+    expect(r.stdout + r.stderr).not.toContain(FAKE_ID);
+  });
+
+  it('redacts a failing read too', () => {
+    const r = run(['--plan'], { FAKE_FAIL: '1' });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/error on <redacted>/);
+    expect(r.stderr).toMatch(/reading remote D1 failed/);
+    expect(r.stdout + r.stderr).not.toContain(FAKE_ID);
   });
 });

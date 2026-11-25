@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { API_DIR, stateDayCountsSql, stateEventsSql, stateFromRows, stateImportsSql, stateSiteMetaSql } from './importer.mjs';
+import { API_DIR, jstDay, readLandingContent, readLandingState, stateDayCountsSql, stateEventsSql, stateFromRows, stateImportsSql, stateSiteMetaSql } from './importer.mjs';
 
 const MIGRATIONS_DIR = join(API_DIR, 'migrations');
 
@@ -72,18 +72,24 @@ export class SqliteD1 {
       throw e;
     }
   }
-  /** Apply migrations/*.sql not yet recorded, using the same table name as wrangler. */
-  migrate() {
+  /**
+   * Apply migrations/*.sql not yet recorded, using the same table name as wrangler. before: only files named before
+   * it (tests and checks of an older schema, e.g. '0007' = without landing_pages).
+   */
+  migrate(dir = MIGRATIONS_DIR, { before = null } = {}) {
     this.db.exec('CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)');
     const done = new Set(this.db.prepare('SELECT name FROM d1_migrations').all().map((r) => r.name));
-    for (const name of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
+    for (const name of readdirSync(dir).filter((f) => f.endsWith('.sql') && (!before || f < before)).sort()) {
       if (done.has(name)) continue;
-      this.execAll([readFileSync(join(MIGRATIONS_DIR, name), 'utf8'), `INSERT INTO d1_migrations (name) VALUES ('${name.replaceAll("'", "''")}')`]);
+      this.execAll([readFileSync(join(dir, name), 'utf8'), `INSERT INTO d1_migrations (name) VALUES ('${name.replaceAll("'", "''")}')`]);
     }
     return this;
   }
-  /** The importer's view of this database (see importer.mjs stateFromRows). */
-  readState() {
+  /**
+   * The importer's view of this database (see importer.mjs stateFromRows). landingFrom: first day of the landing
+   * window whose stored events are read (default today in Japan; pass the plan's day when planning with another `now`).
+   */
+  readState({ landingFrom = jstDay(Math.floor(Date.now() / 1000)) } = {}) {
     const events = [];
     for (let after = null; ; ) {
       const page = this.db.prepare(stateEventsSql(after, 5000)).all();
@@ -91,7 +97,10 @@ export class SqliteD1 {
       if (page.length < 5000) break;
       after = page[page.length - 1].id;
     }
-    return stateFromRows(events, this.db.prepare(stateImportsSql()).all(), this.db.prepare(stateSiteMetaSql()).all(), this.db.prepare(stateDayCountsSql()).all());
+    const query = (sql) => this.db.prepare(sql).all();
+    const landing = readLandingState(query);
+    return stateFromRows(events, query(stateImportsSql()), query(stateSiteMetaSql()), query(stateDayCountsSql()),
+      landing, landing ? readLandingContent(query, landingFrom) : null);
   }
   close() {
     this.db.close();

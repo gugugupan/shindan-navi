@@ -138,16 +138,73 @@ newest of their items'. Written by `stamp_changed()` just before `items.json` (n
 unaffected):
 
 - TODAY when the item is new or any shown field (`SHOWN`: date, game, name, pack, box, per_box, per_pack, url, thumb,
-  approx, after overrides; prices compared by yen amount) differs from the run's starting `items.json`; else kept.
+  approx, after overrides; prices compared by yen amount) or the product code the page shows (`shown_code`: the
+  official `source.key` when it is a code, else a code in the name, as `item_code` in build.py) differs from the run's
+  starting `items.json`; else kept. `source.url`, `sources` and `official_name` are not shown and move no date.
 - Backfill, no invented dates: an item without `changed` (written before the field existed) takes the previous
   `meta.json` `updated`, the date the sitemap already gave it; the build uses `meta.json` `updated` until then.
-- An override committed without a merge rerun moves no date (verify WARNs); the next run stamps the change.
+- An override committed without a merge rerun moves no date: the build shows it at once, the item's sitemap
+  `lastmod` stays until the next run stamps the change. verify only lists every new or changed override as a WARN
+  (`overrides: entry … changed — review`); it has no separate check for the date.
+
+## Archive (`data/items-archive.json`)
+
+Owner decision 2026-11-20 ("option A"): a released item keeps its `/item/<id>/` page after it leaves the calendar.
+`items.json` still drops items released more than `KEEP_PAST_DAYS` (30) days before TODAY; `update_archive()` in the
+merge moves them into `data/items-archive.json` (committed, JSON with 1-space indent like `items.json`, sorted by date,
+title, name), written only by a non-dry run, together with `items.json`:
+
+- Who gets in: items of the run's starting `items.json` that the run dropped because of their date. Not items hidden
+  in `overrides.json` (`hide: true`: cancelled, duplicates), which lose their page as before. Nothing else removes an
+  item from `items.json` (upcoming items that vanished from the sources are kept, see Merge).
+- Record: `{id, date, game, name, pack, box, per_box, per_pack, url, thumb, approx, source, changed}` as the item had
+  them (after overrides; keys the item lacks are left out). `id` never changes. `changed` = the archiving run's TODAY
+  (the page turns into 発売済み), then kept.
+- Leaves the archive: an id that is back in `items.json` (the calendar entry wins), and entries released more than
+  `KEEP_ARCHIVE_DAYS` (730, ~2 years) before TODAY (their page then answers 404 and leaves the sitemap).
+- Thumbnails: an archived item keeps its `thumb` file; the run's thumbnail pruning counts archive references (and
+  every `overrides.json` `thumb`), and drops a file once nothing references it. Nothing is downloaded for the archive. The build shows the
+  placeholder when the file is not in `public/thumbs` any more.
+- `scripts/refresh.py` resets `items-archive.json` to HEAD with `items.json` before the merge, and its packet counts
+  the entries archived and dropped vs HEAD.
+
+Build (`scripts/build.py`, `archived`): one `/item/<id>/` page per archive entry that is not hidden and not in
+`items.json`, in the sitemap with `lastmod` = its `changed`, canonical / og like other item pages. The page says 発売済み
+(a tag next to the title name, 「（発売済み）」 after the date, 発売時の価格, a 発売済み legend), keeps the 公式 links, and
+has no 新弾カレンダーで見る link: its main link goes to the title page (else `/releases/`); 発売月 links the month page
+only while one is built. Archived items never appear in the release calendar, title / month pages, their JSON-LD or
+`/`. 同じタイトルの前後の新弾 runs over calendar and archived items together, so archived pages stay linked. A
+neighbour list changing (an item archived, added or moved next to it) moves no `changed` / sitemap `lastmod`: only the
+item's own shown fields do.
+
+Known edge case (rare, accepted): an id leaves the archive only when the same id is back in `items.json`. A released
+product that comes back both rescheduled past the window and renamed (e.g. a reissue under a new name) gets a new id,
+so the archive entry and the calendar item stand side by side as two pages of one product until someone hides one
+(`hide: true` in `overrides.json`, which also takes the archive page down).
+
+verify (`check_archive` / `check_items` in `verify_release.py`, `browser.mjs`): ids unique and not in `items.json`;
+`changed` a date on or before `--today` (a merge stamps `meta.json` `updated`, a hand-added entry its publishing day); released before the 30-day window; an item that left
+`items.json` for its date and is not hidden must be archived (FAIL); entries removed from the archive, entries older
+than two years and new entries that were not in the base's `items.json` (backfill, hand edits) are WARNs; every
+archived page exists, shows 発売済み, does not link into the calendar, is in the sitemap with its `changed` and on no
+calendar page or `/`.
+
+Backfill (2026-11-20, one-off script, not kept): seeded from the git history of `data/items.json` on `main` — every
+commit's items, the last record of each stable id (`i…`) that is not in today's `items.json`, archived when the
+commit that removed it was a merge run whose TODAY (`meta.json` `updated`) was more than 30 days after the release
+date and the id is not hidden; `changed` = 2026-11-20, the day the pages are first published (none of them had a
+live `/item/` page before). Skipped: the first commit's positional ids
+(`p000`…, renumbered to stable ids in the next commit, which carry the same items) and the 2 hidden ids. Result: 36
+entries (10 dropped on 2026-11-02, 26 on 2026-11-17). Their thumbnails, already pruned from `public/thumbs`, were
+restored from the item's last `items.json` commit (`git show`, no download; owner decision; 36 files, ~0.97 MB), with
+the item's `thumb` / `approx` from that commit.
 
 ## Product decisions kept
 
 Stable ids (`item_id`, never renumbered), `overrides.json` applied but never written, de-duplication by source
 identity first (`find_by_source`, official `source`) before name similarity / Jev, official variants listed
-separately, releases older than 30 days dropped, upcoming items that vanished from the sources kept and reported.
+separately, releases older than 30 days dropped from the calendar (their pages kept via the archive), upcoming
+items that vanished from the sources kept and reported.
 
 ## Code layout (Python, run with `.venv/bin/python -I` from the repo root)
 

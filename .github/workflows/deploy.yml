@@ -27,8 +27,13 @@ jobs:
       # send_email binding in remote-config.mjs. Set it only after Email Routing, Turnstile, the secrets and the
       # migration are in place. TURNSTILE_SITE_KEY is the widget's public site key.
       FEEDBACK_ENABLED: ${{ vars.FEEDBACK_ENABLED }}
-      # 話題カレンダー (contracts/voices.md): "1" builds /voices/ and its tool tab. Static, so both builds take it.
+      # 話題カレンダー (contracts/voices.md): "1" builds /voices/, its tool tab and the home いま話題 from /api/v1/voices*
+      # (D1, written by api/scripts/import-voices.mjs). build.py ignores it on the Pages build, which has no Worker.
       VOICES_ENABLED: ${{ vars.VOICES_ENABLED }}
+      # Event landing pages /events/<slug>/<pref>/ (docs/design/event-landing.md): "1" builds their shell and the robots.txt
+      # sitemap line, and remote-config.mjs routes the pages to the Worker. Set it only after migration 0007 is applied
+      # and an import has written landing_pages. build.py ignores it on the Pages build.
+      LANDING_ENABLED: ${{ vars.LANDING_ENABLED }}
     steps:
       - uses: actions/checkout@v4
 

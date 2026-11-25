@@ -1,0 +1,54 @@
+<!--
+  Shell of the Worker-rendered event landing pages /events/<slug>/<pref>/ (docs/design/event-landing.md), built only
+  with LANDING_ENABLED=1 as dist/_landing.html. The Worker (api/src/landing.ts) fetches it from the assets and replaces
+  the LP_HEAD region (title, description, canonical, robots, OGP, JSON-LD) and the LP_MAIN region (crumbs, h1, list,
+  links). As built, it is noindex and empty. The h1 sits above the list (owner-approved exception, 2026-11-20).
+-->
+<title>TCGイベント｜トレカカレンダー</title>
+<style>/*SITE_CSS*/</style>
+<style>/*PAGE_FONTS*/</style>
+<style>
+.lp-head{margin:6px 0 10px}
+.lp-head h1{font-family:var(--display);font-size:clamp(20px,3.2vw,28px);line-height:1.3;margin:4px 0 6px;color:var(--ink)}
+.lp-head p{margin:0;font-size:13px;line-height:1.7;color:var(--muted)}
+.lp-go{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0 14px;font-size:13px;font-weight:700}
+.lp-go a{color:var(--accent)}
+.lp-list{display:grid;gap:14px}
+.lp-day{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px}
+.lp-day>h2{margin:0 0 10px;font-size:15px;display:flex;align-items:baseline;gap:8px}
+.lp-day>h2 time{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.lp-day>h2 small{font-size:12px;font-weight:500;color:var(--muted)}
+.lp-rows{display:flex;flex-direction:column;gap:10px}
+/* rows as on /events/ (#list in src/events.html) */
+.lp-rows .ev{gap:4px;background:var(--surface-2);border-radius:10px;padding:10px 12px 10px 14px}
+.lp-rows .ev::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--g)}
+.lp-rows .evg-l .ev{background:var(--surface);padding:8px 10px}
+.lp-rows .evg-l .ev::before{display:none}
+.ev-link{justify-self:start;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;background:var(--surface);white-space:nowrap}
+.ev-link:hover{border-color:var(--accent)}
+.lp-rows .ev-s .ev-link{margin-left:auto}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.lp-more{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:700;color:var(--accent)}
+.lp-empty{border:1px dashed var(--line);border-radius:12px;padding:16px;font-size:13.5px;line-height:1.8;color:var(--muted)}
+.lp-empty a{color:var(--accent);font-weight:700}
+.lp-links{margin-top:22px;display:grid;gap:12px}
+.lp-links h2{margin:0 0 6px;font-size:13px;color:var(--muted)}
+.lp-links p{margin:0;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px}
+.lp-links a{color:var(--ink)}
+.lp-links a[aria-current]{color:var(--muted);text-decoration:none;font-weight:700}
+@media (max-width:760px){.lp-day{padding:10px 12px}.lp-rows .ev{padding:9px 10px 10px 12px}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <!--BRAND-->
+    <!--CORNER-->
+  </header>
+
+  <!--LP_MAIN--><main class="lp-list"><p class="lp-empty">このページは表示できません。<a href="/events/">イベントカレンダー</a>をご覧ください。</p></main><!--/LP_MAIN-->
+
+  <p class="legend">イベント情報は各タイトルの公式イベントページで公開されている内容をもとに掲載しています。開催可否・参加費・定員・申込方法は変わることがあるため、参加前に必ず「公式で詳細・申込」から最新情報をご確認ください。定員は募集人数で、残り枠ではありません。</p>
+  <!--SITENAV-->
+</div>
+
+<!--EVROW-->
