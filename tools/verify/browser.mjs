@@ -2183,17 +2183,19 @@ if (HAS_EVENTS) {
       });
       await go('/');
       await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); });
-      await go('/', '#evBody .gcol');
+      await go('/', HAS_EVENTS ? '#evBody .gcol' : '#wkPanel .pk');
       if (HAS_VOICES) await page.waitForSelector('#vtBody .vt', { timeout: 5000 }).catch(() => {});
-      // today's panel: the stubbed events (columns OPCG / UATCG / PTCG, a shared OPCG + UATCG row) and the fixture cards
+      // today's panel: the stubbed events (columns OPCG / UATCG / PTCG, a shared OPCG + UATCG row; BUILD_EVENTS builds) and the fixture cards
       const a = await audit(page);
-      judge(where, a, 3);
-      const need = ['/onepiece/', '/unionarena/', '/pokemon/'].filter(h => !a.links.some(l => l[1] === h));
+      judge(where, a, HAS_EVENTS ? 3 : 1);
+      const need = (HAS_EVENTS ? ['/onepiece/', '/unionarena/', '/pokemon/'] : ['/onepiece/']).filter(h => !a.links.some(l => l[1] === h));
       if (need.length) fail(where, `event columns / tags without ${need.join(' ')}`);
       const cards = await page.locator('#wkPanel .pk').evaluateAll(ps => ps.filter(p => /^GL fixture/.test(p.querySelector('.n')?.textContent)).map(p => p.querySelector('.g a.gl')?.getAttribute('href') || null));
       if (JSON.stringify(cards) !== JSON.stringify(['/onepiece/', null])) fail(where, `fixture cards' game links ${JSON.stringify(cards)}`);
       if (vp === 'mobile') await page.locator('#wkPanel').screenshot({ path: path.join(OUT, `game-links-home-${vp}.png`) });
-      // 表示中: each saved title links its hub (MTG is offered only with いま話題; without it the /events/ filter holds the titles)
+      // 表示中: each saved title links its hub (MTG is offered only with いま話題; without it the /events/ filter holds the titles;
+      // a BUILD_EVENTS=0 build offers no titles)
+      if (!HAS_EVENTS) { await page.unroute(`${BASE}/`); return; }
       const [saved, want] = HAS_VOICES ? [['tcg.voices', { game: 'OPCG,MTG' }], '/onepiece/,/mtg/'] : [['tcg.ev.filters', { pref: 'JP-13', game: 'OPCG,PTCG' }], '/onepiece/,/pokemon/'];
       await page.evaluate(([k, v]) => localStorage.setItem(k, JSON.stringify(v)), saved);
       await go('/', '#hsT a');
