@@ -16,13 +16,14 @@ template, the game in the path, and switching to another game only loads that ga
 - The hub lives at the game's **slug**: the 10 existing title pages (`/pokemon/` …) become hubs at the same URLs
   (no new duplicate page), with their current `<title>`, description, h1, crumbs and ItemList unchanged. `/<code>/`
   (for example `/opcg/`) answers 301 to the slug. New games (M3) get the slug D1 already has (`/conan/` …).
-- Page: the release calendar for that game, plus a 話題 marker on days the game's topics are active and (M2) the event
-  count for the player's location. A day opens that day's releases / topics (/ events). Below the calendar: いま話題,
-  the static release list, about. A game without events or topics drops that layer.
+- Page: the release calendar for that game, plus each of the game's topics as one bar over its days (M1, owner
+  2026-11-25: a timeline, not per-day markers) and (M2) per-type event counts for the player's location. A day opens
+  that day's releases / topics / event types. Below the calendar: いま話題, the static release list, about. A game
+  without events or topics drops that layer.
 - Releases are static (the page embeds them, as title pages do now). **Topics are fetched in the browser** from
   `GET /api/v1/voices`, the URL `/voices/` already uses (same version-keyed edge cache, so no new D1 read pattern);
-  the built HTML has no topic text. Events (M2) come from the existing `/api/v1/events/days` and `/events` endpoints
-  with no new parameter. With `BUILD_EVENTS=0` (the Pages build) topics and events are left out.
+  the built HTML has no topic text. Event counts (M2) come from one existing `/api/v1/events/days` request per shown
+  month (no event rows, no new parameter). With `BUILD_EVENTS=0` (the Pages build) topics and events are left out.
 - Switching games is a plain link to the other hub (full load, `?m=` carried). No `/<slug>/data.json`: every page
   already embeds all visible releases, and topics / events are API answers the browser caches.
 
@@ -142,94 +143,46 @@ without query or hash.
 
 Template: the release app `src/template.html` in hub mode (`PAGE.hub`), not a new file: it already has the one-game
 calendar, stars, the 前日20時 add-to-calendar ask, the detail dialog and the table view, so `tcg.stars` stays one
-implementation. Hub mode replaces the title chips with the game switcher and adds the 話題 markers, the day dialog and
-いま話題; M2 adds the events layer (`<!--LOCPICK-->`, `<!--EVROW-->`) to the same page.
+implementation. Hub mode replaces the title chips with the game switcher and adds the topic bars, the day dialog and
+いま話題; M2 adds per-type event counts and the location (`<!--LOCPICK-->`) to the same page.
 
 Top of page follows the owner rules: logo row (tool tabs, corner) and the toolbar only; crumbs, h1 and lead go
 **below the calendar** (no exception asked for). No tool tab is marked current (the hub spans all three);
 `/releases/`, `/events/`, `/voices/` stay the tools.
 
-### Desktop (≥ 901px)
+### Desktop / tablet (≥ 761px)
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│ [トレカカレンダー]  新弾カレンダー | イベントカレンダー | 話題カレンダー            ⚙  ログイン │
-├──────────────────────────────────────────────────────────────────────────────────────────┤
-│ [▣ ポケカ ▾]   ‹  2026年12月  ›  今日            📍東京都 変更        凡例: 発売 ■ イベント ● 話題 ◆ │
-├────────┬────────┬────────┬────────┬────────┬────────┬────────────────────────────────────┤
-│ 月      │ 火      │ 水      │ 木      │ 金      │ 土      │ 日                                  │
-│ 1       │ 2       │ 3       │ 4       │ 5       │ 6       │ 7                                   │
-│         │         │         │         │ ■ 拡張パック│ ● 42    │ ● 38                                │
-│ ● 6     │ ● 4     │ ● 5     │ ● 7     │  「熱風の…」│ ◆ 話題 2 │                                     │
-│         │         │         │         │ ● 9     │         │                                     │
-├────────┼────────┼ … (quiet weekdays stay slim, today gold, as /releases/) ───────────────────┤
-└──────────────────────────────────────────────────────────────────────────────────────────┘
- トップ › ポケカ
- ポケモンカードゲーム（ポケカ）新弾・イベントカレンダー            ← h1, muted, below the calendar
- 発売予定 2件・次の発売は12/5(金)・東京都のイベント 今月 312件（11/20更新）
-
- ┌ 今週のイベント（東京都）M2 ──────┐ ┌ いま話題（API）─────────────────┐
- │ 11/21(土) 13:00 ジムバトル      │ │ ◆ 新弾の当たり枠が話題 🔥3日       │
- │   カードショップ○○ 新宿店       │ │   好意的な声が多い  → /voices/#t=… │
- │ 東京都のイベントを見る → (JS link)│ │ 話題カレンダーで見る →             │
- └──────────────────────────────┘ └────────────────────────────────┘
- ポケカ 新弾の発売予定（N件）   一覧を表示   (static list, folded as today; item links)
- ポケカについて (about block, as the title page has today)
- ほかのタイトル: [▣ワンピ] [▣MTG] [▣遊戯王] …                         (static links to the other hubs)
- footer
+│ [▣ ポケカ ▾]  ‹ 2026年11月 ›  今日  [カレンダー|テーブル]   📍東京都（推定） 変更 (M2)                       │
+├──────┬──────┬──────┬──────┬──────┬──────┬──────┤
+│ 17    │ 18    │ 19    │ 20    │ 21 1件 │ 22    │ 23    │
+│ ┃＋ 新弾の当たり枠が話題 ───────────────────────┃       │       │   one bar per topic (lanes)
+│       │ ┃± 禁止改定の賛否 ──────────────────────────────┃   │
+│       │       │       │       │ [release card]│       │       │
+│ 大会 6 │ 大会 4 │ 大会 5 │ 大会 7 │ 大会 30 体験会 3 ほか 2 │ …   │   per-type counts (M2)
 ```
 
-Cell content (desktop): up to 2 release names (gold `■` strip, title-coloured, the rest as `+N`), the event count
-`● N` (game colour), `◆ 話題 N` when topics are active that day. Event counts never show without a location.
+- **Topic bars (M1)**, as `/voices/` draws them for one selected game: one bar per topic from `first_seen` to the last
+  snapshot that lists it, cut per week (dotted left edge / square right edge where it continues), at most 4 lanes a
+  week and 「ほか N件」 under the days of hidden ones; colour = the game's, label = attitude glyph (＋ － ± ・) + the
+  title as of the bar's first day (`/voices/` version rule). A bar links `/voices/#t=<id>`. The release cards sit under
+  the lanes. Quiet weekdays stay slim unless a bar covers them.
+- **Event counts (M2)**: under the cards, the day's counts per event type for this game in the location
+  (`by_game_type[G]`), at most 2 named types + 「ほか N」, names from the build-time `TYPE_LABELS` (as `/` has
+  `H.types`).
+
+### Phones (≤ 760px)
+
+The release calendar is a day list there, so topics get a compact month timeline above it, like `/voices/`' phone
+calendar keeps one mark per game and day: one row per topic active in the month (attitude glyph + title, 11/17〜11/21,
+a thin track of the month with the topic's days filled), each row linking `/voices/#t=<id>`. Day sections show the
+day's event total (M2); days with events but no release are listed too.
 
 ### Day dialog (both widths)
 
-```
-┌ 12月6日(土) ポケカ ───────────────────────── × ┐
-│ 発売 (0)            ← section omitted when empty │
-│ イベント 42件（東京都）  [大会] [交流会] [体験会]  │
-│  13:00 ジムバトル  カードショップ○○ 新宿店   公式 → │
-│  …                                              │
-│  さらに読み込む   ／  この日を地図で見る (/events/) │
-│ 話題 2件                                         │
-│  ◆ 新弾の当たり枠が話題  → /voices/#t=<id>        │
-└────────────────────────────────────────────────┘
-```
-
-The event rows reuse `/events/`' card markup (`src/evrow.html`). The map stays on `/events/`
-(`この日を地図で見る` → `/events/?pref=…&game=…#…` day view), so the hub never loads Google Maps.
-
-### Mobile (≤ 760px)
-
-```
-┌──────────────────────────────┐
-│ [ロゴ]                 ⚙  👤 │
-│ [▣ ポケカ ▾]  ‹ 12月 ›  今日   │
-│ 📍東京都 変更                  │
-├──┬──┬──┬──┬──┬──┬──┤
-│月│火│水│木│金│土│日│
-│1 │2 │3 │4 │5 │6 │7 │
-│• │• │• │• │■•│•◆│• │   ■ release  • events  ◆ topics (no numbers)
-├──┴──┴──┴──┴──┴──┴──┤
-│ 凡例: ■発売 •イベント ◆話題      │
-│ トップ › ポケカ                 │
-│ ポケモンカードゲーム（ポケカ）…    │  h1 (muted)
-│ ▸ 今週のイベント・東京都 (M2)   │  loads on expand
-│ いま話題 (API)                 │
-│ ▸ 発売予定 (N) 一覧を表示       │  static list, folded
-├──────────────────────────────┤
-│  新弾   │ イベント │  話題        │  bottom tool bar (unchanged)
-└──────────────────────────────┘
-```
-
-A day tap opens the day dialog as a full-height sheet with 閉じる at the top and bottom (as `/releases/`). Sections
-are open by default; the count is in the heading.
-
-### Tablet (761-900px)
-
-As the desktop grid with the release calendar's tablet rules: tool tabs show the short names 新弾 / イベント / 話題,
-cells show one release name (`+N` for more), `● N` and `◆` without the word 話題; the three sections below the
-calendar stack in one column instead of three.
+A day number opens it, labelled by its date: that day's releases (cards as today), the topics active that day (cards
+with the version rule, links to `/voices/#t=`), and (M2) every event type with its count plus
+「イベントカレンダーでこの日を見る」 → the `/events/` day view for this game and location. No event rows.
 
 ### Game switcher
 
@@ -242,17 +195,14 @@ links every hub too, so crawlers and no-JS visitors reach them.
 | State | Behaviour |
 | --- | --- |
 | Built with `BUILD_EVENTS=0` (Pages host before cutover) | The hub honours `<!--EVENTS-->` like the other pages: no location control, no event counts or legend entry, no events section or dialog part, no `snLoc`, no `/api` call of any kind. |
-| Built with `VOICES_ENABLED` off | No `/api/v1/voices` request, no ◆ markers, no いま話題 section, no link to `/voices/`. |
-| No location saved | Same as `/events/`: ask `/api/v1/geo` (no D1) and preselect the guess, else show 「地域を選ぶと…のイベント数を表示します」 + 都道府県を選ぶ (`snLoc`). No events request until a location exists. The hub writes `pref` to `tcg.ev.filters` only when the player picks (as `/` does). |
-| Game without events (MTG, 遊戯王, デュエマ, release-only) | No location control, no event counts, no events section, no events request. 遊戯王 shows the KONAMI official search link-out from `ev-bushi-int` in place of the section. |
+| Built with `VOICES_ENABLED` off | No `/api/v1/voices` request, no topic bars, no いま話題 section, no link to `/voices/`. |
+| No location saved (Q3) | Ask `/api/v1/geo` (no D1) and preselect the guess, shown as 「📍東京都（推定） 変更」; its counts load. Saved to `tcg.ev.filters` `pref` only when the player picks in the shared picker (`snLoc`; picking the guessed one confirms it). No guess: 「📍地域を選ぶ」 and no events request. |
+| Game without events (MTG, 遊戯王, デュエマ, release-only) | No location control, no event counts, no events request. |
 | Game without releases in the data window | 発売予定 shows 「現在、発売予定の新弾は掲載していません」 + the latest past release (title-page rule today); the calendar opens on the current month. |
 | Releases only, nothing upcoming, no events | Still a hub (static releases + about), but see indexing (section 8). |
-| Topics loading / API error / malformed answer | Releases render at once and never wait; markers and いま話題 stay hidden (no error box: topics are extra). |
-| No topic for the game in the latest snapshot | いま話題 says 「最新のまとめ（M/D）に{short}の話題はありません」 + 話題カレンダーで見る; markers on past days stay. Hidden once the latest snapshot is > 7 days old, as the home block. |
-| Month outside the event window | Cells show no counts; a muted line 「イベント情報は M/D〜M/D」 from the `/days` response being empty and the data window in meta. |
-| Location with 0 events this month | Section shows 「東京都のポケカイベントは見つかりませんでした」 + オンライン を見る. |
-| Events API error (M2) | Releases and topics stay; events area shows 「イベント情報を読み込めませんでした」 + 再読み込み. |
-| 429 (`API_LIMIT`, 20 uncached requests / min per client) or 503 (`API_BREAKER`) | Not an error: reuse `/events/`' `busyText` / `errorState` busy branch (「アクセスが集中しています。N秒ほど待ってから…」, N from `Retry-After`, else 60), moved into the shared `src/evrow.html` include. |
+| Topics loading / API error / malformed answer | Releases render at once and never wait; bars and いま話題 stay hidden (no error box: topics are extra). |
+| No topic for the game in the latest snapshot | いま話題 says 「最新のまとめ（M/D）に{short}の話題はありません」 + 話題カレンダーで見る; bars of past topics stay. Hidden once the latest snapshot is > 7 days old (Tokyo date), as the home block. |
+| Events loading / API error / 429 / 503 / month outside the event window / no events | Cells show no counts; releases and topics unaffected; no error box (counts are extra). |
 
 Default month: the title-page rule (today's month; if the game has no release in it, the next month with one, else its
 latest), with the same note. Only releases count: the build cannot see topics or events.
@@ -271,68 +221,17 @@ The answer is shape-checked as on `/voices/`; the hub keeps the topics with its 
 `/voices/#t=<id>` (no post text, no X URL, not even `reacting_to`). Takedowns need nothing extra: a topic removed from
 D1 leaves every page with the next voices version.
 
-### Events (API, unchanged endpoints and parameters)
+### Events (M2: per-type counts, one request per shown month)
 
-Only with `BUILD_EVENTS=1`, an events game, and a location. Rows are rows stepped per uncached request, measured
-numbers from `api/README.md` › D1 budget (8 games, 東京都) and an estimate for 13 games (day_counts grows with the
-game masks); D1 may count index entries too, so the budget below doubles them.
-
-| Request | When | Cache key shared with | Uncached rows, 東京都 (8 games / 13 est.) |
-| --- | --- | --- | --- |
-| `/events/days?from=M-01&until=M+1-01&pref=P` (no `game`) | load, month change | `/events/` and `/` without a saved game / type filter | ≤ 636 / ≤ ~1,000 |
-| `/events?from=TODAY&until=M+1-01&game=G&pref=P&limit=50` | **lazily**: with a saved (confirmed) location, when 今週のイベント scrolls into view (IntersectionObserver) on desktop or is expanded on phones; with only an IP-guessed location, not until the visitor confirms it or expands the section by hand | `/events/` list and `/` with exactly this one game filtered | day lookup ≤ 636 + scan ≤ 200 + ~50 ≈ 890 / ≈ 1,250 |
-| + one `/events?from=M+1-01&…` | only when the week crosses the month end and page 1 did not reach day 7 | same | ≈ 890 / ≈ 1,250 |
-| `/events?from=D&until=M+1-01&game=G&pref=P` (+ at most 1 cursor page, then 「すべて見る」 → `/events/` day view) | day dialog | `/events/` day view with this game | ≈ 890 / ≈ 1,250 **per page**: a cursor page re-runs the day lookup (`matchingDaysSql` from the cursor day) before its scan, so page 2 costs about as much as page 1 |
-| `/events/meta` | location picker opens, freshness line | everyone | 1 |
-
-The cells take `by_game[G]` from the unfiltered `/days` answer. `game=G` would read the same day_counts rows (the
-index is by location and day) but would create 13× more cache keys and lose the sharing; switching games in the same
-month then needs **no** new `/days` request.
-
-**Key space** (per colo, per data version; every import bumps the version, so all keys start cold after an import;
-Japanese traffic lands on several colos, at least NRT and KIX, each with its own cache):
-
-| Key family | Keys |
-| --- | ---: |
-| `/days` (shared) | 48 locations × ≤ 3 months ≈ 144 |
-| week list (`from=TODAY`, renews daily) | 48 × 13 games ≈ 624 per day |
-| day dialog (`from=D`, ≤ 2 pages) | 48 × 13 × ~30 days × 2 ≈ 37,000 (≈ 75,000 at the 4 pages of the first draft) |
-
-The day-dialog family is far too large for the cache to bound reads (37k keys × even 200 rows × 2 ≈ 15M per colo),
-so the budget is governed by traffic and the guards below, not by key coverage.
-
-**All-miss cost per visit** (×2 index factor, 13 games, 東京都; a median prefecture is roughly a fifth):
-
-| Action | Rows |
-| --- | ---: |
-| Load (`/days`) | ≈ 2,000 |
-| 今週のイベント opened | + ≈ 2,500 |
-| Each day dialog page (first page, and again for the cursor page) | + ≈ 2,500 each |
-| Tokyo visitor: load + week + 2 days (first pages only) | ≈ 9,500; with both cursor pages ≈ 14,500 (median prefecture ≈ a fifth) |
-
-**Shared 5M rows/day.** The hub shares the Free-plan budget with `/events/` (one location now: an uncached 東京都
-day view ≈ 1,000 rows, api/README), `/` (2-3 requests per visit), the accounts API and import days: with 13 games
-the state read is ~102k rows per import (`api/README.md` on `ev-bushi-int`) plus one lookup per written row, and
-each `--plan` run reads the same again.
-Gate for M2: read the 7-day maximum of D1 rows read in the Cloudflare dashboard (the owner or the lead with the
-owner's access); ship only if that maximum + projected hub traffic × ~3,000 rows (all-miss, mixed prefectures)
-stays under 2.5M (half the limit); re-check daily for the first week.
-
-**Guards.**
-- No events request without a location; `/geo` costs no D1. Most crawlers render from outside Japan (`/geo` →
-  null) and have no saved location, so a rendered hub costs them 0 D1 rows. A crawler that does get a Japanese IP
-  guess triggers only the month `/days` request (the IP-guessed location drives `/days` alone): the week list waits
-  for a confirmed location or a manual expand, since a tall rendering viewport would fire the IntersectionObserver.
-- No static links with API-shaped parameters anywhere on a hub (section 10): crawlers never fan out over
-  `/events/?game=…&pref=…`.
-- 今週のイベント is lazy and needs a confirmed location; the day dialog reads at most 2 pages, then hands over to
-  `/events/`.
-- `API_LIMIT` (20 misses / min per client) and `API_BREAKER` (300 / min per location) stay as they are; a 429 is
-  shown as 「しばらくしてから再度お試しください」 (section 5).
-- Section 10 replaces the week request with 1 row once landing pages exist. Releases-only games: 0 API requests.
-
-`api/README.md` › D1 budget gets a **Game hub** paragraph with these numbers in M2 (CLAUDE.md: a new page request
-pattern changes the budget).
+Only with `BUILD_EVENTS=1`, an events game (registry `sources.events`) and a location (saved or IP-guessed):
+`GET /api/v1/events/days?from=M-01&until=M+1-01&game=G&pref=P`, the exact query `/events/` sends for its calendar
+with this one game selected (and `/` with that saved game filter), so it shares their browser and edge cache keys. The
+page reads `by_game_type[G]` per day (answers cached before `by_game_type` existed fall back to `by_game[G]` as a
+total). No `/events` row requests, no cursor pages, no `/events/meta`. Uncached cost: ≤ 887 rows (東京都, 13 games;
+`api/README.md` › D1 budget), a median prefecture about a fifth; months outside the data window answer empty without
+D1. Switching months asks once per month per visit (kept in memory). Crawlers outside Japan get no IP guess and send
+no events request. `api/README.md` › D1 budget has a **Game hub** paragraph. Gate before shipping M2: the 7-day
+maximum of D1 rows read (Cloudflare dashboard, owner) + projected hub visits × ~900 stays under 2.5M (half the limit).
 
 ## 7. Switching games
 
@@ -370,9 +269,10 @@ to what crawlers get without a second render path. Revisit only if switching pro
 
 ## 9. Accessibility
 
-- Each day number is a button and its own tab stop (simplified from a roving tabindex, M1); markers are not focusable.
-  Each day's accessible name says everything the markers show: 「12月6日(土) 発売1件・イベント42件・話題2件」.
-- Markers are `aria-hidden`; colour is never the only cue (■ / ● / ◆ shapes + the legend; counts as text on desktop).
+- Each day number is a button and its own tab stop (simplified from a roving tabindex, M1). Its accessible name says
+  what the day holds: 「12月6日(土) 発売1件・話題2件・イベント42件」. Topic bars are links (title, attitude and dates in
+  their name); counts are text.
+- Colour is never the only cue: bars carry the title and an attitude glyph, counts carry the type name.
 - Game-coloured text is mixed towards black / white for ≥ 4.5:1 in both themes (as `/voices/`); icons stay
   decorative (`gi()`).
 - Dialog: native `<dialog>` labelled by its date heading, Esc closes, focus returns to that day's button (also after
@@ -396,7 +296,7 @@ writes per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or
 - **Shared data.** Both key on the registry slug; the Worker renderer imports the same `data/games.json` (names,
   colours, icon). The importer that writes `landing_pages` uses registry `bit` / `slug`.
 - **Shared read.** A landing row already holds a location's upcoming events for one game. Once it exists, the hub's
-  今週のイベント can read it through a strict endpoint (`/api/v1/events/landing?game=G&pref=P`, exactly those two
+  day dialog could read upcoming rows through a strict endpoint (`/api/v1/events/landing?game=G&pref=P`, exactly those two
   params, same version-keyed edge cache): **1 row per miss instead of ≈ 890-1,250**. The row must then carry ≥ 7 days of
   events (or the first 50), which the event-build node should design for.
 - **Shared code.** The event row renderer is already shared: `src/evrow.html` (`<!--EVROW-->` slot, `window.snEv`) on
@@ -421,14 +321,14 @@ writes per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or
   `/api/v1/voices` and no `/voices/` link in hubs.
 
 `tools/verify/browser.mjs` (desktop 1280 and mobile 390, plus the 344-393 width sweep):
-- An events game with the dev mock API and a saved location: counts in cells match the mock `by_game`; at most 2
-  `/api` requests on load; day dialog lists events and paging stops at the day count.
-- A releases-only game (MTG): no `/api` request, no location control.
-- No location: `/geo` once, prompt when it returns null, no events request.
+- An events game with a stubbed `/days` and a saved location: cell and day-dialog counts match the stub; exactly the
+  `/events/` query; the day link opens the `/events/` day view.
+- A releases-only game (MTG): no events request, no location control.
+- No location: `/geo` once, 「（推定）」 label, nothing saved; no events request when it returns null.
 - Switching: the switcher dialog lists every hub as a link with the shown month; following it loads that hub on that
-  month. Topics: markers and day dialog match the served `/api/v1/voices` answer; an API failure leaves releases intact.
-- One tab stop per day; dialog focus return; no horizontal overflow at 344-393, 761-900 and 1280 widths.
-- 今週のイベント: no `/events` request before it is scrolled into view / expanded.
+  month. Topics: bars (lanes, dates) and the day dialog match the served `/api/v1/voices` answer; an API failure leaves
+  releases intact.
+- Dialog name and focus return; no horizontal overflow at 390 and 1366, light and dark.
 - A `BUILD_EVENTS=0` build: no `/api` request on any hub.
 - Redirects are not driven here (see above).
 
@@ -437,8 +337,8 @@ writes per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or
 | # | Ships | Visible change | Needs |
 | --- | --- | --- | --- |
 | M0 | Registry: `data/games.json` (13 events games, bits / sort from 0001 / 0005 / 0006), contract, build.py / Worker / importers / page scripts read it; migration test | None (the HOCG chip was settled on `main`; section 2); the gate diffs dist against the previous build | Done on `feat/game-hub` |
-| M1 | Hub mode of the release app for the 10 existing slugs: releases (static) + topics (`/api/v1/voices`), day dialog, いま話題, switcher, `/<code>/` redirects, gates; titles / h1 / ItemList unchanged | Title pages get the hub body (no events yet) | Owner OK on Q1 (given); redirect check on the preview URL |
-| M2 | Events layer: location, `/days` counts, lazy 今週のイベント, day events (`src/evrow.html`); D1 budget paragraph | Event counts on the 6 event-game hubs of `main` (OPCG, UATCG, PTCG, GCG, DBFW, DCG), plus WS once its Bushi Navi data is imported | M2 D1 gate (section 6) |
+| M1 | Hub mode of the release app for the 10 existing slugs: releases (static) + topic timeline bars (`/api/v1/voices`), day dialog, いま話題, switcher, `/<code>/` redirects, gates; titles / h1 / ItemList unchanged | Title pages get the hub body (no events yet) | Owner OK on Q1 (given); redirect check on the preview URL |
+| M2 | Per-type event counts: location (saved or IP guess, Q3), one `/events/days` per shown month, counts in cells and the day dialog, link to the `/events/` day view; D1 budget paragraph | Counts on the event-game hubs (OPCG, UATCG, PTCG, GCG, DBFW, DCG, WS) | M2 D1 gate (section 6) |
 | M3 | Hubs beyond the 10: CONAN, BS, VG, SVE, HOCG, LLOCG; og images; thin-page rule (two stateless thresholds) | New URLs in the sitemap | Explicit owner answer to Q2 and the CLAUDE.md line "Only the 10 main titles get landing pages for now" updated in the same PR; Bushi Navi games imported |
 | M4 | Landing-page links both ways (static 都道府県 row); week block from the landing row | 都道府県 links to `/events/<slug>/<pref>/` | event-build (migration 0007) live |
 | M5 | Retitle hubs to 発売日・イベント・話題カレンダー (title, description, h1) | Search snippets | Owner OK; Search Console watched before and after |
