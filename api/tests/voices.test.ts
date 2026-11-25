@@ -7,7 +7,7 @@ import worker from '../src/index';
 import { REPO_DIR } from '../scripts/lib/importer.mjs';
 import {
   checkSnapshot, checkTimeline, hashOf, bodyOf, loadVoices, planVoices, removeTopics, voicesState, redact, todayJst,
-  VOICES_STATE_SQL, DEFAULT_VOICES_DIR,
+  VOICES_STATE_SQL,
 } from '../scripts/lib/voices.mjs';
 import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 import { importDir, run, synthetic, writeDataDir } from './helpers';
@@ -24,7 +24,7 @@ const snap = (over: Record<string, unknown> = {}, topics: Record<string, unknown
 const check = (s: unknown, name = '2026-11-20.json') => checkSnapshot(name, JSON.stringify(s, null, 2), { today: TODAY });
 const API_DIR = join(REPO_DIR, 'api');
 
-/** Fixed fixture snapshots (not data/voices/, which keeps changing): 11-20 with two topics, 11-21 continuing one. */
+/** Fixed fixture snapshots: 11-20 with two topics, 11-21 continuing one. */
 const FIXTURES = [
   snap({}, [topic(), topic({ id: 'ptcg-fixture', game: 'PTCG', status: 'new', reacting_to: 'https://x.com/pokemon_cojp/status/123' })]),
   snap({ date: '2026-11-21', window: { from: '2026-11-19', to: '2026-11-21' } }, [topic({ status: 'continuing', window: { from: '2026-11-19', to: '2026-11-21' } })]),
@@ -37,11 +37,17 @@ function fixtureDir(list: Record<string, any>[] = FIXTURES) {
 const served = (list: Record<string, any>[] = FIXTURES) => list.map((s) => ({ date: s.date, window: s.window, topics: s.topics }));
 
 describe('voices validation (contracts/voices.md rules)', () => {
-  it('accepts the committed snapshots and keeps only date, window and topics', () => {
-    // the live files against the real date: only "not after today" depends on it
-    const r = loadVoices(DEFAULT_VOICES_DIR, { today: todayJst() });
+  it('accepts the gate fixtures once their sample flag is dropped, and keeps only date, window and topics', () => {
+    // tools/verify/fixtures/voices/: the real snapshots live only in D1 and the owner's local copy, never in the repo
+    const src = join(REPO_DIR, 'tools', 'verify', 'fixtures', 'voices');
+    const files = readdirSync(src).filter((f) => f.endsWith('.json'));
+    expect(files.length).toBeGreaterThan(1);
+    const raw = files.map((f) => JSON.parse(readFileSync(join(src, f), 'utf8')));
+    expect(raw.every((s) => s.sample === true)).toBe(true);
+    expect(loadVoices(src, { today: '2026-12-31' }).snapshots.size).toBe(0);
+    const r = loadVoices(fixtureDir(raw.map(({ sample, ...s }) => s)), { today: '2026-12-31' });
     expect(r.errors).toEqual([]);
-    expect(r.snapshots.size).toBe(readdirSync(DEFAULT_VOICES_DIR).filter((f) => f.endsWith('.json')).length);
+    expect(r.snapshots.size).toBe(files.length);
     for (const s of r.snapshots.values()) expect(Object.keys(s)).toEqual(['date', 'window', 'topics']);
     expect(checkTimeline(r.snapshots.values()).errors).toEqual([]);
   });

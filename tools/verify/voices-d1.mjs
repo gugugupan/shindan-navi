@@ -1,12 +1,13 @@
 // /voices/ and the home page's いま話題 against the real Worker code (docs/design/voices-db.md). Seeds a throwaway SQLite
-// database from data/voices/ with the real importer, serves dist/ and the API with api/scripts/dev-node.mjs, and drives
-// both pages in headless Chrome at desktop and mobile widths. (tools/verify/browser.mjs covers the page's interactions
-// with the API answer served from data/voices/.)
+// database with the real importer from the made-up gate snapshots (tools/verify/voices-fixtures.mjs, the last one on
+// --today; never the owner's data), serves dist/ and the API with api/scripts/dev-node.mjs, and drives both pages in
+// headless Chrome at desktop and mobile widths. (tools/verify/browser.mjs covers the page's interactions with the
+// same snapshots served by its own server.)
 //
 //   VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --today YYYY-MM-DD   # builds dist/
 //   node tools/verify/voices-d1.mjs --today YYYY-MM-DD [--out .verify]                  # needs api/node_modules
 //
-// Checks: the API answers data/voices/; one /api/v1/voices request; list sections and cards, この日のまとめ → /voices/#d=,
+// Checks: the API answers the imported snapshots; one /api/v1/voices request; list sections and cards, この日のまとめ → /voices/#d=,
 // the calendar, #t= deep links, loading and error states (an HTTP error, a malformed answer) with 再読み込み; the home
 // block makes one /api/v1/voices/latest request and lists that snapshot's topics.
 import { chromium } from 'playwright-core';
@@ -14,6 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { snapshots as voiceSnapshots, writeSnapshots } from './voices-fixtures.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const API = path.join(ROOT, 'api');
@@ -32,7 +34,9 @@ if (!fs.existsSync(page0)) {
 fs.mkdirSync(OUT, { recursive: true });
 const db = path.join(OUT, 'voices-d1.sqlite3');
 for (const f of [db, `${db}-wal`, `${db}-shm`]) fs.rmSync(f, { force: true });
-const imp = spawnSync(process.execPath, ['scripts/import-voices.mjs', '--target', 'sqlite', '--sqlite', db, '--yes'], { cwd: API, encoding: 'utf8' });
+const dataDir = path.join(OUT, 'voices-d1-data');
+writeSnapshots(dataDir, TODAY);
+const imp = spawnSync(process.execPath, ['scripts/import-voices.mjs', '--data', dataDir, '--target', 'sqlite', '--sqlite', db, '--yes'], { cwd: API, encoding: 'utf8' });
 process.stdout.write(imp.stdout);
 if (imp.status !== 0) { console.error(imp.stderr); process.exit(1); }
 
@@ -43,11 +47,10 @@ await new Promise((ok, no) => {
 });
 
 const want = await (await fetch(`${BASE}/api/v1/voices`)).json();
-const files = fs.readdirSync(path.join(ROOT, 'data/voices')).filter((f) => f.endsWith('.json')).sort()
-  .map((f) => JSON.parse(fs.readFileSync(path.join(ROOT, 'data/voices', f), 'utf8'))).filter((s) => !s.sample && s.topics.length);
+const files = voiceSnapshots(TODAY);
 const fails = [];
 const fail = (where, msg) => fails.push(`${where}: ${msg}`);
-if (JSON.stringify(want.snapshots) !== JSON.stringify(files.map((s) => ({ date: s.date, window: s.window, topics: s.topics })))) fail('api', '/api/v1/voices differs from data/voices');
+if (JSON.stringify(want.snapshots) !== JSON.stringify(files.map((s) => ({ date: s.date, window: s.window, topics: s.topics })))) fail('api', '/api/v1/voices differs from the imported snapshots');
 
 const VIEWPORTS = { desktop: { width: 1280, height: 900 }, mobile: { width: 390, height: 844, isMobile: true, hasTouch: true } };
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });

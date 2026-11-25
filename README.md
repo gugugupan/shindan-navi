@@ -75,7 +75,7 @@ Repo secrets and variables:
 - `CLOUDFLARE_ACCOUNT_ID`.
 - `D1_DATABASE_ID` — id of the `shindan-navi-events` D1 database. Never commit it.
 - Variable `LIVE_HOST` — see above.
-- Variable `VOICES_ENABLED` (`1` = build the 話題カレンダー `/voices/`, its tool tab, the home いま話題 and the privacy section; Worker build only, the data comes from D1 via `api/scripts/import-voices.mjs`, docs/design/voices-db.md). Set `PRIVACY_EFFECTIVE_VOICES` in build.py to the go-live day first.
+- Variable `VOICES_ENABLED` (`1` = build the 話題カレンダー `/voices/`, its tool tab, the home いま話題 and the privacy section; Worker build only, the data comes from D1 via `api/scripts/import-voices.mjs` from local snapshot files that are never committed, docs/design/voices-db.md). Set `PRIVACY_EFFECTIVE_VOICES` in build.py to the go-live day first.
 - Variables `FEEDBACK_ENABLED` (`1` = build `/feedback/` and its links, add the send_email binding) and
   `TURNSTILE_SITE_KEY` (public widget key) — set only after the steps in `api/README.md` › Feedback › Owner setup.
 

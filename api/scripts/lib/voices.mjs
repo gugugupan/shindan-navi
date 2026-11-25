@@ -1,4 +1,4 @@
-// 話題カレンダー snapshots → D1 (docs/design/voices-db.md). Reads data/voices/<date>.json, validates them against
+// 話題カレンダー snapshots → D1 (docs/design/voices-db.md). Reads <date>.json files (local only), validates them against
 // contracts/voices.md (plus contracts/voices.schema.json and checks across snapshots), and turns the difference against
 // the database's voice_snapshots rows into SQL.
 import { createHash } from 'node:crypto';

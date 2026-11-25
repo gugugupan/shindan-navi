@@ -54,7 +54,7 @@
                 }
               ]
             },
-            "voices": { "type": "boolean", "description": "Topics (data/voices/) may use this code." }
+            "voices": { "type": "boolean", "description": "Topics (contracts/voices.md) may use this code." }
           }
         }
       }

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Import 話題カレンダー snapshots (data/voices/<date>.json) into D1 (docs/design/voices-db.md).
+// Import 話題カレンダー snapshots (<date>.json in --data) into D1 (docs/design/voices-db.md). The snapshots live only in D1;
+// the files are the importer's local input and backup, never committed (default data/voices/, git-ignored; the owner
+// keeps the copy in .shindan-data/voices/ next to the checkout and passes it with --data).
 //
 //   node scripts/import-voices.mjs [--data DIR] [--target sqlite|wrangler|remote] [--plan | --yes] [--prune]
 //   node scripts/import-voices.mjs --remove-topic ID[,ID…] | --remove-snapshot DATE[,DATE…]  [--target …] [--plan | --yes]
@@ -9,7 +11,7 @@
 // Nothing is written without --yes (--plan says so explicitly and cannot be combined with it). A local file with
 // topics [] deletes its date; a date in D1 without any local file is kept unless --prune.
 // Takedowns start from the rows in D1, remove the topic (from every date that lists it) or the whole date, and with
-// --yes write D1 and then apply the same removal to every file in --data that holds it (commit them). A file the
+// --yes write D1 and then apply the same removal to every file in --data that holds it. A file the
 // removal cannot clean (unreadable, or still naming the id) stops the run before anything is written.
 //
 // sqlite:   node:sqlite file of the Node dev server (api/.local/events.sqlite3). --yes first applies api/migrations/
@@ -257,6 +259,6 @@ sqliteDb?.close();
 // Check the result: no file in --data may still hold what was removed.
 if (takedown) {
   const left = readdirSync(dataDir).filter((x) => x.endsWith('.json')).filter((f) => holds(f, readFileSync(join(dataDir, f), 'utf8')).length);
-  if (left.length) fail(`takedown incomplete: ${left.join(', ')} in ${dataDir} still hold ${[...dropIds, ...dropDates].join(', ')}; fix by hand before committing`);
+  if (left.length) fail(`takedown incomplete: ${left.join(', ')} in ${dataDir} still hold ${[...dropIds, ...dropDates].join(', ')}; fix them by hand`);
 }
-if (fileEdits.length) console.log(`import-voices: ${fileEdits.length} local file(s) changed; review and commit them`);
+if (fileEdits.length) console.log(`import-voices: ${fileEdits.length} local file(s) changed in ${dataDir}`);

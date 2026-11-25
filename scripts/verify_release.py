@@ -328,10 +328,7 @@ def check_voices():
     # the /voices/<date>/ pages are gone (404): nothing may link them
     for x in pages:
         if re.search(r'href="/voices/\d', open(x).read()): fail(f'{os.path.relpath(x, DIST)}: links a removed /voices/<date>/ page')
-    # topic text is fetched; the committed snapshots must not leak into the HTML, nor any X URL (official posts included)
-    texts = [t[k] for x in glob.glob(os.path.join(ROOT, 'data/voices/*.json')) for t in json.load(open(x))['topics'] for k in ('title', 'summary')]
-    leaked = [t for t in texts if t in src or html.escape(t) in src]
-    if leaked: fail(f'/voices/: topic text in the built HTML: {leaked[:2]}')
+    # topic text is fetched (the build reads no snapshot: they live only in D1); no X URL either (official posts included)
     if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail('/voices/: X URL in the built HTML')
     # owner decision 2026-11-20: no topic links to the players who posted
     if 'data-x="post"' in src or '関連する投稿' in src: fail('/voices/: the page script links players\' posts')

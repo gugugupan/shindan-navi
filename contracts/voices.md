@@ -1,19 +1,23 @@
 # 話題カレンダー contract (`/voices/`)
 
-What TCG players on X talk about, per game, as a calendar. The snapshots are committed as files, imported into D1 by
-`api/scripts/import-voices.mjs` and served by the Worker (`GET /api/v1/voices`, `/api/v1/voices/latest`;
+What TCG players on X talk about, per game, as a calendar. The snapshots live only in D1 (owner decision 2026-11-25):
+written as local files, imported by `api/scripts/import-voices.mjs` and served by the Worker (`GET /api/v1/voices`, `/api/v1/voices/latest`;
 docs/design/voices-db.md); `/voices/` and the home page's いま話題 fetch them in the browser. The page is built only with
 `VOICES_ENABLED=1` on the Worker build (off by default and always off with `BUILD_EVENTS=0`: no page, no tool tab, no
 privacy section, no link anywhere).
 
-## Files (`data/voices/`, committed)
+## Files (local only, never committed)
 
 ```
-data/voices/<YYYY-MM-DD>.json   one snapshot (voices.schema.json); the name is its date
+<dir>/<YYYY-MM-DD>.json   one snapshot (voices.schema.json); the name is its date
 ```
 
-The files are the importer's input and the backup of what D1 holds; nothing reads them at build time except
-`scripts/fonts.py` (glyphs for the `/voices/` font faces).
+The files are the importer's input and the local backup of what D1 holds. They are **not in git** (owner decision
+2026-11-25; `/data/voices` is git-ignored, like `/data/events`): the importer reads `--data <dir>` (default
+`data/voices/` of the checkout), and the owner keeps the copy in `.shindan-data/voices/`, next to the repo checkouts
+in the workspace, passing it with `--data`. Nothing reads them at build time or in CI; the gates and tests use the
+made-up snapshots in `tools/verify/fixtures/voices/` (`sample: true`). The snapshots up to 2026-11-23 were committed
+before this decision and stay in Git history (not rewritten).
 
 - `date` = the snapshot date in Asia/Tokyo = `window.to` = the file name. A snapshot covers the posts of a ~3-day window
   ending on that day (`window` dates are inclusive).
@@ -92,8 +96,8 @@ a new game.
 Snapshot files are never renamed. A topic, or a whole snapshot, may be removed on a takedown / deletion request (the
 privacy page promises deletion): `cd api && D1_DATABASE_ID=… npm run import:voices -- --remove-topic ID --target remote`
 (or `--remove-snapshot DATE`) shows the plan, and the same command with `--yes` removes it from D1 (every date that
-lists the id; a date left without topics is deleted) and from the local files, which are then committed (operations:
-docs/design/voices-db.md). Search caches and archives may lag, as the privacy page says.
+lists the id; a date left without topics is deleted) and from the local files in `--data` (pass the owner's copy;
+operations: docs/design/voices-db.md). Snapshots committed before 2026-11-25 stay in Git history. Search caches and archives may lag, as the privacy page says.
 
 ## Checks
 
@@ -104,4 +108,5 @@ string; more than 3 voices; `share` all zero; missing or extra fields (also `con
 today (JST). Across snapshots an id keeps its `game` and `first_seen`, and `new` is only its first appearance.
 `verify_release.py` checks that the built `/voices/` embeds no snapshot, topic text or X URL and is in the sitemap;
 `tools/verify/voices-d1.mjs` runs the page and the home block against the importer and the Worker code, and
-`tools/verify/browser.mjs` drives the page with the API answer served from `data/voices/`.
+`tools/verify/browser.mjs` drives the page with the API answer served by its own server, both from the fixtures in
+`tools/verify/fixtures/voices/` (dates moved so the last snapshot is `--today`).

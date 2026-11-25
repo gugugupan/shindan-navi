@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "date": "2026-01-07",
+  "window": {
+    "from": "2026-01-05",
+    "to": "2026-01-07"
+  },
+  "sample": true,
+  "note": "Made-up gate fixture (tools/verify/voices-fixtures.mjs): no real posts or topics. sample: true keeps the importer from ever loading it; the gates drop the flag and move the dates so the last snapshot is --today.",
+  "topics": [
+    {
+      "id": "opcg-fixture-reprint",
+      "game": "OPCG",
+      "title": "（検証用）再録カードの発表",
+      "summary": "架空の再録カードが発表され、入手しやすくなると歓迎する声が多い。",
+      "attitude": "positive",
+      "share": {
+        "positive": 6,
+        "negative": 1,
+        "neutral": 1
+      },
+      "volume": "high",
+      "voices": [
+        "入手しやすくなってうれしいという声",
+        "再録の枚数が足りるか心配する声"
+      ],
+      "reacting_to": "https://x.com/fixture_tcg/status/1000000000000000001",
+      "window": {
+        "from": "2026-01-05",
+        "to": "2026-01-07"
+      },
+      "first_seen": "2026-01-05",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "ptcg-fixture-deck-price",
+      "game": "PTCG",
+      "title": "（検証用）構築済みデッキの価格",
+      "summary": "架空の構築済みデッキの価格が高いという声が続いている。中身に見合うという意見もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 1,
+        "negative": 5,
+        "neutral": 2
+      },
+      "volume": "mid",
+      "voices": [
+        "もう少し安くしてほしいという声",
+        "収録内容を考えれば妥当だという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-05",
+        "to": "2026-01-07"
+      },
+      "first_seen": "2026-01-06",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-fixture-league",
+      "game": "DM",
+      "title": "（検証用）店舗大会の参加者",
+      "summary": "架空の店舗大会の参加者数について、意見が分かれている。",
+      "attitude": "mixed",
+      "share": {
+        "positive": 1,
+        "negative": 1,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "参加しやすくなったという声",
+        "席が足りないという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-05",
+        "to": "2026-01-07"
+      },
+      "first_seen": "2026-01-07",
+      "status": "new",
+      "source": "grok-app"
+    }
+  ]
+}

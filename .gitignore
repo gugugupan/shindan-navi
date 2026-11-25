@@ -9,6 +9,8 @@ out/
 wrangler.remote.json
 # Collected event data is local only and reaches D1 through api/scripts/import-events.mjs; never commit it.
 /data/events
+# 話題カレンダー snapshots live only in D1; the files are the importer's local input and backup (contracts/voices.md).
+/data/voices
 .verify/
 node_modules/
 # Release collector output is an intermediate, rebuilt by the collectors on every update; never commit it.

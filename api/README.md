@@ -329,8 +329,9 @@ says so. Its state read adds the landing window's events (~23k rows with 13 game
 missing once a day in every colo (624 × ~300 ≈ 187k reads), crawlers in a few colos make it < 5k. Every landing
 request, hit or miss, is a Worker invocation (Free: 100k/day).
 
-**Voices** (`import-voices.mjs`, migration `migrations/0008_voices.sql`, docs/design/voices-db.md): one
-`voice_snapshots` row per date, so an import writes ~2 rows per new or changed date + 1 version row (a takedown: the
+**Voices** (`import-voices.mjs`, migration `migrations/0008_voices.sql`, docs/design/voices-db.md): the snapshots live
+only in D1, imported from local files that are never committed (`--data`, default the git-ignored `../data/voices/`;
+the owner passes their copy). One `voice_snapshots` row per date, so an import writes ~2 rows per new or changed date + 1 version row (a takedown: the
 dates it rewrites or deletes + 1); its plan reads every row once. `/api/v1/voices*` is cached like the events
 endpoints under its own version (`voice_meta`), so a miss happens once per colo and import; each `/voices/` view and
 each home view with いま話題 is still a Worker request (Workers Free: 100,000 a day).
