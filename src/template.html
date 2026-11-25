@@ -336,9 +336,18 @@ tbody tr.starred td.nm{font-weight:700}
 .swlist a[aria-current]{border-color:var(--ink);background:var(--surface-2)}
 .dn button.n{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer}
 .dn button.n:hover{box-shadow:inset 0 0 0 1px var(--accent)}
-.tmk{align-self:flex-start;max-width:100%;border:0;border-radius:6px;padding:2px 7px;background:var(--gtint);color:var(--gt);font:inherit;font-size:12px;font-weight:700;line-height:1.5;white-space:nowrap;cursor:pointer}
-.day.slim .tmk{align-self:center;padding:2px 4px}
-.tmk:hover{box-shadow:inset 0 0 0 1px var(--g)}
+.day,.dow{grid-row:var(--r)}
+/* topic bars over their days (as /voices/ with one game): lane l sits at 40px + l*26px from the top of its week */
+.tbar{position:relative;z-index:1;align-self:start;min-width:0;height:22px;margin:calc(40px + var(--l) * 26px) 5px 0;display:flex;align-items:center;gap:5px;padding:0 8px 0 6px;border-left:3px solid var(--g);border-radius:6px;background:var(--gtint);font-size:12px;line-height:1;color:var(--ink);white-space:nowrap;overflow:hidden;text-decoration:none}
+.tbar:hover{box-shadow:inset 0 0 0 1px var(--g)}
+.tbar.cl{margin-left:0;border-radius:0 6px 6px 0;border-left-style:dotted}
+.tbar.cr{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.tbar b,.tlr b{flex:none;color:var(--gt)}
+.tbar .tt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.tlanes{flex:none;display:block}
+.tmore{align-self:flex-start;border:0;background:none;padding:0;font:inherit;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer}
+/* phones: the month's topics as a compact timeline above the day list */
+.tline{display:none}
 .tps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
 .tp{border-left:3px solid var(--g);padding:1px 0 1px 10px;min-width:0}
 .tp a{font-weight:700;font-size:14px;color:var(--ink);text-decoration:none}
@@ -426,6 +435,13 @@ tbody tr.starred td.nm{font-weight:700}
 
   .cal{display:none}
   .agenda{display:flex;gap:10px}
+  .tline{display:grid;gap:8px;margin-top:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+  .tline h3{margin:0;font-size:12px;font-weight:700;color:var(--muted)}
+  .tlr{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:3px 8px;color:var(--ink);text-decoration:none;font-size:13px}
+  .tlr .tt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+  .tlr .td{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .tlr .tk{grid-column:1/-1;position:relative;height:6px;border-radius:3px;background:var(--surface-2)}
+  .tlr .tk i{position:absolute;top:0;bottom:0;border-radius:3px;background:var(--g)}
   .ag{scroll-margin-top:76px;display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;padding:10px 10px 10px 8px;border-radius:12px}
   .ag h3{flex-direction:column;align-items:center;gap:2px;margin:0;font-size:22px;line-height:1;position:sticky;top:64px;align-self:start}
   .ag h3 .dw{font-family:var(--body);font-size:12px;font-weight:700;color:var(--muted)}
@@ -528,6 +544,7 @@ tbody tr.starred td.nm{font-weight:700}
   <p class="mnote" id="nextnote" hidden></p>
   <div id="calView">
     <div class="cal" id="cal"></div>
+    <div class="tline" id="tline" hidden></div>
     <div class="agenda" id="agenda"></div>
   </div>
   <div id="tblView" hidden>
@@ -709,37 +726,55 @@ function renderCal(list){
   const slim=w=>busy.size>0 && !busy.has(w);
   const calEl=document.getElementById('cal');
   calEl.style.gridTemplateColumns=[0,1,2,3,4,5,6].map(w=>slim(w)?'46px':'minmax(0,1fr)').join(' ');
-  let h=DOW.map((w,i)=>`<div class="dow ${i==0?'sun':i==6?'sat':''}${slim(i)?' slim':''}${todayInView&&i===todayDow?' now':''}">${w}</div>`).join('');
+  let h=DOW.map((w,i)=>`<div class="dow ${i==0?'sun':i==6?'sat':''}${slim(i)?' slim':''}${todayInView&&i===todayDow?' now':''}" style="--r:1">${w}</div>`).join('');
+  // hub: each topic as bars over its days, cut per week, at most MAX_LANES lanes a week (the rest counted per day)
+  const lanes={}, hidden={};
+  for(let wk=0;wk<weeks;wk++){
+    const ws=addDay(keyOf(start),wk*7), we=addDay(ws,6);
+    const segs=TOPICS.filter(x=>x.first<=we&&x.last>=ws).sort((a,b)=>a.first.localeCompare(b.first)||b.last.localeCompare(a.last))
+      .map(x=>({x, s:x.first>ws?x.first:ws, e:x.last<we?x.last:we}));
+    const end=[];
+    segs.forEach(sg=>{
+      let l=end.findIndex(e=>e<sg.s); if(l<0){ l=end.length; end.push(''); }
+      end[l]=sg.e; sg.lane=l;
+      if(l>=MAX_LANES) for(let k=sg.s;k<=sg.e;k=addDay(k,1)) hidden[k]=(hidden[k]||0)+1;
+    });
+    lanes[wk]=Math.min(end.length,MAX_LANES);
+    segs.filter(sg=>sg.lane<MAX_LANES).forEach(sg=>{
+      const x=sg.x, t=versionOn(x,sg.s).t, c0=dnum(sg.s)-dnum(ws)+1, c1=dnum(sg.e)-dnum(ws)+2;
+      h+=`<a class="tbar${x.first<ws?' cl':''}${x.last>we?' cr':''}" data-topic="${esc(x.id)}" data-s="${sg.s}" data-e="${sg.e}" href="${VT_PAGE}#t=${encodeURIComponent(x.id)}" style="${hubVars};--r:${wk+2};--l:${sg.lane};grid-row:${wk+2};grid-column:${c0}/${c1}" aria-label="${esc(`話題：${t.title}（${ATT[t.attitude]||''}・${fmtDate(x.first,false)}〜${fmtDate(x.last,false)}）`)}"><b aria-hidden="true">${ATT_M[t.attitude]||'・'}</b><span class="tt">${esc(t.title)}</span></a>`;
+    });
+  }
   for(let i=0;i<weeks*7;i++){
     const dt=new Date(start); dt.setDate(start.getDate()+i);
     const key=keyOf(dt), w=dt.getDay(), items=byDate[key]||[];
     const cls=['day']; if(dt.getMonth()!==m-1) cls.push('out'); if(key===TODAY) cls.push('today'); else if(key<TODAY) cls.push('past');
     if(slim(w)) cls.push('slim'); if(w===6) cls.push('lastcol');
     const badge=key===TODAY?`<span class="tbadge">TODAY</span>`:'';
-    const tps=topicsOn(key).length;
-    const n=HUB?`<button class="n" data-open-day="${key}" aria-label="${dayLabel(key,items.length,tps)}">${dt.getDate()}</button>`:`<span class="n">${dt.getDate()}</span>`;
-    const tm=tps?`<span class="tmk" style="${hubVars}" data-open-day="${key}" aria-hidden="true">◆${slim(w)?'':` 話題 ${tps}`}</span>`:'';
-    if(slim(w)){ h+=`<div class="${cls.join(' ')}"><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}</div>${tm}</div>`; continue; }
+    const wk=Math.floor(i/7), pos=`style="--r:${wk+2};grid-column:${w+1}"`;
+    const n=HUB?`<button class="n" data-open-day="${key}" aria-label="${dayLabel(key,items.length,topicsOn(key).length)}">${dt.getDate()}</button>`:`<span class="n">${dt.getDate()}</span>`;
+    if(slim(w)){ h+=`<div class="${cls.join(' ')}" ${pos}><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}</div></div>`; continue; }
+    const tl=lanes[wk]?`<span class="tlanes" style="height:${lanes[wk]*26-4}px"></span>`:'';
+    const tm=hidden[key]?`<button class="tmore" data-open-day="${key}" tabindex="-1">ほか${hidden[key]}件の話題</button>`:'';
     const shown=items.slice(0,PER_DAY);
-    h+=`<div class="${cls.join(' ')}"><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}${items.length?`<span class="c">${items.length}件</span>`:''}</div>${tm}${shown.map(pkBtn).join('')}${items.length>PER_DAY?`<button class="more" data-day="${key}">+${items.length-PER_DAY}件をすべて表示</button>`:''}</div>`;
+    h+=`<div class="${cls.join(' ')}" ${pos}><div class="dn ${w==0?'sun':w==6?'sat':''}">${n}${badge}${items.length?`<span class="c">${items.length}件</span>`:''}</div>${tl}${tm}${shown.map(pkBtn).join('')}${items.length>PER_DAY?`<button class="more" data-day="${key}">+${items.length-PER_DAY}件をすべて表示</button>`:''}</div>`;
   }
   calEl.innerHTML=h;
 
   const inMonth=list.filter(d=>d.date.startsWith(state.month));
-  // hub: days with topics are listed too, and never folded away with the past days
-  const tpDays=new Set(monthDays(state.month).filter(k=>topicsOn(k).length));
-  const days=[...new Set([...inMonth.map(d=>d.date),...tpDays])].sort();
+  renderTimeline();
+  const days=[...new Set(inMonth.map(d=>d.date))].sort();
   let ag='', lineDone=!TODAY.startsWith(state.month);
-  const pastDays=days.filter(k=>k<TODAY&&!tpDays.has(k));
+  const pastDays=days.filter(k=>k<TODAY);
   if(pastDays.length && !state.showPast && days.some(k=>k>=TODAY))
     ag+=`<button class="pastbtn" id="showPast">過去の発売日（${pastDays.length}日分）を表示</button>`;
   days.forEach(k=>{
-    if(k<TODAY && !tpDays.has(k) && !state.showPast && days.some(x=>x>=TODAY)) return;
+    if(k<TODAY && !state.showPast && days.some(x=>x>=TODAY)) return;
     if(!lineDone && k>TODAY){ ag+=`<div class="todayline"><span>今日 ${fmtDate(TODAY,false)}</span></div>`; lineDone=true; }
     if(k===TODAY) lineDone=true;
     const its=inMonth.filter(d=>d.date===k).sort(starFirst);
     const [,,dd]=k.split('-').map(Number), w=new Date(k+'T00:00').getDay();
-    ag+=`<section data-day="${k}" class="ag${k===TODAY?' today':k<TODAY?' past':''}"><h3>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${its.length?`<span class="ct">${its.length}件</span>`:''}${its.length>Math.max(DAY_PEEK,its.filter(isStar).length)&&state.openDays.has(k)?`<button class="daytoggle mini" data-day="${k}" aria-expanded="true">閉じる</button>`:''}</h3><div class="list">${tpDays.has(k)?`<button class="tmk" style="${hubVars}" data-open-day="${k}">◆ 話題 ${topicsOn(k).length}件</button>`:''}${dayList(k,its)}</div></section>`;
+    ag+=`<section data-day="${k}" class="ag${k===TODAY?' today':k<TODAY?' past':''}"><h3>${dd}<span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}曜</span>${k===TODAY?'<span class="tbadge">TODAY</span>':''}${its.length?`<span class="ct">${its.length}件</span>`:''}${its.length>Math.max(DAY_PEEK,its.filter(isStar).length)&&state.openDays.has(k)?`<button class="daytoggle mini" data-day="${k}" aria-expanded="true">閉じる</button>`:''}</h3><div class="list">${dayList(k,its)}</div></section>`;
   });
   if(!lineDone) ag+=`<div class="todayline"><span>今日 ${fmtDate(TODAY,false)}</span></div>`;
   document.getElementById('agenda').innerHTML = days.length ? ag : `<div class="empty">この月に該当する発売予定はありません</div>`;
@@ -1020,6 +1055,21 @@ const dnum = s => { const [y,m,d]=s.split('-').map(Number); return Date.UTC(y,m-
 const dayLabel = (k,n,t) => { const [,m,d]=k.split('-').map(Number); return `${m}月${d}日(${DOW[new Date(k+'T00:00').getDay()]})`+(n?` 発売${n}件`:'')+(t?`・話題${t}件`:''); };
 // assembled, so builds without 話題 carry no link to the page, not even in this script
 const VT_PAGE = '/'+'voices/';
+const ATT_M = {positive:'＋', negative:'－', mixed:'±', neutral:'・'};
+const MAX_LANES = 4;
+const addDay = (k,n) => { const [y,m,d]=k.split('-').map(Number); return keyOf(new Date(y,m-1,d+n)); };
+// phones: the month's topics, one row each with its days on a month track (the calendar grid is hidden there)
+function renderTimeline(){
+  const el=document.getElementById('tline'), ds=monthDays(state.month), a=ds[0], z=ds[ds.length-1];
+  const xs=TOPICS.filter(x=>x.first<=z&&x.last>=a).sort((p,q)=>p.first.localeCompare(q.first));
+  el.hidden=!xs.length; if(!xs.length){ el.innerHTML=''; return; }
+  el.setAttribute('style',hubVars);
+  el.innerHTML=`<h3>この月の話題</h3>`+xs.map(x=>{
+    const t=versionOn(x,x.first<a?a:x.first).t, s=x.first<a?a:x.first, e=x.last>z?z:x.last;
+    const l=(dnum(s)-dnum(a))/ds.length*100, w=(dnum(e)-dnum(s)+1)/ds.length*100;
+    return `<a class="tlr" href="${VT_PAGE}#t=${encodeURIComponent(x.id)}" data-topic="${esc(x.id)}" aria-label="${esc(`話題：${t.title}（${ATT[t.attitude]||''}・${fmtDate(x.first,false)}〜${fmtDate(x.last,false)}）`)}"><span class="tt"><b aria-hidden="true">${ATT_M[t.attitude]||'・'}</b> ${esc(t.title)}</span><span class="td" aria-hidden="true">${fmtDate(x.first,false)}〜${fmtDate(x.last,false)}</span><span class="tk" aria-hidden="true"><i style="left:${l.toFixed(2)}%;width:${w.toFixed(2)}%"></i></span></a>`;
+  }).join('');
+}
 const ATT = {positive:'好意的な声が多い', negative:'否定的な声が多い', mixed:'賛否が分かれている', neutral:'目立った賛否はない'};
 let VSNAPS = 0;
 // what a topic looked like on day k, as on /voices/: the first snapshot on or after k, else the latest

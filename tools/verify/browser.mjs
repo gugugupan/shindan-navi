@@ -1697,27 +1697,38 @@ if (HAS_EVENTS) {
       if (JSON.stringify(api) !== JSON.stringify(wantApi)) fail(where, `API requests ${JSON.stringify(api)}, expected ${JSON.stringify(wantApi)}`);
       const st = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         month: state.month, cur: !!document.querySelector('.tooltabs a[aria-current]'),
-        tmk: [...document.querySelectorAll('[data-open-day].tmk')].filter(e => e.offsetParent).map(e => [e.dataset.openDay, e.closest('.ag') ? +e.textContent.match(/\d+/)[0] : +(e.textContent.match(/\d+/) || [1])[0]]),
+        bars: [...document.querySelectorAll('.tbar')].filter(e => e.offsetParent).map(e => [e.dataset.topic, e.dataset.s, e.dataset.e]),
+        rows: [...document.querySelectorAll('#tline .tlr')].filter(e => e.offsetParent).map(e => e.dataset.topic),
         grid: [...document.querySelectorAll('.day button.n')].map(b => b.dataset.openDay),
         sec: document.getElementById('hubTopics') ? { hidden: document.getElementById('hubTopics').hidden, n: document.querySelectorAll('#hubTopics .tp').length,
           xurl: /x\.com|twitter\.com/.test(document.getElementById('hubTopics').innerHTML.replace('X（旧Twitter）', '')) } : null }));
       if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
       if (st.cur) fail(where, 'a tool tab is marked current on a hub');
-      // markers: every shown day (desktop grid / phone month list) with the game's topics, with their count
-      const days = vp === 'desktop' ? st.grid : Array.from({ length: 31 }, (_, i) => `${st.month}-${String(i + 1).padStart(2, '0')}`);
-      const want = HAS_VOICES ? days.filter(d => onDay(d)).map(d => [d, onDay(d)]) : [];
-      const got = st.tmk.filter(([d]) => days.includes(d));
-      const slimOk = (g, w) => g.length === w.length && g.every(([d, n], i) => d === w[i][0] && (n === w[i][1] || n === 1));
-      if (!slimOk(got, want)) fail(where, `話題 markers ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`);
+      // topics as a timeline: desktop one bar per topic and week of the grid (≤ 4 lanes), phones one row per topic of the month
+      const want = HAS_VOICES ? days => days.filter(d => onDay(d)) : () => [];
+      if (vp === 'desktop') {
+        const exp = [];
+        for (let w = 0; w * 7 < st.grid.length; w++) {
+          const ws = st.grid[w * 7], we = st.grid[w * 7 + 6];
+          for (const [id, x] of topics) if (HAS_VOICES && x.first <= we && x.last >= ws) exp.push([id, x.first > ws ? x.first : ws, x.last < we ? x.last : we]);
+        }
+        const key = a => JSON.stringify([...a].sort());
+        if (key(st.bars) !== key(exp)) fail(where, `topic bars ${JSON.stringify(st.bars)}, expected ${JSON.stringify(exp)}`);
+      } else {
+        const a = `${st.month}-01`, z = addDay(addDay(`${st.month}-28`, 4).slice(0, 7) + '-01', -1);
+        const exp = HAS_VOICES ? [...topics].filter(([, x]) => x.first <= z && x.last >= a).sort((p, q) => p[1].first.localeCompare(q[1].first)).map(([id]) => id) : [];
+        if (JSON.stringify(st.rows) !== JSON.stringify(exp)) fail(where, `timeline rows ${JSON.stringify(st.rows)}, expected ${JSON.stringify(exp)}`);
+      }
       if (HAS_VOICES) {
         if (!st.sec) fail(where, 'いま話題 section missing');
         else if (nowN === null ? !st.sec.hidden : st.sec.hidden || st.sec.n !== Math.min(5, nowN)) fail(where, `いま話題 ${JSON.stringify(st.sec)}, expected ${nowN}`);
         if (st.sec?.xurl) fail(where, 'いま話題 has an X URL');
       } else if (st.sec) fail(where, 'いま話題 without VOICES_ENABLED');
       // day dialog: a topic day opens with its releases and topics
-      const tday = want[0]?.[0];
+      // day dialog (desktop; phones open topics from the timeline)
+      const tday = vp === 'desktop' && want(st.grid)[0];
       if (tday) {
-        await page.locator(vp === 'desktop' ? `.day [data-open-day="${tday}"].n` : `.ag [data-open-day="${tday}"]`).click();
+        await page.locator(`.day [data-open-day="${tday}"].n`).click();
         const dl = await page.evaluate(() => ({ open: document.getElementById('dlg').open, tp: document.querySelectorAll('#dlg .dl-tp .tp').length,
           links: [...document.querySelectorAll('#dlg .dl-tp a')].map(a => a.getAttribute('href')), titles: [...document.querySelectorAll('#dlg .dl-tp a')].map(a => a.textContent),
           name: document.getElementById(document.getElementById('dlg').getAttribute('aria-labelledby'))?.textContent }));
@@ -1725,7 +1736,7 @@ if (HAS_EVENTS) {
           fail(where, `day dialog ${tday}: ${JSON.stringify(dl)}, expected ${JSON.stringify(titlesOn(tday))}`);
         await page.screenshot({ path: path.join(OUT, `hub-${vp}-${scheme}-day.png`) });
         await page.keyboard.press('Escape');
-        if (vp === 'desktop' && await page.evaluate(() => document.activeElement?.dataset.openDay) !== tday) fail(where, 'focus did not return to the day');
+        if (await page.evaluate(() => document.activeElement?.dataset.openDay) !== tday) fail(where, 'focus did not return to the day');
       }
       await page.screenshot({ path: path.join(OUT, `hub-${vp}-${opt.width}-${scheme}.png`), fullPage: true });
       // switcher: every hub as a link, the current one marked; the shown month is carried, also the default one
@@ -1760,7 +1771,7 @@ if (HAS_EVENTS) {
     page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
     await page.route('**/api/v1/voices', r => r.fulfill({ status: 503, body: 'busy' }));
     await page.goto(BASE + pick.path, { waitUntil: 'networkidle' });
-    const st = await page.evaluate(() => ({ tmk: document.querySelectorAll('.tmk').length, sec: document.getElementById('hubTopics').hidden, cards: document.querySelectorAll('.pk').length }));
+    const st = await page.evaluate(() => ({ tmk: document.querySelectorAll('.tbar,.tlr').length, sec: document.getElementById('hubTopics').hidden, cards: document.querySelectorAll('.pk').length }));
     if (st.tmk || !st.sec || !st.cards) fail('hub voices 503', JSON.stringify(st));
     for (const b of bad) fail('hub voices 503', b);
     await ctx.close();
