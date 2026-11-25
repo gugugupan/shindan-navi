@@ -344,6 +344,10 @@ describe('pages (flag on)', () => {
     const blocks = ld(text);
     expect(blocks[0]['@type']).toBe('BreadcrumbList');
     expect(blocks[0].itemListElement.at(-1).item).toBe('https://shindan-navi.app/events/onepiece/tokyo/');
+    // under the game's hub (game hub M4), which the page also links back to
+    expect(blocks[0].itemListElement.map((x: { name: string; item: string }) => [x.name, x.item.replace('https://shindan-navi.app', '')]))
+      .toEqual([['トップ', '/'], ['ワンピカード', '/onepiece/'], ['東京都のワンピカードイベント', '/events/onepiece/tokyo/']]);
+    expect(text).toContain('<a href="/onepiece/">ワンピカードの新弾発売日・イベントカレンダー →</a>');
     const events = blocks.filter((b) => b['@type'] === 'Event');
     expect(events.length).toBeGreaterThan(0);
     for (const e of events) {

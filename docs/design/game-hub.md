@@ -1,6 +1,6 @@
 # Game hub: one calendar page per game (design)
 
-Status: M0 (registry) live as 757c623; M1 + M2 live as 8bb04a0; M3 (16 hubs, thin-page rule) on `hub-m3`. Owner answers 2026-11-25: Q1 yes (hubs replace the 10 title pages), Q2 the
+Status: M0 (registry) live as 757c623; M1 + M2 live as 8bb04a0; M3 (16 hubs, thin-page rule) and M4 (landing links both ways; no week block) on `hub-m3`. Owner answers 2026-11-25: Q1 yes (hubs replace the 10 title pages), Q2 the
 16 games (M3), Q3 preselect the IP guess (M2). Revised 2026-11-25 for what changed on `main` since the first draft:
 topics live only in D1 (`/api/v1/voices`, no topic text in built HTML, no `/voices/<date>/` archives), event landing
 pages and the shared event rows (`src/evrow.html`) exist, `/` has one day view. Plan node `game-hub-design` (kb plan
@@ -291,8 +291,10 @@ writes per import, 1 row read per miss), Event JSON-LD, noindex when 0 events or
   crawlers render and which would read D1 on every miss). Only one script-generated link, for the visitor's own
   location: 「東京都のイベントを見る →」 → `/events/?game=G&pref=P`.
 - **Links, M4.** Hub → landing: a static 都道府県別 row of `/events/<slug>/<pref>/` links (the landing pages read 1
-  precomputed row per miss and are noindex when empty), and the week section's link points there. Landing → hub:
-  breadcrumb トップ › ポケカ › 東京都のイベント, plus 「ポケカの新弾・話題を見る」.
+  precomputed row per miss and are noindex when empty), built only with `LANDING_ENABLED=1` (flag-off output
+  unchanged). Landing → hub: breadcrumb トップ › ポケカ › 東京都のポケカイベント, plus 「ポケカの新弾発売日・イベントカレンダー →」
+  (not 話題: the Worker does not know `VOICES_ENABLED`). The hub has no week section, and reading landing rows from
+  the hub (below) would add an endpoint and D1 reads, so M4 ships without it.
 - **Shared data.** Both key on the registry slug; the Worker renderer imports the same `data/games.json` (names,
   colours, icon). The importer that writes `landing_pages` uses registry `bit` / `slug`.
 - **Shared read.** A landing row already holds a location's upcoming events for one game. Once it exists, the hub's

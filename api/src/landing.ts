@@ -11,7 +11,7 @@ export const STALE_DAYS = 14;
 const MAX_LD_EVENTS = 50;
 
 // Display name (= GAME_ICON key and the /events/ chip name), common short name, palette, icon and whether build.py has a
-// 新弾 page at /<slug>/: the events games' rows of the game registry (contracts/games.md).
+// hub at /<slug>/: the events games' rows of the game registry (contracts/games.md).
 export const LANDING_GAMES: Record<string, { label: string; short: string; c: string; cd: string; icon: string; releases: boolean }> =
   Object.fromEntries(REGISTRY.filter((g) => g.sources.events)
     .sort((a, b) => a.sources.events!.sort - b.sources.events!.sort)
@@ -200,10 +200,14 @@ export function renderLanding(template: string, code: string, loc: string, row: 
     sections.push(`<p class="lp-empty">${row ? `${where}で開催予定の${esc(game.short)}のイベントは、いま掲載していません。` : `${where}の${esc(game.short)}のイベント情報は準備中です。`}<a href="${esc(eventsUrl({ game: code, pref: loc }))}" rel="nofollow">イベントカレンダーで探す →</a></p>`);
   }
 
-  const crumbs: [string, string | null][] = [['トップ', '/'], ['イベントカレンダー', '/events/'], [loc === 'online' ? `${game.short}のオンラインイベント` : `${place.name}の${game.short}イベント`, null]];
+  // under the game's hub when it has one (docs/design/game-hub.md › 10, M4), else under /events/
+  const crumbs: [string, string | null][] = [['トップ', '/'], game.releases ? [game.short, `/${g.slug}/`] : ['イベントカレンダー', '/events/'],
+    [loc === 'online' ? `${game.short}のオンラインイベント` : `${place.name}の${game.short}イベント`, null]];
   const crumbHtml = '<nav class="crumbs" aria-label="パンくず">' + crumbs.map(([n, h]) => (h ? `<a href="${h}">${esc(n)}</a>` : `<span aria-current="page">${esc(n)}</span>`)).join(' › ') + '</nav>';
   const go = [`<a href="${esc(eventsUrl({ game: code, pref: loc }))}" rel="nofollow">地図・カレンダーで探す →</a>`];
-  if (game.releases) go.push(`<a href="/${g.slug}/">${esc(game.short)}の新弾発売日 →</a>`);
+  // the hub shows releases and per-type event counts on every Worker build (topics only with VOICES_ENABLED, which
+  // the Worker does not know)
+  if (game.releases) go.push(`<a href="/${g.slug}/">${esc(game.short)}の新弾発売日・イベントカレンダー →</a>`);
   const prefLinks = LOCS.map((l) => (l.loc === loc ? `<a href="${landingPath(code, l.loc)}" aria-current="page">${esc(l.name)}</a>` : `<a href="${landingPath(code, l.loc)}">${esc(l.name)}</a>`)).join('');
   const gameLinks = GAMES.filter((x) => x.code !== code).map((x) => `<a href="${landingPath(x.code, loc)}">${esc(LANDING_GAMES[x.code].short)}</a>`).join('');
   const main = `${crumbHtml}<div class="lp-head"><h1>${esc(h1)}</h1><p>${esc(lead)}</p></div><p class="lp-go">${go.join('')}</p>`

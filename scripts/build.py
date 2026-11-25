@@ -182,6 +182,19 @@ def type_labels():
     if not types or len(types)!=len(lines):
         sys.exit(f"api/src/constants.ts: parsed {len(types)} of {len(lines)} TYPE_LABELS lines (one `code: 'name',` per line)")
     return types
+# event landing page locations (/events/<slug>/<loc>/): names from the API's PREFECTURES, URL segments from the Worker's
+# PREF_SLUGS (both JIS order), then online
+def landing_locs():
+    names=re.findall(r"\['JP-\d\d', '([^']+)'\]",open(os.path.join(ROOT,'api/src/constants.ts')).read())
+    block=open(os.path.join(ROOT,'api/src/landing.ts')).read().split('PREF_SLUGS = [',1)[1].split('];',1)[0]
+    slugs=re.findall(r"'([a-z]+)'",block)
+    if len(names)!=47 or len(slugs)!=47: sys.exit(f'api/src: parsed {len(names)} PREFECTURES and {len(slugs)} PREF_SLUGS (47 each)')
+    return list(zip(slugs,names))+[('online','オンライン')]
+# hub → landing (M4, LANDING_ENABLED only): one static row of the game's /events/<slug>/<loc>/ pages
+def hub_landing_links(g):
+    if not (LANDING_ENABLED and g['sources']['events']): return ''
+    links=''.join(f'<a href="/events/{g["slug"]}/{s}/">{esc(n)}</a>' for s,n in landing_locs())
+    return f'<section class="seo lpref" aria-labelledby="lpref-h"><h2 id="lpref-h">都道府県別の{esc(g["short"])}大会・イベント</h2><p>{links}</p></section>'
 # hub mode of the release app on the title pages (docs/design/game-hub.md): switcher list, and the voices API for 話題
 HUB_REG=[g for g in REG if g['hub']]
 def hub_js(slug,key):
@@ -251,7 +264,8 @@ def page_def():
             list=static_list(lst,list_head,list_note,show_game=False)
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
-                  f'カレンダーでは{esc(short)}の発売予定{"と、Xで話題になっていること" if VOICES_ENABLED else ""}を表示しています。ほかのタイトルへはカレンダー上のタイトル名から切り替えられ、全タイトルの新弾は<a href="/releases/">新弾カレンダー</a>でまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。']),
+                  f'カレンダーでは{esc(short)}の発売予定{"と、Xで話題になっていること" if VOICES_ENABLED else ""}を表示しています。ほかのタイトルへはカレンダー上のタイトル名から切り替えられ、全タイトルの新弾は<a href="/releases/">新弾カレンダー</a>でまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。'])
+                +hub_landing_links(next(g for g in HUB_REG if g['slug']==slug)),
             ld_items=lst,lastmod=lastmod(its),noindex=not HUB_INDEX[slug]))
     for ym in months:
         its=[d for d in data if d['date'].startswith(ym)]

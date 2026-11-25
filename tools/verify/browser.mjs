@@ -61,6 +61,8 @@ const HAS_FEEDBACK = fs.existsSync(path.join(DIST, 'feedback/index.html'));
 const HAS_EVENTS = fs.existsSync(path.join(DIST, 'events/index.html'));
 // /voices/ and the home page's いま話題 block: VOICES_ENABLED=1 Worker builds only
 const HAS_VOICES = fs.existsSync(path.join(DIST, 'voices/index.html'));
+// event landing pages (the Worker's shell): LANDING_ENABLED=1 builds only
+const HAS_LANDING = fs.existsSync(path.join(DIST, '_landing.html'));
 const TURNSTILE_STUB = `window.turnstile={_o:null,_n:0,
   render(el,o){this._o=o;setTimeout(()=>o.callback('tok-'+(++this._n)),0);return 'w1';},
   reset(){window.__tsResets=(window.__tsResets||0)+1;setTimeout(()=>this._o.callback('tok-'+(++this._n)),0);}};
@@ -1916,7 +1918,10 @@ if (HAS_EVENTS) {
         await page.goto(BASE + h.path, { waitUntil: 'networkidle' });
         await page.locator('#gameSw').click();
         const st = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          h1: document.querySelectorAll('h1').length, sw: [...document.querySelectorAll('#swList a')].map(a => [a.getAttribute('href').split('?')[0], a.getAttribute('aria-current')]) }));
+          h1: document.querySelectorAll('h1').length, sw: [...document.querySelectorAll('#swList a')].map(a => [a.getAttribute('href').split('?')[0], a.getAttribute('aria-current')]),
+          lp: [...document.querySelectorAll('.lpref a')].filter(a => a.getClientRects().length && a.getBoundingClientRect().right <= document.documentElement.clientWidth + 1).length }));
+        // M4: with LANDING_ENABLED an events game's hub has a row of its 48 landing pages, all inside the viewport
+        if (st.lp !== (HAS_LANDING && h.js.eventsApi ? 48 : 0)) fail(where, `${st.lp} landing links`);
         if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
         if (st.h1 !== 1) fail(where, `${st.h1} h1`);
         if (JSON.stringify(st.sw.map(x => x[0])) !== JSON.stringify(HUBS.map(x => x.path)) || st.sw.some(([p, c]) => (c === 'page') !== (p === h.path)))

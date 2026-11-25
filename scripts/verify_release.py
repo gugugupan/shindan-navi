@@ -480,6 +480,7 @@ def check_hubs(hubs, n_rel):
     has_voices = os.path.exists(os.path.join(DIST, 'voices/index.html'))
     reg = {g['slug']: g for g in REGISTRY if g['hub']}
     sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
+    has_landing = os.path.exists(os.path.join(DIST, '_landing.html'))
     indexable = []
     for pg in hubs:
         src = open(os.path.join(DIST, pg['path'].strip('/'), 'index.html')).read()
@@ -492,6 +493,13 @@ def check_hubs(hubs, n_rel):
         if robots != ([] if index else ['noindex,follow']): fail(f'{pg["path"]}: robots {robots}, expected {"none" if index else "noindex,follow"} ({n} releases, events {ev})')
         if (f'<loc>{SITE}{pg["path"]}</loc>' in sitemap) != index: fail(f'sitemap: hub {pg["path"]} {"missing" if index else "listed while noindex"}')
         if index: indexable.append(pg['path'])
+        # hub → landing (M4): with LANDING_ENABLED (the build writes _landing.html) one row of the game's 48 location
+        # pages on events games, nothing anywhere else
+        lp = re.findall(r'href="/events/([a-z0-9-]+)/([a-z]+)/"', src)
+        want_lp = has_landing and bool(g['sources']['events'])
+        if want_lp and (len(lp) != 48 or len(set(lp)) != 48 or {x[0] for x in lp} != {g['slug']} or 'class="seo lpref"' not in src):
+            fail(f'{pg["path"]}: landing row has {len(lp)} links {sorted({x[0] for x in lp})}')
+        if not want_lp and (lp or 'class="seo lpref"' in src): fail(f'{pg["path"]}: landing links without LANDING_ENABLED or events')
         og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
         ogf = og and os.path.join(DIST, og[1].replace(SITE + '/', '', 1))
         if not og or og[1] != f'{SITE}/og/{g["slug"]}.png' or not os.path.exists(ogf): fail(f'{pg["path"]}: og:image {og and og[1]} missing')

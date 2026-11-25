@@ -75,7 +75,7 @@ through `idx_events_loc`, only while the table exists). Rows are hashed and diff
   no row / table missing → 404).
 - `<title>`: `{short}の大会・イベント（{県}）｜トレカカレンダー`; h1 `{県}の{short} 大会・イベント一覧` **above the
   list** (owner-approved exception to the site's h1-in-footer pattern); canonical = the slash URL.
-- JSON-LD: BreadcrumbList (トップ › イベントカレンダー › page) + one `Event` per rendered event (max 50, owner 2026-11-23): name,
+- JSON-LD: BreadcrumbList (トップ › the game's hub › page since game-hub M4; トップ › イベントカレンダー › page for a game without a hub) + one `Event` per rendered event (max 50, owner 2026-11-23): name,
   startDate (date or datetime), endDate, eventStatus (cancelled / postponed / scheduled), eventAttendanceMode,
   location (`Place` + `PostalAddress`, or `VirtualLocation` with the source URL), url = source URL. No
   `organizer` (the venue is not always the organizer) and no `offers` (fees are often unknown).
@@ -91,11 +91,11 @@ the flag on; `dist/sitemap.xml` stays static. Submit the new sitemap in Search C
 ## Links
 
 - Out: crumbs; 「地図・カレンダーで探す」 → `/events/?game=G&pref=P` (nofollow); the 47 other locations of the game;
-  the 12 other games in the same location; the game's 新弾 page `/<slug>/` where one exists (7 of 13).
+  the 12 other games in the same location; the game's hub `/<slug>/` (「{short}の新弾発売日・イベントカレンダー →」, all 13 since game-hub M3).
 - In: the sitemap, the cross links, and `/events/` (flag on only, `<!--LANDING-->` parts of `src/events.html`): once
   a location is chosen, a 「<県>のイベント一覧」 row of chips under the list, one per chosen title, else per title with
-  events there (from `loc_counts`), linking `/events/<slug>/<pref>/` (owner 2026-11-23). Hub → landing links come
-  with game-hub M4 (`docs/design/game-hub.md` › 10).
+  events there (from `loc_counts`), linking `/events/<slug>/<pref>/` (owner 2026-11-23), and each events game's hub
+  (flag on only): a static 都道府県別の{short}大会・イベント row of its 48 pages (game-hub M4, `docs/design/game-hub.md` › 10).
 
 ## D1 budget (Free: 5M reads / 100k writes per UTC day)
 
