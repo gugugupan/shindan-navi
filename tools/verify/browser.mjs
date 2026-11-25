@@ -1666,7 +1666,7 @@ if (HAS_EVENTS) {
   }
 }
 // Hubs (title pages in hub mode, docs/design/game-hub.md): the game switcher (links with the shown month), 話題 markers
-// and the day dialog from /api/v1/voices (served from data/voices/), いま話題, a failed voices API, /<code>/ redirects;
+// and the day dialog from /api/v1/voices (the gate fixtures, served locally), いま話題, a failed voices API, /<code>/ redirects;
 // both themes, 1366 / 390 screenshots.
 {
   const HUBS = PAGES.filter(p => p.js && p.js.hub);

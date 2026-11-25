@@ -484,9 +484,10 @@ def check_hubs(hubs):
         has_events = os.path.exists(os.path.join(DIST, 'events/index.html'))
         if ('"eventsApi"' in src) != (has_events and bool(g['sources']['events'])): fail(f'{pg["path"]}: event counts {"on a game without events or a build without /events/" if '"eventsApi"' in src else "missing"}')
         if ('id="prefDlg"' in src) != ('"eventsApi"' in src): fail(f'{pg["path"]}: location picker and event counts disagree')
-        for s in os.listdir(os.path.join(ROOT, 'data/voices')) if os.path.isdir(os.path.join(ROOT, 'data/voices')) else []:
-            for t in json.load(open(os.path.join(ROOT, 'data/voices', s))).get('topics', []):
-                if t['summary'] in src or f'"{t["id"]}"' in src: fail(f'{pg["path"]}: topic {t["id"]} text in the built HTML'); break
+        # the gate fixtures stand in for the D1 snapshots (as for /voices/): none of their text may be built in
+        for x in glob.glob(os.path.join(ROOT, 'tools/verify/fixtures/voices/*.json')):
+            for t in json.load(open(x, encoding='utf-8'))['topics']:
+                if t['title'] in src or t['summary'] in src or f'"{t["id"]}"' in src: fail(f'{pg["path"]}: topic {t["id"]} text in the built HTML'); break
     rp = os.path.join(DIST, '_redirects')
     lines = [l.split() for l in open(rp).read().splitlines() if l.strip()] if os.path.exists(rp) else []
     want = {f'/{v}{t}': f'/{g["slug"]}/' for g in reg.values() if g['code'].lower() != g['slug'] for v in (g['code'].lower(), g['code']) for t in ('', '/')}

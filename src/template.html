@@ -346,6 +346,8 @@ tbody tr.starred td.nm{font-weight:700}
 .tbar.cr{margin-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
 .tbar b,.tlr b{flex:none;color:var(--gt)}
 .tbar .tt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* topic text comes from the API after the build: the system face (--runtime), as on /voices/ */
+.tbar .tt,.tlr .tt,.tp a,.tp p{font-family:var(--runtime)}
 .tlanes{flex:none;display:block}
 .tmore{align-self:flex-start;border:0;background:none;padding:0;font:inherit;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer}
 /* per-type event counts (M2): a line at the foot of the cell, the location under the toolbar */
