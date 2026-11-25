@@ -1,6 +1,6 @@
 # Game hub: one calendar page per game (design)
 
-Status: M0 (registry) live as 757c623; M1 + M2 live as 8bb04a0; M3 (16 hubs, thin-page rule) and M4 (landing links both ways; no week block) on `hub-m3`. Owner answers 2026-11-25: Q1 yes (hubs replace the 10 title pages), Q2 the
+Status: M0 (registry) live as 757c623; M1 + M2 live as 8bb04a0; M3 (16 hubs, thin-page rule) M4 (landing links both ways; no week block) and M5 (retitle) on `hub-m3`. Owner answers 2026-11-25: Q1 yes (hubs replace the 10 title pages), Q2 the
 16 games (M3), Q3 preselect the IP guess (M2). Revised 2026-11-25 for what changed on `main` since the first draft:
 topics live only in D1 (`/api/v1/voices`, no topic text in built HTML, no `/voices/<date>/` archives), event landing
 pages and the shared event rows (`src/evrow.html`) exist, `/` has one day view. Plan node `game-hub-design` (kb plan
@@ -249,7 +249,9 @@ to what crawlers get without a second render path. Revisit only if switching pro
   not mixed with a template change. Retitling is a separate later step (M5), shipped alone and watched in Search
   Console for 2-4 weeks: 「ポケカ 新弾 発売日・イベント・話題カレンダー（ポケモンカード）｜トレカカレンダー」, h1
   「ポケモンカードゲーム（ポケカ）新弾・イベントカレンダー」 (only the parts the game has). New hubs (M3) start with
-  the same pattern as the title pages.
+  the same pattern as the title pages. As built (M5): h1 「ポケモンカードゲーム（ポケカ）新弾 発売日・イベント・話題カレンダー」;
+  イベント only for events games on builds with the Worker API, 話題 only with `VOICES_ENABLED`; a hub with neither
+  (MTG / 遊戯王 / デュエマ with voices off) keeps the title-page wording. og images keep 新弾 発売日カレンダー.
 - **Static HTML** (what a crawler gets): crumbs, h1, lead, the release list with item links (ItemList as now), about
   block, other hubs (footer). No topic text (owner 2026-11-21: SEO of topics given up) and no per-prefecture links
   until the landing pages exist (M4). Topics and events are client-side.

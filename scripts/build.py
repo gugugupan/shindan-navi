@@ -254,17 +254,24 @@ def page_def():
             lead=f'現在、発売予定の新弾はありません・最近の発売は{fmt(last["date"])}（{upd_label}更新）'
             list_head,list_note=f'{short} 最近の発売',f'{name}の最近発売された商品 {len(lst)}件。新しい発売予定が発表され次第掲載します。価格は税込。'
             about_next=f'現在、発売予定の新弾は掲載していません。最近の発売は{fmt(last["date"])}「{esc(last["name"])}」です。'
+        # M5 (docs/design/game-hub.md › 8): the title names only what this hub shows on this build (event counts on
+        # events games with the Worker API, topics with VOICES_ENABLED); a hub with neither keeps the title page's wording
+        g=next(g for g in HUB_REG if g['slug']==slug)
+        ev,tp=BUILD_EVENTS and bool(g['sources']['events']),VOICES_ENABLED and g['sources']['voices']
+        shows='・'.join(['発売日']+['イベント']*ev+['話題']*tp)
+        extra='と、'.join(['選んだ地域の店舗大会・イベント数']*ev+['Xで話題になっていること']*tp)
         pages.append(dict(path=f'/{slug}/',slug=slug,og=slug,
-            title=f'{short} 新弾 発売日一覧（{TITLE_ALT[slug]}）｜トレカカレンダー',
-            desc=f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}今後の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。',
-            keywords=names+[f'{short} 新弾',f'{short} 発売日']+COMMON_KW,
-            h1=f'{name} 新弾 発売日カレンダー' if short in name else f'{name}（{short}）新弾 発売日カレンダー',
+            title=f'{short} 新弾 {shows}カレンダー（{TITLE_ALT[slug]}）｜トレカカレンダー' if extra else f'{short} 新弾 発売日一覧（{TITLE_ALT[slug]}）｜トレカカレンダー',
+            desc=(f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格をカレンダーでチェック。{desc_next}{extra}も日ごとに確認でき、お気に入り登録やGoogleカレンダー追加もできます。' if extra else
+                  f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}今後の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。'),
+            keywords=names+[f'{short} 新弾',f'{short} 発売日']+[f'{short} 大会',f'{short} イベント']*ev+[f'{short} 話題']*tp+COMMON_KW,
+            h1=(f'{name} 新弾 {shows}カレンダー' if short in name else f'{name}（{short}）新弾 {shows}カレンダー'),
             lead=lead,
             crumbs=[('トップ','/'),('新弾カレンダー','/releases/'),(f'{short} 新弾',None)], js=hub_js(slug,key),
             list=static_list(lst,list_head,list_note,show_game=False)
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
-                  f'カレンダーでは{esc(short)}の発売予定{"と、Xで話題になっていること" if VOICES_ENABLED else ""}を表示しています。ほかのタイトルへはカレンダー上のタイトル名から切り替えられ、全タイトルの新弾は<a href="/releases/">新弾カレンダー</a>でまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。'])
+                  f'カレンダーでは{esc(short)}の発売予定{"".join("と、"+x for x in ["選んだ地域の店舗大会・イベント数"]*ev+["Xで話題になっていること"]*tp)}を表示しています。ほかのタイトルへはカレンダー上のタイトル名から切り替えられ、全タイトルの新弾は<a href="/releases/">新弾カレンダー</a>でまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。'])
                 +hub_landing_links(next(g for g in HUB_REG if g['slug']==slug)),
             ld_items=lst,lastmod=lastmod(its),noindex=not HUB_INDEX[slug]))
     for ym in months:

@@ -493,6 +493,16 @@ def check_hubs(hubs, n_rel):
         if robots != ([] if index else ['noindex,follow']): fail(f'{pg["path"]}: robots {robots}, expected {"none" if index else "noindex,follow"} ({n} releases, events {ev})')
         if (f'<loc>{SITE}{pg["path"]}</loc>' in sitemap) != index: fail(f'sitemap: hub {pg["path"]} {"missing" if index else "listed while noindex"}')
         if index: indexable.append(pg['path'])
+        # M5: title, description and h1 name events / topics only where this build shows them; 新弾 発売日 stays first
+        has_events = os.path.exists(os.path.join(DIST, 'events/index.html'))
+        ev, tp = has_events and bool(g['sources']['events']), has_voices and g['sources']['voices']
+        title = html.unescape(re.search(r'<title>(.*?)</title>', src)[1])
+        desc = html.unescape(re.search(r'<meta name="description" content="([^"]*)"', src)[1])
+        h1 = html.unescape(re.search(r'<div class="ptitle"><h1>(.*?)</h1>', src)[1])
+        if f'{g["short"]} 新弾 発売日' not in title: fail(f'{pg["path"]}: title {title!r} lost 新弾 発売日')
+        for word, on in (('イベント', ev), ('話題', tp)):
+            for k, v in (('title', title), ('description', desc), ('h1', h1)):
+                if (word in v) != on: fail(f'{pg["path"]}: {k} {"lacks" if on else "claims"} {word}: {v!r}')
         # hub → landing (M4): with LANDING_ENABLED (the build writes _landing.html) one row of the game's 48 location
         # pages on events games, nothing anywhere else
         lp = re.findall(r'href="/events/([a-z0-9-]+)/([a-z]+)/"', src)
