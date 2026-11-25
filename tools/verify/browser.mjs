@@ -2175,31 +2175,40 @@ if (HAS_EVENTS) {
     const go = async (p, ready) => { await page.goto(BASE + p, { waitUntil: 'load' }); if (ready) await page.waitForSelector(ready, { timeout: 8000 }).catch(() => {}); };
     const run = async (label, fn) => { const where = `${vp} game links ${label}`; try { await fn(where); } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); } };
     await run('/', async where => {
+      // made-up releases today (one title with a hub, one without) put in front of the build's, so the cards are always there
+      await page.route(`${BASE}/`, async route => {
+        const r = await route.fetch(), fx = [{ id: 'iglfx1', date: TODAY, game: 'ONE PIECE', name: 'GL fixture A', pack: '', thumb: '' },
+          { id: 'iglfx2', date: TODAY, game: 'GLテスト', name: 'GL fixture B', pack: '', thumb: '' }];
+        route.fulfill({ response: r, body: (await r.text()).replace('"items": [', `"items": [${fx.map(x => JSON.stringify(x)).join(',')},`) });
+      });
       await go('/');
       await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); });
       await go('/', '#evBody .gcol');
-      // a day with releases, so its cards are checked too
-      for (const t of await page.locator('#wkStrip [role="tab"]').all()) { if (await page.locator('#wkPanel .pk').count()) break; await t.click(); }
       if (HAS_VOICES) await page.waitForSelector('#vtBody .vt', { timeout: 5000 }).catch(() => {});
+      // today's panel: the stubbed events (columns OPCG / UATCG / PTCG, a shared OPCG + UATCG row) and the fixture cards
       const a = await audit(page);
       judge(where, a, 3);
       const need = ['/onepiece/', '/unionarena/', '/pokemon/'].filter(h => !a.links.some(l => l[1] === h));
       if (need.length) fail(where, `event columns / tags without ${need.join(' ')}`);
-      if (!(await page.locator('#wkPanel .pk').count())) fail(where, 'no release cards in the week');
+      const cards = await page.locator('#wkPanel .pk').evaluateAll(ps => ps.filter(p => /^GL fixture/.test(p.querySelector('.n')?.textContent)).map(p => p.querySelector('.g a.gl')?.getAttribute('href') || null));
+      if (JSON.stringify(cards) !== JSON.stringify(['/onepiece/', null])) fail(where, `fixture cards' game links ${JSON.stringify(cards)}`);
       if (vp === 'mobile') await page.locator('#wkPanel').screenshot({ path: path.join(OUT, `game-links-home-${vp}.png`) });
-      // 表示中: each saved title links its hub
-      await page.evaluate(() => localStorage.setItem('tcg.voices', JSON.stringify({ game: 'OPCG,MTG' })));
+      // 表示中: each saved title links its hub (MTG is offered only with いま話題; without it the /events/ filter holds the titles)
+      const [saved, want] = HAS_VOICES ? [['tcg.voices', { game: 'OPCG,MTG' }], '/onepiece/,/mtg/'] : [['tcg.ev.filters', { pref: 'JP-13', game: 'OPCG,PTCG' }], '/onepiece/,/pokemon/'];
+      await page.evaluate(([k, v]) => localStorage.setItem(k, JSON.stringify(v)), saved);
       await go('/', '#hsT a');
-      const b = await audit(page);
-      judge(where + ' 表示中', b, 2);
+      judge(where + ' 表示中', await audit(page), 2);
       const hs = await page.locator('#hsT a').evaluateAll(as => as.map(a => a.getAttribute('href')));
-      if (hs.join() !== '/onepiece/,/mtg/') fail(where, `表示中 links ${hs.join()}`);
+      if (hs.join() !== want) fail(where, `表示中 links ${hs.join()} (want ${want})`);
+      await page.unroute(`${BASE}/`);
     });
     await run('/releases/', async where => {
       await go('/releases/');
       await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.view', '"cal"'); });
-      await go('/releases/', '.pk .g a.gl');
-      judge(where, await audit(page), 3);
+      await go('/releases/', '.pk');
+      judge(where, await audit(page), 0);
+      // the rest needs a shown card of a title with a hub (the labels above are checked whatever the data)
+      if (!(await page.locator('.pk:has(a.gl) .pko').filter({ visible: true }).count())) return;
       // the card opens its dialog (game link left out), the dialog's label links too
       await page.locator('.pk:has(a.gl) .pko').filter({ visible: true }).first().click();
       await page.waitForSelector('#dlg[open] .dl-head', { timeout: 5000 });
@@ -2219,8 +2228,8 @@ if (HAS_EVENTS) {
         if (await page.locator('#dlg[open]').count()) fail(where, 'game link opened the detail dialog');
       }
       await page.evaluate(() => localStorage.setItem('tcg.view', '"tbl"'));
-      await go('/releases/', 'td.gm a.gl');
-      judge(where + ' table', await audit(page), 3);
+      await go('/releases/', 'td.gm');
+      judge(where + ' table', await audit(page), 1);
     });
     await run('/events/', async where => {
       if (!HAS_EVENTS) return;
@@ -2228,6 +2237,11 @@ if (HAS_EVENTS) {
       const a = await audit(page);
       judge(where, a, 3);
       if (!a.links.some(l => l[1] === '/unionarena/')) fail(where, 'shared event without its UNION ARENA link');
+      // a re-render (auto-paging) keeps focus on the same row's game link
+      const kept = await page.evaluate(() => { const l = document.getElementById('list'), g = l.querySelector('.ev a.gl[href="/unionarena/"]'); if (!g) return 'no link';
+        const id = g.closest('[data-id]')?.dataset.id; g.focus(); const k = snEv.keep(l); l.innerHTML = l.innerHTML; snEv.restore(l, k);
+        const f = document.activeElement; return f !== g && f.matches('a.gl[href="/unionarena/"]') && f.closest('[data-id]')?.dataset.id === id ? 'ok' : `lost (${f.tagName}.${f.className})`; });
+      if (kept !== 'ok') fail(where, `focused game link after re-render: ${kept}`);
       if (await page.locator('button.chip.g').count() < 3) fail(where, 'title filter chips missing');
     });
     await run('/voices/', async where => {

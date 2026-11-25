@@ -211,7 +211,8 @@ window.snEv=(function(){
   // opens the group holding el (a map pin picked a member row)
   function reveal(el){ const g=el&&el.closest('.evg'); const b=g&&g.querySelector(':scope>.ev-s>.evg-tog'); if(b&&b.getAttribute('aria-expanded')!=='true') setOpen(b,true); }
   // Re-rendering a list (auto-paging) replaces its nodes: keep(root) remembers the focused control by what it is (a group
-  // toggle by group id; in a row, its event id and the control: source link, map pin, 地図なし) and the game column it
+  // toggle by group id; in a row, its event id and the control: source link, map pin, 地図なし; a game tag by its row or
+  // group and hub href) and the game column it
   // sat in (home: a shared event has a row per column). restore(root, k) focuses its new copy, opening the group a row
   // was folded into meanwhile; a row that joined a group has its source link on another element (venue on home).
   const LINK='a.ev-link,a.ev-n,a.ev-venue';
@@ -219,7 +220,9 @@ window.snEv=(function(){
     const a=document.activeElement; if(!a||!root.contains(a)) return null;
     const c=a.closest('.gcol'), col=c&&c.getAttribute('aria-label');
     const g=a.matches('.evg-tog')&&a.closest('.evg'); if(g) return {col, g:g.dataset.g};
-    const r=a.closest('[data-id]'); if(!r) return null;
+    const r=a.closest('[data-id]');
+    if(a.matches('a.gl')){ const eg=!r&&a.closest('.evg'); return r||eg ? {col, id:r&&r.dataset.id, g:eg&&eg.dataset.g, gl:a.getAttribute('href')} : null; }
+    if(!r) return null;
     return {col, id:r.dataset.id, ctl:a.matches(LINK)?'link':a.matches('.ev-pin')?'.ev-pin':a.matches('.nomapt')?'.nomapt':null};
   }
   function restore(root,k){
@@ -227,7 +230,12 @@ window.snEv=(function(){
     const scope=k.col ? root.querySelector(`.gcol[aria-label="${CSS.escape(k.col)}"]`) : root;
     if(!scope) return;
     let el;
-    if(k.g) el=scope.querySelector(`.evg[data-g="${CSS.escape(k.g)}"]>.ev-s>.evg-tog`);
+    if(k.gl){
+      const q=`a.gl[href="${CSS.escape(k.gl)}"]`, r=k.id&&scope.querySelector(`[data-id="${CSS.escape(k.id)}"]`);
+      const box=k.g ? scope.querySelector(`.evg[data-g="${CSS.escape(k.g)}"]`) : r;
+      el=(box&&box.querySelector(q))||(r&&r.closest('.evg')&&r.closest('.evg').querySelector(q));
+    }
+    else if(k.g) el=scope.querySelector(`.evg[data-g="${CSS.escape(k.g)}"]>.ev-s>.evg-tog`);
     else {
       const r=scope.querySelector(`[data-id="${CSS.escape(k.id)}"]`); if(!r) return;
       el=k.ctl==='link' ? r.querySelector(LINK) : k.ctl ? r.querySelector(k.ctl) : null;

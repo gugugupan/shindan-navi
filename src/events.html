@@ -25,6 +25,7 @@
 <!--/LANDING-->.state .ygo{margin:0}
 .fgrp{display:grid;gap:6px}
 .fgrp h3{margin:0;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
+.fgrp h3>*{display:inline-flex;align-items:center;gap:6px}
 .fg{display:grid;grid-template-columns:6em minmax(0,1fr);gap:6px 10px;align-items:start;margin:0;padding:0;border:0;min-width:0}
 .fl{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding-top:5px}
 .fc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
@@ -465,7 +466,7 @@ function renderF(){
     body=games.map(g=>{
       const ts=(meta&&meta.types||[]).filter(t=>t.game_code===g.code);
       if(!ts.length) return '';
-      return `<div class="fgrp" style="${gvars(g)}"><h3>${gi(g.name)}${esc(g.name)}</h3><div class="fc">${ts.map(t=>`<button class="chip k" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`;
+      return `<div class="fgrp" style="${gvars(g)}"><h3>${gl(g.name,gi(g.name)+esc(g.name))}</h3><div class="fc">${ts.map(t=>`<button class="chip k" data-k="type" data-v="${esc(t.code)}" aria-pressed="${state.type.includes(t.code)}">${esc(t.name)} <em>${t.count.toLocaleString('ja-JP')}</em></button>`).join('')}</div></div>`;
     }).join('') || `<p class="note">${meta?'選べる形式がありません':'読み込み中…'}</p>`;
   } else if(k==='days') body=`<div class="fc">${chips(DAYS,false)}</div>`;
   const focusKey=document.activeElement&&fDlg.contains(document.activeElement)&&document.activeElement.dataset.k?[document.activeElement.dataset.k,document.activeElement.dataset.v]:null;
