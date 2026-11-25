@@ -5,16 +5,15 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { snapshots as voiceSnapshots } from './voices-fixtures.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DIST = path.join(ROOT, 'dist');
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const TODAY = arg('--today', new Date().toISOString().slice(0, 10));
-// /api/v1/voices as the Worker answers it after importing data/voices/ (samples and empty snapshots are never imported);
-// the server below serves it, so /voices/ and the home block work without the Worker (voices-d1.mjs runs the real one)
-const VOICE_SNAPS = fs.existsSync(path.join(ROOT, 'data/voices')) ? fs.readdirSync(path.join(ROOT, 'data/voices')).filter(f => f.endsWith('.json')).sort()
-  .map(f => JSON.parse(fs.readFileSync(path.join(ROOT, 'data/voices', f), 'utf8'))).filter(s => !s.sample && s.topics.length)
-  .map(s => ({ date: s.date, window: s.window, topics: s.topics })) : [];
+// /api/v1/voices as the Worker answers it after importing the made-up gate snapshots (tools/verify/voices-fixtures.mjs,
+// last one on --today); the server below serves it, so /voices/ and the home block work without the Worker (voices-d1.mjs runs the real one)
+const VOICE_SNAPS = voiceSnapshots(TODAY).map(s => ({ date: s.date, window: s.window, topics: s.topics }));
 const VOICES_API = { '/api/v1/voices': { version: 'local', snapshots: VOICE_SNAPS }, '/api/v1/voices/latest': { version: 'local', snapshot: VOICE_SNAPS.at(-1) || null } };
 // page stubs of the events API leave the voices endpoints to the server
 const EVENTS_API = u => u.pathname.startsWith('/api/v1/') && !VOICES_API[u.pathname];
@@ -479,7 +478,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
     const H = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]));
     const last = VOICE_SNAPS.at(-1);
-    if (!last) throw new Error('no voices snapshot in data/voices/');
+    if (!last) throw new Error('no voices fixture snapshot');
     const HV = { date: last.date, topics: last.topics, games: (H.voiceGames || []).filter(g => last.topics.some(t => t.game === g.code)) };
     const byId = Object.fromEntries(HV.topics.map(t => [t.id, t]));
     const short = Object.fromEntries(HV.games.map(g => [g.code, g.short || g.name]));

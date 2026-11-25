@@ -50,7 +50,7 @@ In Chinese: both RESULT lines, every WARN with what you checked, the data summar
 
 ## Notes
 
-- Step 2 serves the voices API answer from `data/voices/` itself, so it needs no Worker.
+- Step 2 serves the voices API answer itself, so it needs no Worker. Both voices gates use the made-up snapshots in `tools/verify/fixtures/voices/` (dates moved so the last one is `--today`), never real ones: those live only in D1 and the owner's local copy.
 - Google's Rich Results Test has no API; for structured-data changes, offer the owner a manual paste of one built page into https://search.google.com/test/rich-results.
 - Search performance (indexing, impressions, CTR per page / query) can only be judged after Google recrawls; it is not part of this gate.
 - When a check is wrong rather than the site, fix the check in its own commit and say so in the report.

@@ -8,19 +8,32 @@ archive pages, offline rollback) stays in git history at **8f153d7**.
 Owner decision 2026-11-21: snapshots are stored in D1 and the pages render them in the browser from the API instead of
 embedding them at build time. The SEO loss is accepted for now (a server-rendered setup such as Next.js may come later).
 
+Owner decision 2026-11-25: the snapshots live **only in D1**. The JSON files are no longer committed (`/data/voices` is
+git-ignored, like `/data/events`); they are the importer's local input and backup. The owner's copy is
+`.shindan-data/voices/` next to the repo checkouts in the workspace (pass it with `--data`); the snapshots up to
+2026-11-23 stay in Git history. Builds, CI, tests and gates never read real snapshots: they use the made-up ones in
+`tools/verify/fixtures/voices/`.
+
 ## Shape
 
 | Piece | How |
 | --- | --- |
-| Snapshots | D1 `voice_snapshots`, written by `api/scripts/import-voices.mjs` from the committed `data/voices/*.json` |
+| Snapshots | D1 `voice_snapshots`, written by `api/scripts/import-voices.mjs` from local files (`--data`, never committed) |
 | `/voices/` | `const V = {counts, api}`; the page fetches `GET /api/v1/voices`, shape-checks it, then calls `boot(snapshots)` |
 | Per-day pages | none; この日のまとめ links `/voices/#d=<date>`. Old `/voices/<date>/` URLs answer 404 |
 | Home いま話題 | one `GET /api/v1/voices/latest`; the game palette is embedded as `H.voiceGames` |
 | Sitemap | `/voices/` without lastmod (the data changes without a build) |
-| Fonts | `/voices/` faces from the local `data/voices/` text (later topics fall back to the system font for new glyphs) |
+| Fonts | topic titles, summaries and voices (cards, home rows) use `--runtime`, a system font stack; the subset fonts carry only the built pages' text |
 | Pages build (`BUILD_EVENTS=0`) | no Worker behind it, so no `/voices/`, tool tab, home block or privacy section, whatever `VOICES_ENABLED` says |
 
-The committed files stay: they are the importer's input and the only copy outside D1.
+The local files are the importer's input and the only copy outside D1; keep the owner's copy backed up.
+
+Fonts: the self-hosted faces are subset from the built HTML (`scripts/fonts.py`), which holds no topic text. The
+subsets used to add the glyphs of the committed snapshots, but with no files in the repo (or CI) a build would cover
+nothing, and even then each later topic mixed faces per glyph (measured on the 4 snapshots up to 2026-11-25: 278 of
+697 distinct non-ASCII characters, ~9.5% of all characters, missing from the subsets). So the topic text is set in one
+system face (`--runtime` in `src/template.html`: Hiragino / Yu Gothic / system-ui), as consistent as the page and with
+no font growth; headings, chips and labels around it keep the brand faces.
 
 ## Storage: migration `api/migrations/0008_voices.sql`
 
@@ -40,9 +53,15 @@ voice_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)   -- 'version'
 
 ```
 npm run import:voices -- [--data DIR] [--target sqlite|wrangler|local|remote] [--yes] [--prune]
-npm run import:voices -- --remove-topic ID[,ID] | --remove-snapshot DATE[,DATE]  [--target …] [--yes]
+npm run import:voices -- --data DIR --remove-topic ID[,ID] | --remove-snapshot DATE[,DATE]  [--target …] [--yes]
+npm run import:voices -- --data DIR --today YYYY-MM-DD …   # local targets only: the date check's clock (gates)
 npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes applies api/migrations/ first)
 ```
+
+- `--data` defaults to the checkout's git-ignored `data/voices/` (as the events importer's `data/events/`) only for
+  local imports: `--target remote` and takedowns refuse to run without an explicit `--data <owner voices dir>`, so a
+  missing or stale default copy can neither feed the production D1 nor be the only files a takedown cleans. A missing
+  directory stops an import or takedown.
 
 - Validation = `contracts/voices.md` › Checks (fields, lengths in code points, game codes from `src/voices.html`,
   window / date / file name, share, voices, `reacting_to` as an x.com status URL), plus `contracts/voices.schema.json`
@@ -60,7 +79,7 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes a
 - Takedown: starts from the D1 rows, removes the topic from every date that lists it (a date left empty is deleted) or
   the whole date, writes D1, then applies the same removal to every file in `--data` that holds the id or date, valid
   or not, judged on the decoded JSON (raw text only for unparseable files). Files are rewritten with 2-space JSON, or
-  deleted when no topic is left; commit them. A missing `--data` directory, or a file it cannot clean (unparseable, or
+  deleted when no topic is left. A missing `--data` directory, or a file it cannot clean (unparseable, or
   still naming the id, e.g. in `note`), stops the run before anything is written; a final check fails the run if any
   file still holds it. Continuity problems are warnings here.
 - Targets as `import-events.mjs`: `remote` needs `D1_DATABASE_ID` (written to the git-ignored `wrangler.remote.json`
@@ -89,26 +108,29 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes a
 ## Verification
 
 - `cd api && npm test` (`tests/voices.test.ts`: validation, plan, takedown, API, cache keys, rate limit).
-- `VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --today D` (no embedded data or topic text, sitemap,
-  home flags), then `node tools/verify/voices-d1.mjs --today D`: seeds `.verify/voices-d1.sqlite3` from `data/voices/`
-  with the importer, serves dist/ + API with `dev-node.mjs`, and checks in Chrome (desktop + mobile) one API request,
+- `VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --today D` (no embedded data, no fixture topic text, sitemap,
+  home flags), then `node tools/verify/voices-d1.mjs --today D`: seeds `.verify/voices-d1.sqlite3` with the importer
+  (`--today D`) from the fixtures (`tools/verify/voices-fixtures.mjs`: `sample` dropped, dates moved so the last snapshot is D), serves dist/ + API with `dev-node.mjs`, and checks in Chrome (desktop + mobile) one API request,
   the list and calendar, `#d=` / `#t=` links, loading and error states, and the home block.
 - `node tools/verify/browser.mjs --today D` drives the calendar, dialogs, filters and the home block with the API
-  answer served from `data/voices/` by its own static server.
+  answer from the same fixtures served by its own static server.
 - A `BUILD_EVENTS=0` build has no `dist/voices/`.
 
 ## Operations
 
-- A new snapshot: commit `data/voices/<date>.json`, then `D1_DATABASE_ID=… npm run import:voices -- --target remote`
-  (read the plan) and again with `--yes`. No deploy is needed; check `https://shindan-navi.app/api/v1/voices/latest`.
+- A new snapshot: write `<date>.json` into the owner's copy (`.shindan-data/voices/`), then
+  `D1_DATABASE_ID=… npm run import:voices -- --data <owner voices dir> --target remote` (read the plan) and again with
+  `--yes`. Nothing is committed. No deploy is needed; check `https://shindan-navi.app/api/v1/voices/latest`.
   Writes to the production D1 follow `.claude/skills/d1-remote-op`.
-- Takedown: `D1_DATABASE_ID=… npm run import:voices -- --remove-topic ID --target remote` (or `--remove-snapshot DATE`;
-  read the plan), then the same with `--yes`; commit the edited or deleted files.
+- Takedown: `D1_DATABASE_ID=… npm run import:voices -- --data <owner voices dir> --remove-topic ID --target remote` (or
+  `--remove-snapshot DATE`; read the plan), then the same with `--yes`; it edits or deletes the files in `--data` too.
+  Snapshots committed before 2026-11-25 stay in Git history (the privacy page says the repository history may keep
+  them).
 - Rollback of a bad import: a wrong date that was already in D1 is fixed by correcting its file and importing again
   (the plan shows `update`). A date that should not exist at all is removed with
-  `D1_DATABASE_ID=… npm run import:voices -- --remove-snapshot DATE --target remote` (read the plan), then the same with
-  `--yes`: a plain import keeps D1 dates that have no local file (only `--prune` would delete them), and this also
-  deletes the local file; commit that.
+  `D1_DATABASE_ID=… npm run import:voices -- --data <owner voices dir> --remove-snapshot DATE --target remote` (read the
+  plan), then the same with `--yes`: a plain import keeps D1 dates that have no local file (only `--prune` would delete
+  them), and this also deletes the local file.
 - D1 outage: the edge copies and the last known version in the colo cache cover short ones; otherwise the pages show
   their error state.
 
@@ -119,4 +141,4 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes a
   (one operator, rare imports).
 - Deletion ledger: a takedown edits D1 and the local files; nothing stops an old copy of a file from re-importing a
   removed topic, and search caches may lag (as the privacy page says).
-- Fonts for topics added after the build, a month-scoped payload, and server rendering.
+- Brand fonts for topic text (it uses the system face, see Shape), a month-scoped payload, and server rendering.

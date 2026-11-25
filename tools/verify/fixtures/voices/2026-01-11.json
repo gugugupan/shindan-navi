@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "date": "2026-01-11",
+  "window": {
+    "from": "2026-01-09",
+    "to": "2026-01-11"
+  },
+  "sample": true,
+  "note": "Made-up gate fixture (tools/verify/voices-fixtures.mjs): no real posts or topics. sample: true keeps the importer from ever loading it; the gates drop the flag and move the dates so the last snapshot is --today.",
+  "topics": [
+    {
+      "id": "ptcg-fixture-promo",
+      "game": "PTCG",
+      "title": "（検証用）配布プロモの発表",
+      "summary": "架空の配布プロモカードが発表され、デザインがかわいいと喜ぶ声が多い。",
+      "attitude": "positive",
+      "share": {
+        "positive": 7,
+        "negative": 0,
+        "neutral": 1
+      },
+      "volume": "high",
+      "voices": [
+        "デザインがかわいいという声",
+        "配布期間が短いという声"
+      ],
+      "reacting_to": "https://x.com/fixture_tcg/status/1000000000000000002",
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-10",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "ygo-fixture-limit",
+      "game": "YGO",
+      "title": "（検証用）制限改訂の予想",
+      "summary": "次の制限改訂で規制されそうなカードについて、厳しすぎるという不満が目立つ。",
+      "attitude": "negative",
+      "share": {
+        "positive": 1,
+        "negative": 6,
+        "neutral": 2
+      },
+      "volume": "high",
+      "voices": [
+        "規制は避けられないという声",
+        "好きなデッキが弱くなるのが残念という声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-08",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "opcg-fixture-reprint",
+      "game": "OPCG",
+      "title": "（検証用）再録カードの発表",
+      "summary": "架空の再録カードが発表され、入手しやすくなると歓迎する声が多い。",
+      "attitude": "positive",
+      "share": {
+        "positive": 4,
+        "negative": 1,
+        "neutral": 1
+      },
+      "volume": "mid",
+      "voices": [
+        "予約を済ませたという声",
+        "店頭での在庫を気にする声"
+      ],
+      "reacting_to": "https://x.com/fixture_tcg/status/1000000000000000001",
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-05",
+      "status": "continuing",
+      "source": "grok-app"
+    },
+    {
+      "id": "dm-fixture-new-deck",
+      "game": "DM",
+      "title": "（検証用）新しいデッキの評価",
+      "summary": "架空の新しいデッキを回した感想が多い。強いという声と、色事故を気にする声がある。",
+      "attitude": "mixed",
+      "share": {
+        "positive": 3,
+        "negative": 3,
+        "neutral": 2
+      },
+      "volume": "mid",
+      "voices": [
+        "そのままでも十分強いという声",
+        "色事故しやすいという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-10",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "ptcg-fixture-deck-price",
+      "game": "PTCG",
+      "title": "（検証用）構築済みデッキの価格",
+      "summary": "架空の構築済みデッキの価格が高いという声が続いている。中身に見合うという意見もある。",
+      "attitude": "negative",
+      "share": {
+        "positive": 1,
+        "negative": 3,
+        "neutral": 2
+      },
+      "volume": "mid",
+      "voices": [
+        "再販を待つという声",
+        "値下がりを待つという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-06",
+      "status": "cooling",
+      "source": "grok-app"
+    },
+    {
+      "id": "ptcg-fixture-rule",
+      "game": "PTCG",
+      "title": "（検証用）ルールの確認",
+      "summary": "架空のカードの効果処理について、確認する投稿がいくつかある。",
+      "attitude": "neutral",
+      "share": {
+        "positive": 1,
+        "negative": 0,
+        "neutral": 3
+      },
+      "volume": "low",
+      "voices": [
+        "処理の順番を確認したいという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-11",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "conan-fixture-event",
+      "game": "CONAN",
+      "title": "（検証用）体験会の告知",
+      "summary": "架空の体験会の告知に、参加してみたいという声がある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 2,
+        "negative": 0,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "近くの店で開かれるならうれしいという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-11",
+      "status": "new",
+      "source": "grok-app"
+    },
+    {
+      "id": "uatcg-fixture-art",
+      "game": "UATCG",
+      "title": "（検証用）新しいイラスト",
+      "summary": "公開された架空のイラストを好意的に受け止める声がある。",
+      "attitude": "positive",
+      "share": {
+        "positive": 2,
+        "negative": 0,
+        "neutral": 1
+      },
+      "volume": "low",
+      "voices": [
+        "イラストの雰囲気が良いという声"
+      ],
+      "reacting_to": null,
+      "window": {
+        "from": "2026-01-09",
+        "to": "2026-01-11"
+      },
+      "first_seen": "2026-01-09",
+      "status": "cooling",
+      "source": "grok-app"
+    }
+  ]
+}
