@@ -39,6 +39,10 @@ describe('game registry', () => {
   it('matches contracts/games.schema.json', () => {
     const validate = new Ajv({ allErrors: true, strict: false }).compile(json('games.schema.json'));
     expect(validate(REG) ? [] : validate.errors).toEqual([]);
+    // an official_url needs a host; a voices game's code must fit the topics' game pattern
+    const row = REG.find((g) => g.sources.voices && g.official_url)!;
+    expect(validate([{ ...row, official_url: 'https:///x' }])).toBe(false);
+    expect(validate([{ ...row, code: 'AB1' }])).toBe(false);
   });
 
   it('keeps its keys unique', () => {

@@ -10,6 +10,8 @@
     "colour": { "type": "string", "pattern": "^#[0-9a-f]{6}$" },
     "game": {
       "type": "object",
+      "if": { "properties": { "sources": { "properties": { "voices": { "const": true } } } } },
+      "then": { "properties": { "code": { "pattern": "^[A-Z]{2,6}$", "description": "Voices topics carry the code: contracts/voices.schema.json `game`." } } },
       "additionalProperties": false,
       "required": ["code", "slug", "hub", "label", "official", "short", "chip", "title_alt", "aliases", "icon", "colour", "official_url", "sources"],
       "properties": {
@@ -37,7 +39,7 @@
           ],
           "description": "null = the release calendar's computed hue."
         },
-        "official_url": { "type": ["string", "null"], "pattern": "^https://", "description": "公式 link of the title's releases." },
+        "official_url": { "type": ["string", "null"], "pattern": "^https://[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+(/|$)", "description": "公式 link of the title's releases (a host is required)." },
         "sources": {
           "type": "object", "additionalProperties": false, "required": ["releases", "events", "voices"],
           "properties": {

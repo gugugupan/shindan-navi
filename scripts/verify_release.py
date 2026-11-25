@@ -468,6 +468,31 @@ def check_index(sitemap, today):
     print(f'  index        sitemap={len(locs)} indexable={len(indexable)} titles={len(titles)} long item titles={len(long_items)}')
 
 
+def check_hubs(hubs):
+    # hub mode (docs/design/game-hub.md): topics only from the voices API, never in the built HTML; /<code>/ redirects
+    has_voices = os.path.exists(os.path.join(DIST, 'voices/index.html'))
+    reg = {g['slug']: g for g in REGISTRY if g['hub']}
+    for pg in hubs:
+        src = open(os.path.join(DIST, pg['path'].strip('/'), 'index.html')).read()
+        g = reg.get(pg['js']['hub']['slug'])
+        if not g or pg['js']['game'] != g['label']: fail(f'{pg["path"]}: hub data does not match its registry row')
+        if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail(f'{pg["path"]}: X URL in a hub')
+        if ('"voicesApi"' in src) != (has_voices and g['sources']['voices']): fail(f'{pg["path"]}: voices API {"without" if has_voices else "with"} VOICES_ENABLED')
+        if ('id="hubTopics"' in src) != ('"voicesApi"' in src): fail(f'{pg["path"]}: いま話題 section and voices API disagree')
+        for s in os.listdir(os.path.join(ROOT, 'data/voices')) if os.path.isdir(os.path.join(ROOT, 'data/voices')) else []:
+            for t in json.load(open(os.path.join(ROOT, 'data/voices', s))).get('topics', []):
+                if t['summary'] in src or f'"{t["id"]}"' in src: fail(f'{pg["path"]}: topic {t["id"]} text in the built HTML'); break
+    rp = os.path.join(DIST, '_redirects')
+    lines = [l.split() for l in open(rp).read().splitlines() if l.strip()] if os.path.exists(rp) else []
+    want = {f'/{v}{t}': f'/{g["slug"]}/' for g in reg.values() if g['code'].lower() != g['slug'] for v in (g['code'].lower(), g['code']) for t in ('', '/')}
+    got = {}
+    for l in lines:
+        if len(l) != 3 or l[2] != '301': fail(f'_redirects: bad line {" ".join(l)}'); continue
+        got[l[0]] = l[1]
+    if got != want: fail(f'_redirects: {len(got)} rules differ from the {len(want)} /<code>/ spellings of the hubs')
+    if any(t in got for t in got.values()): fail('_redirects: a target is redirected again')
+    print(f'  hubs {len(hubs)} checked, _redirects {len(got)} rules')
+
 def check_dist(today, head, ov, arch):
     meta = json.load(open(os.path.join(ROOT, 'data/meta.json')))
     pages = json.load(open(os.path.join(ROOT, 'scripts/.pages.json')))
@@ -483,6 +508,7 @@ def check_dist(today, head, ov, arch):
     hubs = {f'/{g["slug"]}/' for g in REGISTRY if g['hub']}
     if set(titles) != hubs: fail(f'dist: title pages {sorted(titles)} differ from the data/games.json hub rows {sorted(hubs)}')
     if not months: fail('dist: no month pages')
+    check_hubs([p for p in pages if (p.get('js') or {}).get('hub')])
 
     hidden = [k for k, v in ov.items() if v.get('hide')]
     sitemap = open(os.path.join(DIST, 'sitemap.xml')).read()
@@ -491,7 +517,8 @@ def check_dist(today, head, ov, arch):
         if f'<loc>{SITE}{p}</loc>' not in sitemap: fail(f'sitemap: {p} missing')
     # lastmod: item pages their item's `changed` (meta.updated until the updater stamps one), calendar pages the newest
     # of their items', / meta.updated
-    vis = [{**i, **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date',)}} for i in head if not ov.get(i['id'], {}).get('hide')]
+    canon = {l: g['label'] for g in REGISTRY for l in g['sources']['releases']}
+    vis = [{**i, 'game': canon.get(i['game'], i['game']), **{k: v for k, v in ov.get(i['id'], {}).items() if k in ('date',)}} for i in head if not ov.get(i['id'], {}).get('hide')]
     ch = lambda xs: max((x.get('changed') or meta['updated'] for x in xs), default=meta['updated'])
     want_lastmod = {f'{SITE}/item/{i["id"]}/': i.get('changed') or meta['updated'] for i in arch + vis}
     for pg in pages:

@@ -214,9 +214,8 @@ const addM = (ym,n) => { let [y,m]=ym.split('-').map(Number); m+=n; while(m>12){
 const WEEK = Array.from({length:7},(_,i)=>addD(TODAY,i));
 // releases are known for H.from..H.until only (build day -1 .. +14)
 const covered = d => d>=H.from && d<=H.until;
-// short title labels for the 表示中 line (data/games.json chips; other titles show their full name); here DBフュージョンワールド
-// reads フュージョンワールド, not its chip DBFW
-const SHORT = {.../*SHORT*/{}, 'DBフュージョンワールド':'フュージョンワールド'};
+// short title labels for the 表示中 line (data/games.json chips; other titles show their full name)
+const SHORT = /*SHORT*/{};
 
 // same colours as the release calendar (src/template.html: titles by count, golden-angle hues)
 const games = Object.keys(H.counts).sort((a,b)=>H.counts[b]-H.counts[a]||a.localeCompare(b,'ja'));

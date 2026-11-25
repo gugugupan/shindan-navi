@@ -37,6 +37,9 @@ def registry_errors(reg):
         for k in dict.fromkeys(need):
             if not g[k]: err.append(f'{c}: {k} missing')
         if g['label'] not in g['sources']['releases']: err.append(f'{c}: label not in sources.releases')
+        if g['official_url'] is not None and not urllib.parse.urlparse(g['official_url']).hostname: err.append(f'{c}: official_url has no host')
+        # voice topics carry the code (contracts/voices.schema.json allows only letters)
+        if g['sources']['voices'] and not re.fullmatch(r'[A-Z]{2,6}',c): err.append(f'{c}: not a voices code (^[A-Z]{{2,6}}$)')
         ic=g['icon']
         if ic and (not os.path.exists(os.path.join(ROOT,'public/gi',ic)) if ic.endswith(('.png','.svg')) else len(ic)!=1): err.append(f'{c}: icon {ic!r} is neither a public/gi/ file nor one character')
     return err
@@ -44,6 +47,8 @@ if (_e:=registry_errors(REG)): sys.exit('data/games.json: '+'; '.join(_e))
 # events games in /events/ order (events.sort = D1 games.sort_order); voices games: those, then the rest in registry order
 EV_REG=sorted((g for g in REG if g['sources']['events']),key=lambda g:g['sources']['events']['sort'])
 VOICE_REG=[g for g in EV_REG if g['sources']['voices']]+[g for g in REG if g['sources']['voices'] and not g['sources']['events']]
+# titles the home page's 表示中 picker offers: the events games, then the other voices games
+HOME_REG=EV_REG+[g for g in VOICE_REG if not g['sources']['events']]
 # page-script game lists (slots like /*EV_GAMES*/[]) with the keys the scripts read: name = label, short = chip,
 # c / cd = palette colours, bit = events.bit
 PAGE_KEY={'code':lambda g:g['code'],'name':lambda g:g['label'],'short':lambda g:g['chip'],'c':lambda g:g['colour']['light'],
@@ -51,6 +56,8 @@ PAGE_KEY={'code':lambda g:g['code'],'name':lambda g:g['label'],'short':lambda g:
 def page_games(rows,keys): return [{k:PAGE_KEY[k](g) for k in keys} for g in rows]
 def js(v): return json.dumps(v,ensure_ascii=False).replace('</','<\\/')
 OFFICIAL={l:g['official_url'] for g in REG if g['official_url'] for l in g['sources']['releases']}
+# items.json `game` -> the row's label: a title's second release label groups and links as that title everywhere
+CANON={l:g['label'] for g in REG for l in g['sources']['releases']}
 # slug, data game key, official name, common short name
 GAMES=[(g['slug'],g['label'],g['official'],g['short']) for g in REG if g['hub']]
 # extra names people search with, and the second name in a title page's <title>
@@ -61,7 +68,7 @@ TITLE_ALT={g['slug']:g['title_alt'] for g in REG if g['hub']}
 # asset), otherwise a one-character monogram tile in the game's colour. Never a KONAMI asset for 遊戯王. Titles
 # without an icon get their first character.
 GAME_ICON={l:g['icon'] for g in REG if g['icon'] for l in g['sources']['releases']}
-OFFDOM=[urllib.parse.urlparse(u).netloc.replace('www.','') for u in OFFICIAL.values()]+['ws-rose.com','magic.wizards.com','pokemon-card.com']
+OFFDOM=[h for u in OFFICIAL.values() if (h:=urllib.parse.urlparse(u).netloc.replace('www.',''))]+['ws-rose.com','magic.wizards.com','pokemon-card.com']
 # gi(name) in every page script (slot /*GICON*/); decorative, the name always sits next to it
 GICON_JS=('const GICON = '+json.dumps(GAME_ICON,ensure_ascii=False)+';\n'
     "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.(png|svg)$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };")
@@ -84,6 +91,7 @@ for i in it:
     if ov.get('hide'): continue
     d={k:i.get(k,'') for k in keep}
     d.update({k:v for k,v in ov.items() if k in keep})
+    d['game']=CANON.get(d['game'],d['game'])
     if 'url' not in ov and not any(urllib.parse.urlparse(d['url']).netloc.replace('www.','').endswith(x) for x in OFFDOM): d['url']=''
     if d['thumb'] and not d['thumb'].startswith('/'): d['thumb']='/'+d['thumb']
     for k in ('pack','box'): d[k]=price_label(d[k])
@@ -100,6 +108,7 @@ for a in ARCHIVE:
     if ov.get('hide') or a['id'] in _live: continue
     d={k:a.get(k,'') for k in keep}
     d.update({k:v for k,v in ov.items() if k in keep})
+    d['game']=CANON.get(d['game'],d['game'])
     if 'url' not in ov and not any(urllib.parse.urlparse(d['url']).netloc.replace('www.','').endswith(x) for x in OFFDOM): d['url']=''
     if d['thumb'] and not os.path.exists(os.path.join(ROOT,'public',d['thumb'].lstrip('/'))): d['thumb'],d['approx']='',False
     if d['thumb'] and not d['thumb'].startswith('/'): d['thumb']='/'+d['thumb']
@@ -153,6 +162,24 @@ def about_block(heading,paras):
     body=''.join(f'<p>{x}</p>' for x in paras)
     return f'<section class="seo about"><h2>{esc(heading)}</h2>{body}</section>'
 
+# hub mode of the release app on the title pages (docs/design/game-hub.md): switcher list, and the voices API for 話題
+HUB_REG=[g for g in REG if g['hub']]
+def hub_js(slug,key):
+    g=next(g for g in HUB_REG if g['slug']==slug)
+    js={'game':key,'hub':{'slug':slug,'code':g['code'],'chip':g['chip'],'short':g['short'],'c':g['colour']['light'],'cd':g['colour']['dark']},
+        'hubs':[{'slug':h['slug'],'label':h['label'],'short':h['short']} for h in HUB_REG if h['label'] in used]}
+    if VOICES_ENABLED and g['sources']['voices']: js['voicesApi']=EVENTS_API_BASE+'/voices'
+    return js
+# /<code>/ -> /<slug>/ for hub games whose code differs from the slug; both spellings and cases, since hosts differ on
+# case and trailing-slash matching
+def redirects():
+    out=[]
+    for g in HUB_REG:
+        c=g['code']
+        if c.lower()==g['slug']: continue
+        out+=[f'/{v}{t} /{g["slug"]}/ 301' for v in (c.lower(),c) for t in ('','/')]
+    return '\n'.join(out)+'\n'
+
 def page_def():
     pages=[]
     up=[d for d in data if d['date']>=TODAY]
@@ -197,11 +224,11 @@ def page_def():
             keywords=names+[f'{short} 新弾',f'{short} 発売日']+COMMON_KW,
             h1=f'{name} 新弾 発売日カレンダー' if short in name else f'{name}（{short}）新弾 発売日カレンダー',
             lead=lead,
-            crumbs=[('トップ','/'),('新弾カレンダー','/releases/'),(f'{short} 新弾',None)], js={'game':key},
+            crumbs=[('トップ','/'),('新弾カレンダー','/releases/'),(f'{short} 新弾',None)], js=hub_js(slug,key),
             list=static_list(lst,list_head,list_note,show_game=False)
                 +about_block(f'{short}の新弾情報について',[
                   f'{"・".join(esc(x) for x in names)}の新弾（拡張パック・ブースターパック・スターターデッキなど）の発売日と価格をまとめています。{about_next}',
-                  f'カレンダーでは{esc(short)}の発売予定だけを表示しています。タイトルの絞り込み（スマホでは「絞り込み」ボタンの中）で「すべて」を選ぶと、ほかのTCGの新弾もまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。']),
+                  f'カレンダーでは{esc(short)}の発売予定{"と、Xで話題になっていること" if VOICES_ENABLED else ""}を表示しています。ほかのタイトルへはカレンダー上のタイトル名から切り替えられ、全タイトルの新弾は<a href="/releases/">新弾カレンダー</a>でまとめて確認できます。気になる商品は☆でお気に入りに追加でき、商品を開いて「カレンダーに追加」を押すと Google カレンダーやスマホのカレンダーに登録できます。']),
             ld_items=lst,lastmod=lastmod(its)))
     for ym in months:
         its=[d for d in data if d['date'].startswith(ym)]
@@ -227,6 +254,7 @@ ICO=lambda d:f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 # path, name (two parts, joined), icon
 # BUILD_EVENTS=0 leaves /events/ out entirely (page, sitemap, tool tabs): hosts without the /api/ Worker (the Pages site before cutover).
 BUILD_EVENTS=os.environ.get('BUILD_EVENTS','1')!='0'
+EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
 TOOLS=[('/releases/','新弾','カレンダー',ICO('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="currentColor" stroke="none"/>')),
        ('/events/','イベント','カレンダー',ICO('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5a2.5 2.5 0 0 0 2.6 3.6M16 6h2.5a2.5 2.5 0 0 1-2.6 3.6M12 13v4M8.5 20h7"/>')),
        ('/voices/','話題','カレンダー',ICO('<path d="M4 5h16v11H9l-4 4v-4H4z"/><path d="M8 9h8M8 12h5"/>'))]
@@ -296,6 +324,7 @@ if GA_ID:
 }})();
 </script>"""
 
+HUB_TOPICS='<section class="seo hubtp" id="hubTopics" aria-labelledby="hubTopicsH" hidden><h2 id="hubTopicsH">いま話題</h2><div id="hubTopicsBody"></div></section>'
 def render(pg):
     url=SITE+pg['path']
     og=f'{SITE}/og/{pg["og"]}.png'
@@ -348,12 +377,14 @@ def render(pg):
         crumbs='<nav class="crumbs" aria-label="パンくず">'+' › '.join(f'<a href="{h}">{esc(n)}</a>' if h else f'<span aria-current="page">{esc(n)}</span>' for n,h in pg['crumbs'])+'</nav>'
     page=page.replace('<!--PAGEHEAD-->',f'{crumbs}<div class="ptitle"><h1>{esc(pg["h1"])}</h1><p>{esc(pg["lead"])}</p></div>')
     page=page.replace('<!--SEOLIST-->',pg['list']).replace('<!--SITENAV-->',sitenav(pg['path']))
-    page=page.replace('<!--CORNER-->',corner('/releases/'))
+    hub=(pg['js'] or {}).get('hub')
+    # a hub spans releases, topics and events: no tool tab is the current one
+    page=page.replace('<!--CORNER-->',corner(None if hub else '/releases/'))
+    page=page.replace('<!--HUBTOPICS-->',HUB_TOPICS if hub and pg['js'].get('voicesApi') else '')
     page=re.sub(r'<title>.*?</title>\n?','',page,count=1)
     split=page.index('<div class="wrap">')
     return head+page[:split]+'</head>\n<body>\n'+page[split:]+'\n</body>\n</html>\n'
 
-EVENTS_API_BASE=os.environ.get('EVENTS_API_BASE','/api/v1')
 # Browser key for the /events/ day-view map (Maps JavaScript API only, HTTP-referrer restricted; public by design). Empty = placeholder.
 MAPS_BROWSER_KEY=os.environ.get('MAPS_BROWSER_KEY','').strip()
 EVENTS_PAGE=dict(path='/events/',og='events',
@@ -513,7 +544,7 @@ def render_home():
           'items':[{k:d[k] for k in keep if d.get(k)} for d in data if pg['lo']<=d['date']<=pg['hi']]}
     if VOICES_ENABLED: home['voicesApi']=EVENTS_API_BASE+'/voices/latest'; home['voiceGames']=VOICE_GAME_BLOCK
     # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (表示中 line, 今週のカレンダー)
-    home['titles']={g['code']:g['label'] for g in VOICE_REG}
+    home['titles']={g['code']:g['label'] for g in HOME_REG}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
     if BUILD_EVENTS:
         cts=open(os.path.join(ROOT,'api/src/constants.ts')).read()
@@ -526,7 +557,7 @@ def render_home():
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS),
-                     ('/*SHORT*/{}',js({g['label']:g['chip'] for g in VOICE_REG})),('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','short','c','cd','bit']))))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
+                     ('/*SHORT*/{}',js({g['label']:g['chip'] for g in HOME_REG})),('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','short','c','cd','bit']))))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
@@ -885,6 +916,7 @@ sm.append(f'<url><loc>{SITE}{PRIVACY_PAGE["path"]}</loc><lastmod>{PRIVACY_LASTMO
 sm.append('</urlset>')
 open(os.path.join(dist,'sitemap.xml'),'w').write('\n'.join(sm)+'\n')
 # the landing pages' sitemap is the Worker's (indexable pages depend on D1 data and its age)
+open(os.path.join(dist,'_redirects'),'w').write(redirects())
 open(os.path.join(dist,'robots.txt'),'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n'+(f'Sitemap: {SITE}/events/sitemap.xml\n' if LANDING_ENABLED else ''))
 json.dump([{'path':p['path'],'og':p['og'],'h1':p['h1'],'lead':p['lead'],'js':p['js']} for p in pages+[EVENTS_PAGE]],open(os.path.join(ROOT,'scripts/.pages.json'),'w'),ensure_ascii=False)
 venv_py=os.path.join(ROOT,'.venv/bin/python')

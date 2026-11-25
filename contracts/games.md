@@ -19,18 +19,18 @@ events importer (`GAME_CODES`, `GAME_BITS`) and the voices importer (valid topic
 | --- | --- |
 | `code` | `^[A-Z][A-Z0-9]{1,7}$`, never renamed: D1 `games.code`, voices topics and saved filters hold it. |
 | `slug` | `/<slug>/` (title page) and `/events/<slug>/<pref>/`; null = none. |
-| `hub` | build.py builds the title page `/<slug>/` (the 10 main titles; owner decision). |
+| `hub` | build.py builds the hub `/<slug>/` (the title page in hub mode; the 10 main titles; owner decision) and `/<code>/` → `/<slug>/` redirects. |
 | `label` | Display name = items.json `game` = `GAME_ICON` key = `/events/` chip and column name. |
 | `official` | Official name: title pages; for events games D1 `games.name`. |
 | `short` | Common short name: title page `<title>` / h1, event landing pages (ワンピカード, コナンカード). |
-| `chip` | Tight label: `/` (イベント heading, 表示中 line; there DBフュージョンワールド reads フュージョンワールド) and `/voices/` chips (ワンピ, コナン). |
+| `chip` | Tight label: `/` (イベント heading, 表示中 line), `/voices/` chips and the hub's game switcher (ワンピ, コナン, フュージョンワールド). |
 | `title_alt`, `aliases` | Title page: second name in `<title>`, extra search names. |
 | `icon` | `public/gi/` file or a one-character monogram (CLAUDE.md › Game icons); null = first character of the label. |
 | `colour` | `{slot, light, dark}`: CLAUDE.md › Event game palette (slots 1-14) and `contracts/voices.md` › Game codes (15 DM, 16 YGO); null = the release calendar's computed hue. |
-| `official_url` | 公式 link of the title's releases. |
-| `sources.releases` | items.json `game` labels of the title (normally `[label]`). |
+| `official_url` | 公式 link of the title's releases; must have a host (build.py refuses one without). |
+| `sources.releases` | items.json `game` labels of the title (normally `[label]`); the build shows, groups and links every one of them as `label`. |
 | `sources.events` | `{bit, sort}` = D1 `games.bit` / `games.sort_order`; null = no events collected. |
-| `sources.voices` | Topics may use this code. |
+| `sources.voices` | Topics may use this code; it then matches the topics' `^[A-Z]{2,6}$` (`contracts/voices.schema.json`). |
 
 ## Rules
 

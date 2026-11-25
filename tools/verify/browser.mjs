@@ -26,8 +26,12 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
   '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.xml': 'application/xml', '.txt': 'text/plain' };
 
+// dist/_redirects (static `from to 301` lines, as build.py writes them) applied the way the hosts do
+const REDIRECTS = fs.existsSync(path.join(DIST, '_redirects')) ? Object.fromEntries(fs.readFileSync(path.join(DIST, '_redirects'), 'utf8')
+  .split('\n').map(l => l.trim().split(/\s+/)).filter(x => x.length === 3).map(([a, b, c]) => [a, [b, +c]])) : {};
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  if (REDIRECTS[p]) { res.writeHead(REDIRECTS[p][1], { location: REDIRECTS[p][0] + new URL(req.url, 'http://x').search }).end(); return; }
   if (VOICES_API[p]) { res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(VOICES_API[p])); return; }
   let f = path.join(DIST, p);
   if (!f.startsWith(DIST)) { res.writeHead(403).end(); return; }
@@ -1659,6 +1663,107 @@ if (HAS_EVENTS) {
     console.log(`  ${where.padEnd(22)} checked`);
     await ctx.close();
   }
+}
+// Hubs (title pages in hub mode, docs/design/game-hub.md): the game switcher (links with the shown month), 話題 markers
+// and the day dialog from /api/v1/voices (served from data/voices/), いま話題, a failed voices API, /<code>/ redirects;
+// both themes, 1366 / 390 screenshots.
+{
+  const HUBS = PAGES.filter(p => p.js && p.js.hub);
+  const latest = VOICE_SNAPS.at(-1);
+  // a hub with topics in the latest snapshot, else the first one
+  const pick = HUBS.find(h => latest && latest.topics.some(t => t.game === h.js.hub.code)) || HUBS[0];
+  const code = pick.js.hub.code;
+  const topics = new Map();
+  for (const s of VOICE_SNAPS) for (const t of s.topics) if (t.game === code) {
+    const x = topics.get(t.id) || { first: t.first_seen, last: s.date }; x.last = s.date; if (t.first_seen < x.first) x.first = t.first_seen; topics.set(t.id, x);
+  }
+  const onDay = d => [...topics.values()].filter(t => t.first <= d && d <= t.last).length;
+  const addDay = (d, n) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const nowN = HAS_VOICES && latest && (Date.parse(TODAY) - Date.parse(latest.date)) / 864e5 <= 7 ? latest.topics.filter(t => t.game === code).length : null;
+  for (const [vp, opt] of Object.entries({ desktop: { width: 1366, height: 900 }, mobile: VIEWPORTS.mobile })) for (const scheme of ['light', 'dark']) {
+    const where = `${vp} ${scheme} hub ${pick.path}`;
+    const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+      hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo', colorScheme: scheme });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [], api = [];
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    page.on('request', r => { if (r.url().startsWith(BASE + '/api/')) api.push(r.url().slice(BASE.length)); });
+    try {
+      await page.goto(BASE + pick.path, { waitUntil: 'networkidle' });
+      const wantApi = HAS_VOICES ? ['/api/v1/voices'] : [];
+      if (JSON.stringify(api) !== JSON.stringify(wantApi)) fail(where, `API requests ${JSON.stringify(api)}, expected ${JSON.stringify(wantApi)}`);
+      const st = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        month: state.month, cur: !!document.querySelector('.tooltabs a[aria-current]'),
+        tmk: [...document.querySelectorAll('[data-open-day].tmk')].filter(e => e.offsetParent).map(e => [e.dataset.openDay, e.closest('.ag') ? +e.textContent.match(/\d+/)[0] : +(e.textContent.match(/\d+/) || [1])[0]]),
+        grid: [...document.querySelectorAll('.day button.n')].map(b => b.dataset.openDay),
+        sec: document.getElementById('hubTopics') ? { hidden: document.getElementById('hubTopics').hidden, n: document.querySelectorAll('#hubTopics .tp').length,
+          xurl: /x\.com|twitter\.com/.test(document.getElementById('hubTopics').innerHTML.replace('X（旧Twitter）', '')) } : null }));
+      if (st.overflow > 1) fail(where, `page scrolls horizontally by ${st.overflow}px`);
+      if (st.cur) fail(where, 'a tool tab is marked current on a hub');
+      // markers: every shown day (desktop grid / phone month list) with the game's topics, with their count
+      const days = vp === 'desktop' ? st.grid : Array.from({ length: 31 }, (_, i) => `${st.month}-${String(i + 1).padStart(2, '0')}`);
+      const want = HAS_VOICES ? days.filter(d => onDay(d)).map(d => [d, onDay(d)]) : [];
+      const got = st.tmk.filter(([d]) => days.includes(d));
+      const slimOk = (g, w) => g.length === w.length && g.every(([d, n], i) => d === w[i][0] && (n === w[i][1] || n === 1));
+      if (!slimOk(got, want)) fail(where, `話題 markers ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`);
+      if (HAS_VOICES) {
+        if (!st.sec) fail(where, 'いま話題 section missing');
+        else if (nowN === null ? !st.sec.hidden : st.sec.hidden || st.sec.n !== Math.min(5, nowN)) fail(where, `いま話題 ${JSON.stringify(st.sec)}, expected ${nowN}`);
+        if (st.sec?.xurl) fail(where, 'いま話題 has an X URL');
+      } else if (st.sec) fail(where, 'いま話題 without VOICES_ENABLED');
+      // day dialog: a topic day opens with its releases and topics
+      const tday = want[0]?.[0];
+      if (tday) {
+        await page.locator(vp === 'desktop' ? `.day [data-open-day="${tday}"].n` : `.ag [data-open-day="${tday}"]`).click();
+        const dl = await page.evaluate(() => ({ open: document.getElementById('dlg').open, tp: document.querySelectorAll('#dlg .dl-tp .tp').length,
+          links: [...document.querySelectorAll('#dlg .dl-tp a')].map(a => a.getAttribute('href')) }));
+        if (!dl.open || dl.tp !== onDay(tday) || dl.links.some(h => !h.startsWith('/voices/#t='))) fail(where, `day dialog ${tday}: ${JSON.stringify(dl)}, expected ${onDay(tday)} topics`);
+        await page.screenshot({ path: path.join(OUT, `hub-${vp}-${scheme}-day.png`) });
+        await page.keyboard.press('Escape');
+      }
+      await page.screenshot({ path: path.join(OUT, `hub-${vp}-${opt.width}-${scheme}.png`), fullPage: true });
+      // switcher: every hub as a link, the current one marked; the shown month is carried
+      await page.locator('#nextM').click();
+      const m2 = await page.evaluate(() => state.month);
+      if (new URL(page.url()).search !== `?m=${m2}`) fail(where, `URL ${page.url()} after 次月`);
+      await page.locator('#gameSw').click();
+      const sw = await page.evaluate(() => ({ open: document.getElementById('swDlg').open, links: [...document.querySelectorAll('#swList a')].map(a => [a.getAttribute('href'), a.getAttribute('aria-current')]) }));
+      const other = HUBS.find(h => h !== pick);
+      if (!sw.open || sw.links.length !== HUBS.length || sw.links.some(([h, c]) => !h.endsWith(`/?m=${m2}`) || (c === 'page') !== h.startsWith(pick.path)))
+        fail(where, `switcher ${JSON.stringify(sw)}`);
+      if (scheme === 'light') await page.screenshot({ path: path.join(OUT, `hub-${vp}-switcher.png`) });
+      await page.locator(`#swList a[href^="${other.path}"]`).click();
+      await page.waitForURL(u => u.pathname === other.path);
+      if (await page.evaluate(() => state.month) !== m2) fail(where, `switch to ${other.path} did not keep ${m2}`);
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
+  // a failed voices API leaves the releases and hides every 話題 part
+  if (HAS_VOICES) {
+    const ctx = await browser.newContext({ viewport: VIEWPORTS.desktop, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await ctx.newPage(), bad = [];
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    await page.route('**/api/v1/voices', r => r.fulfill({ status: 503, body: 'busy' }));
+    await page.goto(BASE + pick.path, { waitUntil: 'networkidle' });
+    const st = await page.evaluate(() => ({ tmk: document.querySelectorAll('.tmk').length, sec: document.getElementById('hubTopics').hidden, cards: document.querySelectorAll('.pk').length }));
+    if (st.tmk || !st.sec || !st.cards) fail('hub voices 503', JSON.stringify(st));
+    for (const b of bad) fail('hub voices 503', b);
+    await ctx.close();
+  }
+  // /<code>/ answers 301 to the hub (both cases, with and without the slash)
+  for (const h of HUBS) {
+    const c = h.js.hub.code;
+    if (c.toLowerCase() === h.path.slice(1, -1)) continue;
+    for (const v of [`/${c.toLowerCase()}/`, `/${c}`]) {
+      const r = await fetch(BASE + v + '?m=2026-12', { redirect: 'manual' });
+      if (r.status !== 301 || r.headers.get('location') !== `${h.path}?m=2026-12`) fail(`redirect ${v}`, `${r.status} ${r.headers.get('location')}`);
+    }
+  }
+  console.log(`  hubs checked (${pick.path}, ${topics.size} topics, ${Object.keys(REDIRECTS).length} redirects)`);
 }
 // game icons (gi() in build.py) next to game names in both themes: every one loaded and at its fixed size
 {
