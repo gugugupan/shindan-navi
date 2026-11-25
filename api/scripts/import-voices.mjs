@@ -4,7 +4,9 @@
 // keeps the copy in .shindan-data/voices/ next to the checkout and passes it with --data).
 //
 //   node scripts/import-voices.mjs [--data DIR] [--target sqlite|wrangler|remote] [--plan | --yes] [--prune]
-//   node scripts/import-voices.mjs --remove-topic ID[,ID…] | --remove-snapshot DATE[,DATE…]  [--target …] [--plan | --yes]
+//   node scripts/import-voices.mjs --data DIR --remove-topic ID[,ID…] | --remove-snapshot DATE[,DATE…]  [--target …] [--plan | --yes]
+//   (--data is required with --target remote and for takedowns; --today YYYY-MM-DD, local targets only, moves the
+//   "no date after today" check for gates)
 //
 // Every run validates the files (contracts/voices.md; samples are skipped, never imported), reads the database's
 // rows, checks the resulting timeline and prints per date insert / update / unchanged / delete by content hash.
@@ -34,7 +36,7 @@ import { BASE_CONFIG, writeRemoteConfig, remoteConfig } from './remote-config.mj
 const DB_NAME = 'shindan-navi-events';
 const { values: opts } = parseArgs({
   options: {
-    data: { type: 'string', default: DEFAULT_VOICES_DIR },
+    data: { type: 'string' },
     target: { type: 'string', default: 'wrangler' },
     sqlite: { type: 'string', default: join(API_DIR, '.local', 'events.sqlite3') },
     out: { type: 'string', default: join(API_DIR, '.local', 'import-voices.sql') },
@@ -43,6 +45,7 @@ const { values: opts } = parseArgs({
     prune: { type: 'boolean', default: false },
     'remove-topic': { type: 'string' },
     'remove-snapshot': { type: 'string' },
+    today: { type: 'string' },
   },
 });
 const fail = (msg, code = 1) => {
@@ -61,6 +64,14 @@ if (opts['remove-snapshot'] !== undefined && !dropDates.length) fail('--remove-s
 if (dropIds.some((id) => !/^[a-z0-9][a-z0-9-]{2,63}$/.test(id))) fail('--remove-topic takes topic ids (a-z, 0-9, -)', 2);
 if (dropDates.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) fail('--remove-snapshot takes YYYY-MM-DD dates', 2);
 const takedown = dropIds.length > 0 || dropDates.length > 0;
+// The default dir may be missing or a stale partial copy: the production D1 and takedowns (which also clean the
+// files) take the owner's copy by name, or a takedown could leave it holding what D1 no longer has.
+if (opts.data === undefined && (opts.target === 'remote' || takedown)) {
+  fail(`${opts.target === 'remote' ? '--target remote' : 'a takedown'} needs an explicit --data <owner voices dir> (contracts/voices.md)`, 2);
+}
+opts.data ??= DEFAULT_VOICES_DIR;
+// --today moves the "no date after today" clock for local gates (tools/verify/voices-d1.mjs); never for production.
+if (opts.today !== undefined && (opts.target === 'remote' || !/^\d{4}-\d{2}-\d{2}$/.test(opts.today))) fail('--today takes YYYY-MM-DD and is for local targets only', 2);
 // An empty --data (an unset shell variable) would resolve to the current directory.
 if (!opts.data.trim()) fail('--data is empty', 2);
 // A takedown also cleans --data: a mistyped directory must not let it succeed on D1 alone.
@@ -146,7 +157,7 @@ if (takedown) {
   desired = kept;
 } else {
   if (!existsSync(dataDir)) fail(`${dataDir} does not exist`);
-  local = loadVoices(dataDir);
+  local = loadVoices(dataDir, opts.today ? { today: opts.today } : {});
   warnings.push(...local.warnings);
   errors.push(...local.errors);
   desired = opts.prune ? new Map(local.snapshots) : new Map([...state.snapshots, ...local.snapshots]);

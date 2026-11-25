@@ -36,7 +36,7 @@ const db = path.join(OUT, 'voices-d1.sqlite3');
 for (const f of [db, `${db}-wal`, `${db}-shm`]) fs.rmSync(f, { force: true });
 const dataDir = path.join(OUT, 'voices-d1-data');
 writeSnapshots(dataDir, TODAY);
-const imp = spawnSync(process.execPath, ['scripts/import-voices.mjs', '--data', dataDir, '--target', 'sqlite', '--sqlite', db, '--yes'], { cwd: API, encoding: 'utf8' });
+const imp = spawnSync(process.execPath, ['scripts/import-voices.mjs', '--data', dataDir, '--today', TODAY, '--target', 'sqlite', '--sqlite', db, '--yes'], { cwd: API, encoding: 'utf8' });
 process.stdout.write(imp.stdout);
 if (imp.status !== 0) { console.error(imp.stderr); process.exit(1); }
 

@@ -316,6 +316,27 @@ describe('import-voices.mjs', () => {
     expect(existsSync(db)).toBe(false);
   });
 
+  it('needs an explicit --data for the production D1 and for takedowns', () => {
+    for (const args of [['--target', 'remote', '--plan'], ['--target', 'sqlite', '--remove-topic', 'opcg-test-topic', '--plan'],
+      ['--target', 'sqlite', '--remove-snapshot', '2026-11-20', '--plan']]) {
+      const r = cli(args, { D1_DATABASE_ID: '' });
+      expect(r.status).toBe(2);
+      expect(r.stderr).toMatch(/needs an explicit --data/);
+    }
+  });
+
+  it('takes --today only for local targets', () => {
+    const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
+    const future = snap({ date: '2099-01-03', window: { from: '2099-01-01', to: '2099-01-03' } },
+      [topic({ window: { from: '2099-01-01', to: '2099-01-03' }, first_seen: '2099-01-02' })]);
+    expect(cli([...sqliteArgs(db), '--data', fixtureDir([future]), '--plan']).status).toBe(1);
+    const ok = cli([...sqliteArgs(db), '--data', fixtureDir([future]), '--today', '2099-01-03', '--plan']);
+    expect(ok.status, ok.stderr).toBe(0);
+    const r = cli(['--target', 'remote', '--data', fixtureDir([future]), '--today', '2099-01-03', '--plan']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--today .* local targets only/);
+  });
+
   it('plans without creating or migrating the database file', () => {
     const db = join(mkdtempSync(join(tmpdir(), 'voices-cli-')), 'db.sqlite3');
     const plan = cli([...sqliteArgs(db), '--data', fixtureDir(), '--plan']);

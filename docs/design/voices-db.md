@@ -53,12 +53,15 @@ voice_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)   -- 'version'
 
 ```
 npm run import:voices -- [--data DIR] [--target sqlite|wrangler|local|remote] [--yes] [--prune]
-npm run import:voices -- --remove-topic ID[,ID] | --remove-snapshot DATE[,DATE]  [--target …] [--yes]
+npm run import:voices -- --data DIR --remove-topic ID[,ID] | --remove-snapshot DATE[,DATE]  [--target …] [--yes]
+npm run import:voices -- --data DIR --today YYYY-MM-DD …   # local targets only: the date check's clock (gates)
 npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes applies api/migrations/ first)
 ```
 
-- `--data` defaults to the checkout's git-ignored `data/voices/` (as the events importer's `data/events/`); for the
-  production D1 always pass the owner's copy explicitly. A missing directory stops an import or takedown.
+- `--data` defaults to the checkout's git-ignored `data/voices/` (as the events importer's `data/events/`) only for
+  local imports: `--target remote` and takedowns refuse to run without an explicit `--data <owner voices dir>`, so a
+  missing or stale default copy can neither feed the production D1 nor be the only files a takedown cleans. A missing
+  directory stops an import or takedown.
 
 - Validation = `contracts/voices.md` › Checks (fields, lengths in code points, game codes from `src/voices.html`,
   window / date / file name, share, voices, `reacting_to` as an x.com status URL), plus `contracts/voices.schema.json`
@@ -76,7 +79,7 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes a
 - Takedown: starts from the D1 rows, removes the topic from every date that lists it (a date left empty is deleted) or
   the whole date, writes D1, then applies the same removal to every file in `--data` that holds the id or date, valid
   or not, judged on the decoded JSON (raw text only for unparseable files). Files are rewritten with 2-space JSON, or
-  deleted when no topic is left; commit them. A missing `--data` directory, or a file it cannot clean (unparseable, or
+  deleted when no topic is left. A missing `--data` directory, or a file it cannot clean (unparseable, or
   still naming the id, e.g. in `note`), stops the run before anything is written; a final check fails the run if any
   file still holds it. Continuity problems are warnings here.
 - Targets as `import-events.mjs`: `remote` needs `D1_DATABASE_ID` (written to the git-ignored `wrangler.remote.json`
@@ -105,9 +108,9 @@ npm run import:voices:sqlite -- --yes        # local SQLite of dev:node (--yes a
 ## Verification
 
 - `cd api && npm test` (`tests/voices.test.ts`: validation, plan, takedown, API, cache keys, rate limit).
-- `VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --today D` (no embedded data or topic text, sitemap,
+- `VOICES_ENABLED=1 .venv/bin/python -I scripts/verify_release.py --today D` (no embedded data, no fixture topic text, sitemap,
   home flags), then `node tools/verify/voices-d1.mjs --today D`: seeds `.verify/voices-d1.sqlite3` with the importer
-  from the fixtures (`tools/verify/voices-fixtures.mjs`: `sample` dropped, dates moved so the last snapshot is D), serves dist/ + API with `dev-node.mjs`, and checks in Chrome (desktop + mobile) one API request,
+  (`--today D`) from the fixtures (`tools/verify/voices-fixtures.mjs`: `sample` dropped, dates moved so the last snapshot is D), serves dist/ + API with `dev-node.mjs`, and checks in Chrome (desktop + mobile) one API request,
   the list and calendar, `#d=` / `#t=` links, loading and error states, and the home block.
 - `node tools/verify/browser.mjs --today D` drives the calendar, dialogs, filters and the home block with the API
   answer from the same fixtures served by its own static server.

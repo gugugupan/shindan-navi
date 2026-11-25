@@ -94,10 +94,11 @@ a new game.
 ## Takedowns
 
 Snapshot files are never renamed. A topic, or a whole snapshot, may be removed on a takedown / deletion request (the
-privacy page promises deletion): `cd api && D1_DATABASE_ID=… npm run import:voices -- --remove-topic ID --target remote`
+privacy page promises deletion):
+`cd api && D1_DATABASE_ID=… npm run import:voices -- --data <owner voices dir> --remove-topic ID --target remote`
 (or `--remove-snapshot DATE`) shows the plan, and the same command with `--yes` removes it from D1 (every date that
-lists the id; a date left without topics is deleted) and from the local files in `--data` (pass the owner's copy;
-operations: docs/design/voices-db.md). Snapshots committed before 2026-11-25 stay in Git history. Search caches and archives may lag, as the privacy page says.
+lists the id; a date left without topics is deleted) and from the owner's files in `--data` (the importer refuses a
+takedown or a remote target without an explicit `--data`; operations: docs/design/voices-db.md). Snapshots committed before 2026-11-25 stay in Git history. Search caches and archives may lag, as the privacy page says.
 
 ## Checks
 
@@ -106,7 +107,7 @@ code; a duplicate id inside one snapshot; a topic whose `first_seen` is after th
 not an x.com status URL; a `posts` field (player post URLs are never committed); any other X / Twitter URL in a decoded
 string; more than 3 voices; `share` all zero; missing or extra fields (also `contracts/voices.schema.json`); a date after
 today (JST). Across snapshots an id keeps its `game` and `first_seen`, and `new` is only its first appearance.
-`verify_release.py` checks that the built `/voices/` embeds no snapshot, topic text or X URL and is in the sitemap;
+`verify_release.py` checks that the built `/voices/` embeds no snapshot, no fixture topic text and no X URL and is in the sitemap;
 `tools/verify/voices-d1.mjs` runs the page and the home block against the importer and the Worker code, and
 `tools/verify/browser.mjs` drives the page with the API answer served by its own server, both from the fixtures in
 `tools/verify/fixtures/voices/` (dates moved so the last snapshot is `--today`).
