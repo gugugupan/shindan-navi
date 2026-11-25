@@ -961,6 +961,7 @@ document.getElementById('results').addEventListener('click',e=>{
   if(e.target.closest('#pickPref')){ openPref(); return; }
   const nm=e.target.closest('button.nomapt'); if(nm){ toggleTip(nm); return; }
   const a=e.target.closest('a.ev-link'); if(a){ track('click_event_source',{game:a.dataset.game}); return; }
+  if(e.target.closest('a.gl')) return;
   const d=e.target.closest('button.cd[data-day],button.daymap[data-open]');
   if(d){ const k=d.dataset.day||d.dataset.open; commit({view:'list',range:'custom',from:k,to:k},{day:true}); window.scrollTo({top:0}); track('events_map',{action:'day'}); return; }
   const ev=e.target.closest('.ev[data-mk]');

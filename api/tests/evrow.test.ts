@@ -22,7 +22,7 @@ const icon = (n: string) => {
   const v = g ? g.icon : [...String(n || '?')][0].toUpperCase();
   return /\.(png|svg)$/.test(v) ? `<img class="gi" src="/gi/${v}" width="16" height="16" alt="" aria-hidden="true">` : `<span class="gi" aria-hidden="true">${v}</span>`;
 };
-const games = Object.fromEntries(Object.entries(LANDING_GAMES).map(([k, g]) => [k, { name: g.label, c: g.c, cd: g.cd }]));
+const games = Object.fromEntries(Object.entries(LANDING_GAMES).map(([k, g]) => [k, { name: g.label, c: g.c, cd: g.cd, hub: g.releases ? g.slug : '' }]));
 
 // Real-looking shapes: the contract fixture, synthetic rows (cancelled / postponed / fees / registration states),
 // shared venue ids, month-marker names, a group of identical events, a shared (multi-game) event.

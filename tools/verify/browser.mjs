@@ -335,7 +335,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const hasEvents = await page.locator('#evBody').count() > 0;
   // today's panel is the day view: its release cards, and without a location one muted line; the 表示中 line's 地域を設定
   // is the only location control (no 都道府県を選ぶ button outside the dialogs)
-  const st = await page.evaluate(() => ({ date: document.getElementById('hDate').textContent, cards: document.querySelectorAll('#wkPanel a.pk').length,
+  const st = await page.evaluate(() => ({ date: document.getElementById('hDate').textContent, cards: document.querySelectorAll('#wkPanel .pk').length,
     none: !!document.querySelector('#wkPanel .wps .q'), days: document.querySelectorAll('#wkStrip [role="tab"]').length,
     prompt: !!document.getElementById('hsLocSet') && document.getElementById('evBody').textContent === '地域を設定すると、この日のイベントも表示します。'
       && ![...document.querySelectorAll('#home button')].some(b => b.textContent.includes('都道府県')),
@@ -356,7 +356,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13,JP-14', game: 'OPCG', days: 'weekend' })); }, [fav && fav.id]);
   await page.reload({ waitUntil: 'networkidle' });
   if (fav) {
-    const first = await page.locator('#wkPanel a.pk').first().getAttribute('href');
+    const first = await page.locator('#wkPanel .pk a.pko').first().getAttribute('href');
     if (first !== `/releases/#i=${fav.id}`) fail(where, `favourite not first: ${first}`);
   }
   if (hasEvents) {
@@ -471,16 +471,17 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     const sec = document.getElementById('vtr');
     return { shown: !!sec && !sec.hidden && sec.offsetParent !== null, label: sec && document.getElementById(sec.getAttribute('aria-labelledby'))?.textContent,
       sub: document.getElementById('vtSub')?.textContent, buttons: sec ? sec.querySelectorAll('button').length : 0,
-      rows: [...document.querySelectorAll('#vtBody a.vt')].map(a => a.getAttribute('href').replace('/voices/#t=', '')),
+      rows: [...document.querySelectorAll('#vtBody .vt a.tt')].map(a => a.getAttribute('href').replace('/voices/#t=', '')),
       asof: document.getElementById('vtAsOf')?.textContent, saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')],
       cards: (() => {
-        const lis = [...document.querySelectorAll('#vtBody ul.vts > li')], rs = lis.map(li => li.querySelector('a.vt')?.getBoundingClientRect() || li.getBoundingClientRect());
+        const lis = [...document.querySelectorAll('#vtBody ul.vts > li')], rs = lis.map(li => li.querySelector('.vt')?.getBoundingClientRect() || li.getBoundingClientRect());
         const rows = Object.values(rs.reduce((m, r) => ((m[Math.round(r.top)] ||= []).push(Math.round(r.height)), m), {}));
         const box = document.getElementById('vtr').getBoundingClientRect();
         return { n: lis.length, cols: new Set(rs.map(r => Math.round(r.left))).size, unequal: rows.some(h => Math.max(...h) - Math.min(...h) > 1),
           outside: rs.some(r => r.left < box.left - 0.5 || r.right > box.right + 0.5),
-          links: lis.map(li => { const a = li.querySelectorAll('a'), n = a[0] && (a[0].getAttribute('aria-labelledby') || '').split(' ').map(i => document.getElementById(i)?.textContent).join(' ');
-            return { n: a.length, name: n, title: li.querySelector('.tt')?.textContent, meta: Math.min(...[...li.querySelectorAll('.vh,.vh :not(.gi),.tr')].map(e => parseFloat(getComputedStyle(e).fontSize))) }; }) };
+          links: lis.map(li => { const a = li.querySelectorAll('a.tt'), n = a[0] && a[0].textContent;
+            // besides the card's link (the title, stretched over the card): only the game chip's hub link
+            return { n: a.length, other: li.querySelectorAll('a:not(.tt):not(.gl)').length, name: n, title: li.querySelector('.tt')?.textContent, meta: Math.min(...[...li.querySelectorAll('.vh,.vh :not(.gi),.tr')].map(e => parseFloat(getComputedStyle(e).fontSize))) }; }) };
       })(),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
   });
@@ -512,7 +513,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
       if (c.cols < min || c.cols > max) fail(where, `${w}px: ${c.cols} columns`);
       if (c.unequal) fail(where, `${w}px: cards in a row differ in height`);
       if (c.outside) fail(where, `${w}px: a card sticks out of the section`);
-      if (c.links.some(l => l.n !== 1 || !l.title || l.name !== l.title)) fail(where, `${w}px: card links ${JSON.stringify(c.links.map(l => [l.n, l.name]))}`);
+      if (c.links.some(l => l.n !== 1 || l.other || !l.title || l.name !== l.title)) fail(where, `${w}px: card links ${JSON.stringify(c.links.map(l => [l.n, l.name]))}`);
       if (c.links.some(l => !(l.meta >= 12))) fail(where, `${w}px: card metadata under 12px`);
       if (st.overflow > 1) fail(where, `${w}px: page scrolls horizontally by ${st.overflow}px`);
       if (st.rows.some(id => !byId[decodeURIComponent(id)])) fail(where, `${w}px: link targets ${st.rows.join(' ')}`);
@@ -575,8 +576,8 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (!allOk(st)) fail(where, `absent games everywhere: sub "${st.sub}" rows ${st.rows.join(' ')}`);
     if (st.saved[0] !== JSON.stringify({ game: 'ZZZ' })) fail(where, `tcg.voices overwritten: ${st.saved[0]}`);
     // the row link opens that topic on /voices/
-    const href = await page.locator('#vtBody a.vt').first().getAttribute('href');
-    await page.locator('#vtBody a.vt').first().click();
+    const href = await page.locator('#vtBody .vt a.tt').first().getAttribute('href');
+    await page.locator('#vtBody .vt a.tt').first().click();
     await page.waitForURL(u => u.pathname === '/voices/');
     await page.waitForFunction(() => document.getElementById('vDlg')?.open);
     if (await page.evaluate(() => location.hash) !== href.slice('/voices/'.length)) fail(where, `/voices/ hash after the row`);
@@ -666,7 +667,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null,
       tabs: tabs.map(t => ({ sel: t.getAttribute('aria-selected'), ti: t.tabIndex, rel: cnt(t, '発売'), ev: cnt(t, 'イベント'), label: t.getAttribute('aria-label') })),
       by: p.getAttribute('aria-labelledby'), live: document.getElementById('wkLive')?.textContent ?? null,
-      evHead: p.querySelector('.wps[aria-label="イベント"] h4')?.textContent ?? null, ty: [...p.querySelectorAll('.gcol .ty')].map(t => t.textContent), rels: [...p.querySelectorAll('a.pk .g')].map(g => g.textContent.replace('★', '')),
+      evHead: p.querySelector('.wps[aria-label="イベント"] h4')?.textContent ?? null, ty: [...p.querySelectorAll('.gcol .ty')].map(t => t.textContent), rels: [...p.querySelectorAll('.rels .pk .g')].map(g => g.textContent.replace('★', '')),
       cols: [...p.querySelectorAll('.gcol')].map(c => c.getAttribute('aria-label')), others: p.querySelector('.relo .rl')?.textContent || null,
       foot: [...p.querySelectorAll('.wpf a')].map(a => [a.textContent, a.getAttribute('href')]),
       locSet: !!document.getElementById('hsLocSet'), evText: document.getElementById('evBody')?.textContent ?? null,
@@ -1263,6 +1264,8 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     }
     await page.keyboard.press('Escape');
     if (await page.locator('#vDlg').evaluate(d => d.open)) fail(where, 'Escape did not close the day dialog');
+    // the dialog's close event (which clears the hash) runs as a later task
+    await page.waitForFunction(() => !location.hash, null, { timeout: 2000 }).catch(() => {});
     const h1 = await page.evaluate(() => [location.hash, history.length]);
     if (h1[0] !== '' || h1[1] !== hist0) fail(where, `after close: hash ${h1[0]}, history ${hist0} -> ${h1[1]}`);
     // Enter on a focused day opens it
@@ -1533,7 +1536,7 @@ if (HAS_EVENTS) {
               id('0|OPCG|tournament|大会ar') !== id('0|OPCG|tournament|大会ar', 'other')]; })(),
           labels: [[E('a', 'X', { venue: { name: '店', source_id: '1' } }), E('b', 'X', { venue: { name: '店', source_id: '2' } })], [E('a', 'X', { attendance_mode: 'online' }), E('b', 'X', { attendance_mode: 'online' })]]
             .map(rows => { const b = txt(snEv.grp({ key: 'l' + Math.random(), rows })).querySelector('.evg-tog'); return b.getAttribute('aria-label').startsWith(b.textContent + '（'); }),
-          links: [bad.querySelectorAll('a').length, badC.querySelectorAll('a').length, !!bad.querySelector('b'), bad.querySelector('.ev-n .t').textContent],
+          links: [bad.querySelectorAll('a:not(.gl)').length, badC.querySelectorAll('a:not(.gl)').length, !!bad.querySelector('b'), bad.querySelector('.ev-n .t').textContent],
         };
       }, TODAY);
       const wantNames = ['交流会', '交流会', 'チャレンジ戦', 'ジムバトル', '教室', 'グランプリ', '交流会【10/30】', '交流会【10/31】', `【${String(+TODAY.slice(2, 4) + 1)}/11】ジムバトル`,
@@ -2123,6 +2126,133 @@ if (HAS_EVENTS) {
     await ctx.close();
   }
 }
+// Game labels link their hub (owner 2026-11-25): every shown game icon + name of a title with a hub is a link to /<slug>/
+// (plain on that hub itself and for titles without one); filter / toggle chips stay buttons; no interactive element
+// inside another; no sideways scroll at 390.
+{
+  const REG = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/games.json'), 'utf8'));
+  const NAME2SLUG = {};
+  for (const g of REG) if (g.hub) for (const n of [g.label, g.short, g.chip, ...g.sources.releases]) if (n) NAME2SLUG[n] = g.slug;
+  const ITEMS = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/items.json'), 'utf8'));
+  const item = ITEMS.find(d => NAME2SLUG[d.game] && fs.existsSync(path.join(DIST, 'item', d.id, 'index.html')));
+  const LABELS = '.pk .g > a, .pk .g > span:not(.sm), .tag, .gcol h5 .gn, .vt .gm, #hsT > a, #hsT > span, .seo-day .sg';
+  const audit = page => page.evaluate(([LABELS, MAP]) => {
+    const nameOf = el => { const c = el.cloneNode(true); c.querySelectorAll('.gi, [aria-hidden="true"], i, em, b').forEach(e => e.remove()); return c.textContent.trim(); };
+    const out = { links: [], wrong: [], nested: document.querySelectorAll('a a, a button, button a, button button').length,
+      chipLinks: [...document.querySelectorAll('[aria-pressed]')].filter(e => e.tagName === 'A' || e.querySelector('a') || e.closest('a')).length,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+    for (const el of document.querySelectorAll(LABELS)) {
+      if (!el.getClientRects().length && !el.closest('dialog[open], details')) continue;
+      const n = nameOf(el), slug = MAP[n], want = slug && location.pathname !== `/${slug}/` ? `/${slug}/` : null;
+      const href = el.tagName === 'A' ? el.getAttribute('href') : null;
+      if (href) out.links.push([n, href]);
+      if (href !== want) out.wrong.push([n, el.className, href, want]);
+    }
+    return out; }, [LABELS, NAME2SLUG]);
+  const judge = (where, a, min) => {
+    if (a.links.length < min) fail(where, `game links: ${a.links.length} < ${min}`);
+    if (a.wrong.length) fail(where, `game labels not linking their hub: ${JSON.stringify(a.wrong.slice(0, 4))}`);
+    if (a.nested) fail(where, `${a.nested} interactive elements nested in links / buttons`);
+    if (a.chipLinks) fail(where, `${a.chipLinks} filter chips are (or hold) links`);
+    if (a.overflow > 0) fail(where, `sideways scroll ${a.overflow}px`);
+  };
+  const SHARED = (i, codes) => ({ id: `gl${i}`, name: `GL${i}`, game_code: codes[0], game_codes: codes, starts_on: TODAY, time_precision: 'datetime',
+    starts_at: `${TODAY}T18:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'offline', venue: { name: `店 ${i}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
+  const EVS = [SHARED(0, ['OPCG', 'UATCG']), SHARED(1, ['PTCG']), SHARED(2, ['OPCG'])];
+  for (const [vp, opt] of Object.entries(VIEWPORTS)) {
+    const ctx = await browser.newContext({ viewport: { width: opt.width, height: opt.height }, isMobile: !!opt.isMobile,
+      hasTouch: !!opt.hasTouch, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    const bad = [];
+    page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+    await page.route(EVENTS_API, route => {
+      const u = new URL(route.request().url());
+      if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [], prefectures: [{ code: 'JP-13', count: EVS.length }] } });
+      if (u.pathname.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: EVS.length, by_game: { OPCG: 2, UATCG: 1, PTCG: 1 } }] } });
+      route.fulfill({ json: { events: u.searchParams.get('from') > TODAY ? [] : EVS, next_cursor: null } });
+    });
+    const go = async (p, ready) => { await page.goto(BASE + p, { waitUntil: 'load' }); if (ready) await page.waitForSelector(ready, { timeout: 8000 }).catch(() => {}); };
+    const run = async (label, fn) => { const where = `${vp} game links ${label}`; try { await fn(where); } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); } };
+    await run('/', async where => {
+      await go('/');
+      await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); });
+      await go('/', '#evBody .gcol');
+      // a day with releases, so its cards are checked too
+      for (const t of await page.locator('#wkStrip [role="tab"]').all()) { if (await page.locator('#wkPanel .pk').count()) break; await t.click(); }
+      if (HAS_VOICES) await page.waitForSelector('#vtBody .vt', { timeout: 5000 }).catch(() => {});
+      const a = await audit(page);
+      judge(where, a, 3);
+      const need = ['/onepiece/', '/unionarena/', '/pokemon/'].filter(h => !a.links.some(l => l[1] === h));
+      if (need.length) fail(where, `event columns / tags without ${need.join(' ')}`);
+      if (!(await page.locator('#wkPanel .pk').count())) fail(where, 'no release cards in the week');
+      if (vp === 'mobile') await page.locator('#wkPanel').screenshot({ path: path.join(OUT, `game-links-home-${vp}.png`) });
+      // 表示中: each saved title links its hub
+      await page.evaluate(() => localStorage.setItem('tcg.voices', JSON.stringify({ game: 'OPCG,MTG' })));
+      await go('/', '#hsT a');
+      const b = await audit(page);
+      judge(where + ' 表示中', b, 2);
+      const hs = await page.locator('#hsT a').evaluateAll(as => as.map(a => a.getAttribute('href')));
+      if (hs.join() !== '/onepiece/,/mtg/') fail(where, `表示中 links ${hs.join()}`);
+    });
+    await run('/releases/', async where => {
+      await go('/releases/');
+      await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.view', '"cal"'); });
+      await go('/releases/', '.pk .g a.gl');
+      judge(where, await audit(page), 3);
+      // the card opens its dialog (game link left out), the dialog's label links too
+      await page.locator('.pk:has(a.gl) .pko').filter({ visible: true }).first().click();
+      await page.waitForSelector('#dlg[open] .dl-head', { timeout: 5000 });
+      judge(where + ' dialog', await audit(page), 1);
+      if (!(await page.locator('#dlg[open] .dl-head a.gl').count())) fail(where, 'detail dialog: game label not a link');
+      await page.keyboard.press('Escape');
+      if (vp === 'desktop') {
+        const card = page.locator('.cal .pkw').filter({ has: page.locator('a.gl') }).first(), lk = card.locator('a.gl');
+        await lk.focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+        await card.screenshot({ path: path.join(OUT, `game-links-card-focus-${vp}.png`) });
+        await page.keyboard.press('Tab');
+        if (!(await card.locator('.pko').evaluate(b => b === document.activeElement))) fail(where, 'Tab from the game link does not reach the card');
+        await card.screenshot({ path: path.join(OUT, `game-links-card-focus2-${vp}.png`) });
+        const href = await lk.getAttribute('href');
+        await lk.click();
+        await page.waitForURL(u => new URL(u).pathname === href, { timeout: 5000 });
+        if (await page.locator('#dlg[open]').count()) fail(where, 'game link opened the detail dialog');
+      }
+      await page.evaluate(() => localStorage.setItem('tcg.view', '"tbl"'));
+      await go('/releases/', 'td.gm a.gl');
+      judge(where + ' table', await audit(page), 3);
+    });
+    await run('/events/', async where => {
+      if (!HAS_EVENTS) return;
+      await go('/events/?pref=JP-13&view=list', '#list .ev');
+      const a = await audit(page);
+      judge(where, a, 3);
+      if (!a.links.some(l => l[1] === '/unionarena/')) fail(where, 'shared event without its UNION ARENA link');
+      if (await page.locator('button.chip.g').count() < 3) fail(where, 'title filter chips missing');
+    });
+    await run('/voices/', async where => {
+      if (!HAS_VOICES) return;
+      await go('/voices/?view=list', '.tc .tag');
+      judge(where, await audit(page), 1);
+    });
+    await run('hub /onepiece/', async where => {
+      await go('/onepiece/', '.pk');
+      const a = await audit(page);
+      judge(where, a, 0);
+      if (await page.locator('a.gl[href="/onepiece/"]').count()) fail(where, 'the hub links itself');
+    });
+    if (item) await run('item', async where => {
+      await go(`/item/${item.id}/`);
+      const a = await audit(page);
+      judge(where, a, 1);
+      if (vp === 'mobile') await page.locator('.pd-card').screenshot({ path: path.join(OUT, `game-links-item-${vp}.png`) });
+    });
+    for (const b of [...new Set(bad)]) fail(`${vp} game links`, b);
+    console.log(`  ${`${vp} game links`.padEnd(22)} checked`);
+    await ctx.close();
+  }
+}
+
 await browser.close();
 server.close();
 for (const f of fails) console.log('FAIL', f);

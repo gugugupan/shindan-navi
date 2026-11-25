@@ -1,6 +1,6 @@
 <!--
   Event rows shared by /events/ (day list) and / (今日のイベント): build.py inserts this at the EVROW slot, before the
-  page script. window.snEv: init({gi, games}) once, name(e) (display name), row(e, o) and grp(g, o) (HTML), group(rows,
+  page script. window.snEv: init({gi, games}) once (games: code → {name, c, cd, hub}; a tag links /<hub>/), name(e) (display name), row(e, o) and grp(g, o) (HTML), group(rows,
   rank) (identical events of a day folded into groups), and the open groups (kept across re-renders).
   A row has three levels: name → time ・ venue (+ area) → registration facts / action. Display only: names in the data
   and API stay as they are.
@@ -111,7 +111,7 @@ window.snEv=(function(){
   const safeUrl = u => /^https:\/\//i.test(String(u||'')) ? String(u) : '';
   const stBadge = e => e.event_status==='cancelled' ? '<span class="st">中止</span>' : e.event_status==='postponed' ? '<span class="st post">延期</span>' : '';
   function tags(e,col){
-    return codesOf(e).filter(c=>c!==col).map(c=>{ const x=GAMES[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; return `<span class="tag" style="--gl:${x.c};--gd:${x.cd}">${gi(x.name)}${esc(x.name)}</span>`; }).join('');
+    return codesOf(e).filter(c=>c!==col).map(c=>{ const x=GAMES[c]||{name:c,c:'#8a8f9e',cd:'#8a8f9e'}; const st=`--gl:${x.c};--gd:${x.cd}`, t=gi(x.name)+esc(x.name), h=`/${x.hub}/`; return x.hub ? `<a class="tag gl" href="${h}" style="${st}">${t}</a>` : `<span class="tag" style="${st}">${t}</span>`; }).join('');
   }
   const gvars = c => { const g=GAMES[c]||{c:'#8a8f9e',cd:'#8a8f9e'}; return `--gl:${g.c};--gd:${g.cd}`; };
   // the category reads as noise when the name already says it (交流会 → 交流会)

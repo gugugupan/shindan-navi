@@ -39,10 +39,10 @@
 .none b{color:var(--ink);font-size:14px}
 .none.err{border-color:var(--sun);border-style:solid}
 .rels{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
-a.pk{color:inherit;text-decoration:none;grid-template-columns:48px minmax(0,1fr);padding:6px 8px 6px 6px}
-a.pk .th{width:48px}
-a.pk .n{font-size:14px}
-a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
+.rels .pk{grid-template-columns:48px minmax(0,1fr);padding:6px 8px 6px 6px}
+.rels .pk .th{width:48px}
+.rels .pk .n{font-size:14px;color:inherit;text-decoration:none}
+.rels .pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 .pk .sm{color:var(--foil);margin-right:4px}
 /* today's events: one column per game */
 .gcols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px;align-items:start}
@@ -132,10 +132,13 @@ a.pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
 /* one card per topic: as many 240px+ columns as fit (5 at 1366, 3 at ~1000, 1 on phones), equal heights per row */
 .vts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:10px}
 .vts>li{display:flex;min-width:0}
-.vt{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-top:3px solid var(--g);border-radius:10px;padding:9px 12px 10px;color:var(--ink);text-decoration:none}
+.vt{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-top:3px solid var(--g);border-radius:10px;padding:9px 12px 10px;color:var(--ink);text-decoration:none}
 .vt:hover{border-color:var(--accent);border-top-color:var(--g)}
-.vt:hover .tt{color:var(--accent);text-decoration:underline}
-.vt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.vt:hover:not(:has(a.gl:hover)) .tt{color:var(--accent);text-decoration:underline}
+.vt .tt{color:inherit;text-decoration:none}
+.vt .tt::after{content:"";position:absolute;inset:0}
+.vt .tt:focus-visible{outline:none}
+.vt:has(.tt:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .vt .vh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px;font-weight:700}
 .vt .gm{display:inline-flex;align-items:center;gap:4px;min-width:0;color:var(--gt);white-space:nowrap}
 .vt .am{color:var(--a);white-space:nowrap}
@@ -245,7 +248,7 @@ const relsOn = d => H.items.filter(x=>x.date===d).sort(byStar);
 // A day's releases of the saved titles plus favourites of any title, favourites first (cards as on the release calendar)
 const relCards = its => `<div class="rels">${its.map(d=>{
   const pr = d.pack ? `<span class="pr">${esc(d.pack)}</span>` : '';
-  return `<a class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}" href="/releases/#i=${d.id}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}${gi(d.game)}${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></a>`;
+  return `<div class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}${gl(d.game,gi(d.game)+esc(d.game))}</span><a class="n pko" href="/releases/#i=${d.id}">${esc(d.name)}</a>${pr}</span></div>`;
 }).join('')}</div>`;
 function relPart(x){
   if(x.all==null) return `<p class="q">${x.d>H.until?`このページの発売情報は ${md(H.until)} までです。`:''}この日の発売情報は新弾カレンダーでご確認ください。</p>`;
@@ -430,7 +433,7 @@ function evPart(d,f){
     const ul = rows.length ? `<ul class="evs">${rows.map(x=>evItem(x,g.code,f,partial,d)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件${min} ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h5><span class="gn">${gi(g.name)}${esc(g.name)}</span><span class="c"><b>${n}</b> 件${min}</span></h5>${typeLine(g.code,d,known?null:rs,min)}${ul}${more}</section>`;
+    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h5>${gl(g.name,gi(g.name)+esc(g.name),'gn')}<span class="c"><b>${n}</b> 件${min}</span></h5>${typeLine(g.code,d,known?null:rs,min)}${ul}${more}</section>`;
   }).join('')}</div>${others}`};
 }
 
@@ -449,12 +452,12 @@ const TITLES = H.titles||{}; // code -> release / event display name
 const VOICES = !!$('vtr');
 // what the saved filters can hold: tcg.voices any of H.titles; without いま話題 only /events/' filter is read (its games)
 const TITLE_OPTS = Object.keys(TITLES).filter(c=>VOICES||EVG[c]);
-const shortList = codes => codes.slice(0,4).map(c=>SHORT[TITLES[c]]||TITLES[c]).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
+const shortList = (codes,html) => codes.slice(0,4).map(c=>(n=>html?gl(TITLES[c],esc(n)):n)(SHORT[TITLES[c]]||TITLES[c])).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
 function homeSel(){ const codes=savedGames(c=>TITLES[c]); return TITLE_OPTS.filter(c=>codes.includes(c)); }
 function selNames(){ const sel=homeSel(); return sel.length ? new Set(sel.map(c=>TITLES[c])) : null; }
 function renderSet(){
   const sel=homeSel(), t=$('hsT');
-  t.textContent = sel.length ? shortList(sel) : 'すべてのタイトル';
+  t.innerHTML = sel.length ? shortList(sel,true) : 'すべてのタイトル';
   t.title = sel.map(c=>TITLES[c]).join('・');
   if(!EVENTS) return;
   const p=evFilters().pref, l=$('hsL');
@@ -646,11 +649,11 @@ function renderVt(){
     : t.status==='new' ? '<span class="badge new"><span aria-hidden="true">🆕 </span>新</span>' : '';
   $('vtBody').innerHTML = `<ul class="vts">${rows.map((t,i)=>{
     const g=vtGame[t.game]||{name:t.game,short:t.game}, a=ATT[t.attitude]||ATT.neutral, k=ATT[t.attitude]?t.attitude:'neutral';
-    return `<li><a class="vt" style="${vtvars(t.game)}" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}" aria-labelledby="vtT${i}" aria-describedby="vtM${i} vtS${i}">`
-      + `<span class="vh" id="vtM${i}"><span class="gm">${gi(g.name)}<span aria-hidden="true">${esc(g.short||g.name)}</span><span class="sr">${esc(g.name)}</span></span>`
+    return `<li><div class="vt" style="${vtvars(t.game)}">`
+      + `<span class="vh" id="vtM${i}">${gl(g.name,`${gi(g.name)}<span aria-hidden="true">${esc(g.short||g.name)}</span><span class="sr">${esc(g.name)}</span>`,'gm')}`
       + `<span class="am a-${k}"><span aria-hidden="true">${a.m}</span>${a.l}</span>${badge(t)}</span>`
-      + `<span class="tt" id="vtT${i}">${esc(t.title)}</span><span class="sm" id="vtS${i}">${esc(t.summary)}</span>`
-      + `<span class="tr">反応の傾向（推定）：${TREND[k]}</span></a></li>`;
+      + `<a class="tt" id="vtT${i}" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}" aria-describedby="vtM${i} vtS${i}">${esc(t.title)}</a><span class="sm" id="vtS${i}">${esc(t.summary)}</span>`
+      + `<span class="tr">反応の傾向（推定）：${TREND[k]}</span></div></li>`;
   }).join('')}</ul>`;
   const [,m,d]=VT.date.split('-').map(Number);
   $('vtAsOf').textContent=`${m}/${d} 時点・AI要約`;

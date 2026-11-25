@@ -148,7 +148,7 @@ try {
     if (JSON.stringify(api) !== JSON.stringify(['/api/v1/voices/latest'])) fail(where, `API requests ${JSON.stringify(api)}`);
     const latest = files.at(-1);
     const st = await page.evaluate(() => ({ shown: !document.getElementById('vtr').hidden, asof: document.getElementById('vtAsOf').textContent,
-      rows: [...document.querySelectorAll('#vtBody a.vt')].map((a) => a.getAttribute('href')) }));
+      rows: [...document.querySelectorAll('#vtBody .vt a.tt')].map((a) => a.getAttribute('href')) }));
     const fresh = (Date.parse(TODAY) - Date.parse(latest.date)) / 864e5 <= 7;
     if (st.shown !== fresh) fail(where, `block shown=${st.shown}, snapshot ${latest.date}`);
     if (fresh) {

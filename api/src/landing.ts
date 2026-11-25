@@ -12,10 +12,10 @@ const MAX_LD_EVENTS = 50;
 
 // Display name (= GAME_ICON key and the /events/ chip name), common short name, palette, icon and whether build.py has a
 // hub at /<slug>/: the events games' rows of the game registry (contracts/games.md).
-export const LANDING_GAMES: Record<string, { label: string; short: string; c: string; cd: string; icon: string; releases: boolean }> =
+export const LANDING_GAMES: Record<string, { label: string; slug: string; short: string; c: string; cd: string; icon: string; releases: boolean }> =
   Object.fromEntries(REGISTRY.filter((g) => g.sources.events)
     .sort((a, b) => a.sources.events!.sort - b.sources.events!.sort)
-    .map((g) => [g.code, { label: g.label, short: g.short!, c: g.colour!.light, cd: g.colour!.dark, icon: g.icon ?? [...g.label][0].toUpperCase(), releases: g.hub }]));
+    .map((g) => [g.code, { label: g.label, slug: g.slug!, short: g.short!, c: g.colour!.light, cd: g.colour!.dark, icon: g.icon ?? [...g.label][0].toUpperCase(), releases: g.hub }]));
 
 // URL segment per location, JIS order (JP-01..JP-47), then online.
 export const PREF_SLUGS = [
@@ -91,7 +91,7 @@ const gi = (n: string) => {
   const v = g ? g.icon : [...String(n || '?')][0].toUpperCase();
   return /\.(png|svg)$/.test(v) ? `<img class="gi" src="/gi/${esc(v)}" width="16" height="16" alt="" aria-hidden="true">` : `<span class="gi" aria-hidden="true">${esc(v)}</span>`;
 };
-const ROW_GAMES: Record<string, RowGame> = Object.fromEntries(Object.entries(LANDING_GAMES).map(([k, g]) => [k, { name: g.label, c: g.c, cd: g.cd }]));
+const ROW_GAMES: Record<string, RowGame> = Object.fromEntries(Object.entries(LANDING_GAMES).map(([k, g]) => [k, { name: g.label, c: g.c, cd: g.cd, hub: g.releases ? g.slug : '' }]));
 const jsonLd = (x: unknown) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, '\\u003c')}</script>`;
 const eventsUrl = (q: Record<string, string>) => `/events/?${new URLSearchParams(q).toString().replace(/%2C/g, ',')}`;
 

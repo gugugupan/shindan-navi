@@ -421,7 +421,7 @@ function card(v, hx='h3'){
   const voices=t.voices.length?`<p class="vlab">おもな意見（AIによる言い換え）</p><ul class="voices">${t.voices.map(x=>`<li><span aria-hidden="true">💬 </span>${esc(x)}</li>`).join('')}</ul>`:'';
   const links=t.reacting_to?`<a href="${esc(t.reacting_to)}" target="_blank" rel="nofollow noopener noreferrer" data-x="reacting">反応元の公式投稿 ↗${ext}</a>`:'';
   return `<article class="tc" style="${gvars(t.game)}" data-topic="${esc(t.id)}">
-    <div class="tc-top"><span class="tag">${gi(g.name)}${esc(g.name)}</span>${badge(v)}<span class="ai">AIによる要約</span></div>
+    <div class="tc-top">${gl(g.name,gi(g.name)+esc(g.name),'tag')}${badge(v)}<span class="ai">AIによる要約</span></div>
     <${hx}>${esc(t.title)}</${hx}>
     <p class="sum">${esc(t.summary)}</p>
     ${attBlock(t)}

@@ -69,6 +69,15 @@ h1 .y{font-family:var(--mono);font-size:.42em;color:var(--muted);vertical-align:
 .gi{--gi:16px;flex:none;box-sizing:border-box;width:var(--gi);height:var(--gi);border-radius:4px;vertical-align:-3px}
 span.gi{display:inline-grid;place-items:center;background:color-mix(in oklab,var(--gl,hsl(var(--h) 55% 42%)) 80%,#000);color:#fff;font-size:calc(var(--gi) * .64);font-weight:700;font-style:normal;line-height:1}
 img.gi{display:inline-block;padding:1px;background:#fff;box-shadow:inset 0 0 0 1px rgb(0 0 0 / .14)}
+/* game label linking its hub (gl() in build.py); above a card's stretched main control (.pko), touch area grown on phones */
+a.gl{color:inherit;text-decoration:none;position:relative;z-index:1;border-radius:4px}
+a.gl:hover,a.gl:focus-visible{text-decoration:underline;text-underline-offset:3px}
+@media (pointer:coarse){a.gl::after{content:"";position:absolute;inset:-6px -2px}}
+/* a card's main control: its ::after covers the card, so the card stays one target beside the game link */
+.pko{all:unset;cursor:pointer;display:block;min-width:0}
+.pko::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.pko:focus-visible{outline:none}
+.pko:focus-visible::after{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
 .chip em{font-style:normal;color:var(--faint);font-family:var(--mono);font-size:12px}
 .chip:hover{border-color:var(--faint)}
 .chip[aria-pressed="true"]{border-color:var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));font-weight:700}
@@ -109,6 +118,7 @@ img.gi{display:inline-block;padding:1px;background:#fff;box-shadow:inset 0 0 0 1
 .pk .t{min-width:0;display:flex;flex-direction:column;gap:1px}
 .pk .g .gi{--gi:14px;margin-right:3px}
 .pk .g{font-size:12px;font-weight:700;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%));line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (pointer:coarse){.pk .g{padding-block:6px;margin-block:-6px}}
 .pk .n{font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
 .pk .pr{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .more{border:1px dashed var(--line);border-radius:8px;background:none;color:var(--accent);font-size:12px;font-weight:700;padding:5px}
@@ -754,7 +764,7 @@ document.getElementById('chips').addEventListener('click',e=>{
 
 function pkBtn(d){
   const pr=d.pack?`<span class="pr">${esc(d.pack)}${d.box&&d.box!==d.pack?` · BOX ${esc(d.box)}${d.per_box?`（${d.per_box}パック）`:''}`:''}</span>`:'';
-  return `<div class="pkw${isStar(d)?' on':''}"><button class="pk" style="--h:${HUE[d.game]}" data-id="${d.id}" title="${esc(d.game+' / '+d.name)}">${thumb(d)}<span class="t"><span class="g">${gi(d.game)}${esc(d.game)}</span><span class="n">${esc(d.name)}</span>${pr}</span></button>${starBtn(d)}</div>`;
+  return `<div class="pkw${isStar(d)?' on':''}"><div class="pk" style="--h:${HUE[d.game]}">${thumb(d)}<span class="t"><span class="g">${gl(d.game,gi(d.game)+esc(d.game))}</span><button class="pko" data-id="${d.id}" title="${esc(d.game+' / '+d.name)}"><span class="n">${esc(d.name)}</span></button>${pr}</span></div>${starBtn(d)}</div>`;
 }
 
 
@@ -855,7 +865,7 @@ function renderTable(list){
     <td class="sc">${starBtn(d)}</td>
     <td class="d">${fmtDate(d.date)}</td>
     <td class="im"><button class="pk thbtn" style="--h:${HUE[d.game]}" data-id="${d.id}" aria-label="詳細">${thumb(d)}</button></td>
-    <td class="gm"><span class="tag" style="--h:${HUE[d.game]}">${gi(d.game)}${esc(d.game)}</span></td>
+    <td class="gm">${gl(d.game,gi(d.game)+esc(d.game),'tag',` style="--h:${HUE[d.game]}"`)}</td>
     <td class="nm">${esc(d.name)}${d.approx?'<span class="ap" title="シリーズのキービジュアル等のため、実際のパッケージと異なる場合があります">参考画像</span>':''}</td>
     <td class="p p1">${esc(d.pack||'—')}</td>
     <td class="p bx">${esc(d.box||'—')}${d.box&&d.per_box?`<small class="pb">${d.per_box}パック</small>`:''}</td>
@@ -964,7 +974,7 @@ function openDetail(items,title,keepOpen,day){
   const tps=day?topicsOn(day):[];
   if(!keepOpen) track('view_item', items.length===1 ? {game:items[0].game, item_name:items[0].name} : {item_name:title, count:items.length});
   document.getElementById('dlgBody').innerHTML=`<h2 class="dl-day" id="dlgH">${title}</h2>`+(items.length?'':'<p class="dl-none">この日の発売予定はありません。</p>')+items.map(d=>`<div class="dl-item" style="--h:${HUE[d.game]}">${thumb(d)}<div>
-    <div class="dl-head"><span class="tag">${gi(d.game)}${esc(d.game)}</span>${starBtn(d,true)}</div>
+    <div class="dl-head">${gl(d.game,gi(d.game)+esc(d.game),'tag')}${starBtn(d,true)}</div>
     <h4>${esc(d.name)}</h4>
     <dl><dt>発売日</dt><dd>${fmtDate(d.date)}</dd>
     <dt>価格（税込）</dt><dd>${esc(d.pack||'—')}</dd>
@@ -991,7 +1001,7 @@ document.addEventListener('click',e=>{
     else { cl.dataset.armed='1'; cl.textContent='もう一度押すと解除'; cl.classList.add('warn'); setTimeout(()=>{ if(cl.isConnected){ delete cl.dataset.armed; cl.textContent='すべて解除'; cl.classList.remove('warn'); } },3000); }
     return;
   }
-  const p=e.target.closest('.pk[data-id]');
+  const p=e.target.closest('.pko[data-id],.pk[data-id]');
   if(p){const d=DATA.find(x=>x.id===p.dataset.id); openDetail([d],fmtDate(d.date)); return}
   const mo=e.target.closest('.more');
   if(mo){openDay(mo.dataset.day); dayOpener=`.more[data-day="${mo.dataset.day}"]`; return}
@@ -1058,7 +1068,7 @@ function openCalPrompt(items,fromStar){
   calItems=items;
   const one=items.length===1, d=items[0];
   const head = one
-    ? `<div class="cal-item" style="--h:${HUE[d.game]}">${thumb(d)}<div><span class="tag">${gi(d.game)}${esc(d.game)}</span><b>${esc(d.name)}</b><span class="cal-date">${fmtDate(d.date)} 発売</span></div></div>`
+    ? `<div class="cal-item" style="--h:${HUE[d.game]}">${thumb(d)}<div>${gl(d.game,gi(d.game)+esc(d.game),'tag')}<b>${esc(d.name)}</b><span class="cal-date">${fmtDate(d.date)} 発売</span></div></div>`
     : `<p class="cal-sub">これから発売のお気に入り ${items.length}件（${fmtDate(items[0].date,false)}〜${fmtDate(items[items.length-1].date,false)}）</p>`;
   const google = one
     ? `<a class="calopt" href="${esc(googleCalUrl(d))}" target="_blank" rel="noopener" data-cal-method="google"><span class="ci">G</span><span><b>Google カレンダー</b><small>新しいタブで予定を作成</small></span></a>`

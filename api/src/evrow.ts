@@ -7,6 +7,8 @@ export interface RowGame {
   name: string;
   c: string;
   cd: string;
+  /** the game's hub slug: its tags link /<hub>/ */
+  hub?: string;
 }
 export interface RowOpts {
   compact?: boolean;
@@ -124,7 +126,8 @@ export function renderer(gi: (name: string) => string, GAMES: Record<string, Row
   function tags(e: Ev, col?: string | null) {
     return codesOf(e).filter((c) => c !== col).map((c) => {
       const x = GAMES[c] || { name: c, c: '#8a8f9e', cd: '#8a8f9e' };
-      return `<span class="tag" style="--gl:${x.c};--gd:${x.cd}">${gi(x.name)}${esc(x.name)}</span>`;
+      const st = `--gl:${x.c};--gd:${x.cd}`, t = gi(x.name) + esc(x.name);
+      return x.hub ? `<a class="tag gl" href="/${x.hub}/" style="${st}">${t}</a>` : `<span class="tag" style="${st}">${t}</span>`;
     }).join('');
   }
   const gvars = (c: string) => {

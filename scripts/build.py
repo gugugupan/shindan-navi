@@ -50,9 +50,9 @@ VOICE_REG=[g for g in EV_REG if g['sources']['voices']]+[g for g in REG if g['so
 # titles the home page's 表示中 picker offers: the events games, then the other voices games
 HOME_REG=EV_REG+[g for g in VOICE_REG if not g['sources']['events']]
 # page-script game lists (slots like /*EV_GAMES*/[]) with the keys the scripts read: name = label, short = chip,
-# c / cd = palette colours, bit = events.bit
+# c / cd = palette colours, bit = events.bit, hub = the hub's slug or ''
 PAGE_KEY={'code':lambda g:g['code'],'name':lambda g:g['label'],'short':lambda g:g['chip'],'c':lambda g:g['colour']['light'],
-    'cd':lambda g:g['colour']['dark'],'bit':lambda g:g['sources']['events']['bit']}
+    'cd':lambda g:g['colour']['dark'],'bit':lambda g:g['sources']['events']['bit'],'hub':lambda g:g['slug'] if g['hub'] else ''}
 def page_games(rows,keys): return [{k:PAGE_KEY[k](g) for k in keys} for g in rows]
 def js(v): return json.dumps(v,ensure_ascii=False).replace('</','<\\/')
 OFFICIAL={l:g['official_url'] for g in REG if g['official_url'] for l in g['sources']['releases']}
@@ -68,10 +68,15 @@ TITLE_ALT={g['slug']:g['title_alt'] for g in REG if g['hub']}
 # asset), otherwise a one-character monogram tile in the game's colour. Never a KONAMI asset for 遊戯王. Titles
 # without an icon get their first character.
 GAME_ICON={l:g['icon'] for g in REG if g['icon'] for l in g['sources']['releases']}
+# display name -> hub slug, for game labels that link their hub
+GHUB={l:g['slug'] for g in REG if g['hub'] for l in [g['label'],*g['sources']['releases']]}
 OFFDOM=[h for u in OFFICIAL.values() if (h:=urllib.parse.urlparse(u).netloc.replace('www.',''))]+['ws-rose.com','magic.wizards.com','pokemon-card.com']
 # gi(name) in every page script (slot /*GICON*/); decorative, the name always sits next to it
 GICON_JS=('const GICON = '+json.dumps(GAME_ICON,ensure_ascii=False)+';\n'
-    "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.(png|svg)$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };")
+    "const gi = n => { const v=GICON[n]||[...String(n||'?')][0].toUpperCase(); return /\\.(png|svg)$/.test(v) ? `<img class=\"gi\" src=\"/gi/${esc(v)}\" width=\"16\" height=\"16\" alt=\"\" aria-hidden=\"true\">` : `<span class=\"gi\" aria-hidden=\"true\">${esc(v)}</span>`; };"
+    # gl(name, inner, cls, attrs): a game label as a link to its hub (registry `hub` rows); plain on that hub and for other titles
+    +'\nconst GHUB = '+json.dumps(GHUB,ensure_ascii=False)+';\n'
+    "const gl = (n,inner,cls='',at='') => { const s=GHUB[n], h=s&&location.pathname!==`/${s}/`; return h ? `<a class=\"gl${cls?' '+cls:''}\" href=\"/${s}/\"${at}>${inner}</a>` : `<span${cls?` class=\"${cls}\"`:''}${at}>${inner}</span>`; };")
 
 # Prices come as 6600円(税込) / 6,050円 / 240円 depending on the source; pages say once that prices include tax.
 def price_label(s):
@@ -449,7 +454,7 @@ def render_events():
     site_css=re.search(r'<style>\n(.*?)</style>',template,re.S).group(1)
     brand=re.search(r'<a class="brand".*?</a>',template,re.S).group(0)
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),("/*MAPS_KEY*/''",json.dumps(MAPS_BROWSER_KEY)),('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW),('/*GICON*/',GICON_JS),
-                     ('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','c','cd','bit']))))+(
+                     ('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','c','cd','bit','hub']))))+(
                      (('/*LP_GAMES*/{}',js({g['code']:[g['slug'],g['short']] for g in EV_REG})),) if LANDING_ENABLED else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
@@ -603,7 +608,7 @@ def render_home():
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),
                      ('<!--H1-->',esc(pg['h1'])),
                      ('/*HOME*/null',json.dumps(home,ensure_ascii=False).replace('</','<\\/')),("/*API_BASE*/'/api/v1'",json.dumps(EVENTS_API_BASE)),('/*GICON*/',GICON_JS),
-                     ('/*SHORT*/{}',js({g['label']:g['chip'] for g in HOME_REG})),('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','short','c','cd','bit']))))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
+                     ('/*SHORT*/{}',js({g['label']:g['chip'] for g in HOME_REG})),('/*EV_GAMES*/[]',js(page_games(EV_REG,['code','name','short','c','cd','bit','hub']))))+((('<!--LOCPICK-->',LOCPICK),('<!--EVROW-->',EVROW)) if BUILD_EVENTS else ()):
         assert src.count(slot)==1,slot
         src=src.replace(slot,val)
     src=re.sub(r'<title>.*?</title>\n?','',src,count=1)
@@ -853,8 +858,9 @@ def item_body(pg):
     if d['url']: links.append(f'<a href="{esc(d["url"])}" target="_blank" rel="noopener">公式商品ページ ↗</a>')
     if g in OFFICIAL: links.append(f'<a href="{esc(OFFICIAL[g])}" target="_blank" rel="noopener">{esc(g)} 公式サイト ↗</a>')
     sold_tag='<span class="pd-sold">発売済み</span>'
+    glabel=f'<a class="tag gl" href="/{pg["slug"]}/"><i></i>{esc(g)}</a>' if pg['slug'] else f'<span class="tag"><i></i>{esc(g)}</span>'
     card=(f'<article class="pd-card" style="--h:{HUE[g]}"><div class="pd-img">{img}</div><div>'
-          f'<p class="pd-tag"><span class="tag"><i></i>{esc(g)}</span>{sold_tag if sold else ""}</p><h1>{esc(d["name"])}</h1>'
+          f'<p class="pd-tag">{glabel}{sold_tag if sold else ""}</p><h1>{esc(d["name"])}</h1>'
           f'<dl>{"".join(rows)}</dl><p class="dl-links">{"".join(links)}</p></div></article>')
     lis=''.join(f'<li><time datetime="{x["date"]}">{fmt(x["date"],True)}</time>'
                 +(f'<span aria-current="page">{esc(x["name"])}</span>' if x is d else f'<a href="/item/{x["id"]}/">{esc(x["name"])}</a>')+'</li>' for x in pg['near'])
