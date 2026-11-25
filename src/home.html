@@ -3,58 +3,122 @@
   embeds the releases from build day -1 to +14 (HOME) and the page says so when it runs past that window.
   Events (EVENTS parts, BUILD_EVENTS on), only with a saved location: /events/days for this month and the first /events
   page from today, the cache keys /events/ uses too; one more page (the /events/ list's second page) only when a game
-  column of today would otherwise stay short. Choosing another day in 今週のカレンダー asks for that day's /events page
+  column of today would otherwise stay short. Choosing another day in the week strip asks for that day's /events page
   (from the day, the /events/ day view's key) only when the loaded rows do not cover it: at most one request per day,
   kept for the visit. /events/meta only once the location picker is opened (its counts).
   The location is the /events/ saved filter's (src/locpick.html), so changing it here changes it there.
   いま話題 (VOICES parts, VOICES_ENABLED on): the latest /voices/ snapshot, one GET of H.voicesApi (/api/v1/voices/latest),
   drawn with the game palette in H.voiceGames; it only reads the /voices/ and /events/ saved game filters (changed on
   /voices/), never writes them.
-  表示中 line: the saved titles (tcg.voices' game filter on VOICES builds, else the /events/ one) and the /events/
-  location; the only place they are set. 変更 opens #hsDlg, which writes the titles to both filters (tcg.voices only
-  when it exists or holds a title /events/ has not) and the location through the shared picker; without a location
-  the line's 地域を設定 opens the picker. 今週のカレンダー (today + 6 days) is the day view: the chosen day's releases
-  of those titles (cards) and its events as one column per game (the /events/ filter), today first.
+  表示中 pill (next to the h1 date): the saved titles (tcg.voices' game filter on VOICES builds, else the /events/ one) and
+  the /events/ location; the only place they are set. It opens #hsDlg, which writes the titles to both filters
+  (tcg.voices only when it exists or holds a title /events/ has not) and the location through the shared picker; without
+  a location the イベント block's 地域を設定 opens the picker. The week strip (today + 6 days, tabs) picks the day: its
+  releases of those titles grouped by title on the left, its events as one collapsible row per game on the right, いま話題
+  under them (desktop; one column below 901px).
 -->
 <title>今日発売のTCG・トレカ新弾とイベント｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
 <style>
-.home{display:grid;gap:12px}
-.hbar{margin:4px 0 0;font-size:inherit;font-weight:400;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.home{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* top row: today's date (h1), the 表示の設定 pill, the week strip on the right (below the date on phones / tablets) */
+.htop{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:2px}
+.hbar{margin:0;display:flex;align-items:center;gap:8px}
 .hbar b{font-family:var(--display);font-weight:400;font-size:clamp(22px,3vw,28px);line-height:1.2}
-.hbar span{font-family:var(--body);font-size:13px;font-weight:700;color:var(--muted)}
+.tb{font-family:var(--body);font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--foil-ink);background:var(--foil);border-radius:4px;padding:2px 6px}
+.pill{font:inherit;font-size:13px;font-weight:700;color:var(--ink);display:inline-flex;align-items:center;gap:6px;max-width:min(320px,100%);min-width:0;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:4px 10px 4px 12px;cursor:pointer}
+.pill:hover{border-color:var(--accent)}
+.pill #hsT{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill .loc{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;color:var(--muted)}
+.pill .loc:empty{display:none}
+.pill .loc svg{color:var(--accent);flex:none}
+.pill .chev{flex:none;color:var(--muted)}
+.wkw{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:0}
+.wkl{margin:0;display:flex;gap:10px;font-size:12px;color:var(--muted)}
+.wkl>span{display:inline-flex;align-items:center;gap:4px}
+/* the strip: today + 6 days as tabs; a count only where there is something (発売 filled, イベント outlined) */
+.wks{display:flex;gap:4px}
+.wdy{font:inherit;color:var(--ink);cursor:pointer;border:1px solid transparent;border-radius:8px;background:none;padding:4px 6px 5px;min-width:56px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.wdy:hover{border-color:var(--line);background:var(--surface)}
+.wdy[aria-selected="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.wdy.today{box-shadow:inset 0 3px 0 var(--foil)}
+.wdy.today[aria-selected="true"]{box-shadow:inset 0 3px 0 var(--foil),inset 0 0 0 1px var(--accent)}
+.wdy .dt{display:flex;align-items:baseline;gap:3px;white-space:nowrap}
+.wdy .dt b{font-family:var(--mono);font-size:15px}
+.wdy .dw{font-size:12px;font-weight:700;color:var(--muted)}
+.wdy .dw.sat{color:var(--sat)} .wdy .dw.sun{color:var(--sun)}
+.wdy .ct{display:flex;gap:3px;min-height:18px;align-items:center}
+.cr,.ce{display:inline-block;box-sizing:border-box;height:16px;font-family:var(--mono);font-size:12px;font-weight:700;line-height:16px;min-width:18px;text-align:center;border-radius:9px;padding:0 5px;white-space:nowrap}
+.cr{background:var(--accent);color:var(--accent-ink)}
+.ce{border:1px solid var(--muted);color:var(--ink);line-height:14px}
+.cr.u,.ce.u{background:none;border:0;color:var(--faint);font-weight:500}
+.cr .sm{color:var(--foil-hi);margin-left:2px}
+/* the chosen day (the tab panel): 発売 on the left, イベント on the right with いま話題 under it */
+.hgrid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-rows:auto 1fr;gap:12px;align-items:start}
+.hgrid>.wkp{grid-column:1/-1;grid-row:1/3;display:grid;grid-template-columns:subgrid;grid-template-rows:subgrid;align-items:start;min-width:0}
+.wkp>.rel{grid-column:1;grid-row:1/3}
+.wkp>.evb{grid-column:2;grid-row:1}
+.hgrid>.vtr{grid-column:2;grid-row:2}
+.hgrid:not(:has(.evb)){grid-template-columns:minmax(0,1fr)}
+.hgrid:not(:has(.evb))>.wkp>.rel{grid-column:1/-1}
+.wkp:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:14px}
 .blk{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
-.blk-h{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0}
+.blk-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0}
 .blk-h h2{margin:0;font-family:var(--display);font-weight:400;font-size:19px;line-height:1.3}
-.blk-h .tb{font-family:var(--body);font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--foil-ink);background:var(--foil);border-radius:4px;padding:2px 6px;vertical-align:3px;margin-left:6px}
-.blk-h .sub{font-size:12.5px;font-weight:700;color:var(--muted);display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
-.blk-h .n{margin-left:auto;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.blk-h .dd{font-family:var(--mono);font-size:13px;font-weight:700}
+.blk-h .sub{font-size:12.5px;font-weight:700;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.blk-h .n{font-size:12.5px;color:var(--muted);white-space:nowrap}
 .blk-h .n b{font-family:var(--mono);color:var(--ink)}
-.blk-f{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin-top:auto}
+.blk-h .dayl{margin-left:auto}
+.dayl{font-size:12.5px;font-weight:700;color:var(--accent);text-decoration:none;white-space:nowrap}
+.dayl:hover{text-decoration:underline}
+.blk-f{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 12px}
 .go{font:inherit;font-size:13px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--surface);white-space:nowrap;cursor:pointer}
 .go:hover{border-color:var(--accent)}
 .hint{margin:0;font-size:12px;color:var(--muted)}
-.hint a{color:var(--accent)}
 .none{margin:0;padding:18px 12px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--muted);font-size:13px;display:grid;gap:8px;justify-items:center}
 .none b{color:var(--ink);font-size:14px}
 .none.err{border-color:var(--sun);border-style:solid}
-.rels{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
-.rels .pk{grid-template-columns:48px minmax(0,1fr);padding:6px 8px 6px 6px}
-.rels .pk .th{width:48px}
-.rels .pk .n{font-size:14px;color:inherit;text-decoration:none}
-.rels .pk.on{border-color:var(--foil);box-shadow:inset 0 0 0 1px var(--foil)}
-.pk .sm{color:var(--foil);margin-right:4px}
-/* today's events: one column per game */
-.gcols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px;align-items:start}
-.gcol{border:1px solid var(--line);border-top:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:10px;background:var(--surface-2);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.gcol h5{margin:0 2px;display:flex;align-items:baseline;gap:8px;font-size:13.5px;line-height:1.35}
-.gcol h5 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)))}
-.gcol h5 .c{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
-.gcol h5 .c b{font-family:var(--mono);color:var(--ink);font-size:13px}
+.q{margin:0;font-size:13px;color:var(--muted)}
+/* 発売: one group per title (icon + name once), rows of thumbnail, name without the repeated title / series, price */
+.rels{display:grid;gap:12px}
+.rg h3{margin:0 0 2px;font-size:14px;line-height:1.4;display:flex;align-items:center;gap:6px;color:hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 6%))}
+.rg h3 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.rg h3 .gi{--gi:16px}
+.rg h4{margin:6px 0 0;padding:3px 8px;border-radius:6px;background:var(--surface-2);font-size:12.5px;font-weight:700;color:var(--muted)}
+.rows{list-style:none;margin:0;padding:0}
+.rels .pk{grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:10px;background:none;border:0;border-bottom:1px solid var(--line);border-radius:6px 6px 0 0;padding:5px 4px}
+.rels .pk::before{display:none}
+.rels .pk:hover{background:var(--surface-2)}
+.rels .pk .th{width:30px}
+.rels .pk .t{display:flex;flex-direction:row;align-items:baseline;gap:4px;min-width:0}
+.rels .pk .n{font-size:14px;color:inherit}
+.rels .pk:hover .n{color:var(--accent)}
+.rels .pk .pr{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.rels .pk.on{background:var(--foil-soft)}
+.pk .sm{color:var(--foil);flex:none}
+.rl{align-self:flex-start;font-size:12.5px;font-weight:700;color:var(--accent);text-decoration:none}
+.rl b{font-family:var(--mono)}
+.rl:hover{text-decoration:underline}
+.relo{margin:2px 0 0}
+/* イベント: one row per game (its count); opened, the type line and the rows (src/evrow.html) */
+.gcols{display:grid;gap:6px}
+.gcol{border:1px solid var(--line);border-left:3px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));border-radius:8px;background:var(--surface-2);min-width:0}
+.gcol h3{position:relative;margin:0;display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:14px;line-height:1.35}
+.gcol h3 .gn{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--gt,hsl(var(--h) var(--chip-s) calc(var(--chip-l) - 8%)))}
+.gt{all:unset;margin-left:auto;cursor:pointer;display:inline-flex;align-items:center;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.gt b{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.gt::after{content:"";position:absolute;inset:0;border-radius:6px}
+.gt:focus-visible::after{outline:2px solid var(--accent);outline-offset:1px}
+.gt svg{margin-left:6px;transition:transform .15s}
+.gt[aria-expanded="true"] svg{transform:rotate(180deg)}
+.gcol h3:hover .gt b{color:var(--accent)}
+.gb{display:flex;flex-direction:column;gap:6px;padding:0 8px 8px}
+.gb[hidden]{display:none}
 .gcol .more{align-self:flex-start;font-size:12.5px;padding:3px 10px}
-.gcol .ty{margin:-2px 2px 0;font-size:12px;line-height:1.4;color:var(--muted)}
+.gcol .ty{margin:0 2px;font-size:12px;line-height:1.4;color:var(--muted)}
 .gcol .ty b{font-family:var(--mono);font-weight:700;color:var(--ink)}
-.gcol .q{margin:2px;font-size:12px;color:var(--muted)}
 .evs{list-style:none;margin:0;padding:0;display:grid;gap:5px}
 .evs .ev{gap:2px;background:var(--surface);border-radius:8px;padding:7px 9px}
 .evs .ev-n{font-size:14px;line-height:1.4;text-decoration:none}
@@ -62,15 +126,16 @@
 .evs .ev-m{font-size:12.5px}
 .evs .ev-s{margin-top:1px}
 .evs .evg-l .ev{padding:4px 0 4px 2px;background:none;border-radius:0}
-.sk{height:52px;border-radius:10px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%}
+.sk{height:40px;border-radius:8px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%}
 @media (prefers-reduced-motion:no-preference){.sk{animation:sk 1.2s linear infinite}@keyframes sk{to{background-position:-200% 0}}}
-/* 表示中: the saved titles and location, one line under the h1 */
-.hset{margin:-4px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px;color:var(--muted)}
-.hset .v{font-weight:700;color:var(--ink);min-width:0;overflow-wrap:anywhere}
-.hset .v.loc{display:inline-flex;align-items:center;gap:4px}
-.hset .v.loc svg{color:var(--accent);flex:none}
-.hset .v.unset{font-weight:500;color:var(--muted)}
-.hset .go{padding:3px 12px;font-size:12.5px}
+.gcs{display:flex;flex-wrap:wrap;gap:4px}
+.gcs.gmore{align-items:center;margin-top:4px}
+.gmore .lab{font-size:12px;color:var(--muted);margin-right:2px}
+.gc{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
+.gc>span{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.gc b{font-family:var(--mono)}
+.gc:hover{box-shadow:0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
+/* 表示の設定 */
 .setdlg fieldset{border:0;margin:0;padding:10px 0 0;border-top:1px solid var(--line);display:grid;gap:8px;min-width:0}
 .setdlg legend{float:left;width:100%;font-size:12px;font-weight:700;color:var(--muted);padding:0}
 .setdlg .fc{clear:both;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
@@ -79,46 +144,6 @@
 .setdlg .lc{font-weight:700}
 .setdlg .foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
 .go.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-/* 今週のカレンダー: one tab per day (today + 6), the chosen day's panel below */
-.wks{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-.wdy{font:inherit;color:var(--ink);text-align:left;cursor:pointer;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);padding:7px 9px 8px;display:flex;flex-direction:column;gap:4px;min-width:0}
-.wdy:hover{border-color:var(--accent)}
-.wdy[aria-selected="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
-.wdy.today{border-top:3px solid var(--foil);padding-top:5px}
-.wdy .dt{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 6px}
-.wdy .dt b{font-family:var(--mono);font-size:16px}
-.wdy .dw{font-size:12px;font-weight:700;color:var(--muted)}
-.wdy .dw.sat{color:var(--sat)} .wdy .dw.sun{color:var(--sun)}
-.wdy .lb{font-size:12px;font-weight:700;color:var(--accent)}
-.wdy .ct{display:grid;gap:1px;font-size:12px;color:var(--muted);white-space:nowrap}
-.wdy .ct b{font-family:var(--mono);font-size:13px;color:var(--ink)}
-.wdy .ct .z b{color:var(--faint);font-weight:500}
-.wdy .ct .sm{color:var(--foil);margin-left:3px}
-.wkp{border-top:1px solid var(--line);padding:10px 0 0;display:grid;gap:12px;min-width:0}
-.wkp:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.wkp>h3{margin:0;font-family:var(--display);font-weight:400;font-size:19px;line-height:1.3;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
-.wkp>h3 .lb{font-family:var(--body);font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--foil-ink);background:var(--foil);border-radius:4px;padding:2px 6px}
-.wps{display:flex;flex-direction:column;gap:8px;min-width:0}
-.wps h4{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-size:13px;font-weight:700;color:var(--muted)}
-.wps h4 .n{margin-left:auto;font-weight:500;white-space:nowrap}
-.wps h4 .n b{font-family:var(--mono);color:var(--ink)}
-.wkp .q{margin:0;font-size:13px;color:var(--muted)}
-.wpf{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
-.hset .v.loc button{font:inherit;font-weight:700;color:var(--accent);background:none;border:1px dashed var(--accent);border-radius:999px;padding:2px 10px;cursor:pointer}
-.rl{align-self:flex-start;font-size:12.5px;font-weight:700;color:var(--accent);text-decoration:none}
-.rl b{font-family:var(--mono)}
-.rl:hover{text-decoration:underline}
-.relo{margin:8px 0 0}
-.gcs{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
-.gcs.gmore{align-items:center;margin-top:8px}
-.gmore .lab{font-size:12px;color:var(--muted);margin-right:2px}
-.gc{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--ink);text-decoration:none;border:1px solid var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)));background:var(--gtint,hsl(var(--h) 70% var(--tint-l)));border-radius:999px;padding:1px 8px 1px 6px;white-space:nowrap;min-width:0}
-.gc>span{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.gc b{font-family:var(--mono)}
-.gc:hover{box-shadow:0 0 0 1px var(--g,hsl(var(--h) var(--chip-s) var(--chip-l)))}
-.gc.any{border-color:var(--line);background:var(--surface);color:var(--accent)}
-/* a day without releases: the events take the space (one row per game) */
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 /* いま話題 (VOICES): the latest /voices/ snapshot. Game colours, attitude colours and glyphs as on /voices/
    (src/voices.html): --gl/--gd per game give --g (marks) and --gt (text, >=4.5:1) per theme. */
 .vtr{--pos:#1d7f4c;--mix:#94580a;--neg:var(--sun)}
@@ -129,41 +154,43 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .vtr [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff)}}
 :root[data-theme="dark"] .vtr [style*="--gl"]{--g:var(--gd);--gt:color-mix(in oklab,var(--gd) 60%,#fff)}
 .vtr[hidden]{display:none}
-/* one card per topic: as many 240px+ columns as fit (5 at 1366, 3 at ~1000, 1 on phones), equal heights per row */
-.vts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:10px}
+/* one compact row per topic (game, attitude, status, title; the summary is the link's title): a single list in the right
+   column, as many 240px+ columns as fit below 901px */
+.vts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
 .vts>li{display:flex;min-width:0}
-.vt{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-top:3px solid var(--g);border-radius:10px;padding:9px 12px 10px;color:var(--ink);text-decoration:none}
-.vt:hover{border-color:var(--accent);border-top-color:var(--g)}
+.vt{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--g);border-radius:8px;padding:6px 10px 7px;color:var(--ink);text-decoration:none}
+.vt:hover{border-color:var(--accent);border-left-color:var(--g)}
 .vt:hover:not(:has(a.gl:hover)) .tt{color:var(--accent);text-decoration:underline}
 .vt .tt{color:inherit;text-decoration:none}
 .vt .tt::after{content:"";position:absolute;inset:0}
 .vt .tt:focus-visible{outline:none}
 .vt:has(.tt:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
-.vt .vh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px;font-weight:700}
+.vt .vh{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;font-size:12px;font-weight:700}
 .vt .gm{display:inline-flex;align-items:center;gap:4px;min-width:0;color:var(--gt);white-space:nowrap}
 .vt .am{color:var(--a);white-space:nowrap}
 .vt .badge{margin-left:auto;font-size:12px;font-weight:700;border-radius:4px;padding:0 6px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
 .vt .badge.new{border-color:transparent;background:var(--accent-soft);color:var(--accent)}
 .vt .badge.hot{border-color:var(--foil);background:var(--foil-soft);color:var(--ink)}
 .vt .badge.cool{color:var(--muted)}
-.vt .tt,.vt .sm{font-family:var(--runtime);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
-.vt .tt{font-size:14px;font-weight:700;line-height:1.45;-webkit-line-clamp:2}
-.vt .sm{font-size:12.5px;line-height:1.6;color:var(--ink);-webkit-line-clamp:3}
-.vt .tr{margin-top:auto;padding-top:6px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted)}
-@media (max-width:1100px){
-  .gcols{grid-template-columns:repeat(min(var(--n),2),minmax(0,1fr))}
+.vt .tt{font-family:var(--runtime);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;font-size:14px;font-weight:700;line-height:1.45;-webkit-line-clamp:2}
+.vtr .blk-f .dayl{margin-left:auto}
+@media (max-width:900px){
+  .wkw{flex:1 1 100%;margin-left:0;flex-direction:column-reverse;align-items:stretch}
+  .wkl{justify-content:flex-end}
+  .wks{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+  .wdy{min-width:0;border-color:var(--line);background:var(--surface)}
+  .hgrid{grid-template-columns:minmax(0,1fr);grid-template-rows:none}
+  .hgrid>.wkp{grid-column:auto;grid-row:auto;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:none;gap:12px}
+  .wkp>.rel,.wkp>.evb,.hgrid>.vtr{grid-column:auto;grid-row:auto}
+  .vts{grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr))}
 }
 @media (max-width:760px){
   .blk{padding:12px;border-radius:12px}
-  .rels{grid-template-columns:minmax(0,1fr)}
-  .gcols{grid-template-columns:minmax(0,1fr)}
   .gcol .ty{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* phones: a scrolling strip of fixed-width days (the page itself never scrolls sideways) */
   .wks{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;margin:0 -12px;padding:2px 12px 4px;scroll-padding:0 12px}
   .wks::-webkit-scrollbar{display:none}
-  .wdy{flex:0 0 86px;scroll-snap-align:start}
-  .wpf{justify-content:stretch}
-  .wpf .go{flex:1 1 auto;text-align:center}
+  .wdy{flex:0 0 64px;scroll-snap-align:start}
 }
 </style>
 
@@ -174,27 +201,28 @@
   </header>
 
   <main class="home" id="home">
-    <h1 class="hbar"><b id="hDate"></b><span><!--H1--></span></h1>
-    <p class="hset" id="hSet"><span>表示中：</span><span class="v" id="hsT">すべてのタイトル</span><!--EVENTS--><span class="v loc" id="hsL"></span><!--/EVENTS--><button type="button" class="go" id="hsBtn" aria-haspopup="dialog" aria-label="表示するタイトル<!--EVENTS-->・地域<!--/EVENTS-->を変更">変更</button></p>
-    <section class="blk" aria-labelledby="wkH">
-      <div class="blk-h"><h2 id="wkH">今週のカレンダー</h2><span class="sub" id="wkSub"></span></div>
-      <div class="wks" id="wkStrip" role="tablist" aria-labelledby="wkH"></div>
+    <div class="htop">
+      <h1 class="hbar"><b id="hDate"></b><span class="tb">今日</span><span class="sr"><!--H1--></span></h1>
+      <button type="button" class="pill" id="hsBtn" aria-haspopup="dialog"><span class="sr">表示の設定：</span><span id="hsT">すべてのタイトル</span><!--EVENTS--><span class="loc" id="hsL"></span><!--/EVENTS--><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="wkw"><div class="wks" id="wkStrip" role="tablist"></div><p class="wkl" id="wkLg" aria-hidden="true"></p></div>
+    </div>
+    <div class="hgrid">
       <div class="wkp" id="wkPanel" role="tabpanel" tabindex="0"></div>
-      <p class="sr" id="wkLive" role="status" aria-live="polite"></p>
-    </section>
 <!--VOICES-->
-    <section class="blk vtr" id="vtr" aria-labelledby="vtH" hidden>
-      <div class="blk-h"><h2 id="vtH">いま話題</h2><span class="sub" id="vtSub"></span></div>
-      <div id="vtBody"></div>
-      <div class="blk-f"><p class="hint" id="vtAsOf"></p><a class="go" href="/voices/">話題カレンダーで見る ›</a></div>
-    </section>
+      <section class="blk vtr" id="vtr" aria-labelledby="vtH" hidden>
+        <div class="blk-h"><h2 id="vtH">いま話題</h2><span class="sub" id="vtSub"></span></div>
+        <div id="vtBody"></div>
+        <div class="blk-f"><p class="hint" id="vtAsOf"></p><a class="dayl" href="/voices/">話題カレンダーで見る ›</a></div>
+      </section>
 <!--/VOICES-->
+    </div>
+    <p class="sr" id="wkLive" role="status" aria-live="polite"></p>
   </main>
 
   <!--SITENAV-->
 </div>
 <dialog id="hsDlg" class="setdlg" aria-labelledby="hsTitle"><div class="dlg"><button type="button" class="ib close" id="hsClose" aria-label="閉じる">×</button><h2 class="dl-day" id="hsTitle">表示の設定</h2>
-  <p class="note">選んだタイトル<!--EVENTS-->と地域<!--/EVENTS-->で、このページの今週のカレンダー<!--VOICES-->・いま話題<!--/VOICES-->を表示します。<!--EVENTS-->イベントカレンダーと共通の設定です。<!--/EVENTS--></p>
+  <p class="note">選んだタイトル<!--EVENTS-->と地域<!--/EVENTS-->で、このページの発売<!--EVENTS-->・イベント<!--/EVENTS--><!--VOICES-->・いま話題<!--/VOICES-->を表示します。<!--EVENTS-->イベントカレンダーと共通の設定です。<!--/EVENTS--></p>
   <fieldset><legend>タイトル</legend><div class="fc" id="hsTitles"></div></fieldset>
 <!--EVENTS-->
   <fieldset><legend>地域</legend><div class="fc"><span class="lc" id="hsLoc"></span><button type="button" class="go" id="hsLocBtn" aria-haspopup="dialog">地域を設定</button></div></fieldset>
@@ -245,11 +273,41 @@ const isStar = d => stars.has(d.id);
 const byStar = (a,b) => isStar(b)-isStar(a);
 const relsOn = d => H.items.filter(x=>x.date===d).sort(byStar);
 
-// A day's releases of the saved titles plus favourites of any title, favourites first (cards as on the release calendar)
-const relCards = its => `<div class="rels">${its.map(d=>{
-  const pr = d.pack ? `<span class="pr">${esc(d.pack)}</span>` : '';
-  return `<div class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}">${thumb(d)}<span class="t"><span class="g">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}${gl(d.game,gi(d.game)+esc(d.game))}</span><a class="n pko" href="/releases/#i=${d.id}">${esc(d.name)}</a>${pr}</span></div>`;
-}).join('')}</div>`;
+// A day's releases of the saved titles plus favourites of any title, favourites first: one group per title (its icon and
+// name once, linking the hub), each row a thumbnail, the name and the price. A row drops the leading title name only when
+// it is exactly the group's, and rows of the group sharing their first word(s) go under one subheading with that series
+// prefix (whole words only, at least one word left per row, so version / vol. numbers never vanish); the full name stays
+// the link's accessible name.
+const words = s => s.split(/[\s\u3000]+/).filter(Boolean);
+function relGroups(its){
+  const by=new Map();
+  its.forEach(d=>{ if(!by.has(d.game)) by.set(d.game,[]); by.get(d.game).push(d); });
+  return [...by].map(([game,ds])=>{
+    const rows=ds.map(d=>{ const w=words(d.name), g=words(game), cut=w.length>g.length&&g.every((x,i)=>w[i]===x); return {d, pre:cut?g:[], w:cut?w.slice(g.length):w}; });
+    // series: rows of 2+ words sharing their first word; the prefix is their longest common run of words, one short of the shortest
+    const first=new Map();
+    rows.forEach(r=>{ if(r.w.length>1) first.set(r.w[0],(first.get(r.w[0])||[]).concat([r])); });
+    const out=[], done=new Set();
+    rows.forEach(r=>{
+      if(done.has(r)) return;
+      const mates=r.w.length>1?first.get(r.w[0]):null;
+      if(!mates||mates.length<2){ out.push(r); return; }
+      let k=1; const max=Math.min(...mates.map(m=>m.w.length))-1;
+      while(k<max && mates.every(m=>m.w[k]===r.w[k])) k++;
+      mates.forEach(m=>done.add(m));
+      out.push({series:r.w.slice(0,k).join(' '), rows:mates.map(m=>({...m, pre:m.pre.concat(m.w.slice(0,k)), w:m.w.slice(k)}))});
+    });
+    return {game, rows:out};
+  });
+}
+const relRow = r => {
+  const d=r.d, pr = d.pack ? `<span class="pr">${esc(d.pack)}</span>` : '';
+  const sr = r.pre.length ? `<span class="sr">${esc(r.pre.join(' '))} </span>` : '';
+  return `<li class="pk${isStar(d)?' on':''}" style="--h:${HUE[d.game]||0}">${thumb(d)}<span class="t">${isStar(d)?'<span class="sm" role="img" aria-label="お気に入り">★</span>':''}<a class="n pko" href="/releases/#i=${d.id}">${sr}${esc(r.w.join(' '))}</a></span>${pr}</li>`;
+};
+const relCards = its => `<div class="rels">${relGroups(its).map(({game,rows})=>
+  `<section class="rg" data-game="${esc(game)}" style="--h:${HUE[game]||0}" aria-label="${esc(game)}"><h3>${gl(game,gi(game)+esc(game),'gn')}</h3><ul class="rows">${rows.map(r=>r.series
+    ? `<li class="rsg"><h4>${esc(r.series)}</h4><ul class="rows">${r.rows.map(relRow).join('')}</ul></li>` : relRow(r)).join('')}</ul></section>`).join('')}</div>`;
 function relPart(x){
   if(x.all==null) return `<p class="q">${x.d>H.until?`このページの発売情報は ${md(H.until)} までです。`:''}この日の発売情報は新弾カレンダーでご確認ください。</p>`;
   const others = x.hidden ? `<p class="relo"><a class="rl" href="/releases/#d=${x.d}">ほかのタイトルの発売 <b>${x.hidden}</b>件 ›</a></p>` : '';
@@ -406,10 +464,12 @@ function typeLine(code,d,rows,min=''){
 }
 const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 const SK = '<div class="sk" aria-hidden="true"></div><div class="sk" aria-hidden="true" style="margin-top:6px"></div><span class="sr">読み込み中…</span>';
-// The day's events in the panel: one column per game (as /events/ orders them), at most MAX_COLS, the rest as chips.
+const CHEV = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+let evOpen = {}; // game code -> the visitor opened / closed its row
+// The day's events in the panel: one row per game (as /events/ orders them), at most MAX_COLS, the rest as chips.
 // {html, n, min}: n = the day's count for the heading (null when not known), min = 以上 when it is a minimum.
 function evPart(d,f){
-  if(!f.pref) return {html:'<p class="q">地域を設定すると、この日のイベントも表示します。</p>', n:null};
+  if(!f.pref) return {html:'<p class="q"><button type="button" class="go" id="hsLocSet" aria-haspopup="dialog">地域を設定</button></p>', n:null};
   if(!ev || ev.loading) return {html:SK, n:null, loading:true};
   if(ev.error){
     const busy=ev.error.status===429||ev.error.status===503;
@@ -433,7 +493,11 @@ function evPart(d,f){
     const ul = rows.length ? `<ul class="evs">${rows.map(x=>evItem(x,g.code,f,partial,d)).join('')}</ul>` : '';
     const more = !rows.length ? `<a class="go more" href="${href}">${n}件をイベントカレンダーで見る ›</a>`
       : rest>0 ? `<a class="go more" href="${href}">ほか ${rest}件${min} ›</a>` : `<a class="go more" href="${href}">地図で見る ›</a>`;
-    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h5>${gl(g.name,gi(g.name)+esc(g.name),'gn')}<span class="c"><b>${n}</b> 件${min}</span></h5>${typeLine(g.code,d,known?null:rs,min)}${ul}${more}</section>`;
+    // one row per game: open while the visitor keeps it open (this visit), at first only when it is the day's one game
+    const open = evOpen[g.code] ?? cols.length===1;
+    return `<section class="gcol" style="${gvars(g)}" aria-label="${esc(g.name)}"><h3>${gl(g.name,gi(g.name)+esc(g.name),'gn')}`
+      + `<button type="button" class="gt" data-g="${g.code}" aria-expanded="${open}" aria-controls="evg${g.code}"><span class="sr">${esc(g.name)}のイベント </span><b>${n}</b>件${min}${CHEV}</button></h3>`
+      + `<div class="gb" id="evg${g.code}"${open?'':' hidden'}>${typeLine(g.code,d,known?null:rs,min)}${ul}${more}</div></section>`;
   }).join('')}</div>${others}`};
 }
 
@@ -452,16 +516,15 @@ const TITLES = H.titles||{}; // code -> release / event display name
 const VOICES = !!$('vtr');
 // what the saved filters can hold: tcg.voices any of H.titles; without いま話題 only /events/' filter is read (its games)
 const TITLE_OPTS = Object.keys(TITLES).filter(c=>VOICES||EVG[c]);
-const shortList = (codes,html) => codes.slice(0,4).map(c=>(n=>html?gl(TITLES[c],esc(n)):n)(SHORT[TITLES[c]]||TITLES[c])).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
+const shortList = codes => codes.slice(0,4).map(c=>SHORT[TITLES[c]]||TITLES[c]).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
 function homeSel(){ const codes=savedGames(c=>TITLES[c]); return TITLE_OPTS.filter(c=>codes.includes(c)); }
 function selNames(){ const sel=homeSel(); return sel.length ? new Set(sel.map(c=>TITLES[c])) : null; }
 function renderSet(){
   const sel=homeSel(), t=$('hsT');
-  t.innerHTML = sel.length ? shortList(sel,true) : 'すべてのタイトル';
-  t.title = sel.map(c=>TITLES[c]).join('・');
-  if(!EVENTS) return;
-  const p=evFilters().pref, l=$('hsL');
-  l.innerHTML = p ? PIN+esc(LOC.locName(p)) : '<button type="button" id="hsLocSet" aria-haspopup="dialog">地域を設定</button>';
+  t.textContent = sel.length ? shortList(sel) : 'すべてのタイトル';
+  const p=EVENTS?evFilters().pref:'';
+  $('hsBtn').title = (sel.length ? sel.map(c=>TITLES[c]).join('・') : 'すべてのタイトル')+(p?'・'+LOC.locName(p):'');
+  if(EVENTS) $('hsL').innerHTML = p ? PIN+esc(LOC.locName(p)) : '';
 }
 // draft: the dialog's titles; edited: the visitor touched them (else confirming keeps whatever is saved, which account
 // sync may change while the dialog is open)
@@ -520,9 +583,10 @@ const dayLabel = i => i===0?'今日':i===1?'明日':'';
 function renderWeek(){
   const f=EVENTS?(evF||evFilters()):null, sel=homeSel();
   const loading=!!(f&&f.pref&&ev&&ev.loading);
-  $('wkSub').textContent = `${md(WEEK[0])}〜${md(WEEK[6])}`;
   const days=WEEK.map(d=>dayData(d,f,sel));
-  const strip=$('wkStrip'), focused=strip.contains(document.activeElement), sx=strip.scrollLeft;
+  const strip=$('wkStrip'), focused=strip.contains(document.activeElement), sx=strip.scrollLeft, evOn=!!(f&&f.pref);
+  strip.setAttribute('aria-label',`今週の発売${evOn?'・イベント':''}（${md(WEEK[0])}〜${md(WEEK[6])}）`);
+  $('wkLg').innerHTML = '<span><span class="cr"></span>発売数</span>'+(evOn?'<span><span class="ce"></span>イベント数</span>':'');
   strip.innerHTML = days.map((x,i)=>{
     const d=x.d, w=dowOf(d), [,m,dd]=d.split('-').map(Number), lb=dayLabel(i), on=i===wkSel;
     const rel=x.its?x.its.length:null, star=!!x.its&&x.its.some(isStar);
@@ -531,10 +595,12 @@ function renderWeek(){
     const en = !f||!f.pref ? null : x.n==null ? '' : x.n;
     const said=[`${m}月${dd}日(${DOW[w]})${lb?' '+lb:''}`, rel==null?'発売は新弾カレンダーで':`発売${rel}件${star?'（お気に入りあり）':''}`]
       .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):`イベント${en}件${evGamesLabel(f)?`（${evGamesLabel(f)}）`:''}`]);
-    return `<button type="button" role="tab" class="wdy${i===0?' today':''}" id="wkT${i}" aria-selected="${on}" tabindex="${on?0:-1}" aria-controls="wkPanel" aria-label="${esc(said.join('、'))}">`
-      + `<span class="dt"><b>${m}/${dd}</b><span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}</span>${lb?`<span class="lb">${lb}</span>`:''}</span>`
-      + `<span class="ct"><span class="${rel?'':'z'}">発売 <b>${rel==null?'–':rel}</b>${star?'<span class="sm">★</span>':''}</span>`
-      + (en==null?'':`<span class="${en?'':'z'}">イベント <b>${en===''?(loading?'…':'–'):en}</b></span>`)+`</span></button>`;
+    // a count only where there is something; – where it is not known here, … while loading
+    const relS = rel==null?'–':String(rel), evS = en==null?'':en===''?(loading?'…':'–'):String(en);
+    const cr = rel==null ? '<span class="cr u">–</span>' : rel ? `<span class="cr">${rel}${star?'<span class="sm">★</span>':''}</span>` : '';
+    const ce = en==null ? '' : en==='' ? `<span class="ce u">${evS}</span>` : en ? `<span class="ce">${en}</span>` : '';
+    return `<button type="button" role="tab" class="wdy${i===0?' today':''}" id="wkT${i}" aria-selected="${on}" tabindex="${on?0:-1}" aria-controls="wkPanel" aria-label="${esc(said.join('、'))}" data-rel="${relS}" data-ev="${evS}">`
+      + `<span class="dt"><b>${dd===1?m+'/'+dd:dd}</b><span class="dw ${w==0?'sun':w==6?'sat':''}">${DOW[w]}</span></span><span class="ct">${cr}${ce}</span></button>`;
   }).join('');
   strip.scrollLeft=sx;
   if(focused) $('wkT'+wkSel).focus();
@@ -547,21 +613,24 @@ function renderWeek(){
 function renderPanel(x,f,sel){
   const p=$('wkPanel'), d=x.d, [,m,dd]=d.split('-').map(Number), lb=dayLabel(wkSel);
   p.setAttribute('aria-labelledby','wkT'+wkSel);
-  const head=`<h3>${m}月${dd}日(${DOW[dowOf(d)]})${lb?`<span class="lb">${lb}</span>`:''}</h3>`;
-  const rn = x.its&&x.its.length ? `<span class="n"><b>${x.its.length}</b> 件</span>` : '';
-  let evs='', evHref='', live='';
+  // the chosen day is named in the headings unless it is today (the h1)
+  const day = wkSel ? `<span class="dd">${m}/${dd}(${DOW[dowOf(d)]})${lb?' '+lb:''}</span>` : '';
+  const rn = x.its&&x.its.length ? `<span class="n"><b>${x.its.length}</b>件</span>` : '';
+  const rel = `<section class="blk wps rel" aria-labelledby="wkRH"><div class="blk-h"><h2 id="wkRH">発売</h2>${day}${rn}`
+    + `<a class="dayl" href="/releases/#d=${d}">日別一覧<span class="sr">（新弾カレンダーでこの日を見る）</span> ›</a></div>${relPart(x)}</section>`;
+  let evs='', live='';
   if(EVENTS){
     const e=evPart(d,f);
     const where=[f.pref&&LOC.locName(f.pref), evGamesLabel(f)].filter(Boolean).join('・');
-    evs=`<section class="wps" aria-label="イベント"><h4>イベント${where?`（${esc(where)}）`:''}${e.n?`<span class="n"><b>${e.n}</b> 件${e.min||''}</span>`:''}</h4><div id="evBody">${e.html}</div></section>`;
     // the day view of the saved /events/ filter (the set counted here); without a location still that day
-    evHref = f.pref ? dayLink(f,d) : '/events/?'+new URLSearchParams([...(f.game?[['game',f.game]]:[]),...(f.type?[['type',f.type]]:[]),['range','custom'],['from',d],['to',d]]).toString().replace(/%2C/g,',');
+    const evHref = f.pref ? dayLink(f,d) : '/events/?'+new URLSearchParams([...(f.game?[['game',f.game]]:[]),...(f.type?[['type',f.type]]:[]),['range','custom'],['from',d],['to',d]]).toString().replace(/%2C/g,',');
+    evs=`<section class="blk wps evb" aria-labelledby="wkEH"><div class="blk-h"><h2 id="wkEH">イベント</h2>${day}${where?`<span class="sub">${esc(where)}</span>`:''}${e.n?`<span class="n"><b>${e.n}</b>件${e.min||''}</span>`:''}`
+      + `<a class="dayl" href="${esc(evHref)}">日別一覧<span class="sr">（イベントカレンダーでこの日を見る）</span> ›</a></div><div id="evBody">${e.html}</div></section>`;
     live = !f.pref ? '' : e.loading ? `${m}月${dd}日のイベントを読み込み中` : e.error ? `${m}月${dd}日のイベント情報を読み込めませんでした`
       : e.n ? `${m}月${dd}日のイベント ${e.n}件${e.min||''}` : e.n===0 ? `${m}月${dd}日のイベントはありません` : '';
   }
   const kept=window.snEv?snEv.keep(p):null;
-  p.innerHTML = head+`<section class="wps" aria-label="発売"><h4>発売${rn}</h4>${relPart(x)}</section>${evs}`
-    + `<div class="wpf"><a class="go" href="/releases/#d=${d}">新弾カレンダーでこの日を見る ›</a>${evHref?`<a class="go" href="${esc(evHref)}">イベントカレンダーでこの日を見る ›</a>`:''}</div>`;
+  p.innerHTML = rel+evs;
   if(kept) snEv.restore(p,kept);
   // one polite status for the panel's events: loading, then the count, none or the error
   const st=$('wkLive'); if(st.textContent!==live) st.textContent=live;
@@ -610,7 +679,6 @@ let VT = null;
 const VT_PAGE = '/voices/';
 const ATT = {positive:{l:'好意的',m:'＋'}, negative:{l:'否定的',m:'－'}, mixed:{l:'賛否両論',m:'±'}, neutral:{l:'中立',m:'・'}};
 const VOLW = {high:3, mid:2, low:1};
-const TREND = {positive:'好意的な声が多い', negative:'否定的な声が多い', mixed:'賛否が分かれている', neutral:'目立った賛否はない'};
 const daysBetween = (a,b) => Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);
 let vtGame = {};
 // the block stays hidden until the answer comes, and on any failure (nothing to retry: it is a teaser)
@@ -652,8 +720,7 @@ function renderVt(){
     return `<li><div class="vt" style="${vtvars(t.game)}">`
       + `<span class="vh" id="vtM${i}">${gl(g.name,`${gi(g.name)}<span aria-hidden="true">${esc(g.short||g.name)}</span><span class="sr">${esc(g.name)}</span>`,'gm')}`
       + `<span class="am a-${k}"><span aria-hidden="true">${a.m}</span>${a.l}</span>${badge(t)}</span>`
-      + `<a class="tt" id="vtT${i}" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}" aria-describedby="vtM${i} vtS${i}">${esc(t.title)}</a><span class="sm" id="vtS${i}">${esc(t.summary)}</span>`
-      + `<span class="tr">反応の傾向（推定）：${TREND[k]}</span></div></li>`;
+      + `<a class="tt" id="vtT${i}" href="${VT_PAGE}#t=${encodeURIComponent(t.id)}" title="${esc(t.summary)}" aria-describedby="vtM${i}">${esc(t.title)}</a></div></li>`;
   }).join('')}</ul>`;
   const [,m,d]=VT.date.split('-').map(Number);
   $('vtAsOf').textContent=`${m}/${d} 時点・AI要約`;
@@ -664,6 +731,8 @@ $('hDate').textContent = (([y,m,d])=>`${+m}月${+d}日(${DOW[dowOf(TODAY)]})`)(T
 readStars(); renderAll(); loadEvents();
 if($('vtr')) loadVt();
 document.addEventListener('click',e=>{
+  const gt=e.target.closest('#evBody .gt');
+  if(gt){ const o=gt.getAttribute('aria-expanded')!=='true', b=$(gt.getAttribute('aria-controls')); evOpen[gt.dataset.g]=o; gt.setAttribute('aria-expanded',o); if(b) b.hidden=!o; return; }
   if(e.target.closest('#evRetry')) loadEvents(true);
   else if(e.target.closest('#hsLocSet')) openLoc($('hsBtn'));
   else if(e.target.closest('#hsBtn')) openSet();

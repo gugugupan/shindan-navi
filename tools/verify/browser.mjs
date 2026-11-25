@@ -333,11 +333,11 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const H = await page.evaluate(() => JSON.parse(/const H = (\{.*?\});\n/s.exec(document.documentElement.innerHTML)[1]));
   const todays = H.items.filter(d => d.date === TODAY);
   const hasEvents = await page.locator('#evBody').count() > 0;
-  // today's panel is the day view: its release cards, and without a location one muted line; the 表示中 line's 地域を設定
-  // is the only location control (no 都道府県を選ぶ button outside the dialogs)
+  // today's panel is the day view: its release rows, and without a location only the イベント block's 地域を設定 (no
+  // 都道府県を選ぶ button outside the dialogs)
   const st = await page.evaluate(() => ({ date: document.getElementById('hDate').textContent, cards: document.querySelectorAll('#wkPanel .pk').length,
     none: !!document.querySelector('#wkPanel .wps .q'), days: document.querySelectorAll('#wkStrip [role="tab"]').length,
-    prompt: !!document.getElementById('hsLocSet') && document.getElementById('evBody').textContent === '地域を設定すると、この日のイベントも表示します。'
+    prompt: !!document.getElementById('hsLocSet') && document.getElementById('evBody').textContent === '地域を設定'
       && ![...document.querySelectorAll('#home button')].some(b => b.textContent.includes('都道府県')),
     blocks: document.querySelectorAll('#relBody, #relH, #evH, #locBtn, #pickLoc').length, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
   const [, m, d] = TODAY.split('-').map(Number);
@@ -366,8 +366,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const ev = await page.evaluate(() => ({ rows: document.querySelectorAll('#evBody .ev').length, more: document.querySelector('#evBody a.go')?.getAttribute('href'),
       cols: document.querySelectorAll('#evBody .gcol').length, types: document.querySelectorAll('#evBody .ty').length, where: document.getElementById('hsL').textContent }));
     if (ev.cols !== 1 || ev.rows !== 5) fail(where, `today's events show ${ev.cols} columns / ${ev.rows} rows`);
-    // headings: day h3, 発売 / イベント h4, game columns h5
-    if (await page.locator('#wkPanel .gcol h5').count() !== ev.cols || await page.locator('#wkPanel .gcol h3, #wkPanel .gcol h4').count()) fail(where, 'game column headings are not h5');
+    // headings: 発売 / イベント h2, game rows h3
+    if (await page.locator('#wkPanel .gcol h3').count() !== ev.cols || await page.locator('#wkPanel .gcol :is(h2, h4, h5)').count()) fail(where, 'game row headings are not h3');
     // /days without by_game_type (answers cached before it existed): no type line
     if (ev.types) fail(where, `${ev.types} type lines without by_game_type`);
     if (ev.more !== `/events/?game=OPCG&pref=JP-13&range=custom&from=${TODAY}&to=${TODAY}`) fail(where, `day view link ${ev.more}`);
@@ -481,7 +481,9 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
           outside: rs.some(r => r.left < box.left - 0.5 || r.right > box.right + 0.5),
           links: lis.map(li => { const a = li.querySelectorAll('a.tt'), n = a[0] && a[0].textContent;
             // besides the card's link (the title, stretched over the card): only the game chip's hub link
-            return { n: a.length, other: li.querySelectorAll('a:not(.tt):not(.gl)').length, name: n, title: li.querySelector('.tt')?.textContent, meta: Math.min(...[...li.querySelectorAll('.vh,.vh :not(.gi),.tr')].map(e => parseFloat(getComputedStyle(e).fontSize))) }; }) };
+            return { n: a.length, other: li.querySelectorAll('a:not(.tt):not(.gl)').length, name: n, title: li.querySelector('.tt')?.textContent, meta: Math.min(...[...li.querySelectorAll('.vh,.vh :not(.gi)')].map(e => parseFloat(getComputedStyle(e).fontSize))),
+              // compact rows: no summary or 反応の傾向 line on the card, the summary is the link's title
+              extra: li.querySelectorAll('.sm,.tr').length, tip: !!a[0]?.getAttribute('title') }; }) };
       })(),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
   });
@@ -506,7 +508,8 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (!allOk(st)) fail(where, `all games: sub "${st.sub}" rows ${st.rows.join(' ')}`);
     if (st.asof !== `${mm}/${dd} 時点・AI要約`) fail(where, `footer ${st.asof}`);
     // cards: one per row topic in a list, one link each named by the title, metadata >= 12px, equal heights per row,
-    // inside the section; 1 column on phones (also at 280px), >= 3 at 1366 and 1024 (desktop also shot at those widths, light and dark)
+    // inside the section; 1 column on phones (also at 280px) and in the right-hand column at 1366 and 1024 (desktop also
+    // shot at those widths, light and dark)
     const cardsOk = (st, w, min, max) => {
       const c = st.cards;
       if (c.n !== st.rows.length) fail(where, `${w}px: ${c.n} cards for ${st.rows.length} links`);
@@ -515,6 +518,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
       if (c.outside) fail(where, `${w}px: a card sticks out of the section`);
       if (c.links.some(l => l.n !== 1 || l.other || !l.title || l.name !== l.title)) fail(where, `${w}px: card links ${JSON.stringify(c.links.map(l => [l.n, l.name]))}`);
       if (c.links.some(l => !(l.meta >= 12))) fail(where, `${w}px: card metadata under 12px`);
+      if (c.links.some(l => l.extra || !l.tip)) fail(where, `${w}px: a topic row shows its summary / trend line or lacks the summary title`);
       if (st.overflow > 1) fail(where, `${w}px: page scrolls horizontally by ${st.overflow}px`);
       if (st.rows.some(id => !byId[decodeURIComponent(id)])) fail(where, `${w}px: link targets ${st.rows.join(' ')}`);
     };
@@ -535,7 +539,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     else for (const w of [1366, 1024]) {
       await page.setViewportSize({ width: w, height: opt.height });
       const sw = await state();
-      cardsOk(sw, w, 3, 5);
+      cardsOk(sw, w, 1, 1);
       await shot(String(w));
     }
     if (opt.width > 760) await page.setViewportSize({ width: opt.width, height: opt.height });
@@ -597,7 +601,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
   console.log(`  ${where.padEnd(22)} checked`);
   await ctx.close();
 }
-// / 表示中 line and 今週のカレンダー. The line names the saved titles (tcg.voices with VOICES builds, else /events/' game
+// / 表示中 pill and the week strip. The pill names the saved titles (tcg.voices with VOICES builds, else /events/' game
 // filter) and the /events/ location; 変更 opens a dialog that writes the titles to /events/' filter (its games) and to
 // tcg.voices when it exists or holds a title /events/ has not, and the location through the shared picker. The strip is
 // today + 6 days, one tab stop (arrow keys / Home / End), counting the titles' releases and, this month, their events
@@ -663,13 +667,14 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
   const state = async () => { await settled(page); return read(); };
   const read = () => page.evaluate(() => {
     const tabs = [...document.querySelectorAll('#wkStrip [role="tab"]')], p = document.getElementById('wkPanel'), s = document.getElementById('wkStrip');
-    const cnt = (t, k) => { const x = [...t.querySelectorAll('.ct > span')].find(e => e.textContent.startsWith(k)); return x ? x.querySelector('b').textContent : null; };
-    return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null,
-      tabs: tabs.map(t => ({ sel: t.getAttribute('aria-selected'), ti: t.tabIndex, rel: cnt(t, '発売'), ev: cnt(t, 'イベント'), label: t.getAttribute('aria-label') })),
+    // a tab's counts (data-rel / data-ev; '' = no events line); badges only for counts above 0
+    const zeroBadge = tabs.some(t => (t.dataset.rel === '0' && t.querySelector('.cr')) || (t.dataset.ev === '0' && t.querySelector('.ce')));
+    return { titles: document.getElementById('hsT').textContent, loc: document.getElementById('hsL')?.textContent ?? null, zeroBadge,
+      tabs: tabs.map(t => ({ sel: t.getAttribute('aria-selected'), ti: t.tabIndex, rel: t.dataset.rel ?? null, ev: t.dataset.ev || null, label: t.getAttribute('aria-label') })),
       by: p.getAttribute('aria-labelledby'), live: document.getElementById('wkLive')?.textContent ?? null,
-      evHead: p.querySelector('.wps[aria-label="イベント"] h4')?.textContent ?? null, ty: [...p.querySelectorAll('.gcol .ty')].map(t => t.textContent), rels: [...p.querySelectorAll('.rels .pk .g')].map(g => g.textContent.replace('★', '')),
+      evHead: p.querySelector('.evb .blk-h .sub')?.textContent ?? null, ty: [...p.querySelectorAll('.gcol .ty')].map(t => t.textContent), rels: [...p.querySelectorAll('.rels .pk')].map(e => e.closest('.rg').dataset.game),
       cols: [...p.querySelectorAll('.gcol')].map(c => c.getAttribute('aria-label')), others: p.querySelector('.relo .rl')?.textContent || null,
-      foot: [...p.querySelectorAll('.wpf a')].map(a => [a.textContent, a.getAttribute('href')]),
+      foot: [...p.querySelectorAll('a.dayl')].map(a => [a.textContent, a.getAttribute('href')]),
       locSet: !!document.getElementById('hsLocSet'), evText: document.getElementById('evBody')?.textContent ?? null,
       saved: [localStorage.getItem('tcg.voices'), localStorage.getItem('tcg.ev.filters')], focus: document.activeElement?.id || null,
       dlg: document.getElementById('hsDlg').open, strip: s.scrollWidth - s.clientWidth,
@@ -693,7 +698,9 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (st.tabs.some(t => !t.label || !/^\d+月\d+日/.test(t.label))) fail(where, `${label}: tab labels`);
       if (st.overflow > 1) fail(where, `${label}: page scrolls horizontally by ${st.overflow}px`);
       if (st.small.length) fail(where, `${label}: text under 12px: ${st.small.slice(0, 3).join(' | ')}`);
+      if (st.zeroBadge) fail(where, `${label}: a zero day shows a count badge`);
     };
+    const REL_LINK = '日別一覧（新弾カレンダーでこの日を見る） ›', EV_LINK = '日別一覧（イベントカレンダーでこの日を見る） ›';
     // a title with releases this week (an /events/ game, so the /events/ filter can hold it too)
     const inWeek = H.items.filter(x => week.includes(x.date));
     const code = ['OPCG', 'UATCG', 'CONAN', 'PTCG', 'GCG', 'DBFW', 'BS', 'DCG'].find(c => inWeek.some(x => x.game === H.titles[c])) || 'OPCG';
@@ -711,7 +718,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     const todayRels = H.items.filter(x => x.date === TODAY);
     if (st.rels.length !== todayRels.length) fail(where, `today's panel shows ${st.rels.length} release cards, data has ${todayRels.length}`);
     const evDay = d => `/events/?pref=JP-13&range=custom&from=${d}&to=${d}`;
-    if (JSON.stringify(st.foot) !== JSON.stringify([['新弾カレンダーでこの日を見る ›', `/releases/#d=${TODAY}`]].concat(HAS_EVENTS ? [['イベントカレンダーでこの日を見る ›', evDay(TODAY)]] : []))) fail(where, `today's links ${JSON.stringify(st.foot)}`);
+    if (JSON.stringify(st.foot) !== JSON.stringify([[REL_LINK, `/releases/#d=${TODAY}`]].concat(HAS_EVENTS ? [[EV_LINK, evDay(TODAY)]] : []))) fail(where, `today's links ${JSON.stringify(st.foot)}`);
     if (HAS_EVENTS && api.length !== 2) fail(where, `API requests ${api.join(' ')}`);
     // tomorrow: covered by the loaded rows (no request), one column per game
     if (HAS_EVENTS && WEEK1.slice(0, 7) === ym) {
@@ -737,7 +744,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
         await state();
         if (api.length !== 4 || !api[3].includes(`from=${week[4]}&`)) fail(where, `${week[4]}: requests ${api.slice(3).join(' ')}`);
       }
-      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-day-busy.png`) });
+      await page.locator('#home').screenshot({ path: path.join(OUT, `${vp}-home-day-busy.png`) });
       await page.locator('#wkT0').click();
     }
     if (opt.width <= 760 && st.strip < 1) fail(where, 'the strip does not scroll on phones');
@@ -775,7 +782,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (st.rels.length !== mine.length) fail(where, `from /events/: today's cards ${st.rels}`);
     const hid = todays.length - mine.length;
     if ((hid ? `ほかのタイトルの発売 ${hid}件 ›` : null) !== st.others) fail(where, `from /events/: others "${st.others}"`);
-    await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-strip-filtered.png`) });
+    await page.locator('#home').screenshot({ path: path.join(OUT, `${vp}-home-strip-filtered.png`) });
     // tcg.voices wins over /events/ (VOICES builds)
     if (HAS_VOICES) {
       const evGame = code === 'PTCG' ? 'OPCG,PTCG' : `${code},PTCG`;
@@ -805,7 +812,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       await page.reload({ waitUntil: 'networkidle' });
       st = await state();
       strip('filtered query', st, two.map(c => H.titles[c]), null, true, ['OPCG', 'PTCG']);
-      if (HAS_EVENTS && !st.evHead.startsWith('イベント（東京都・ワンピ・ポケカ）')) fail(where, `panel heading "${st.evHead}"`);
+      if (HAS_EVENTS && st.evHead !== '東京都・ワンピ・ポケカ') fail(where, `panel heading "${st.evHead}"`);
     }
 
     // 変更: the dialog writes the titles (other saved filters kept), cancel writes nothing
@@ -919,7 +926,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       await page.reload({ waitUntil: 'load' });
       const i = week.findIndex((d, j) => j > 0 && relN(d, null) !== '0');
       if (i > 0) await page.locator(`#wkT${i}`).click();
-      const target = page.locator('#wkPanel .wpf a').first();
+      const target = page.locator('#wkPanel a.dayl').first();
       await target.focus();
       const before = await page.evaluate(() => { const a = document.activeElement; return a.id || a.getAttribute('href'); });
       if (!await page.locator('#wkPanel .sk').count()) fail(where, 'slow answer: the panel is not loading');
@@ -941,7 +948,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       const href = `/events/?game=OPCG&pref=JP-13&range=custom&from=${week[nx]}&to=${week[nx]}`;
       const nRows = EVTS.filter(e => e.d === week[nx] && matches(e, ['OPCG'])).length;
       // its rows are all loaded: the strip shows their count; the shared OPCG + PTCG row makes no PTCG column
-      if (st.tabs[nx].ev !== String(nRows) || JSON.stringify(st.foot[1]) !== JSON.stringify(['イベントカレンダーでこの日を見る ›', href])) fail(where, `next month ${week[nx]}: ${st.tabs[nx].ev} ${JSON.stringify(st.foot)}`);
+      if (st.tabs[nx].ev !== String(nRows) || JSON.stringify(st.foot[1]) !== JSON.stringify([EV_LINK, href])) fail(where, `next month ${week[nx]}: ${st.tabs[nx].ev} ${JSON.stringify(st.foot)}`);
       if (api.length !== 1 || !api[0].endsWith(`/api/v1/events?from=${week[nx]}&until=${nm1Of(week[nx])}&game=OPCG&pref=JP-13&limit=50`)) fail(where, `next month ${week[nx]}: requests ${api.join(' ')}`);
       if (JSON.stringify(st.cols) !== JSON.stringify(['ONE PIECE']) || !st.ty.some(t => t.startsWith(`${H.types.standard_battle} 2件`))) fail(where, `next month ${week[nx]}: columns ${st.cols} type lines ${st.ty}`);
       // more rows than its page: no count in the strip, the type line's counts are minimums
@@ -951,18 +958,18 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       st = await state();
       if (st.tabs[nx].ev !== '–' || !st.ty.length || !st.ty.every(t => t.includes('件以上'))) fail(where, `next month, more rows: ${st.tabs[nx].ev} type lines ${st.ty}`);
       nmBusy = false;
-      await page.locator('section:has(#wkH)').screenshot({ path: path.join(OUT, `${vp}-home-strip-nextmonth.png`) });
+      await page.locator('#home').screenshot({ path: path.join(OUT, `${vp}-home-strip-nextmonth.png`) });
     } else if (HAS_EVENTS) console.log(`  ${where.padEnd(22)} no next-month day this week: next-month check skipped`);
 
-    // no location: no request; 地域を設定 in the 表示中 line, one muted line in the panel
+    // no location: no request; the pill names no location, the イベント block is one 地域を設定 button
     api.length = 0;
     await setStore({ 'tcg.ev.filters': { game: code, type: 'standard_battle' } });
     await page.reload({ waitUntil: 'networkidle' });
     st = await state();
     if (api.length) fail(where, `API called without a location: ${api.join(' ')}`);
-    if (HAS_EVENTS && (st.loc !== '地域を設定' || !st.locSet || st.evText !== '地域を設定すると、この日のイベントも表示します。')) fail(where, `no location: "${st.loc}" ${st.locSet} "${st.evText}"`);
+    if (HAS_EVENTS && (st.loc !== '' || !st.locSet || st.evText !== '地域を設定')) fail(where, `no location: "${st.loc}" ${st.locSet} "${st.evText}"`);
     if (HAS_EVENTS) {
-      // 地域を設定 opens the picker; the choice shows in the line and focus returns to 変更
+      // 地域を設定 opens the picker; the choice shows in the pill and focus returns to it
       await page.locator('#hsLocSet').click();
       await page.locator('#prefDlg[open] [data-pref="JP-13"]').click();
       await page.waitForFunction(() => document.getElementById('hsL').textContent === '東京都');
@@ -1576,6 +1583,11 @@ if (HAS_EVENTS) {
       await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })));
       await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
       await page.locator('#evBody .gcol').first().waitFor();
+      // several games: every row starts closed; its button opens it
+      const opTog = page.locator('#evBody .gcol[aria-label="ONE PIECE"] .gt');
+      if (await opTog.getAttribute('aria-expanded') !== 'false' || await page.locator('#evBody .gcol[aria-label="ONE PIECE"] .gb').isVisible()) fail(where, 'home: a game row of several starts open');
+      await opTog.click();
+      if (await opTog.getAttribute('aria-expanded') !== 'true' || !(await page.locator('#evBody .gcol[aria-label="ONE PIECE"] .gb').isVisible())) fail(where, 'home: the game row did not open');
       const h = await page.evaluate(() => { const c = document.querySelector('#evBody .gcol[aria-label="ONE PIECE"]');
         return { text: document.getElementById('evBody').textContent, rows: [...c.querySelectorAll(':scope .evs>.ev')].map(e => e.querySelector(':scope>.ev-n').textContent.replace('（外部サイト）', '')),
           more: c.querySelector('a.go.more')?.textContent, tags: c.querySelectorAll('.ev-m .tag').length,
@@ -1600,7 +1612,7 @@ if (HAS_EVENTS) {
       // /days without by_game: the column counts come from the loaded rows, the day total says more are coming
       nobg = true;
       await page.reload({ waitUntil: 'networkidle' });
-      await page.locator('#evBody .evg').first().waitFor();
+      await page.locator('#evBody .evg').first().waitFor({ state: 'attached' });
       const nb = await page.evaluate(() => document.querySelector('#evBody .evg .evg-c').textContent);
       if (!nb.endsWith('以上')) fail(where, `home without by_game: group count ${nb}`);
       nobg = false; extra = 0;
@@ -1691,6 +1703,7 @@ if (HAS_EVENTS) {
       await page.goto(`${BASE}/`);
       await page.evaluate(() => localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })));
       await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      for (const g of ['ONE PIECE', 'ポケモンカード']) await page.locator(`#evBody .gcol[aria-label="${g}"] .gt`).click();
       const nm = page.locator('#evBody .gcol[aria-label="ONE PIECE"] [data-id="y1"] a.ev-n');
       await nm.waitFor();
       await nm.focus();
@@ -2071,6 +2084,144 @@ if (HAS_EVENTS) {
   console.log(`  hubs checked (${pick.path}, ${topics.size} topics, ${Object.keys(REDIRECTS).length} redirects)`);
 }
 // game icons (gi() in build.py) next to game names in both themes: every one loaded and at its fixed size
+// Footer (every page with the タイトル別 / 月別 rows): both rows inside one closed native <details> 「タイトル別・月別」,
+// the links still in the HTML; the ツール row, the site row and the notice stay outside it.
+{
+  const where = 'footer details';
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.html') ? [path.join(d, e.name)] : []);
+  let n = 0;
+  for (const f of walk(DIST)) {
+    const h = fs.readFileSync(f, 'utf8'), nav = /<nav class="sitenav"[^>]*>(.*?)<\/nav>/s.exec(h);
+    if (!nav) continue;
+    const rel = path.relative(DIST, f);
+    if (/<b>(タイトル別|月別)<\/b>/.test(nav[1])) {
+      n++;
+      const det = /<details class="sitemore"><summary>タイトル別・月別<\/summary>(.*?)<\/details>/s.exec(nav[1]);
+      if (!det || !det[1].includes('<b>タイトル別</b>') || !det[1].includes('<b>月別</b>') || /<b>(タイトル別|月別)<\/b>/.test(nav[1].replace(det[0], ''))) fail(where, `${rel}: タイトル別 / 月別 not folded`);
+      else if (!/href="\/\d{4}-\d{2}\/"/.test(det[1])) fail(where, `${rel}: month links missing`);
+    }
+    if (!nav[1].includes('class="sitenote"') || !nav[1].includes('href="/privacy/"')) fail(where, `${rel}: notice / privacy link missing`);
+    if (/<details class="sitemore" open/.test(nav[1])) fail(where, `${rel}: footer details open`);
+  }
+  if (n < 10) fail(where, `only ${n} pages with the folded rows`);
+  console.log(`  ${where.padEnd(22)} ${n} pages`);
+}
+// / (direction A, owner 2026-11-25): the h1 date with the strip beside it on desktop; the day's releases grouped by title
+// (title once, the shared title / series prefix dropped from the names but kept in their accessible names, version /
+// vol. numbers kept, prices on the right), events one collapsible row per game (closed when the day has several, open
+// when one), zero days without a count; 発売 left, イベント and いま話題 stacked on the right from 901px, one column
+// below; no sideways scroll at 1366 / 1024 / 390 / 280 in both themes. Made-up releases replace the build's.
+if (HAS_EVENTS) {
+  const where = 'home layout A';
+  const day = n => new Date(Date.parse(`${TODAY}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const D2 = day(2);
+  const fx = [
+    ['DIVINE CROSS', 'DIVINE CROSS スペシャルセット 2026年 夏 りっく☆じあ〜す', '3,300円'], ['DIVINE CROSS', 'DIVINE CROSS スペシャルセット 2026年 夏 刹那にかける恋はなび', '2,200円'],
+    ['DIVINE CROSS', 'DIVINE CROSS ワナクリ２', '660円'], ['DIVINE CROSS', 'DIVINE CROSS 七つの大罪 黙示録の四騎士 vol.2', '660円'], ['DIVINE CROSS', 'DIVINE CROSS', '']
+  ].map(([game, name, pack], i) => ({ id: `ifxa${i}`, date: TODAY, game, name, pack }))
+    .concat([['UNION ARENA', 'UNION ARENA ブースターパック D.Gray-man【UA58BT】', '385円'], ['UNION ARENA', 'UNION ARENA ブースターパック 〈物語〉シリーズ Vol.2【EX18BT】', '385円'],
+      ['アニマルカードゲーム', '構築済みトライアルデッキ 「狸の宴」', '2,750円'], ['ポケモンカード', '拡張パック「ハドウシーカー」', '200円'], ['アニマルカードゲーム', '構築済みトライアルデッキ 「狼の夜」', '2,750円']]
+      .map(([game, name, pack], i) => ({ id: `ifxb${i}`, date: D2, game, name, pack })));
+  const evs = [['a1', 'OPCG', TODAY], ['a2', 'OPCG', TODAY], ['a3', 'PTCG', TODAY], ['a4', 'OPCG', D2]].map(([id, code, d]) => ({ id, name: `テスト大会 ${id}`, game_code: code, game_codes: [code],
+    starts_on: d, time_precision: 'datetime', starts_at: `${d}T18:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'offline', venue: { name: `店 ${id}` }, source_url: 'https://example.com/', event_status: 'scheduled' }));
+  const sameMonth = D2.slice(0, 7) === TODAY.slice(0, 7);
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'ja-JP', timezoneId: 'Asia/Tokyo' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+  const bad = [];
+  page.on('pageerror', e => bad.push(`pageerror: ${e.message}`));
+  await page.route(`${BASE}/`, async route => {
+    const r = await route.fetch(), html = await r.text(), m = /const H = (\{.*?\});\n/s.exec(html), H = JSON.parse(m[1]);
+    H.items = fx;
+    route.fulfill({ response: r, body: html.replace(m[1], JSON.stringify(H).replace(/</g, '\\u003c')) });
+  });
+  await page.route(EVENTS_API, route => {
+    const u = new URL(route.request().url());
+    if (u.pathname.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [], prefectures: [] } });
+    if (u.pathname.endsWith('/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: 3, by_game: { OPCG: 2, PTCG: 1 } }].concat(sameMonth ? [{ date: D2, count: 1, by_game: { OPCG: 1 } }] : []) } });
+    route.fulfill({ json: { events: evs.filter(e => e.starts_on >= u.searchParams.get('from') && e.starts_on < u.searchParams.get('until')), next_cursor: null } });
+  });
+  const rows = () => page.evaluate(() => [...document.querySelectorAll('#wkPanel .rg')].map(g => [g.dataset.game, (h => { h.querySelectorAll('.gi').forEach(e => e.remove()); return h.textContent.trim(); })(g.querySelector('h3').cloneNode(true)),
+    [...g.querySelectorAll(':scope > .rows > li')].map(li => li.classList.contains('rsg')
+      ? { series: li.querySelector('h4').textContent, rows: [...li.querySelectorAll('.pk')].map(p => { const a = p.querySelector('a.n'), c = a.cloneNode(true); c.querySelectorAll('.sr').forEach(e => e.remove()); return [c.textContent, a.textContent]; }) }
+      : (p => { const a = p.querySelector('a.n'), c = a.cloneNode(true); c.querySelectorAll('.sr').forEach(e => e.remove()); return [c.textContent, a.textContent]; })(li))]));
+  try {
+    await page.goto(`${BASE}/`);
+    await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tcg.ev.filters', JSON.stringify({ pref: 'JP-13' })); localStorage.setItem('tcg.stars', JSON.stringify(['ifxb3'])); });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
+    // today: one title; the two スペシャルセット share a subheading, the bare title name stays, vol.2 stays
+    const full = (s, x) => `${s} ${x}`;
+    const want1 = [['DIVINE CROSS', 'DIVINE CROSS', [{ series: 'スペシャルセット 2026年 夏', rows: [['りっく☆じあ〜す', full('DIVINE CROSS スペシャルセット 2026年 夏', 'りっく☆じあ〜す')], ['刹那にかける恋はなび', full('DIVINE CROSS スペシャルセット 2026年 夏', '刹那にかける恋はなび')]] },
+      ['ワナクリ２', 'DIVINE CROSS ワナクリ２'], ['七つの大罪 黙示録の四騎士 vol.2', 'DIVINE CROSS 七つの大罪 黙示録の四騎士 vol.2'], ['DIVINE CROSS', 'DIVINE CROSS']]]];
+    const r1 = await rows();
+    if (JSON.stringify(r1) !== JSON.stringify(want1)) fail(where, `same-series day ${JSON.stringify(r1)}`);
+    const lay = await page.evaluate(() => {
+      const R = s => document.querySelector(s)?.getBoundingClientRect(), rel = R('#wkPanel .rel'), evb = R('#wkPanel .evb'), vt = R('#vtr'), h1 = R('.hbar'), strip = R('#wkStrip');
+      const prices = [...document.querySelectorAll('#wkPanel .pk')].filter(p => p.querySelector('.pr')).map(p => p.getBoundingClientRect().right - p.querySelector('.pr').getBoundingClientRect().right);
+      const tabs = [...document.querySelectorAll('#wkStrip [role="tab"]')].map(t => [t.dataset.rel, t.dataset.ev, !!t.querySelector('.cr:not(.u)'), !!t.querySelector('.ce:not(.u)')]);
+      const ops = [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelector('.gt').getAttribute('aria-expanded'), !c.querySelector('.gb').hidden]);
+      return { side: rel && evb && evb.left > rel.right, ratio: rel && evb && rel.width / (rel.width + evb.width), under: !vt || (Math.abs(vt.left - evb.left) < 2 && vt.top > evb.bottom),
+        beside: strip.left > h1.right && strip.top < h1.bottom, prices: Math.max(...prices), tabs, ops,
+        legend: document.getElementById('wkLg').textContent, foot: (d => d && { open: d.open, tools: !!document.querySelector('.sitenav > div b')?.textContent.includes('ツール'), note: !!document.querySelector('.sitenav .sitenote')?.getClientRects().length })(document.querySelector('.sitenav details.sitemore')) };
+    });
+    if (!lay.side || !(lay.ratio > 0.55 && lay.ratio < 0.65)) fail(where, `1366: 発売 / イベント not side by side at ~60% (${lay.ratio})`);
+    if (!lay.under) fail(where, '1366: いま話題 not under イベント');
+    if (!lay.beside) fail(where, '1366: the strip is not beside the date');
+    if (!(lay.prices < 12)) fail(where, `prices not right-aligned (${lay.prices}px from the row end)`);
+    // zero days: no badge; a count only above 0
+    if (lay.tabs.some(([r, e, cr, ce]) => cr !== (+r > 0) || (e !== '' && e !== '–' && ce !== (+e > 0)))) fail(where, `strip badges ${JSON.stringify(lay.tabs)}`);
+    if (lay.tabs[1][0] !== '0' || lay.tabs[0][0] !== '5') fail(where, `strip counts ${JSON.stringify(lay.tabs)}`);
+    if (lay.legend !== '発売数イベント数') fail(where, `legend "${lay.legend}"`);
+    if (JSON.stringify(lay.ops) !== JSON.stringify([['ONE PIECE', 'false', false], ['ポケモンカード', 'false', false]])) fail(where, `event rows not closed at first ${JSON.stringify(lay.ops)}`);
+    if (!lay.foot || lay.foot.open || !lay.foot.tools || !lay.foot.note) fail(where, `footer ${JSON.stringify(lay.foot)}`);
+    // a row opens and closes; it stays open across a re-render
+    const tog = page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gt');
+    await tog.click();
+    if (await tog.getAttribute('aria-expanded') !== 'true' || await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .ev').count() !== 1 || !(await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .ev').isVisible())) fail(where, 'event row did not open');
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('sn:prefs')));
+    if (await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gt').getAttribute('aria-expanded') !== 'true') fail(where, 'event row closed by a re-render');
+    await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gt').click();
+    if (await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gb').isVisible()) fail(where, 'event row did not close');
+    // the multi-title day: the favourite's title first; series subheadings per title; Vol.2 kept
+    await page.locator('#wkT2').click();
+    await page.waitForFunction(() => !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
+    const r2 = await rows();
+    const want2 = [['ポケモンカード', 'ポケモンカード', [['拡張パック「ハドウシーカー」', '拡張パック「ハドウシーカー」']]],
+      ['UNION ARENA', 'UNION ARENA', [{ series: 'ブースターパック', rows: [['D.Gray-man【UA58BT】', 'UNION ARENA ブースターパック D.Gray-man【UA58BT】'], ['〈物語〉シリーズ Vol.2【EX18BT】', 'UNION ARENA ブースターパック 〈物語〉シリーズ Vol.2【EX18BT】']] }]],
+      ['アニマルカードゲーム', 'アニマルカードゲーム', [{ series: '構築済みトライアルデッキ', rows: [['「狸の宴」', '構築済みトライアルデッキ 「狸の宴」'], ['「狼の夜」', '構築済みトライアルデッキ 「狼の夜」']] }]]];
+    if (JSON.stringify(r2) !== JSON.stringify(want2)) fail(where, `multi-title day ${JSON.stringify(r2)}`);
+    const dd = await page.evaluate(() => [...document.querySelectorAll('#wkPanel .blk-h .dd')].map(e => e.textContent));
+    if (dd.length !== 2 || !dd.every(t => t.startsWith(`${+D2.slice(5, 7)}/${+D2.slice(8)}(`))) fail(where, `other day not named in the headings ${JSON.stringify(dd)}`);
+    if (sameMonth) {
+      const one = await page.evaluate(() => [...document.querySelectorAll('#evBody .gcol')].map(c => [c.getAttribute('aria-label'), c.querySelector('.gt').getAttribute('aria-expanded')]));
+      if (JSON.stringify(one) !== JSON.stringify([['ONE PIECE', 'true']])) fail(where, `a day's one game is not open ${JSON.stringify(one)}`);
+    }
+    await page.locator('#wkT0').click();
+    // widths and themes: no sideways scroll; one column below 901px
+    for (const w of [1366, 1024, 390, 280]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme });
+        const st = await page.evaluate(() => { const rel = document.querySelector('#wkPanel .rel').getBoundingClientRect(), evb = document.querySelector('#wkPanel .evb')?.getBoundingClientRect();
+          return { ov: document.documentElement.scrollWidth - document.documentElement.clientWidth, stacked: !evb || evb.top >= rel.bottom - 1 }; });
+        if (st.ov > 1) fail(where, `${w}px ${scheme}: page scrolls sideways by ${st.ov}px`);
+        if ((w <= 900) !== st.stacked) fail(where, `${w}px: ${st.stacked ? 'stacked' : 'two columns'}`);
+        await page.screenshot({ path: path.join(OUT, `home-a-${w}${scheme === 'dark' ? '-dark' : ''}.png`), fullPage: true });
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    // without a location: the イベント block is one 地域を設定 button
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.evaluate(() => localStorage.removeItem('tcg.ev.filters'));
+    await page.reload({ waitUntil: 'networkidle' });
+    if (await page.locator('#evBody').evaluate(e => e.textContent + '|' + e.querySelectorAll('button').length) !== '地域を設定|1') fail(where, 'no location: not one 地域を設定 button');
+    await page.screenshot({ path: path.join(OUT, 'home-a-1366-nopref.png'), fullPage: true });
+  } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+  for (const b of [...new Set(bad)]) fail(where, b);
+  console.log(`  ${where.padEnd(22)} checked`);
+  await ctx.close();
+}
 {
   const GC = ['OPCG', 'UATCG', 'CONAN', 'PTCG'];
   const ev = i => ({ id: `gi${i}`, name: `E${i}`, game_code: GC[i % 4], game_codes: i % 4 ? [GC[i % 4]] : ['OPCG', 'UATCG'], starts_on: TODAY,
@@ -2078,7 +2229,7 @@ if (HAS_EVENTS) {
     venue: { name: `店 ${i}` }, source_url: 'https://example.com/', event_status: 'scheduled' });
   const evs = Array.from({ length: 8 }, (_, i) => ev(i));
   const tmr = new Date(Date.parse(`${TODAY}T00:00:00Z`) + 864e5).toISOString().slice(0, 10);
-  const targets = [['/releases/', '.gi'], ['/', HAS_EVENTS ? '#evBody .gcol h5 .gi' : '.gi']];
+  const targets = [['/releases/', '.gi'], ['/', HAS_EVENTS ? '#evBody .gcol h3 .gi' : '.gi']];
   if (HAS_EVENTS) targets.push(['/events/?pref=JP-13&view=list', '#list .ev .gi']);
   // phones show dots on the calendar: the day dialog (latest snapshot) has the chips and cards
   const vday = HAS_VOICES && VOICE_SNAPS.at(-1)?.date;
@@ -2135,7 +2286,7 @@ if (HAS_EVENTS) {
   for (const g of REG) if (g.hub) for (const n of [g.label, g.short, g.chip, ...g.sources.releases]) if (n) NAME2SLUG[n] = g.slug;
   const ITEMS = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/items.json'), 'utf8'));
   const item = ITEMS.find(d => NAME2SLUG[d.game] && fs.existsSync(path.join(DIST, 'item', d.id, 'index.html')));
-  const LABELS = '.pk .g > a, .pk .g > span:not(.sm), .tag, .gcol h5 .gn, .vt .gm, #hsT > a, #hsT > span, .seo-day .sg';
+  const LABELS = '.pk .g > a, .pk .g > span:not(.sm), .rg > h3 > .gn, .tag, .gcol h3 .gn, .vt .gm, .seo-day .sg';
   const audit = page => page.evaluate(([LABELS, MAP]) => {
     const nameOf = el => { const c = el.cloneNode(true); c.querySelectorAll('.gi, [aria-hidden="true"], i, em, b').forEach(e => e.remove()); return c.textContent.trim(); };
     const out = { links: [], wrong: [], nested: document.querySelectorAll('a a, a button, button a, button button').length,
@@ -2190,18 +2341,18 @@ if (HAS_EVENTS) {
       judge(where, a, HAS_EVENTS ? 3 : 1);
       const need = (HAS_EVENTS ? ['/onepiece/', '/unionarena/', '/pokemon/'] : ['/onepiece/']).filter(h => !a.links.some(l => l[1] === h));
       if (need.length) fail(where, `event columns / tags without ${need.join(' ')}`);
-      const cards = await page.locator('#wkPanel .pk').evaluateAll(ps => ps.filter(p => /^GL fixture/.test(p.querySelector('.n')?.textContent)).map(p => p.querySelector('.g a.gl')?.getAttribute('href') || null));
+      const cards = await page.locator('#wkPanel .pk').evaluateAll(ps => ps.filter(p => /^GL fixture/.test(p.querySelector('.n')?.textContent)).map(p => p.closest('.rg').querySelector('h3 a.gl')?.getAttribute('href') || null));
       if (JSON.stringify(cards) !== JSON.stringify(['/onepiece/', null])) fail(where, `fixture cards' game links ${JSON.stringify(cards)}`);
       if (vp === 'mobile') await page.locator('#wkPanel').screenshot({ path: path.join(OUT, `game-links-home-${vp}.png`) });
-      // 表示中: each saved title links its hub (MTG is offered only with いま話題; without it the /events/ filter holds the titles;
-      // a BUILD_EVENTS=0 build offers no titles)
+      // the 表示中 pill is one button (it opens 表示の設定): its saved titles are plain names, no links inside
+      // (MTG is offered only with いま話題; without it the /events/ filter holds the titles; a BUILD_EVENTS=0 build offers none)
       if (!HAS_EVENTS) { await page.unroute(`${BASE}/`); return; }
-      const [saved, want] = HAS_VOICES ? [['tcg.voices', { game: 'OPCG,MTG' }], '/onepiece/,/mtg/'] : [['tcg.ev.filters', { pref: 'JP-13', game: 'OPCG,PTCG' }], '/onepiece/,/pokemon/'];
+      const [saved, want] = HAS_VOICES ? [['tcg.voices', { game: 'OPCG,MTG' }], 'ワンピ・MTG'] : [['tcg.ev.filters', { pref: 'JP-13', game: 'OPCG,PTCG' }], 'ワンピ・ポケカ'];
       await page.evaluate(([k, v]) => localStorage.setItem(k, JSON.stringify(v)), saved);
-      await go('/', '#hsT a');
-      judge(where + ' 表示中', await audit(page), 2);
-      const hs = await page.locator('#hsT a').evaluateAll(as => as.map(a => a.getAttribute('href')));
-      if (hs.join() !== want) fail(where, `表示中 links ${hs.join()} (want ${want})`);
+      await go('/', '#hsT');
+      judge(where + ' 表示中', await audit(page), 1);
+      const hs = await page.evaluate(() => ({ tag: document.getElementById('hsT').closest('button')?.id, text: document.getElementById('hsT').textContent, links: document.querySelectorAll('#hsBtn a').length }));
+      if (hs.tag !== 'hsBtn' || hs.text !== want || hs.links) fail(where, `表示中 pill ${JSON.stringify(hs)} (want ${want})`);
       await page.unroute(`${BASE}/`);
     });
     await run('/releases/', async where => {

@@ -368,7 +368,9 @@ def sitenav(cur):
     # thin hubs stay out of the footer (the game switcher still lists every hub)
     g=''.join(f'<a href="/{s}/"{" aria-current=\"page\"" if cur==f"/{s}/" else ""}>{esc(short)}</a>' for s,k,n,short in GAMES if HUB_INDEX[s])
     m=''.join(f'<a href="/{ym}/"{" aria-current=\"page\"" if cur==f"/{ym}/" else ""}>{mlabel(ym)}</a>' for ym in months)
-    return f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(cur)}<div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div>{siterow(cur)}</nav>'
+    # タイトル別 / 月別 folded (owner 2026-11-25): the links stay in the HTML, ツール and the site row stay open
+    return (f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(cur)}<details class="sitemore"><summary>タイトル別・月別</summary>'
+            f'<div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div></details>{siterow(cur)}</nav>')
 
 GA=''
 if GA_ID:
