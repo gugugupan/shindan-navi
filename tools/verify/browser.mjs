@@ -214,9 +214,10 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     }, pageGame[p] || null);
     const m = /^\/(\d{4})-(\d{2})\/$/.exec(p);
     const [wy, wm] = m ? [m[1], m[2]] : TODAY.split('-');
-    // a title page with nothing this month opens on the title's next month with releases (else its latest) and says so
-    const cur = `${wy}-${wm}`, gm = st.gm;
-    const open = gm.length && !gm.includes(cur) ? gm.find(x => x > cur) || gm.at(-1) : cur;
+    // a title page with nothing this month opens on the title's next month with releases (else its latest) and says so;
+    // an events hub with nothing upcoming stays on this month (its event counts show there)
+    const cur = `${wy}-${wm}`, gm = st.gm, evHubPage = !!PAGES.find(x => x.path === p)?.js?.eventsApi;
+    const open = gm.length && !gm.includes(cur) ? gm.find(x => x > cur) || (evHubPage ? cur : gm.at(-1)) : cur;
     const want = `${+open.slice(0, 4)}年${+open.slice(5)}月`;
     if (st.month !== want) fail(where, `calendar opens on ${st.month}, expected ${want}`);
     if (st.note !== (open !== cur)) fail(where, `month note ${st.note ? 'shown' : 'missing'}`);

@@ -201,7 +201,7 @@ def hub_js(slug,key):
     g=next(g for g in HUB_REG if g['slug']==slug)
     c=g['colour'] or {}
     js={'game':key,'hub':{'slug':slug,'code':g['code'],'chip':g['chip'] or g['short'],'short':g['short'],'c':c.get('light'),'cd':c.get('dark')},
-        'hubs':[{'slug':h['slug'],'label':h['label'],'short':h['short']} for h in HUB_REG if h['label'] in used]}
+        'hubs':[{'slug':h['slug'],'label':h['label'],'short':h['short']} for h in HUB_REG]}
     if VOICES_ENABLED and g['sources']['voices']: js['voicesApi']=EVENTS_API_BASE+'/voices'
     # per-type event counts for the player's location (M2): events games on builds with the Worker API
     if BUILD_EVENTS and g['sources']['events']: js['eventsApi']=EVENTS_API_BASE; js['types']=type_labels()
@@ -220,7 +220,7 @@ def page_def():
     pages=[]
     up=[d for d in data if d['date']>=TODAY]
     soon=[d for d in up if d['date']<=(jd(TODAY)+datetime.timedelta(days=30)).isoformat()]
-    gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if k in used and HUB_INDEX[s])
+    gl='・'.join(f'<a href="/{s}/">{esc(sh)}</a>' for s,k,n,sh in GAMES if HUB_INDEX[s])
     pages.append(dict(path='/releases/',slug='releases',og='home',
         title='TCG・トレカ新弾 発売日カレンダー（ポケカ・ワンピ・MTGほか）｜トレカカレンダー',
         desc=f'TCG・トレカ新弾の発売日カレンダー。ポケカ（ポケモンカード）・ワンピカード・MTG・遊戯王・デュエマ・ヴァイス・ユニアリなど{len(used)}タイトルの拡張パック・スターターデッキの発売日と価格を一覧でチェック。お気に入り登録・Googleカレンダー追加にも対応。',
@@ -235,8 +235,8 @@ def page_def():
               f'タイトル別の発売日一覧：{gl}']),
         ld_items=soon,lastmod=lastmod(data)))
     for slug,key,name,short in GAMES:
+        # every registered hub is built, also with no visible release (its events, topics and landing links stay)
         its=[d for d in data if d['game']==key]
-        if not its: continue
         u=[d for d in its if d['date']>=TODAY]
         al=ALIAS[slug]
         names=list(dict.fromkeys([name,short]+al))
@@ -247,6 +247,12 @@ def page_def():
             lead=f'発売予定 {len(u)}件・次の発売は{fmt(nxt["date"])}（{upd_label}更新）'
             list_head,list_note=f'{short} 新弾の発売予定',f'{name}の今後の発売予定 {len(u)}件。価格は税込。'
             about_next=f'次に発売されるのは{upcoming}です。'
+        elif not its:
+            lst=[]
+            desc_next='現在、発売予定の新弾は掲載していません。'
+            lead=f'現在、発売予定の新弾はありません（{upd_label}更新）'
+            list_head=list_note=''
+            about_next='現在、発売予定の新弾は掲載していません。新しい発売予定が発表され次第掲載します。'
         else:
             # only past releases are left in the data (it keeps ~30 days back); never present them as upcoming
             lst=its[::-1]; last=lst[0]
@@ -260,7 +266,8 @@ def page_def():
         ev,tp=BUILD_EVENTS and bool(g['sources']['events']),VOICES_ENABLED and g['sources']['voices']
         shows='・'.join(['発売日']+['イベント']*ev+['話題']*tp)
         extra='と、'.join(['選んだ地域の店舗大会・イベント数']*ev+['Xで話題になっていること']*tp)
-        pages.append(dict(path=f'/{slug}/',slug=slug,og=slug,
+        # a hub without its own share image (og.py renders none without a real package photo) uses the site's
+        pages.append(dict(path=f'/{slug}/',slug=slug,og=slug if os.path.exists(os.path.join(ROOT,'public/og',f'{slug}.png')) else 'home',
             title=f'{short} 新弾 {shows}カレンダー（{TITLE_ALT[slug]}）｜トレカカレンダー' if extra else f'{short} 新弾 発売日一覧（{TITLE_ALT[slug]}）｜トレカカレンダー',
             desc=(f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格をカレンダーでチェック。{desc_next}{extra}も日ごとに確認でき、お気に入り登録やGoogleカレンダー追加もできます。' if extra else
                   f'{name}（{short}）の新弾・拡張パック・スターターデッキの発売日と価格を一覧でチェック。{desc_next}今後の発売スケジュールをカレンダーで確認、お気に入り登録やGoogleカレンダー追加もできます。'),
@@ -354,7 +361,7 @@ def toolrow(cur):
 
 def sitenav(cur):
     # thin hubs stay out of the footer (the game switcher still lists every hub)
-    g=''.join(f'<a href="/{s}/"{" aria-current=\"page\"" if cur==f"/{s}/" else ""}>{esc(short)}</a>' for s,k,n,short in GAMES if k in used and HUB_INDEX[s])
+    g=''.join(f'<a href="/{s}/"{" aria-current=\"page\"" if cur==f"/{s}/" else ""}>{esc(short)}</a>' for s,k,n,short in GAMES if HUB_INDEX[s])
     m=''.join(f'<a href="/{ym}/"{" aria-current=\"page\"" if cur==f"/{ym}/" else ""}>{mlabel(ym)}</a>' for ym in months)
     return f'<nav class="sitenav" aria-label="サイト内リンク">{toolrow(cur)}<div><b>タイトル別</b>{g}</div><div><b>月別</b>{m}</div>{siterow(cur)}</nav>'
 

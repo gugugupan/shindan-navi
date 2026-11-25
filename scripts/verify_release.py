@@ -512,7 +512,9 @@ def check_hubs(hubs, n_rel):
         if not want_lp and (lp or 'class="seo lpref"' in src): fail(f'{pg["path"]}: landing links without LANDING_ENABLED or events')
         og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
         ogf = og and os.path.join(DIST, og[1].replace(SITE + '/', '', 1))
-        if not og or og[1] != f'{SITE}/og/{g["slug"]}.png' or not os.path.exists(ogf): fail(f'{pg["path"]}: og:image {og and og[1]} missing')
+        # og/<slug>.png, or the site's og/home.png for a hub og.py could not render (no real package photo)
+        own = os.path.exists(os.path.join(ROOT, 'public/og', f'{g["slug"]}.png'))
+        if not og or og[1] != f'{SITE}/og/{g["slug"] if own else "home"}.png' or not os.path.exists(ogf): fail(f'{pg["path"]}: og:image {og and og[1]} missing')
         elif open(ogf, 'rb').read(24)[16:24] != (1200).to_bytes(4, 'big') + (630).to_bytes(4, 'big'): fail(f'{pg["path"]}: og image is not 1200x630')
         if re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/', src): fail(f'{pg["path"]}: X URL in a hub')
         if ('"voicesApi"' in src) != (has_voices and g['sources']['voices']): fail(f'{pg["path"]}: voices API {"without" if has_voices else "with"} VOICES_ENABLED')
@@ -555,7 +557,8 @@ def check_dist(today, head, ov, arch):
     if set(titles) != hubs: fail(f'dist: title pages {sorted(titles)} differ from the data/games.json hub rows {sorted(hubs)}')
     if not months: fail('dist: no month pages')
     canon = {l: g['label'] for g in REGISTRY for l in g['sources']['releases']}
-    n_rel = collections.Counter(canon.get(i['game'], i['game']) for i in head if not ov.get(i['id'], {}).get('hide'))
+    # as build.py: the item's game override first, then its registry label
+    n_rel = collections.Counter(canon.get(g, g) for i in head if not ov.get(i['id'], {}).get('hide') for g in [ov.get(i['id'], {}).get('game', i['game'])])
     hub_pages = [p for p in pages if (p.get('js') or {}).get('hub')]
     check_hubs(hub_pages, n_rel)
     noindex = {p['path'] for p in hub_pages if re.search(r'<meta name="robots"[^>]*noindex', open(os.path.join(DIST, p['path'].strip('/'), 'index.html')).read())}

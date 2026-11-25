@@ -116,4 +116,8 @@ for p in pages:
         game = p['js']['game']
         short, full = HUB[name]
         big, sub = f'<em>{html.escape(short)}</em>\n新弾 発売日カレンダー', full
-    render(name, card_html(name, big, sub, thumbs_for(game)))
+    thumbs = thumbs_for(game)
+    if not thumbs:  # no real package photo (stand-ins are not used): the hub keeps og/home.png
+        print('og', name, 'skipped: no thumbnail')
+        continue
+    render(name, card_html(name, big, sub, thumbs))
