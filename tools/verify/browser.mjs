@@ -435,6 +435,8 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
     if (!e.open || !e.none || e.hash) fail(`${vp} /releases/#d=`, `day without releases ${empty}: ${JSON.stringify(e)}`);
   }
   if (todays.length) {
+    // the page reads the hash once on load; from /releases/ a hash-only goto would not reload it
+    await page.goto('about:blank');
     await page.goto(`${BASE}/releases/#d=${TODAY}`, { waitUntil: 'load' });
     const dlg = await page.evaluate(() => ({ open: document.getElementById('dlg').open, n: document.querySelectorAll('#dlgBody .dl-item').length, hash: location.hash }));
     if (!dlg.open || dlg.n !== todays.length || dlg.hash) fail(`${vp} /releases/#d=`, `dialog ${JSON.stringify(dlg)}`);
