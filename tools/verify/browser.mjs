@@ -485,7 +485,9 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
               // compact rows: no summary or 反応の傾向 line on the card, the summary is the link's title
               extra: li.querySelectorAll('.sm,.tr').length, tip: !!a[0]?.getAttribute('title') }; }) };
       })(),
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      // a day without releases puts いま話題 on the left: 6 topics there (two rows of 3), else 5
+      max: document.querySelector('#wkPanel .rel0') && document.querySelector('#wkPanel .evb') ? 6 : 5 };
   });
   const setStore = o => page.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, JSON.stringify(v)); }, o);
   try {
@@ -499,7 +501,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     const W = { high: 3, mid: 2, low: 1 };
     const order = ids => ids.every((id, i) => !i || W[byId[ids[i - 1]].volume] > W[byId[id].volume] || (W[byId[ids[i - 1]].volume] === W[byId[id].volume] && byId[ids[i - 1]].first_seen >= byId[id].first_seen));
     const perGame = ids => Math.max(0, ...Object.values(ids.reduce((m, id) => (m[byId[id].game] = (m[byId[id].game] || 0) + 1, m), {})));
-    const allOk = st => st.sub === 'すべてのタイトル' && st.rows.length === Math.min(5, HV.topics.length) && perGame(st.rows) <= 2 && order(st.rows);
+    const allOk = st => st.sub === 'すべてのタイトル' && st.rows.length === Math.min(st.max, HV.topics.length) && perGame(st.rows) <= 2 && order(st.rows);
     // nothing saved: top topics across all games, no controls
     let st = await state();
     const [, mm, dd] = HV.date.split('-').map(Number);
@@ -508,7 +510,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     if (!allOk(st)) fail(where, `all games: sub "${st.sub}" rows ${st.rows.join(' ')}`);
     if (st.asof !== `${mm}/${dd} 時点・AI要約`) fail(where, `footer ${st.asof}`);
     // cards: one per row topic in a list, one link each named by the title, metadata >= 12px, equal heights per row,
-    // inside the section; 1 column on phones (also at 280px) and in the right-hand column at 1366 and 1024 (desktop also
+    // inside the section; 1 column on phones (also at 280px) and in the right-hand column at 1366 and 1024, more on the left (desktop also
     // shot at those widths, light and dark)
     const cardsOk = (st, w, min, max) => {
       const c = st.cards;
@@ -539,7 +541,8 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     else for (const w of [1366, 1024]) {
       await page.setViewportSize({ width: w, height: opt.height });
       const sw = await state();
-      cardsOk(sw, w, 1, 1);
+      // the right-hand column: 1 column; on the left of a day without releases: 2 (1024) or 3 (1366)
+      if (sw.max === 6) cardsOk(sw, w, w >= 1366 ? 3 : 2, w >= 1366 ? 3 : 2); else cardsOk(sw, w, 1, 1);
       await shot(String(w));
     }
     if (opt.width > 760) await page.setViewportSize({ width: opt.width, height: opt.height });
@@ -2204,6 +2207,23 @@ if (HAS_EVENTS) {
     if (await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gt').getAttribute('aria-expanded') !== 'true') fail(where, 'event row closed by a re-render');
     await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gt').click();
     if (await page.locator('#evBody .gcol[aria-label="ポケモンカード"] .gb').isVisible()) fail(where, 'event row did not close');
+    // a day without releases: 発売 one line across the top with the strip's next release day, いま話題 (wider) left of イベント
+    await page.locator('#wkT1').click();
+    const e0 = await page.evaluate(() => {
+      const R = s => document.querySelector(s)?.getBoundingClientRect(), rel = R('#wkPanel .rel'), evb = R('#wkPanel .evb'), vt = R('#vtr'), hg = R('.hgrid');
+      const vtOn = !!vt && !document.getElementById('vtr').hidden;
+      return { one: !!document.querySelector('#wkPanel .rel0') && rel.height < 80 && Math.abs(rel.width - hg.width) < 2, nx: document.querySelector('#wkPanel .nx')?.textContent ?? null,
+        vtOn, beside: vtOn ? Math.abs(vt.top - evb.top) < 2 && vt.right < evb.left && vt.width > evb.width : Math.abs(evb.width - hg.width) < 2,
+        topics: document.querySelectorAll('#vtBody .vt').length };
+    });
+    const t2 = await page.locator('#wkT2').getAttribute('aria-label');
+    const n2 = /発売(\d+)件/.exec(t2)?.[1], md2 = /^(\d+)月(\d+)日\(([^)]+)\)/.exec(t2);
+    if (!e0.one || e0.nx !== `次の発売 ${md2[1]}/${md2[2]}(${md2[3]})・${n2}件 ›`) fail(where, `no-release day: 発売 line ${JSON.stringify(e0)} (next ${t2})`);
+    if (!e0.beside) fail(where, `no-release day: いま話題 / イベント layout ${JSON.stringify(e0)}`);
+    await page.locator('#wkPanel .nx').click();
+    if (await page.locator('#wkT2').getAttribute('aria-selected') !== 'true' || await page.evaluate(() => document.activeElement?.id) !== 'wkT2') fail(where, 'no-release day: 次の発売 did not select that day');
+    if (await page.locator('#wkPanel .rel0').count() || (e0.vtOn && await page.locator('#vtBody .vt').count() > 5)) fail(where, 'a day with releases kept the no-release layout');
+    await page.locator('#wkT0').click();
     // the multi-title day: the favourites (two titles; one of them a series member) grouped first, then the rest;
     // series subheadings per part; Vol.2 kept
     await page.locator('#wkT2').click();

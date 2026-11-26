@@ -65,6 +65,17 @@
 .hgrid>.vtr{grid-column:2;grid-row:2}
 .hgrid:not(:has(.evb)){grid-template-columns:minmax(0,1fr)}
 .hgrid:not(:has(.evb))>.wkp>.rel{grid-column:1/-1}
+/* a day without releases: 発売 one line across the top, いま話題 (wider) on the left, イベント on the right */
+.hgrid:has(.rel0)>.wkp>.rel{grid-column:1/-1;grid-row:1}
+.hgrid:has(.rel0):has(.evb)>.wkp>.evb{grid-row:2}
+.hgrid:has(.rel0):has(.evb)>.vtr{grid-column:1;grid-row:2}
+.hgrid:has(.rel0):has(.evb)>.vtr .vts{grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr))}
+.hgrid:has(.rel0):not(:has(>.vtr:not([hidden])))>.wkp>.evb{grid-column:1/-1}
+.rel0 .blk-h{align-items:center}
+.rel0 .q{font-size:13px}
+.rel0 .nx{font:inherit;font-size:13px;font-weight:700;color:var(--accent);background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer}
+.rel0 .nx:hover{border-color:var(--accent)}
+.rel0 .rl{font-size:13px}
 .wkp:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:14px}
 .blk{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .blk-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0}
@@ -187,6 +198,7 @@ div.none.err{border-color:var(--sun);border-style:solid}
   .hgrid{grid-template-columns:minmax(0,1fr);grid-template-rows:none}
   .hgrid>.wkp{grid-column:auto;grid-row:auto;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:none;gap:12px}
   .wkp>.rel,.wkp>.evb,.hgrid>.vtr{grid-column:auto;grid-row:auto}
+  .hgrid:has(.rel0)>.wkp>.rel,.hgrid:has(.rel0):has(.evb)>.wkp>.evb,.hgrid:has(.rel0):has(.evb)>.vtr,.hgrid:has(.rel0)>.wkp>.evb{grid-column:auto;grid-row:auto}
   .vts{grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr))}
 }
 @media (max-width:760px){
@@ -317,7 +329,7 @@ const relCards = its => `<div class="rels">${[...relGroups(its.filter(isStar)), 
 function relPart(x){
   if(x.all==null) return `<p class="q">${x.d>H.until?`このページの発売情報は ${md(H.until)} までです。`:''}この日の発売情報は新弾カレンダーでご確認ください。</p>`;
   const others = x.hidden ? `<p class="relo"><a class="rl" href="/releases/#d=${x.d}">ほかのタイトルの発売 <b>${x.hidden}</b>件 ›</a></p>` : '';
-  return (x.its.length ? relCards(x.its) : `<p class="q">${x.names?'選択中のタイトルの発売はありません。':'発売はありません。'}</p>`)+others;
+  return relCards(x.its)+others;
 }
 
 // ---- events (BUILD_EVENTS)
@@ -613,18 +625,26 @@ function renderWeek(){
   if(focused) $('wkT'+wkSel).focus();
   // a re-render (events arriving, sync) keeps the focused panel control: the same link / button, else the panel
   const p=$('wkPanel'), a=document.activeElement, key=p.contains(a)&&a!==p ? (a.getAttribute('href')||'')+'|'+a.textContent : null;
-  renderPanel(days[wkSel],f,sel);
+  renderPanel(days[wkSel],f,sel,days);
   // (event rows restore their own focus through snEv; this only catches what is still lost)
   if(key!=null && !p.contains(document.activeElement)) ([...p.querySelectorAll('a,button')].find(e=>(e.getAttribute('href')||'')+'|'+e.textContent===key)||p).focus();
 }
-function renderPanel(x,f,sel){
+function renderPanel(x,f,sel,days){
   const p=$('wkPanel'), d=x.d, [,m,dd]=d.split('-').map(Number), lb=dayLabel(wkSel);
   p.setAttribute('aria-labelledby','wkT'+wkSel);
   // the chosen day is named in the headings unless it is today (the h1)
   const day = wkSel ? `<span class="dd">${m}/${dd}(${DOW[dowOf(d)]})${lb?' '+lb:''}</span>` : '';
   const rn = x.its&&x.its.length ? `<span class="n"><b>${x.its.length}</b>件</span>` : '';
-  const rel = `<section class="blk wps rel" aria-labelledby="wkRH"><div class="blk-h"><h2 id="wkRH">発売</h2>${day}${rn}`
-    + `<a class="dayl" href="/releases/#d=${d}">日別一覧<span class="sr">（新弾カレンダーでこの日を見る）</span> ›</a></div>${relPart(x)}</section>`;
+  const dayl = `<a class="dayl" href="/releases/#d=${d}">日別一覧<span class="sr">（新弾カレンダーでこの日を見る）</span> ›</a>`;
+  let rel;
+  if(x.all!=null && !x.its.length){
+    // nothing of the shown titles: one line, with the next day of the strip that has some
+    const j=days.findIndex((y,k)=>k>wkSel&&y.its&&y.its.length), y=days[j];
+    const nx = y ? (([,m2,d2])=>`<button type="button" class="nx" data-day="${j}">次の発売 ${m2}/${d2}(${DOW[dowOf(y.d)]})・${y.its.length}件 ›</button>`)(y.d.split('-').map(Number)) : '';
+    const others = x.hidden ? `<a class="rl" href="/releases/#d=${d}">ほかのタイトルの発売 <b>${x.hidden}</b>件 ›</a>` : '';
+    rel = `<section class="blk wps rel rel0" aria-labelledby="wkRH"><div class="blk-h"><h2 id="wkRH">発売</h2>${day}`
+      + `<p class="q">${x.names?'選択中のタイトルの発売はありません':'発売はありません'}</p>${nx}${others}${dayl}</div></section>`;
+  } else rel = `<section class="blk wps rel" aria-labelledby="wkRH"><div class="blk-h"><h2 id="wkRH">発売</h2>${day}${rn}${dayl}</div>${relPart(x)}</section>`;
   let evs='', live='';
   if(EVENTS){
     const e=evPart(d,f);
@@ -636,7 +656,9 @@ function renderPanel(x,f,sel){
       : e.n ? `${m}月${dd}日のイベント ${e.n}件${e.min||''}` : e.n===0 ? `${m}月${dd}日のイベントはありません` : '';
   }
   const kept=window.snEv?snEv.keep(p):null;
+  const wide=!!p.querySelector('.rel0');
   p.innerHTML = rel+evs;
+  if(wide!==!!p.querySelector('.rel0') && typeof renderVt==='function') renderVt();
   if(kept) snEv.restore(p,kept);
   // one polite status for the panel's events: loading, then the count, none or the error
   const st=$('wkLive'); if(st.textContent!==live) st.textContent=live;
@@ -647,6 +669,7 @@ function selDay(i,focus){
   t.scrollIntoView({block:'nearest',inline:'nearest'});
   track('home_day',{offset:i});
 }
+$('wkPanel').addEventListener('click',e=>{ const b=e.target.closest('.nx'); if(b) selDay(+b.dataset.day,true); });
 $('wkStrip').addEventListener('click',e=>{ const b=e.target.closest('[role="tab"]'); if(b) selDay(+b.id.slice(3),true); });
 $('wkStrip').addEventListener('keydown',e=>{
   const k={ArrowRight:1,ArrowLeft:-1,Home:'h',End:'e'}[e.key];
@@ -717,7 +740,9 @@ function renderVt(){
   const pool=VT.topics.map((t,i)=>({t,i})).filter(({t})=>all||sel.includes(t.game))
     .sort((a,b)=>(VOLW[b.t.volume]||0)-(VOLW[a.t.volume]||0)||(a.t.first_seen<b.t.first_seen?1:a.t.first_seen>b.t.first_seen?-1:0)||a.i-b.i);
   const cap=sel.length===1?5:2, per={}, rows=[];
-  for(const {t} of pool){ if(rows.length>=5) break; if((per[t.game]=(per[t.game]||0)+1)>cap) continue; rows.push(t); }
+  // 6 (two full rows of 3) when they sit on the left of a day without releases
+  const max=$('wkPanel').querySelector('.rel0')&&$('wkPanel').querySelector('.evb')?6:5;
+  for(const {t} of pool){ if(rows.length>=max) break; if((per[t.game]=(per[t.game]||0)+1)>cap) continue; rows.push(t); }
   const badge=t=>t.status==='continuing' ? `<span class="badge hot"><span aria-hidden="true">🔥 </span>${daysBetween(t.first_seen,VT.date)+1}日連続</span>`
     : t.status==='cooling' ? '<span class="badge cool"><span aria-hidden="true">📉 </span>落ち着き</span>'
     : t.status==='new' ? '<span class="badge new"><span aria-hidden="true">🆕 </span>新</span>' : '';
