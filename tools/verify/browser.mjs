@@ -2636,6 +2636,8 @@ if (fs.existsSync(path.join(DIST, 'index.html')) && fs.readFileSync(path.join(DI
       await page.waitForFunction(() => document.getElementById('hsMsg').textContent, null, { timeout: 5000 }).catch(() => {});
       let d = await dlg();
       if (!d.open || !d.msg || d.loc !== '福岡県' || !d.on.includes('WS') || await page.locator('#hsSaved').textContent()) fail(where, `failed save ${JSON.stringify(d)}`);
+      // focus goes back to the save button (it was disabled while saving)
+      if (await page.evaluate(() => document.activeElement?.id) !== 'hsOk') fail(where, `failed save: focus on ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}`);
       // retry: one PUT with the whole setting, sorted; closed, 保存しました, the new requests
       s.put = 200; s.puts.length = 0; const from = s.log.length;
       await page.locator('#hsOk').click();
@@ -2814,6 +2816,10 @@ if (fs.existsSync(path.join(DIST, 'index.html')) && fs.readFileSync(path.join(DI
       // マイカレンダーを削除: one PUT null, back to the page as before
       s.puts.length = 0;
       await page.locator('#hsBtn').click();
+      // the first press only asks (本当に削除する, the button keeps focus); the second deletes
+      await page.locator('#hsReset').click();
+      if (s.puts.length || await page.locator('#hsReset').textContent() !== '本当に削除する' || !(await page.locator('#hsMsg').textContent())
+        || await page.evaluate(() => document.activeElement?.id) !== 'hsReset') fail(where, `delete: first press ${JSON.stringify(s.puts)}`);
       await page.locator('#hsReset').click();
       await page.waitForFunction(() => document.getElementById('hsM').hidden, null, { timeout: 5000 }).catch(() => {});
       if (JSON.stringify(s.puts) !== JSON.stringify([{ personal_calendar: null }]) || (await view(page)).mine || 'personal_calendar' in s.accts.uN.prefs

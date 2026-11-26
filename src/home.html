@@ -593,7 +593,7 @@ function renderSet(){
 // sync may change while the dialog is open). In the account's dialog the location is part of the draft too (draftLoc,
 // '' = none), and both go to the account only through この内容で保存. dlgMode / dlgUser: the mode and account the
 // dialog was opened for (another account closes it); dlgId: which opening a pending save belongs to.
-let draft=[], edited=false, draftLoc='', dlgMode='local', dlgUser='', dlgId=0, saving=false;
+let draft=[], edited=false, draftLoc='', dlgMode='local', dlgUser='', dlgId=0, saving=false, delArm=false;
 function initDraft(){
   draft=homeSel(); dlgMode=mode(); dlgUser=userId();
   // マイカレンダー: its own location; no setting yet: what the page shows now
@@ -615,6 +615,8 @@ function renderSetDlg(){
   $('hsRetryP').hidden=!(pend&&st==='error');
   if($('hsLogin')) $('hsLogin').hidden=st!=='out';
   $('hsReset').hidden=!(acc&&st==='set');
+  // deleting takes a second press on the same button
+  $('hsReset').textContent = delArm ? '本当に削除する' : 'マイカレンダーを削除';
   $('hsOk').hidden=pend;
   $('hsOk').textContent = acc ? (saving ? '保存中…' : 'この内容で保存') : 'この内容で表示';
   [$('hsOk'),$('hsReset')].forEach(b=>b.disabled=saving);
@@ -624,7 +626,7 @@ function renderSetDlg(){
   $('hsLocBtn').textContent = p ? '地域を変更' : '地域を設定';
 }
 function openSet(){
-  initDraft(); edited=false; dlgId++; $('hsMsg').textContent=''; renderSetDlg();
+  initDraft(); edited=false; delArm=false; dlgId++; $('hsMsg').textContent=''; renderSetDlg();
   const d=$('hsDlg'); if(d.showModal) d.showModal(); else d.setAttribute('open','');
   d.querySelector('.chip[aria-pressed="true"]')?.focus();
 }
@@ -660,8 +662,8 @@ const status = t => { $('hsSaved').textContent=t; clearTimeout(savedTimer); save
 async function saveAcct(reset){
   if(saving||mode()!=='acct'||dlgUser!==userId()) return;
   const st=pState(), id=dlgId;
-  const keep=PC?PC.games.filter(c=>!ALL_TITLES[c]):[];
-  const v=reset?null:{location:draftLoc||null, games:[...new Set(opts().filter(c=>draft.includes(c)).concat(keep))].sort()};
+  // codes no longer in the registry drop out here (the API refuses them)
+  const v=reset?null:{location:draftLoc||null, games:opts().filter(c=>draft.includes(c)).sort()};
   // マイカレンダー unchanged: nothing to write
   if(!reset&&st==='set'&&PC&&JSON.stringify(v)===JSON.stringify({location:PC.location, games:[...PC.games].sort()})){ closeSet(); $('hsBtn').focus(); return; }
   saving=true; $('hsMsg').textContent=''; renderSetDlg();
@@ -675,7 +677,8 @@ async function saveAcct(reset){
     saving=false;
     if(e&&e.changed){ closeSet(); status('アカウントが切り替わったため、保存しませんでした'); return; }
     const t = e&&e.busy ? '混み合っています。1 分ほどおいて、もう一度保存してください。' : '保存できませんでした。通信状況を確認して、もう一度保存してください。';
-    if(mine()){ $('hsMsg').textContent=t; renderSetDlg(); } else { if($('hsDlg').open) renderSetDlg(); status('保存できませんでした'); }
+    // the pressed button was disabled while saving: focus goes back to it with the message
+    if(mine()){ $('hsMsg').textContent=t; renderSetDlg(); $(reset?'hsReset':'hsOk').focus(); } else { if($('hsDlg').open) renderSetDlg(); status('保存できませんでした'); }
   }
 }
 
@@ -880,7 +883,10 @@ $('hsDlg').addEventListener('click',e=>{
   if(e.target===d||e.target.closest('#hsClose,#hsCancel')){ closeSet(); return; }
   if(e.target.closest('#hsRetry')){ PS.retry(); return; }
   if(dlgMode==='pending'||saving) return;
-  if(e.target.closest('#hsReset')){ saveAcct(true); return; }
+  if(e.target.closest('#hsReset')){
+    if(!delArm){ delArm=true; $('hsMsg').textContent='もう一度押すと、このアカウントのマイカレンダーを削除します。'; renderSetDlg(); $('hsReset').focus(); return; }
+    saveAcct(true); return;
+  }
   if(e.target.closest('#hsOk')){ if(dlgMode==='acct'){ saveAcct(false); return; } if(mode()==='local') applySet(); closeSet(); $('hsBtn').focus(); return; }
   // the picker opens over this dialog and saves the location itself; the title draft stays pending
   if(e.target.closest('#hsLocBtn')){ openLoc($('hsLocBtn')); return; }
