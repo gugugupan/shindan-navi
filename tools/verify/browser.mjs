@@ -562,7 +562,7 @@ for (const [vp, opt] of HAS_VOICES ? Object.entries(VIEWPORTS) : []) {
     await page.reload({ waitUntil: 'networkidle' });
     st = await state();
     const n1 = HV.topics.filter(t => t.game === one.code).length;
-    if (st.sub !== `${short[one.code]} の話題` || st.rows.length !== Math.min(5, n1) || st.rows.some(id => byId[id].game !== one.code) || !order(st.rows)) fail(where, `one game: sub "${st.sub}" rows ${st.rows.join(' ')}`);
+    if (st.sub !== `${short[one.code]} の話題` || st.rows.length !== Math.min(st.max, n1) || st.rows.some(id => byId[id].game !== one.code) || !order(st.rows)) fail(where, `one game: sub "${st.sub}" rows ${st.rows.join(' ')}`);
     if (st.saved[0] !== JSON.stringify(vf)) fail(where, `tcg.voices written: ${st.saved[0]}`);
     // more than 4 games: 4 short names, then ほかN
     if (HV.games.length > 4) {

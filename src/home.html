@@ -739,9 +739,9 @@ function renderVt(){
   // busiest first, then newer first_seen; at most 2 per game unless one game is chosen
   const pool=VT.topics.map((t,i)=>({t,i})).filter(({t})=>all||sel.includes(t.game))
     .sort((a,b)=>(VOLW[b.t.volume]||0)-(VOLW[a.t.volume]||0)||(a.t.first_seen<b.t.first_seen?1:a.t.first_seen>b.t.first_seen?-1:0)||a.i-b.i);
-  const cap=sel.length===1?5:2, per={}, rows=[];
   // 6 (two full rows of 3) when they sit on the left of a day without releases
   const max=$('wkPanel').querySelector('.rel0')&&$('wkPanel').querySelector('.evb')?6:5;
+  const cap=sel.length===1?max:2, per={}, rows=[];
   for(const {t} of pool){ if(rows.length>=max) break; if((per[t.game]=(per[t.game]||0)+1)>cap) continue; rows.push(t); }
   const badge=t=>t.status==='continuing' ? `<span class="badge hot"><span aria-hidden="true">🔥 </span>${daysBetween(t.first_seen,VT.date)+1}日連続</span>`
     : t.status==='cooling' ? '<span class="badge cool"><span aria-hidden="true">📉 </span>落ち着き</span>'
