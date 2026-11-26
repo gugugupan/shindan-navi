@@ -2,8 +2,8 @@
   DRAFT: the owner must review this policy before it goes live. It is written from what the code does
   (GA4, Cloudflare, localStorage, /events/ Google Maps, Google login), not checked by a lawyer.
   Owner placeholders are span.todo elements carrying the owner-fill data attribute; build.py refuses
-  LOGIN_ENABLED=1 while one is left. Dates: PRIVACY_EFFECTIVE_BASE (制定, EFFECTIVE), PRIVACY_EFFECTIVE_LOGIN and
-  PRIVACY_EFFECTIVE_FEEDBACK (revisions, REVISED_*) in build.py; REVISED is the latest enabled revision.
+  LOGIN_ENABLED=1 while one is left. Dates: PRIVACY_EFFECTIVE_BASE (制定, EFFECTIVE), PRIVACY_EFFECTIVE_LOGIN /
+  _PERSONAL, _FEEDBACK, _VOICES (revisions, REVISED_*) in build.py; REVISED is the latest enabled revision.
   Parts wrapped in the EVENTS / LOGIN / FEEDBACK / VOICES marker comments are kept only with BUILD_EVENTS on /
   LOGIN_ENABLED=1 / FEEDBACK_ENABLED=1 / VOICES_ENABLED=1; STORE / NOSTORE parts depend on whether either of the last two keeps data on the server.
   Section numbers are CSS counters, so they stay in order when a LOGIN part is left out.
@@ -72,7 +72,7 @@
       <!--EVENTS--><p>イベントカレンダー（/events/）を初めて開いたときは、接続元 IP アドレスから Cloudflare が推定した都道府県を初期表示に使います。位置情報の許可は求めず、推定結果を本サイトが保存することもありません。</p><!--/EVENTS-->
 
       <h3>アクセス解析（Google アナリティクス）</h3>
-      <p>サイトの利用状況を把握して改善するため、Google LLC（米国）の Google アナリティクス 4 を利用しています（本サイトのドメイン shindan-navi.app で表示した場合のみ）。Google アナリティクスは Cookie を使い、閲覧したページ、参照元、端末・ブラウザの情報、おおよその地域のほか、本サイト上の操作（選んだタイトル<!--EVENTS-->や都道府県<!--/EVENTS-->、表示の切り替え、お気に入り登録した商品名、カレンダー追加など）を Google に送信します。<!--LOGIN-->ログイン中であっても、アカウントの ID やメールアドレスを Google アナリティクスに送信することはありません。ログイン・ログアウト・アカウント削除については、その操作をしたという事実（操作の種類）のみを送信します。<!--/LOGIN--></p>
+      <p>サイトの利用状況を把握して改善するため、Google LLC（米国）の Google アナリティクス 4 を利用しています（本サイトのドメイン shindan-navi.app で表示した場合のみ）。Google アナリティクスは Cookie を使い、閲覧したページ、参照元、端末・ブラウザの情報、おおよその地域のほか、本サイト上の操作（選んだタイトル<!--EVENTS-->や都道府県<!--/EVENTS-->、表示の切り替え、お気に入り登録した商品名、カレンダー追加など）を Google に送信します。<!--LOGIN-->ログイン中であっても、アカウントの ID やメールアドレスを Google アナリティクスに送信することはありません。マイカレンダー（2-4）で選んだタイトルと地域も送信しません。ログイン・ログアウト・アカウント削除については、その操作をしたという事実（操作の種類）のみを送信します。<!--/LOGIN--></p>
       <p>Google によるデータの取り扱いは <a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener">Google のサービスを使用するサイトやアプリから収集した情報の Google による使用</a> をご覧ください。送信を止めたい場合は、<a href="https://tools.google.com/dlpage/gaoptout?hl=ja" target="_blank" rel="noopener">Google アナリティクス オプトアウト アドオン</a> の利用やブラウザの Cookie 設定で無効にできます。</p>
 
       <h3>ブラウザに保存する情報（localStorage）</h3>
@@ -101,8 +101,9 @@
         <li>表示名</li>
         <li>プロフィール画像の URL</li>
       </ul>
-      <p>あわせて、ログイン中に同期するお気に入り・イベントカレンダーの絞り込み条件（選んだ都道府県を含む）・カレンダー追加確認の設定、ログイン状態を保つためのセッション情報（セッション ID のハッシュ値と有効期限）、利用プラン（現在はすべて無料）、各データの作成・更新日時を保存します。</p>
-      <p>利用目的は、ログインと本人の確認、お気に入りや設定を複数の端末・ブラウザで同期すること、不正な利用の防止、お問い合わせへの対応です。Google のパスワードや、Google のアクセストークン・リフレッシュトークンは受け取らず、保存もしません。Google ドライブやカレンダーなど、ほかの Google のデータにアクセスすることもありません。</p>
+      <p>あわせて、ログイン中に同期するお気に入り・イベントカレンダーの絞り込み条件（選んだ都道府県を含む）・カレンダー追加確認の設定、トップページの「表示の設定」で保存したマイカレンダー（好きなタイトルと、都道府県またはオンラインの地域ひとつ）、ログイン状態を保つためのセッション情報（セッション ID のハッシュ値と有効期限）、利用プラン（現在はすべて無料）、各データの作成・更新日時を保存します。</p>
+      <p>利用目的は、ログインと本人の確認、お気に入りや設定を複数の端末・ブラウザで同期すること、マイカレンダーに合わせてトップページの発売・イベント・話題を表示すること、不正な利用の防止、お問い合わせへの対応です。Google のパスワードや、Google のアクセストークン・リフレッシュトークンは受け取らず、保存もしません。Google ドライブやカレンダーなど、ほかの Google のデータにアクセスすることもありません。</p>
+      <p>マイカレンダーは、ブラウザ（localStorage など）には保存せず、ログインを確認できたあいだだけページの表示に使います。イベントは、選んだ地域とタイトルを条件にした一般のイベント情報の取得（アカウントとは結び付けません）で表示します。「表示の設定」の「マイカレンダーを削除」からいつでも削除でき、アカウントを削除したときにも削除します。</p>
       <p>これらの情報は、Cloudflare が提供するデータベース（Cloudflare D1）に保存します。データは米国その他の国にある Cloudflare のデータセンターで保管される場合があります。</p>
       <p>プロフィール画像は、表示するときに利用者のブラウザが Google のサーバーから直接読み込みます（リファラーは送信しません）。</p>
 <!--/LOGIN-->
@@ -168,7 +169,7 @@
       <ul>
         <!--LOGIN--><li>アカウントの情報（2-4）は、アカウントを削除するまで保存します。</li>
         <li>セッション情報は、ログアウトしたときに削除します。有効期限（180 日）を過ぎたものと、同じアカウントで新しい順に 10 件を超えたものは、次にログインしたときに削除します。</li>
-        <li>設定画面の「アカウントを削除」から、いつでもアカウントを削除できます。削除すると、アカウント・連携した Google アカウントの情報・同期したお気に入りと設定・セッションをデータベースからすぐに完全に削除します（ブラウザの localStorage に残っているお気に入り等は消えません）。<!--FEEDBACK-->フォームから送信したご意見は残り、アカウントとの紐付け（アカウントの ID）だけを削除します。<!--/FEEDBACK--></li><!--/LOGIN-->
+        <li>設定画面の「アカウントを削除」から、いつでもアカウントを削除できます。削除すると、アカウント・連携した Google アカウントの情報・同期したお気に入りと設定（マイカレンダーを含む）・セッションをデータベースからすぐに完全に削除します（ブラウザの localStorage に残っているお気に入り等は消えません）。<!--FEEDBACK-->フォームから送信したご意見は残り、アカウントとの紐付け（アカウントの ID）だけを削除します。<!--/FEEDBACK--></li><!--/LOGIN-->
         <!--FEEDBACK--><li>ご意見・ご要望フォームから送信された内容は、受付から 1 年間保存し、1 年を過ぎたものは順次削除します。期間内でも、1 のお問い合わせ先にご連絡いただければ削除します。運営者に届いた通知メールは、ご意見への対応に必要な間だけ保管し、不要になったものは削除します。</li><!--/FEEDBACK-->
         <li>Cloudflare D1 の障害復旧機能（Time Travel）により、削除後も一定期間（Cloudflare の契約プランに応じて 7 日間または 30 日間、最大 30 日間）、復元用のデータが Cloudflare のシステム内に残る場合があります。運営者がこれを通常の業務で利用することはありません。</li>
       </ul>
@@ -202,7 +203,8 @@
       <h3 class="nn">改定履歴</h3>
       <ul>
         <li><!--EFFECTIVE-->：制定</li>
-        <!--LOGIN--><li><!--REVISED_LOGIN-->：Google アカウントでのログインとお気に入り等の同期の開始にあわせて改定</li><!--/LOGIN-->
+        <!--LOGIN--><li><!--REVISED_LOGIN-->：Google アカウントでのログインとお気に入り等の同期の開始にあわせて改定</li>
+        <li><!--REVISED_PERSONAL-->：トップページのマイカレンダー（アカウントに保存する好きなタイトルと地域）の開始にあわせて改定</li><!--/LOGIN-->
         <!--FEEDBACK--><li><!--REVISED_FEEDBACK-->：ご意見・ご要望フォームの開始にあわせて改定</li><!--/FEEDBACK-->
         <!--VOICES--><li><!--REVISED_VOICES-->：話題カレンダーの開始にあわせて改定</li><!--/VOICES-->
         <!--VOICES--><li><!--REVISED_VOICES_D1-->：話題カレンダーの日付ごとのまとめページの廃止にあわせて改定</li><!--/VOICES-->

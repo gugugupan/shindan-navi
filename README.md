@@ -143,7 +143,7 @@ A browser key is public by design; restrictions are what protect it. Owner check
 
 `favorite`, `filter_game`, `filter_favorites`, `switch_view`, `view_item`, `copy_favorites`, `change_theme`, `click_official`.
 
-`/`: `home_location` (`value` = the picked location).
+`/`: `home_titles` (`value` = the chosen title codes or `all`), `home_location` (`value` = the picked location), `home_day` (`offset`). Neither fires for a logged-in account's マイカレンダー: its titles and location are never sent to GA.
 
 `/feedback/`: `send_feedback` (`kind` only; never the text or the address).
 

@@ -16,6 +16,11 @@
   a location the イベント block's 地域を設定 opens the picker. The week strip (today + 6 days, tabs) picks the day: its
   releases of those titles grouped by title on the left, its events as one collapsible row per game on the right, いま話題
   under them (desktop; one column below 901px).
+  マイカレンダー (LOGIN builds): a logged-in account's personal_calendar (src/corner.html window.snPersonal, in memory
+  only, shown once /me and the prefs answered) replaces the saved titles and location everywhere on this page; the
+  pill is marked マイカレンダー and #hsDlg edits the account (titles and location as one draft, one PUT; also for an
+  account without one yet, pre-filled from what is shown). It never writes the local filters, sends no GA event and
+  puts nothing of it in a page URL. Logged out, #hsDlg links the login.
 -->
 <title>今日発売のTCG・トレカ新弾とイベント｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
@@ -37,6 +42,11 @@
 .pill .loc:empty{display:none}
 .pill .loc svg{color:var(--accent);flex:none}
 .pill .chev{flex:none;color:var(--muted)}
+/* マイカレンダー (a logged-in account's own titles and location): a small mark in the pill, the save status beside it */
+.pill.mine{max-width:min(340px,100%)}
+.pill .my{flex:none;font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 7px;white-space:nowrap}
+.hsv{font-size:12px;font-weight:700;color:var(--muted)}
+.hsv:empty{display:none}
 .wkw{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:0}
 .wkl{margin:0;display:flex;gap:10px;font-size:12px;color:var(--muted)}
 .wkl>span{display:inline-flex;align-items:center;gap:4px}
@@ -158,6 +168,10 @@ div.none.err{border-color:var(--sun);border-style:solid}
 .setdlg .lc{font-weight:700}
 .setdlg .foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
 .go.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.go:disabled{opacity:.55;cursor:default}
+.setdlg .msg{margin:0;font-size:12.5px;font-weight:700;color:var(--sun)}
+.setdlg .msg:empty{display:none}
+.setdlg .foot .reset{margin-right:auto;color:var(--muted)}
 /* いま話題 (VOICES): the latest /voices/ snapshot. Game colours, attitude colours and glyphs as on /voices/
    (src/voices.html): --gl/--gd per game give --g (marks) and --gt (text, >=4.5:1) per theme. */
 .vtr{--pos:#1d7f4c;--mix:#94580a;--neg:var(--sun)}
@@ -220,7 +234,8 @@ div.none.err{border-color:var(--sun);border-style:solid}
   <main class="home" id="home">
     <div class="htop">
       <h1 class="hbar"><b id="hDate"></b><span class="tb">今日</span><span class="hsub"><!--H1--></span></h1>
-      <button type="button" class="pill" id="hsBtn" aria-haspopup="dialog"><span class="sr">表示の設定：</span><span id="hsT">すべてのタイトル</span><!--EVENTS--><span class="loc" id="hsL"></span><!--/EVENTS--><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <button type="button" class="pill" id="hsBtn" aria-haspopup="dialog"><span class="sr">表示の設定：</span><span class="my" id="hsM" hidden>マイカレンダー</span><span id="hsT">すべてのタイトル</span><!--EVENTS--><span class="loc" id="hsL"></span><!--/EVENTS--><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <span class="hsv" id="hsSaved" role="status"></span>
       <div class="wkw"><div class="wks" id="wkStrip" role="tablist"></div><p class="wkl" id="wkLg" aria-hidden="true"></p></div>
     </div>
     <div class="hgrid">
@@ -239,12 +254,16 @@ div.none.err{border-color:var(--sun);border-style:solid}
   <!--SITENAV-->
 </div>
 <dialog id="hsDlg" class="setdlg" aria-labelledby="hsTitle"><div class="dlg"><button type="button" class="ib close" id="hsClose" aria-label="閉じる">×</button><h2 class="dl-day" id="hsTitle">表示の設定</h2>
-  <p class="note">選んだタイトル<!--EVENTS-->と地域<!--/EVENTS-->で、このページの発売<!--EVENTS-->・イベント<!--/EVENTS--><!--VOICES-->・いま話題<!--/VOICES-->を表示します。<!--EVENTS-->イベントカレンダーと共通の設定です。<!--/EVENTS--></p>
+  <p class="note" id="hsNote">選んだタイトル<!--EVENTS-->と地域<!--/EVENTS-->で、このページの発売<!--EVENTS-->・イベント<!--/EVENTS--><!--VOICES-->・いま話題<!--/VOICES-->を表示します。<!--EVENTS-->イベントカレンダーと共通の設定です。<!--/EVENTS--></p>
+  <p class="note" id="hsAcct" hidden></p>
+<!--LOGIN-->  <p class="note" id="hsLogin" hidden><a class="rl" href="/api/v1/auth/google/start?return=%2F" rel="nofollow">ログインしてマイカレンダーを作成 ›</a></p>
+<!--/LOGIN-->
   <fieldset><legend>タイトル</legend><div class="fc" id="hsTitles"></div></fieldset>
 <!--EVENTS-->
   <fieldset><legend>地域</legend><div class="fc"><span class="lc" id="hsLoc"></span><button type="button" class="go" id="hsLocBtn" aria-haspopup="dialog">地域を設定</button></div></fieldset>
 <!--/EVENTS-->
-  <div class="foot"><button type="button" class="go" id="hsCancel">キャンセル</button><button type="button" class="go pri" id="hsOk">この内容で表示</button></div>
+  <p class="msg" id="hsMsg" role="alert"></p>
+  <div class="foot"><button type="button" class="go reset" id="hsReset" hidden>マイカレンダーを削除</button><button type="button" class="go" id="hsCancel">キャンセル</button><button type="button" class="go pri" id="hsOk">この内容で表示</button></div>
 </div></dialog>
 <!--EVENTS-->
 <!--EVROW-->
@@ -341,8 +360,21 @@ const EV_GAMES = /*EV_GAMES*/[];
 const EVG = Object.fromEntries(EV_GAMES.map(g=>[g.code,g]));
 const gvars = g => `--gl:${g.c};--gd:${g.cd}`;
 const SAVED_KEY = 'tcg.ev.filters';
+// マイカレンダー (LOGIN builds, src/corner.html window.snPersonal): a logged-in account's titles and location, kept in
+// memory only. PC = the setting while the account has one: the page shows it instead of the saved filters and never
+// writes tcg.ev.filters / tcg.voices from here, tracks nothing about it and puts none of it in a page URL.
+const PS = window.snPersonal;
+const pState = () => PS ? PS.state() : 'off';
+let PC = null;
+// the dialog edits the account ('none': no setting yet, saving creates it)
+const acct = () => { const st=pState(); return st==='set'||st==='none'; };
 // the /events/ saved filters (one location; older saves with several keep the first). days is left out: today is today.
+// マイカレンダー: its location and its liked games that have events (none of them: noev, no event request; [] = all)
 function evFilters(){
+  if(PC){
+    const eg=EV_GAMES.filter(g=>PC.games.includes(g.code)).map(g=>g.code);
+    return {pref:EVENTS&&PC.location&&LOC.isLoc(PC.location)?PC.location:'', game:eg.join(','), type:'', noev:PC.games.length>0&&!eg.length, mine:true};
+  }
   const s=store.get(SAVED_KEY,null)||{};
   const list=k=>typeof s[k]==='string'?s[k].split(',').filter(Boolean):[];
   return {pref:EVENTS?list('pref').filter(LOC.isLoc)[0]||'':'', game:list('game').filter(g=>EVG[g]).join(','), type:list('type').filter(t=>/^[a-z0-9_]+$/.test(t)).join(',')};
@@ -356,8 +388,11 @@ function q(f,extra){
   Object.entries(extra.tail||{}).forEach(([k,v])=>p.set(k,v));
   return p.toString().replace(/%2C/g,',');
 }
-// game: one game's day view instead of the saved game filter
-const dayLink = (f,d,game) => '/events/?'+q(game?{...f,game}:f,{tail:{range:'custom',from:d,to:d}});
+// game: one game's day view instead of the saved game filter. マイカレンダー: the day alone (nothing personal in URLs)
+const dayLink = (f,d,game) => f.mine ? '/events/?'+new URLSearchParams({range:'custom',from:d,to:d})
+  : '/events/?'+q(game?{...f,game}:f,{tail:{range:'custom',from:d,to:d}});
+// the event part is on: a location, and (マイカレンダー) a liked game with events or all titles
+const evOn = f => !!(f&&f.pref&&!f.noev);
 const SHOW = n => n<=2 ? 5 : 3; // events listed per game column for n columns
 let evF=null, evKey=null, ev=null; // ev: {loading} | {error} | {counts, byGame, byGameType, list, next}
 // rows of a day the loaded pages do not cover: date -> {loading} | {error} | {list, more}, this filter and visit only
@@ -427,7 +462,7 @@ async function loadEvents(force){
   if(!EVENTS) return;
   evF=evFilters();
   const key=JSON.stringify(evF);
-  if(!evF.pref){ evKey=key; ev=null; dayPages={}; renderWeek(); return; }
+  if(!evOn(evF)){ evKey=key; ev=null; dayPages={}; renderWeek(); return; }
   if(key===evKey && !force) return;
   evKey=key; ev={loading:true}; dayPages={}; renderWeek();
   const ym=TODAY.slice(0,7), next=addM(ym,1)+'-01', f=evF;
@@ -487,7 +522,8 @@ let evOpen = {}; // game code -> the visitor opened / closed its row
 // The day's events in the panel: one row per game (as /events/ orders them), at most MAX_COLS, the rest as chips.
 // {html, n, min}: n = the day's count for the heading (null when not known), min = 以上 when it is a minimum.
 function evPart(d,f){
-  if(!f.pref) return {html:'<p class="q"><button type="button" class="go" id="hsLocSet" aria-haspopup="dialog">地域を設定</button></p>', n:null};
+  if(f.noev) return {html:'<p class="q">選んだタイトルのイベント情報はありません。</p>', n:null};
+  if(!f.pref) return {html:`<p class="q">${f.mine?'地域を設定すると、その地域のイベントも表示します。':''}<button type="button" class="go" id="hsLocSet" aria-haspopup="dialog">地域を設定</button></p>`, n:null};
   if(!ev || ev.loading) return {html:SK, n:null, loading:true};
   if(ev.error){
     const busy=ev.error.status===429||ev.error.status===503;
@@ -522,6 +558,7 @@ function evPart(d,f){
 // The player's titles, read only: the /voices/ saved title filter (tcg.voices; VOICES builds), else the /events/ one;
 // codes failing ok are dropped, and a filter left with none falls through. [] = all titles.
 function savedGames(ok){
+  if(PC) return PC.games.filter(ok);
   for(const k of $('vtr')?['tcg.voices',SAVED_KEY]:[SAVED_KEY]){
     const s=store.get(k,null), codes=s&&typeof s.game==='string'?s.game.split(',').filter(ok):[];
     if(codes.length) return codes;
@@ -534,31 +571,48 @@ const TITLES = H.titles||{}; // code -> release / event display name
 const VOICES = !!$('vtr');
 // what the saved filters can hold: tcg.voices any of H.titles; without いま話題 only /events/' filter is read (its games)
 const TITLE_OPTS = Object.keys(TITLES).filter(c=>VOICES||EVG[c]);
+// the account's setting can hold any of them (and any registry title; codes not offered here are kept on save)
+const opts = () => acct() ? Object.keys(TITLES) : TITLE_OPTS;
 const shortList = codes => codes.slice(0,4).map(c=>SHORT[TITLES[c]]||TITLES[c]).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
-function homeSel(){ const codes=savedGames(c=>TITLES[c]); return TITLE_OPTS.filter(c=>codes.includes(c)); }
+function homeSel(){ const codes=savedGames(c=>TITLES[c]); return opts().filter(c=>codes.includes(c)); }
 function selNames(){ const sel=homeSel(); return sel.length ? new Set(sel.map(c=>TITLES[c])) : null; }
 function renderSet(){
   const sel=homeSel(), t=$('hsT');
   t.textContent = sel.length ? shortList(sel) : 'すべてのタイトル';
   const p=EVENTS?evFilters().pref:'';
-  $('hsBtn').title = (sel.length ? sel.map(c=>TITLES[c]).join('・') : 'すべてのタイトル')+(p?'・'+LOC.locName(p):'');
+  $('hsM').hidden=!PC; $('hsBtn').classList.toggle('mine',!!PC);
+  $('hsBtn').title = (PC?'マイカレンダー：':'')+(sel.length ? sel.map(c=>TITLES[c]).join('・') : 'すべてのタイトル')+(p?'・'+LOC.locName(p):'');
   if(EVENTS) $('hsL').innerHTML = p ? PIN+esc(LOC.locName(p)) : '';
 }
 // draft: the dialog's titles; edited: the visitor touched them (else confirming keeps whatever is saved, which account
-// sync may change while the dialog is open)
-let draft=[], edited=false;
+// sync may change while the dialog is open). In the account's dialog the location is part of the draft too (draftLoc,
+// '' = none), and both go to the account only through この内容で保存; dlgAcct: the mode the dialog was opened in.
+let draft=[], edited=false, draftLoc='', dlgAcct=false, saving=false;
+function initDraft(){
+  draft=homeSel(); dlgAcct=acct();
+  // マイカレンダー: its own location; no setting yet: what the page shows now
+  draftLoc = EVENTS&&dlgAcct ? evFilters().pref : '';
+}
 function renderSetDlg(){
-  const box=$('hsTitles'), had=box.contains(document.activeElement)?document.activeElement.dataset.t:null;
+  const box=$('hsTitles'), had=box.contains(document.activeElement)?document.activeElement.dataset.t:null, st=pState();
   box.innerHTML = `<button type="button" class="chip all" data-t="" aria-pressed="${!draft.length}">すべてのタイトル</button>`
-    + TITLE_OPTS.map(c=>`<button type="button" class="chip" data-t="${c}" style="--h:${HUE[TITLES[c]]||0}" aria-pressed="${draft.includes(c)}">${gi(TITLES[c])}${esc(TITLES[c])}</button>`).join('');
+    + opts().map(c=>`<button type="button" class="chip" data-t="${c}" style="--h:${HUE[TITLES[c]]||0}" aria-pressed="${draft.includes(c)}">${gi(TITLES[c])}${esc(TITLES[c])}</button>`).join('');
   if(had!=null) box.querySelector(`[data-t="${had}"]`)?.focus();
+  $('hsNote').hidden=dlgAcct;
+  $('hsAcct').hidden=!dlgAcct;
+  $('hsAcct').textContent = st==='set' ? 'マイカレンダーの設定です。このアカウントに保存し、ログインしたこのページで表示します。'
+    : 'このアカウントに保存します。保存すると、ログインしているあいだ、このページは選んだタイトルと地域のマイカレンダーになります。';
+  if($('hsLogin')) $('hsLogin').hidden=st!=='out';
+  $('hsReset').hidden=!(dlgAcct&&st==='set');
+  $('hsOk').textContent = dlgAcct ? 'この内容で保存' : 'この内容で表示';
+  [$('hsOk'),$('hsReset'),$('hsCancel')].forEach(b=>b.disabled=saving);
   if(!EVENTS) return;
-  const p=evFilters().pref;
+  const p=dlgAcct?draftLoc:evFilters().pref;
   $('hsLoc').textContent = p ? LOC.locName(p) : '未設定';
   $('hsLocBtn').textContent = p ? '地域を変更' : '地域を設定';
 }
 function openSet(){
-  draft=homeSel(); edited=false; renderSetDlg();
+  initDraft(); edited=false; $('hsMsg').textContent=''; renderSetDlg();
   const d=$('hsDlg'); if(d.showModal) d.showModal(); else d.setAttribute('open','');
   d.querySelector('.chip[aria-pressed="true"]')?.focus();
 }
@@ -586,6 +640,28 @@ function applySet(){
   saveTitles(next); renderAll(); loadEvents();
   return true;
 }
+// the account's dialog: save the draft (or null: delete the setting); the dialog closes only once the account has it
+let savedTimer=0;
+async function saveAcct(reset){
+  const st=pState();
+  const keep=PC?PC.games.filter(c=>!TITLES[c]):[];
+  const v=reset?null:{location:draftLoc||null, games:[...new Set(opts().filter(c=>draft.includes(c)).concat(keep))].sort()};
+  // マイカレンダー unchanged: nothing to write
+  if(!reset&&st==='set'&&PC&&JSON.stringify(v)===JSON.stringify({location:PC.location, games:[...PC.games].sort()})){ closeSet(); $('hsBtn').focus(); return; }
+  saving=true; $('hsMsg').textContent=''; renderSetDlg();
+  try{
+    await PS.save(v);
+    saving=false; closeSet(); $('hsBtn').focus();
+    $('hsSaved').textContent = reset ? 'マイカレンダーを削除しました' : '保存しました';
+    clearTimeout(savedTimer); savedTimer=setTimeout(()=>{ $('hsSaved').textContent=''; },4000);
+  }catch(e){
+    saving=false;
+    if(!acct()){ closeSet(); return; }
+    if(!$('hsDlg').open) return;
+    $('hsMsg').textContent = e&&e.busy ? '混み合っています。1 分ほどおいて、もう一度保存してください。' : '保存できませんでした。通信状況を確認して、もう一度保存してください。';
+    renderSetDlg();
+  }
+}
 
 // ---- 今週のカレンダー: today + 6 days as tabs with the saved titles' counts; the chosen day's releases and events in the
 // panel. Strip event counts from this month's /days only (next-month days show –).
@@ -593,25 +669,26 @@ let wkSel=0; // the panel's day (index in WEEK): today at first, this visit only
 function dayData(d,f,sel){
   const names=sel.length?new Set(sel.map(c=>TITLES[c])):null, all=covered(d)?relsOn(d):null;
   const its=all&&(names?all.filter(x=>names.has(x.game)||isStar(x)):all);
-  return {d, names, all, its, hidden:all?all.length-its.length:0, n:f&&f.pref?dayCount(d):null};
+  return {d, names, all, its, hidden:all?all.length-its.length:0, n:evOn(f)?dayCount(d):null};
 }
 // the saved /events/ game filter, named (the event counts follow it: the API's query)
 const evGamesLabel = f => f&&f.game ? (gs=>gs.slice(0,4).map(c=>EVG[c].short).join('・')+(gs.length>4?` ほか${gs.length-4}`:''))(f.game.split(',')) : '';
 const dayLabel = i => i===0?'今日':i===1?'明日':'';
 function renderWeek(){
   const f=EVENTS?(evF||evFilters()):null, sel=homeSel();
-  const loading=!!(f&&f.pref&&ev&&ev.loading);
+  const evShown=evOn(f), loading=!!(evShown&&ev&&ev.loading);
   const days=WEEK.map(d=>dayData(d,f,sel));
-  const strip=$('wkStrip'), focused=strip.contains(document.activeElement), sx=strip.scrollLeft, evOn=!!(f&&f.pref);
-  strip.setAttribute('aria-label',`今週の発売${evOn?'・イベント':''}（${md(WEEK[0])}〜${md(WEEK[6])}）`);
-  // the event counts follow /events/' game filter (the API's query), not the pill: always named
-  $('wkLg').innerHTML = '<span><span class="cr"></span>発売数</span>'+(evOn?`<span><span class="ce"></span>イベント数（${esc(evGamesLabel(f)||'すべて')}）</span>`:'');
+  const strip=$('wkStrip'), focused=strip.contains(document.activeElement), sx=strip.scrollLeft;
+  strip.setAttribute('aria-label',`今週の発売${evShown?'・イベント':''}（${md(WEEK[0])}〜${md(WEEK[6])}）`);
+  // the event counts follow /events/' game filter (マイカレンダー: its liked games with events; the API's query), not
+  // the pill: always named
+  $('wkLg').innerHTML = '<span><span class="cr"></span>発売数</span>'+(evShown?`<span><span class="ce"></span>イベント数（${esc(evGamesLabel(f)||'すべて')}）</span>`:'');
   strip.innerHTML = days.map((x,i)=>{
     const d=x.d, w=dowOf(d), [,m,dd]=d.split('-').map(Number), lb=dayLabel(i), on=i===wkSel;
     const rel=x.its?x.its.length:null, star=!!x.its&&x.its.some(isStar);
     // events: null = no line (no location / no events build); '' = not known here (next month until its rows are in,
     // loading, failed)
-    const en = !f||!f.pref ? null : x.n==null ? '' : x.n;
+    const en = !evShown ? null : x.n==null ? '' : x.n;
     const said=[`${m}月${dd}日(${DOW[w]})${lb?' '+lb:''}`, rel==null?'発売は新弾カレンダーで':`発売${rel}件${star?'（お気に入りあり）':''}`]
       .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):`イベント${en}件（${evGamesLabel(f)||'すべて'}）`]);
     // a count only where there is something; – where it is not known here, … while loading
@@ -649,10 +726,10 @@ function renderPanel(x,f,sel,days){
   if(EVENTS){
     const e=evPart(d,f);
     // the day view of the saved /events/ filter (the set counted here); without a location still that day
-    const evHref = f.pref ? dayLink(f,d) : '/events/?'+new URLSearchParams([...(f.game?[['game',f.game]]:[]),...(f.type?[['type',f.type]]:[]),['range','custom'],['from',d],['to',d]]).toString().replace(/%2C/g,',');
+    const evHref = f.pref||f.mine ? dayLink(f,d) : '/events/?'+new URLSearchParams([...(f.game?[['game',f.game]]:[]),...(f.type?[['type',f.type]]:[]),['range','custom'],['from',d],['to',d]]).toString().replace(/%2C/g,',');
     evs=`<section class="blk wps evb" aria-labelledby="wkEH"><div class="blk-h"><h2 id="wkEH">イベント</h2>${day}${e.n?`<span class="n"><b>${e.n}</b>件${e.min||''}</span>`:''}`
       + `<a class="dayl" href="${esc(evHref)}">日別一覧<span class="sr">（イベントカレンダーでこの日を見る）</span> ›</a></div><div id="evBody">${e.html}</div></section>`;
-    live = !f.pref ? '' : e.loading ? `${m}月${dd}日のイベントを読み込み中` : e.error ? `${m}月${dd}日のイベント情報を読み込めませんでした`
+    live = !evOn(f) ? '' : e.loading ? `${m}月${dd}日のイベントを読み込み中` : e.error ? `${m}月${dd}日のイベント情報を読み込めませんでした`
       : e.n ? `${m}月${dd}日のイベント ${e.n}件${e.min||''}` : e.n===0 ? `${m}月${dd}日のイベントはありません` : '';
   }
   const kept=window.snEv?snEv.keep(p):null;
@@ -689,6 +766,11 @@ function locCounts(){
 }
 function openLoc(back){
   if(!metaAsked){ metaAsked=true; api('/events/meta').then(m=>{ meta=m; LOC.refresh(); },()=>{}); }
+  // the account's dialog: the pick only changes its draft (saved with the titles, dropped on cancel)
+  if($('hsDlg').open&&dlgAcct){
+    LOC.open({current:()=>draftLoc, counts:locCounts, onPick:c=>{ if(draftLoc!==c){ draftLoc=c; edited=true; renderSetDlg(); } (back||$('hsLocBtn'))?.focus(); }});
+    return;
+  }
   LOC.open({current:()=>evFilters().pref, counts:locCounts, onPick:c=>{
     const s=store.get(SAVED_KEY,null), o=s&&typeof s==='object'?{...s}:{};
     if(o.pref!==c){
@@ -765,14 +847,17 @@ document.addEventListener('click',e=>{
   const gt=e.target.closest('#evBody .gt');
   if(gt){ const o=gt.getAttribute('aria-expanded')!=='true', b=$(gt.getAttribute('aria-controls')); evOpen[gt.dataset.g]=o; gt.setAttribute('aria-expanded',o); if(b) b.hidden=!o; return; }
   if(e.target.closest('#evRetry')) loadEvents(true);
-  else if(e.target.closest('#hsLocSet')) openLoc($('hsBtn'));
+  // the account's location is set in its dialog, with the titles
+  else if(e.target.closest('#hsLocSet')){ if(acct()) openSet(); else openLoc($('hsBtn')); }
   else if(e.target.closest('#hsBtn')) openSet();
 });
 // the settings dialog: chips change a draft, この内容で表示 saves it; キャンセル / × / Esc / the backdrop drop it
 $('hsDlg').addEventListener('click',e=>{
   const d=$('hsDlg');
+  if(saving) return;
   if(e.target===d||e.target.closest('#hsClose,#hsCancel')){ closeSet(); return; }
-  if(e.target.closest('#hsOk')){ applySet(); closeSet(); $('hsBtn').focus(); return; }
+  if(e.target.closest('#hsReset')){ saveAcct(true); return; }
+  if(e.target.closest('#hsOk')){ if(dlgAcct){ saveAcct(false); return; } applySet(); closeSet(); $('hsBtn').focus(); return; }
   // the picker opens over this dialog and saves the location itself; the title draft stays pending
   if(e.target.closest('#hsLocBtn')){ openLoc($('hsLocBtn')); return; }
   const c=e.target.closest('[data-t]');
@@ -781,10 +866,21 @@ $('hsDlg').addEventListener('click',e=>{
   draft = !t ? [] : draft.includes(t) ? draft.filter(x=>x!==t) : [...draft,t]; edited=true;
   renderSetDlg();
 });
+// Esc while saving: the dialog stays until the answer (it keeps the draft on failure)
+$('hsDlg').addEventListener('cancel',e=>{ if(saving) e.preventDefault(); });
 // logged in, corner.html replaces the local favourites / saved filters with the account's: re-read them
 document.addEventListener('sn:prefs',()=>{
   readStars(); renderAll(); loadEvents(); if(LOC) LOC.refresh();
-  if($('hsDlg').open){ if(!edited) draft=homeSel(); renderSetDlg(); }
+  if($('hsDlg').open){ if(!edited&&!saving) initDraft(); renderSetDlg(); }
 });
+// the account changed (its setting arrived, was saved or reset; logout, 401, another account, deletion): the page
+// shows the new state at once; a dialog opened for another mode closes (its draft is dropped)
+function personal(){
+  PC = pState()==='set' ? PS.get() : null;
+  if($('hsDlg').open && !saving && dlgAcct!==acct()) closeSet();
+  renderAll(); loadEvents();
+  if($('hsDlg').open){ if(!edited&&!saving) initDraft(); renderSetDlg(); }
+}
+if(PS){ document.addEventListener('sn:personal',personal); document.addEventListener('sn:user',personal); personal(); }
 })();
 </script>

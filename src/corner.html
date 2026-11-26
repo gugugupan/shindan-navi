@@ -5,7 +5,8 @@
   The user control calls /api/v1/me only while the __Host-sn_user cookie is set, so logged-out visitors make no
   /api calls. It publishes the user as window.snUser (undefined = not known yet, null = logged out) and a
   "sn:user" event on document whenever that changes. Logged in, it also syncs favourites, /events/ saved filters
-  and the add-to-calendar setting with the account (window.snPrefs, "sn:prefs" event; see the sync block below).
+  and the add-to-calendar setting with the account (window.snPrefs, "sn:prefs" event; see the sync block below),
+  and carries the home page's マイカレンダー (personal_calendar) in memory only (window.snPersonal, "sn:personal").
 -->
 <!--TOOLTABS-->
 <div class="corner">
@@ -35,7 +36,7 @@
       <div class="seg themeseg" role="radiogroup" aria-labelledby="acctThemeH"><button role="radio" data-theme-v="auto">自動</button><button role="radio" data-theme-v="light">ライト</button><button role="radio" data-theme-v="dark">ダーク</button></div></section>
     <section class="acct-sec"><h3>アカウント</h3>
       <div class="acct-who" id="acctWho"></div>
-      <p class="acct-note">お気に入りと絞り込み条件はアカウントに保存され、ログインしたほかの端末と同期します。</p>
+      <p class="acct-note">お気に入り・絞り込み条件・マイカレンダーはアカウントに保存され、ログインしたほかの端末と同期します。</p>
       <div><button class="sbtn ghost" data-acct="logout">ログアウト</button></div></section>
     <section class="acct-sec acct-del" id="acctDel"><h3>アカウント削除</h3>
       <p class="acct-note">アカウントと、同期したお気に入り・設定をサーバーからすぐに完全に削除します。元に戻すことはできません。このブラウザに保存されているお気に入りは残ります。</p>
@@ -110,9 +111,9 @@
     $('acctWho').innerHTML=`${face(u,'av')}<span><b>${esc(u.display_name||'')}</b><small>Google アカウントでログイン中</small></span>`;
   }
   function setUser(u){
-    window.snUser=u; show(u);
+    // sync (and with it the personal view) goes first: no render of the next state may still see the previous account's
+    window.snUser=u; sync.user(u); show(u);
     if(u!==undefined) document.dispatchEvent(new CustomEvent('sn:user',{detail:{user:u}}));
-    sync.user(u);
   }
   const send=(method,path,body,keepalive)=>fetch(API+path,{method,credentials:'same-origin',keepalive:!!keepalive,
     headers:{'content-type':'application/json',accept:'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
@@ -160,6 +161,21 @@
       if(Object.keys(d).length) schedule(0);
     }
     let me=null, ready=false, busy=false, timer=0, lastWrite=0, lastRead=0, holdUntil=0;
+    // マイカレンダー (personal_calendar): never in localStorage (shared devices). pc = {location, games} | null (no
+    // setting) for the account `me` once its prefs answered, undefined before. pcSeq drops answers of a previous
+    // account and reads that started before the latest save.
+    let pc, pcSeq=0, off=false;
+    const pcEvent=()=>document.dispatchEvent(new CustomEvent('sn:personal'));
+    function normPC(v){
+      if(!v||typeof v!=='object'||Array.isArray(v)) return null;
+      return {location:typeof v.location==='string'?v.location:null, games:Array.isArray(v.games)?v.games.filter(c=>typeof c==='string'):[]};
+    }
+    function takePC(j,u,seq){
+      if(me!==u||seq!==pcSeq) return;
+      const v=normPC(j&&j.prefs&&j.prefs.personal_calendar);
+      if(pc!==undefined&&JSON.stringify(v)===JSON.stringify(pc)) return;
+      pc=v; pcEvent();
+    }
     // false: stop syncing (logged out / login off here); keep local data
     function check(r){
       if(r.status===401||r.status===404){ clearMark(); setUser(null); return false; }
@@ -171,12 +187,13 @@
       try{
         if(prev!==id || !base){
           const switched=prev!=null && prev!==id;
-          const L0=local();
+          const L0=local(), seq=pcSeq;
           const r=switched ? await fetch(API+'/me/prefs',{credentials:'same-origin',headers:{accept:'application/json'}})
             : await send('POST','/me/prefs/merge',{stars:L0.stars, ...(L0.filters?{event_filters:L0.filters}:{}), ...(L0.askOff?{ask_calendar:'off'}:{})});
           if(!check(r)||me!==u) return;
-          const S=fromServer(await r.json());
+          const j=await r.json(), S=fromServer(j);
           ls.set(K.user,id); ready=true; lastRead=Date.now();
+          takePC(j,u,seq);
           adopt(S, L0, switched);
         } else {
           ready=true; await refresh(true);
@@ -185,11 +202,12 @@
     }
     async function refresh(force){
       if(!ready||busy||(!force&&Date.now()-lastRead<30e3)) return;
-      busy=true; const u=me;
+      busy=true; const u=me, seq=pcSeq;
       try{
         const r=await fetch(API+'/me/prefs',{credentials:'same-origin',headers:{accept:'application/json'}});
         if(!check(r)||me!==u) return;
         const j=await r.json(); lastRead=Date.now();
+        takePC(j,u,seq);
         adopt(fromServer(j), ls.get(K.base,null)||fromServer(j));
       }catch(e){} finally{ busy=false; }
     }
@@ -208,10 +226,10 @@
       if(!Object.keys(d).length) return;
       if(keepalive){ try{ send('PUT','/me/prefs',d,true); }catch(e){} return; }
       if(Date.now()<holdUntil){ schedule(0); return; }
-      busy=true; lastWrite=Date.now(); const u=me; let S=null;
+      busy=true; lastWrite=Date.now(); const u=me, seq=pcSeq; let S=null;
       try{
         const r=await send('PUT','/me/prefs',d);
-        if(check(r)&&me===u) S=fromServer(await r.json());
+        if(check(r)&&me===u){ const j=await r.json(); takePC(j,u,seq); S=fromServer(j); }
         else if(r.status===429) schedule(0);
       }catch(e){} finally{ busy=false; }
       // a failed write leaves the change in diff(base → local): the next load or visit sends it again
@@ -223,10 +241,35 @@
     });
     window.addEventListener('pagehide',()=>{ if(timer) flush(true); });
     window.snPrefs={changed(){ schedule(1000); }};
+    // state(): 'wait' (account not known yet), 'out' (logged out), 'off' (login unavailable here), 'none' (logged in,
+    // no マイカレンダー), 'set'; get(): the setting while 'set'. save(v) PUTs it (null resets) and resolves with the
+    // saved value; it rejects (err.busy on 429) when the write failed or the account changed meanwhile.
+    window.snPersonal={
+      state(){ return off?'off':me===undefined?'wait':me===null?'out':pc===undefined?'wait':pc?'set':'none'; },
+      get(){ return pc?{location:pc.location, games:pc.games.slice()}:null; },
+      async save(v){
+        const u=me;
+        if(!u||pc===undefined) throw new Error('not ready');
+        if(Date.now()<holdUntil) throw Object.assign(new Error('busy'),{busy:true});
+        const seq=++pcSeq; lastWrite=Date.now();
+        const r=await send('PUT','/me/prefs',{personal_calendar:v});
+        if(me!==u) throw new Error('account changed');
+        if(!check(r)) throw Object.assign(new Error('HTTP '+r.status),{busy:r.status===429});
+        const j=await r.json();
+        if(me!==u) throw new Error('account changed');
+        takePC(j,u,seq);
+        return this.get();
+      }
+    };
     return {
+      // the account check failed (5xx, network, login off): no account here
+      off(){ off=true; pcEvent(); },
+      // a change of account (login, logout, 401, another account, deletion) first drops the personal view
       user(u){
         if(u===me) return;
-        me=u; ready=false; clearTimeout(timer); timer=0;
+        const had=pc!==undefined;
+        me=u; pc=undefined; pcSeq++; ready=false; clearTimeout(timer); timer=0;
+        if(had) pcEvent();
         if(u) start(u);
       },
       flush,
@@ -280,7 +323,7 @@
     if(r.status===401){ clearMark(); setUser(null); return; }
     // 404: login is off on this host; 5xx: keep the session, try again on the next page
     if(r.status===404) clearMark();
-    box.hidden=true; $('setBox').hidden=false; window.snUser=null;
-  }).catch(()=>{ box.hidden=true; $('setBox').hidden=false; window.snUser=null; });
+    box.hidden=true; $('setBox').hidden=false; window.snUser=null; sync.off();
+  }).catch(()=>{ box.hidden=true; $('setBox').hidden=false; window.snUser=null; sync.off(); });
 })();
 </script>
