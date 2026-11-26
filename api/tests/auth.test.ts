@@ -6,7 +6,7 @@ import worker from '../src/index';
 import { b64url, b64urlDecode, MAX_SESSIONS, safeReturn, sessionHash, validateIdToken } from '../src/auth';
 import { readBaseConfig, remoteConfig } from '../scripts/remote-config.mjs';
 import { newDb } from './helpers';
-import type { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
+import { SqliteD1 } from '../scripts/lib/sqlite-d1.mjs';
 
 const ORIGIN = 'https://shindan-navi.app';
 const CLIENT_ID = 'client-123.apps.googleusercontent.com';
@@ -359,6 +359,68 @@ describe('prefs', () => {
     expect(stars.slice(0, 3)).toEqual([STAR(2), STAR(1), STAR(3)]);
     expect((await send('/api/v1/me/prefs/merge', 'POST', { stars: ['bad'] }, cookies)).status).toBe(400);
   });
+  it('personal_calendar: validated, normalised, reset by null, never merged', async () => {
+    const cookies = await loggedIn();
+    let res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { games: ['PTCG', 'OPCG', 'MTG', 'OPCG'], location: 'JP-13' } }, cookies);
+    expect(res.status).toBe(200);
+    expect((await res.json()).prefs).toEqual({ personal_calendar: { location: 'JP-13', games: ['MTG', 'OPCG', 'PTCG'] } });
+    expect(raw.db.prepare("SELECT value_json FROM user_prefs WHERE key = 'personal_calendar'").get()).toEqual({ value_json: '{"location":"JP-13","games":["MTG","OPCG","PTCG"]}' });
+    for (const ok of [{ location: null, games: [] }, { location: 'online', games: ['LYCEE'] }, { location: 'JP-47', games: ['HOLOBEAT', 'YGO'] }]) {
+      res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: ok }, cookies);
+      expect(res.status, JSON.stringify(ok)).toBe(200);
+    }
+    const bad: unknown[] = [
+      { location: 'JP-48', games: [] }, { location: 'JP-13,JP-14', games: [] }, { location: 'tokyo', games: [] }, { location: 13, games: [] },
+      { games: [] }, { location: null }, { location: null, games: 'OPCG' }, { location: null, games: ['XXX'] }, { location: null, games: ['opcg'] },
+      { location: null, games: [1] }, { location: null, games: [], extra: 1 }, [], 'JP-13', true,
+    ];
+    for (const b of bad) expect((await send('/api/v1/me/prefs', 'PUT', { personal_calendar: b }, cookies)).status, JSON.stringify(b)).toBe(400);
+    expect((await (await call('/api/v1/me/prefs', { cookies })).json()).prefs.personal_calendar).toEqual({ location: 'JP-47', games: ['HOLOBEAT', 'YGO'] });
+    // merge (old and new clients after login) neither takes nor drops it
+    expect((await send('/api/v1/me/prefs/merge', 'POST', { personal_calendar: { location: null, games: [] } }, cookies)).status).toBe(400);
+    res = await send('/api/v1/me/prefs/merge', 'POST', { stars: [STAR(1)], event_filters: { pref: 'JP-27' } }, cookies);
+    expect((await res.json()).prefs.personal_calendar).toEqual({ location: 'JP-47', games: ['HOLOBEAT', 'YGO'] });
+    // an old client's PUT carries only its own keys
+    res = await send('/api/v1/me/prefs', 'PUT', { stars: { add: [STAR(2)] }, event_filters: null, ask_calendar: 'off' }, cookies);
+    expect((await res.json()).prefs.personal_calendar).toEqual({ location: 'JP-47', games: ['HOLOBEAT', 'YGO'] });
+    res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, cookies);
+    const body = await res.json();
+    expect(body.prefs.personal_calendar).toBeUndefined();
+    expect(body.updated_at.personal_calendar).toBeUndefined();
+    expect(count("SELECT COUNT(*) AS n FROM user_prefs WHERE key = 'personal_calendar'")).toBe(0);
+    expect((await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, cookies)).status).toBe(200);
+  });
+  it('personal_calendar: the same value (in any order) writes nothing', async () => {
+    const cookies = await loggedIn();
+    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'JP-27', games: ['WS', 'MTG'] } }, cookies);
+    const other = await loggedIn({ sub: 'nobody-set-anything' });
+    const before = raw.db.prepare('SELECT key, value_json, updated_at FROM user_prefs').all();
+    const writes: string[] = [];
+    const db = env.DB as SqliteD1;
+    env.DB = new Proxy(db, {
+      get(target, prop, recv) {
+        const v = Reflect.get(target, prop, recv);
+        if (prop === 'batch') return async (st: unknown[]) => { writes.push(`batch ${st.length}`); return (v as Function).call(target, st); };
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    await new Promise((r) => setTimeout(r, 5));
+    const res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { games: ['MTG', 'WS', 'WS'], location: 'JP-27' } }, cookies);
+    expect(res.status).toBe(200);
+    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null, ask_calendar: null }, other);
+    expect(writes).toEqual([]);
+    expect(raw.db.prepare('SELECT key, value_json, updated_at FROM user_prefs').all()).toEqual(before);
+  });
+  it('personal_calendar belongs to one user', async () => {
+    const a = await loggedIn({ sub: 'user-a' });
+    const b = await loggedIn({ sub: 'user-b' });
+    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'JP-13', games: ['OPCG'] } }, a);
+    expect((await (await call('/api/v1/me/prefs', { cookies: b })).json()).prefs).toEqual({});
+    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'online', games: [] } }, b);
+    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, b);
+    expect((await (await call('/api/v1/me/prefs', { cookies: a })).json()).prefs.personal_calendar).toEqual({ location: 'JP-13', games: ['OPCG'] });
+    expect((await (await call('/api/v1/me/prefs', { cookies: b })).json()).prefs).toEqual({});
+  });
   it('needs a session', async () => {
     expect((await call('/api/v1/me/prefs')).status).toBe(401);
     expect((await send('/api/v1/me/prefs', 'PUT', { ask_calendar: true })).status).toBe(401);
@@ -371,7 +433,8 @@ describe('account deletion', () => {
     const other = await loggedIn({ sub: 'other-sub' });
     await send('/api/v1/me/prefs', 'PUT', { ask_calendar: true }, other);
     const cookies = await loggedIn();
-    await send('/api/v1/me/prefs', 'PUT', { stars: { add: [STAR(1)] }, ask_calendar: 'off' }, cookies);
+    await send('/api/v1/me/prefs', 'PUT', { stars: { add: [STAR(1)] }, ask_calendar: 'off', personal_calendar: { location: 'JP-13', games: ['PTCG'] } }, cookies);
+    expect(count("SELECT COUNT(*) AS n FROM user_prefs WHERE key = 'personal_calendar'")).toBe(1);
     const { user } = await (await call('/api/v1/me', { cookies })).json();
     raw.db.prepare("INSERT INTO entitlements (user_id, feature, source, starts_at) VALUES (?, 'x', 'test', '2026-01-01')").run(user.id);
     raw.db.prepare("INSERT INTO billing_customers (user_id, provider, customer_id) VALUES (?, 'stripe', 'cus_test')").run(user.id);
@@ -382,6 +445,35 @@ describe('account deletion', () => {
     for (const t of ['entitlements', 'billing_customers']) expect(count(`SELECT COUNT(*) AS n FROM ${t}`), t).toBe(0);
     expect((await call('/api/v1/me', { cookies })).status).toBe(401);
     expect((await call('/api/v1/me', { cookies: other })).status).toBe(200);
+  });
+});
+
+describe('migration 0009 (personal_calendar)', () => {
+  it('rebuilds user_prefs keeping every row, the key and the foreign key', () => {
+    const db = new SqliteD1().migrate(undefined, { before: '0009' });
+    const q = (sql: string) => db.db.prepare(sql).all();
+    db.db.exec("INSERT INTO users (id, created_at) VALUES ('u1', '2026-11-01T00:00:00Z'), ('u2', '2026-11-02T00:00:00Z')");
+    const rows = [
+      ['u1', 'ask_calendar', '"off"', '2026-11-03T01:02:03.004Z'], ['u1', 'event_filters', '{"pref":"JP-13","game":"OPCG"}', '2026-11-04T00:00:00Z'],
+      ['u1', 'stars', '["i0000000001"]', '2026-11-05T00:00:00Z'], ['u2', 'stars', '[]', '2026-11-06T00:00:00Z'],
+    ];
+    for (const r of rows) db.db.prepare('INSERT INTO user_prefs (user_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)').run(...r);
+    expect(() => db.db.prepare("INSERT INTO user_prefs VALUES ('u1', 'personal_calendar', '{}', 'x')").run()).toThrow(/CHECK/);
+    const before = q('SELECT * FROM user_prefs ORDER BY user_id, key');
+    const ddl = () => (q("SELECT sql FROM sqlite_master WHERE name = 'user_prefs'")[0] as { sql: string }).sql
+      .replace(/^CREATE TABLE "?user_prefs(_new)?"?/, 'CREATE TABLE user_prefs').replace(/\s+/g, ' ');
+    const old = ddl();
+    db.migrate();
+    expect(q('SELECT * FROM user_prefs ORDER BY user_id, key')).toEqual(before);
+    expect(ddl()).toBe(old.replace("'ask_calendar')", "'ask_calendar', 'personal_calendar')"));
+    expect(old).toContain('WITHOUT ROWID');
+    expect(q("SELECT name FROM sqlite_master WHERE name LIKE 'user_prefs%'")).toEqual([{ name: 'user_prefs' }]);
+    db.db.prepare("INSERT INTO user_prefs VALUES ('u2', 'personal_calendar', '{\"location\":null,\"games\":[]}', 'x')").run();
+    expect(() => db.db.prepare("INSERT INTO user_prefs VALUES ('u3', 'stars', '[]', 'x')").run()).toThrow(/FOREIGN KEY/);
+    expect(() => db.db.prepare("INSERT INTO user_prefs VALUES ('u1', 'stars', '[]', 'x')").run()).toThrow(/UNIQUE|PRIMARY/);
+    expect(() => db.db.prepare("INSERT INTO user_prefs VALUES ('u1', 'theme', '[]', 'x')").run()).toThrow(/CHECK/);
+    expect(q('PRAGMA foreign_key_check')).toEqual([]);
+    expect(q('PRAGMA integrity_check')).toEqual([{ integrity_check: 'ok' }]);
   });
 });
 

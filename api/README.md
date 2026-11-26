@@ -114,10 +114,18 @@ database. Runbook: [Migration 0005](#migration-0005-runbook).
 the `INSERT` (5 rows written); their ids (`bnavi:<digits>`) and sources (`bushinavi`) already pass 0005's shape
 checks. Runbook: [Day 3](#day-3-bushi-navi-games).
 
+`migrations/0009_personal_calendar.sql`: rebuilds `user_prefs` so its key CHECK also allows `personal_calendar` (the
+home page's マイカレンダー, see Accounts). Same columns, `(user_id, key)` key, foreign key to `users` and `WITHOUT
+ROWID`; every row is copied with its `value_json` and `updated_at` verbatim (`api/tests/auth.test.ts` › migration
+0009). Writes one row per existing `user_prefs` row (plus the drop), reads as many. Code before it keeps working on
+the rebuilt table; the code that writes `personal_calendar` needs it, so apply it remotely before that push (see
+Migrations). workerd does not run on macOS 12, so it was rehearsed on the `node:sqlite` stand-in, not on
+`wrangler d1 --local`.
+
 ## Accounts (Google login, synced preferences)
 
 Contract: [`../contracts/README.md`](../contracts/README.md) › Accounts API. Code: `src/auth.ts` (OAuth, sessions,
-routes), `src/prefs.ts` (validation, merge). Dark until enabled: all `/api/v1/auth|me|billing` routes answer 404 unless
+routes), `src/prefs.ts` (validation, merge; keys `stars`, `event_filters`, `ask_calendar`, `personal_calendar`). Dark until enabled: all `/api/v1/auth|me|billing` routes answer 404 unless
 `SITE_ORIGIN` (wrangler.jsonc `vars`) equals the request origin and all three secrets are set.
 
 Secrets (the lead sets them; never in git, never printed):
@@ -284,8 +292,8 @@ day_counts row, ~43k) plus one primary-key lookup per written row.
 | Request | Reads | Writes |
 | --- | ---: | ---: |
 | `GET /me` (valid cookie; forged cookie: 0) | 2 (session + user) | 0 |
-| `GET /me/prefs` | 2 + ≤ 3 prefs | 0 |
-| `PUT /me/prefs`, `POST /me/prefs/merge` | 2 + ≤ 3 prefs | 1 per changed key (unchanged keys are not written) |
+| `GET /me/prefs` | 2 + ≤ 4 prefs | 0 |
+| `PUT /me/prefs`, `POST /me/prefs/merge` | 2 + ≤ 4 prefs | 1 per changed key (unchanged keys are not written) |
 | Login callback | 1 identity lookup + the user's sessions | session 2 (row + index); 2 per expired or over-cap session deleted; new user +3; changed name/avatar/email +1-2 |
 | Logout / `DELETE /me` | 0-2 / 2 | 1-2 / every row of the user (+ its feedback rows' `user_id`) |
 | `POST /feedback` | 0 (2 with a session cookie) + rows older than 1 year | ~4 (row + 2-3 index entries), status update ~2, purged rows |
@@ -297,12 +305,20 @@ Writes are what matter: the importer's `--max-writes` default of 90,000 leaves ~
 day with a full import (the Free limit is 100,000 for everything). A star toggle is one write, so the page batches
 toggles. When D1 refuses writes (quota), the API answers 500 and the page keeps its local state.
 
-Per-user bound: a PUT or merge writes at most 3 rows (one per pref key), and `AUTH_WRITE_LIMIT` allows 5 per minute
-per user, so one user writes at most 3 × 5 × 1,440 = 21,600 rows/day through one Cloudflare location (counters are
+Per-user bound: a PUT or merge writes at most 4 rows (one per pref key; merge never writes `personal_calendar`), and `AUTH_WRITE_LIMIT` allows 5 per minute
+per user, so one user writes at most 4 × 5 × 1,440 = 28,800 rows/day through one Cloudflare location (counters are
 per location, so a user spread over several locations could exceed it). `DELETE /me` shares the limit and ends the
 account. Logins are limited per client IP (30/min) and need a Google round trip each. The page writes at most once
 every 12 s and pauses 60 s after a 429 (`src/corner.html`); a write refused by the limit stays in the local diff and
-is sent later. Reads: ≤ 60 GETs/min per session at ≤ 5 rows each.
+is sent later. Reads: ≤ 60 GETs/min per session at ≤ 6 rows each (`personal_calendar` added one pref row,
+2026-11-26).
+
+The home page's マイカレンダー (`personal_calendar`) adds no account request: it rides on the sync's existing
+GET / merge answers, and saving it in 表示の設定 is one PUT (1 row written, 0 when unchanged). Its event requests
+are the home page's usual `/events/days` + `/events` ones (same queries and cache keys as `/events/`, see Today
+page below) for the saved location and the liked games that have events; none without a location or when no
+liked game has events. A logged-in visit can make the local-filter requests first and the personal ones once the
+account answers.
 
 Reads per uncached request, measured with SQLite on the current data (rows stepped; D1 may count index entries too,
 so up to ~2× for the events scans). "5 largest" = JP-13/27/23/28/11. Every events query is an index seek on
@@ -374,7 +390,11 @@ for that day's first page, `/events` from the day to the 1st of the following mo
 view's first request, same key; next-month days too, which have no `/days` here and count from those rows). At most
 one request per chosen day, kept for the visit (≤ ~103 rows uncached for Tokyo unfiltered, ≤ ~444 filtered); none
 for today or a covered day. Changing the titles in the page's 表示の設定 changes the saved `game` filter, so the next
-load uses that key (as a filter change on `/events/`).
+load uses that key (as a filter change on `/events/`). マイカレンダー (a logged-in account's `personal_calendar`):
+the same requests with the account's location as `pref` and its liked games that have events as `game` (none of them
+→ no `game`, as すべて; no `type`), in `/events/` game order; no event request without a location or when liked
+games exist but none has events (never an empty filter meaning all games). Once the account answers, after any
+local-filter requests already made.
 
 `/events/days` answer size: `by_game_type` (2026-11-20) grows it but reads no more rows (same `day_counts` search, see
 above). Measured on 大阪府 (JP-27), December 2026: 2.3 → 9.6 KB raw, 0.44 → 1.2 KB gzip. Upper bound for Tokyo (636

@@ -1,6 +1,8 @@
+import REGISTRY from '../../data/games.json';
+
 export class PrefsError extends Error {}
 
-export const PREF_KEYS = ['stars', 'event_filters', 'ask_calendar'] as const;
+export const PREF_KEYS = ['stars', 'event_filters', 'ask_calendar', 'personal_calendar'] as const;
 export type PrefKey = (typeof PREF_KEYS)[number];
 export type Prefs = Partial<Record<PrefKey, unknown>>;
 
@@ -9,6 +11,9 @@ const STAR_ID = /^i[0-9a-f]{10}$/;
 const FILTER_KEYS = new Set(['game', 'pref', 'type', 'days', 'view']);
 const MAX_FILTERS_BYTES = 1024;
 const ASK_CALENDAR = new Set<unknown>([true, false, 'ask', 'off']);
+// every registry title, also those without events (contracts/games.md); the /events/ pref values (events.ts PREF_RE)
+const TITLE_CODES = new Set(REGISTRY.map((g) => g.code));
+const LOCATION = /^(JP-(0[1-9]|[1-3][0-9]|4[0-7])|online)$/;
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -32,6 +37,21 @@ export function eventFilters(v: unknown): Record<string, string> {
 export function askCalendar(v: unknown): boolean | string {
   if (!ASK_CALENDAR.has(v)) throw new PrefsError('ask_calendar must be true, false, "ask" or "off"');
   return v as boolean | string;
+}
+
+export interface PersonalCalendar {
+  location: string | null;
+  games: string[];
+}
+
+/** The home page's マイカレンダー: one /events/ location or null, registry codes ([] = all titles), sorted, deduped. */
+export function personalCalendar(v: unknown): PersonalCalendar {
+  if (!isObject(v) || Object.keys(v).some((k) => k !== 'location' && k !== 'games')) throw new PrefsError('personal_calendar must be { location, games }');
+  const { location, games } = v;
+  if (location !== null && (typeof location !== 'string' || !LOCATION.test(location))) throw new PrefsError('personal_calendar.location must be JP-01..JP-47, online or null');
+  if (!Array.isArray(games)) throw new PrefsError('personal_calendar.games must be an array');
+  for (const c of games) if (typeof c !== 'string' || !TITLE_CODES.has(c)) throw new PrefsError('personal_calendar.games: unknown game code');
+  return { location, games: [...new Set(games as string[])].sort() };
 }
 
 export interface PrefRow {
@@ -67,13 +87,17 @@ export function applyPut(current: Prefs, body: unknown): Prefs {
   }
   if (body.event_filters !== undefined) out.event_filters = body.event_filters === null ? null : eventFilters(body.event_filters);
   if (body.ask_calendar !== undefined) out.ask_calendar = body.ask_calendar === null ? null : askCalendar(body.ask_calendar);
+  if (body.personal_calendar !== undefined) out.personal_calendar = body.personal_calendar === null ? null : personalCalendar(body.personal_calendar);
   return out;
 }
 
-/** Changes from a merge body: stars union (server first, capped), the others only where the server has none. */
+/**
+ * Changes from a merge body: stars union (server first, capped), the others only where the server has none.
+ * personal_calendar is never merged (no browser keeps a copy); it is set by PUT only.
+ */
 export function applyMerge(current: Prefs, body: unknown): Prefs {
   if (!isObject(body)) throw new PrefsError('body must be an object');
-  for (const k of Object.keys(body)) if (!(PREF_KEYS as readonly string[]).includes(k)) throw new PrefsError(`unknown key ${k}`);
+  for (const k of Object.keys(body)) if (!(PREF_KEYS as readonly string[]).includes(k) || k === 'personal_calendar') throw new PrefsError(`unknown key ${k}`);
   const out: Prefs = {};
   const client = body.stars === undefined ? [] : starList(body.stars);
   const filters = body.event_filters === undefined || body.event_filters === null ? undefined : eventFilters(body.event_filters);

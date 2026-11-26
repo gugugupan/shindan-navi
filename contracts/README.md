@@ -204,15 +204,18 @@ GET  /api/v1/me                                → 200 { "user": { "id", "displa
                                                 | 401 { "error": "unauthenticated" } (also clears both cookies)
 GET  /api/v1/me/prefs                          → 200 Prefs
 PUT  /api/v1/me/prefs                          partial: { "stars"?: { "add"?: [id], "remove"?: [id] },
-                                                "event_filters"?: object|null, "ask_calendar"?: value|null }
+                                                "event_filters"?: object|null, "ask_calendar"?: value|null,
+                                                "personal_calendar"?: object|null }
                                                 stars applied server-side; the other keys replaced; null removes
                                                 → 200 Prefs (after the change)
 POST /api/v1/me/prefs/merge                    once after login: { "stars": [id], "event_filters"?, "ask_calendar"? }
+                                                (personal_calendar → 400: set by PUT only)
                                                 → 200 Prefs (after the merge)
 DELETE /api/v1/me                              → 204; deletes the account and everything tied to it, clears cookies
 POST /api/v1/billing/webhook                   → 501 (placeholder)
 
-Prefs = { "prefs": { "stars"?: [id], "event_filters"?: object, "ask_calendar"?: boolean|"ask"|"off" },
+Prefs = { "prefs": { "stars"?: [id], "event_filters"?: object, "ask_calendar"?: boolean|"ask"|"off",
+                     "personal_calendar"?: { "location": string|null, "games": [code] } },
           "updated_at": { "<key>": "<ISO 8601>" } }      keys absent when never set
 ```
 
@@ -223,10 +226,15 @@ Values:
 - `event_filters`: the `/events/` saved filters (`tcg.ev.filters`): an object whose keys are among `game`, `pref`,
   `type`, `days`, `view`, each a string; at most 1 KB as JSON.
 - `ask_calendar`: the 「今後は確認しない」 setting: `true`/`false` or `"ask"`/`"off"`.
+- `personal_calendar`: the home page's マイカレンダー, exactly `{ "location", "games" }`. `location`: one `/events/`
+  `pref` value (`JP-01`..`JP-47` or `online`) or `null` (releases only). `games`: codes of `data/games.json` (any
+  registry row, also titles without events such as `MTG`), stored sorted and deduplicated; `[]` = all titles. Absent
+  = never set; `null` in a PUT removes it. The page keeps it in memory only (never in localStorage).
 - Request bodies at most 64 KB. Invalid values → 400 `{ "error": "<message>" }`; nothing is written.
 
 Merge semantics: `stars` = server ∪ client (server order first, capped at 2,000); `event_filters` and `ask_calendar`
-keep the server value when one exists, else take the client's. Only changed keys are written.
+keep the server value when one exists, else take the client's; `personal_calendar` is never merged. Only changed
+keys are written (a `personal_calendar` equal after normalisation is not).
 
 Cookies (all `Path=/; Secure; SameSite=Lax`, `__Host-` so no `Domain`):
 
