@@ -349,7 +349,7 @@ LOCPICK=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/locpick.html')).
 # event rows shared by /events/ and / (src/evrow.html, window.snEv), inserted before the page script at the EVROW slot
 EVROW=re.sub(r'\A<!--.*?-->\n','',open(os.path.join(ROOT,'src/evrow.html')).read(),count=1,flags=re.S).strip()
 def corner(tool):
-    # logo-row controls of every page: product switch after the logo, settings and user on the right (src/corner.html)
+    # logo-row controls of every page: product switch, settings and user together on the right (src/corner.html)
     return flags(re.sub(r'\A<!--.*?-->\n','',CORNER_SRC,count=1,flags=re.S)).replace('<!--TOOLTABS-->',tooltabs(tool)).strip()
 def siterow(cur):
     cur_=lambda p:' aria-current="page"' if cur==p else ''

@@ -167,7 +167,7 @@ async function checkScopes(ctx, vp) {
   await page.evaluate(() => localStorage.clear());
   await page.close();
 }
-// Logo row: the tool tabs follow the logo on desktop (settings / user at the right end), a bottom bar on phones.
+// Logo row: the tool tabs on the right just before settings / user on desktop, a bottom bar on phones.
 async function headerProblem(page, width) {
   const h = await page.evaluate(() => {
     const r = s => document.querySelector(s)?.getBoundingClientRect();
@@ -178,8 +178,9 @@ async function headerProblem(page, width) {
   if (!h.tabs) return HAS_EVENTS ? 'no tool tabs in the logo row' : '';
   if (width <= 760) return h.fixed ? '' : 'tool tabs are not the bottom bar';
   if (h.fixed) return 'tool tabs fixed on desktop';
-  if (h.t.left < h.brand.right || h.t.left - h.brand.right > 24) return `tool tabs not right after the logo (${Math.round(h.t.left - h.brand.right)}px)`;
-  if (h.t.right > h.corner.left) return 'tool tabs overlap the corner';
+  if (h.t.left < h.brand.right) return 'tool tabs overlap the logo';
+  if (h.t.right > h.corner.left || h.corner.left - h.t.right > 20) return `tool tabs not right before the corner (${Math.round(h.corner.left - h.t.right)}px)`;
+  if (Math.abs((h.t.top + h.t.bottom) - (h.corner.top + h.corner.bottom)) > 2) return 'tool tabs not vertically aligned with the corner';
   if (Math.abs(h.corner.right - h.header.right) > 1) return 'corner not at the right end';
   return '';
 }

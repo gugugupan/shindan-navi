@@ -1,6 +1,6 @@
 <!--
   Logo-row controls of every page, inserted by build.py at the CORNER slot (styles: "corner" in template.html).
-  The product switch (TOOLS) sits right after the logo (a bottom tab bar on phones); the corner on the right holds
+  The product switch (TOOLS) sits on the right just before the corner (a bottom tab bar on phones); the corner holds
   settings (theme; logged in, it moves into the account 設定 dialog) and with LOGIN_ENABLED the user control. With FEEDBACK_ENABLED both menus link to /feedback/?from=<this path>.
   The user control calls /api/v1/me only while the __Host-sn_user cookie is set, so logged-out visitors make no
   /api calls. It publishes the user as window.snUser (undefined = not known yet, null = logged out) and a

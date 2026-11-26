@@ -211,7 +211,7 @@ dialog::backdrop{background:rgb(10 12 20 / .5)}
 .daytoggle .lbl{flex:1;min-width:0}
 .pastbtn{width:100%;border:1px dashed var(--line);background:none;border-radius:10px;padding:10px;color:var(--muted);font-weight:700;font-size:13px}
 
-/* corner (src/corner.html): settings and user at the right end of the logo row; the tool tabs sit after the logo */
+/* corner (src/corner.html): settings and user at the right end of the logo row, the tool tabs just before them */
 .corner{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
 .cmenu{position:relative;display:flex}
 .cmenu[hidden]{display:none}
@@ -419,15 +419,16 @@ tbody tr.starred td.nm{font-weight:700}
 .locbtn svg{color:var(--accent);flex:none}
 .locbtn small{font-size:12px;color:var(--accent)}
 .locbtn:hover{border-color:var(--accent)}
-/* tool tabs: next to the logo on desktop, a bar fixed to the bottom of the screen on phones */
+/* tool tabs: on the right next to settings / user on desktop, a bar fixed to the bottom of the screen on phones */
 .tooltabs{display:inline-flex;flex:none;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:9px}
 .tooltabs a{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;border-radius:7px;font-weight:700;font-size:13px;color:var(--muted);text-decoration:none;white-space:nowrap}
 .tooltabs a:hover{color:var(--accent);background:var(--surface-2)}
 .tooltabs a[aria-current]{background:var(--accent);color:var(--accent-ink)}
 .tooltabs svg{width:16px;height:16px;flex:none}
 .panel>.row{flex-wrap:nowrap}
+@media (min-width:761px){.tooltabs{margin-left:auto}.tooltabs+.corner{margin-left:0}}
 @media (max-width:900px){.tooltabs a{padding:0 10px}}
-/* three tabs do not fit next to the logo on narrow tablets: short names there (the aria-label keeps the full one) */
+/* three tabs do not fit beside the logo and corner on narrow tablets: short names there (the aria-label keeps the full one) */
 @media (min-width:761px) and (max-width:900px){.tooltabs:has(a:nth-child(3)) .tl2{display:none}}
 @media (max-width:900px){.seg button{padding:0 9px}.seg button span{display:none}}
 
