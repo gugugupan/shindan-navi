@@ -704,9 +704,11 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (st.zeroBadge) fail(where, `${label}: a zero day shows a count badge`);
       // the shown badge and the tab's label say the same count as the data
       const shown = c => c === '0' ? null : c;
-      const badBadge = st.tabs.filter(t => t.relB !== shown(t.rel) || (t.ev != null && t.evB !== shown(t.ev))
+      const badBadge = st.tabs.filter(t => t.relB !== shown(t.rel) || t.evB !== (t.ev == null ? null : shown(t.ev))
         || (t.rel !== '–' && !t.label.includes(`発売${t.rel}件`)) || (t.ev != null && /^\d+$/.test(t.ev) && !t.label.includes(`イベント${t.ev}件`)));
       if (badBadge.length) fail(where, `${label}: badge text / tab label ${JSON.stringify(badBadge.map(t => [t.rel, t.relB, t.ev, t.evB, t.label]))}`);
+      // the event counts follow the /events/ game filter, not the pill: the legend always names it
+      if (st.legend && st.legend.includes('イベント数') && !/イベント数（[^）]+）$/.test(st.legend)) fail(where, `${label}: legend "${st.legend}" does not name the event filter`);
     };
     const REL_LINK = '日別一覧（新弾カレンダーでこの日を見る） ›', EV_LINK = '日別一覧（イベントカレンダーでこの日を見る） ›';
     // a title with releases this week (an /events/ game, so the /events/ filter can hold it too)
@@ -821,7 +823,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       st = await state();
       strip('filtered query', st, two.map(c => H.titles[c]), null, true, ['OPCG', 'PTCG']);
       if (HAS_EVENTS && st.evHead !== '') fail(where, `panel heading names "${st.evHead}"`);
-      // the event filter differs from the pill's titles: the legend names it
+      // the legend names the event filter
       if (HAS_EVENTS && st.legend !== '発売数イベント数（ワンピ・ポケカ）') fail(where, `legend "${st.legend}"`);
     }
 
@@ -2182,7 +2184,7 @@ if (HAS_EVENTS) {
     // zero days: no badge; a count only above 0
     if (lay.tabs.some(([r, e, cr, ce]) => cr !== (+r > 0) || (e !== '' && e !== '–' && ce !== (+e > 0)))) fail(where, `strip badges ${JSON.stringify(lay.tabs)}`);
     if (lay.tabs[1][0] !== '0' || lay.tabs[0][0] !== '5') fail(where, `strip counts ${JSON.stringify(lay.tabs)}`);
-    if (lay.legend !== '発売数イベント数') fail(where, `legend "${lay.legend}"`);
+    if (lay.legend !== '発売数イベント数（すべて）') fail(where, `legend "${lay.legend}"`);
     if (JSON.stringify(lay.ops) !== JSON.stringify([['ONE PIECE', 'false', false], ['ポケモンカード', 'false', false]])) fail(where, `event rows not closed at first ${JSON.stringify(lay.ops)}`);
     if (!lay.foot || lay.foot.open || !lay.foot.tools || !lay.foot.note) fail(where, `footer ${JSON.stringify(lay.foot)}`);
     // a row opens and closes; it stays open across a re-render

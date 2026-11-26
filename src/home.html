@@ -592,10 +592,8 @@ function renderWeek(){
   const days=WEEK.map(d=>dayData(d,f,sel));
   const strip=$('wkStrip'), focused=strip.contains(document.activeElement), sx=strip.scrollLeft, evOn=!!(f&&f.pref);
   strip.setAttribute('aria-label',`今週の発売${evOn?'・イベント':''}（${md(WEEK[0])}〜${md(WEEK[6])}）`);
-  // the event counts follow /events/' game filter (the API's query): named here when it is not what the pill shows
-  const evSel=f&&f.game?f.game.split(','):[], pillEv=sel.filter(c=>EVG[c]);
-  const evNote = evOn && [...evSel].sort().join()!==[...pillEv].sort().join() ? `（${esc(evGamesLabel(f)||'すべてのタイトル')}）` : '';
-  $('wkLg').innerHTML = '<span><span class="cr"></span>発売数</span>'+(evOn?`<span><span class="ce"></span>イベント数${evNote}</span>`:'');
+  // the event counts follow /events/' game filter (the API's query), not the pill: always named
+  $('wkLg').innerHTML = '<span><span class="cr"></span>発売数</span>'+(evOn?`<span><span class="ce"></span>イベント数（${esc(evGamesLabel(f)||'すべて')}）</span>`:'');
   strip.innerHTML = days.map((x,i)=>{
     const d=x.d, w=dowOf(d), [,m,dd]=d.split('-').map(Number), lb=dayLabel(i), on=i===wkSel;
     const rel=x.its?x.its.length:null, star=!!x.its&&x.its.some(isStar);
