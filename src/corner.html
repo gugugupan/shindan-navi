@@ -110,13 +110,27 @@
     $('userName').innerHTML=`${face(u,'av sm')}<span>${esc(u.display_name||'')}</span>`;
     $('acctWho').innerHTML=`${face(u,'av')}<span><b>${esc(u.display_name||'')}</b><small>Google アカウントでログイン中</small></span>`;
   }
+  // /me again (tab shown again, a 409): another account or none now replaces the state; the same one changes nothing
+  let verifyAt=-1e9;
+  async function verify(force){
+    if(!force&&performance.now()-verifyAt<10e3) return;
+    verifyAt=performance.now();
+    if(!hasMark()){ if(window.snUser) setUser(null); return; }
+    try{
+      const r=await fetch(API+'/me',{credentials:'same-origin',headers:{accept:'application/json'}});
+      if(r.status===401){ clearMark(); setUser(null); return; }
+      if(!r.ok) return;
+      const u=(await r.json()).user, cur=window.snUser;
+      if(!cur||String(cur.id)!==String(u.id)) setUser(u);
+    }catch(e){}
+  }
   function setUser(u){
     // sync (and with it the personal view) goes first: no render of the next state may still see the previous account's
     window.snUser=u; sync.user(u); show(u);
     if(u!==undefined) document.dispatchEvent(new CustomEvent('sn:user',{detail:{user:u}}));
   }
-  const send=(method,path,body,keepalive)=>fetch(API+path,{method,credentials:'same-origin',keepalive:!!keepalive,
-    headers:{'content-type':'application/json',accept:'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+  const send=(method,path,body,keepalive,extra)=>fetch(API+path,{method,credentials:'same-origin',keepalive:!!keepalive,
+    headers:{'content-type':'application/json',accept:'application/json',...(extra||{})},body:body===undefined?undefined:JSON.stringify(body)});
 
   // ---- synced preferences. localStorage stays the source the pages read (and the whole story when logged out);
   // logged in it is a cache of the account. tcg.sync.base is the last server state this browser saw, so local
@@ -162,9 +176,10 @@
     }
     let me=null, ready=false, busy=false, timer=0, lastWrite=0, lastRead=0, holdUntil=0;
     // マイカレンダー (personal_calendar): never in localStorage (shared devices). pc = {location, games} | null (no
-    // setting) for the account `me` once its prefs answered, undefined before. pcSeq drops answers of a previous
-    // account and reads that started before the latest save.
-    let pc, pcSeq=0, off=false;
+    // setting) for the account `me` once its prefs answered, undefined before (pcFail: that load failed). pcSeq
+    // changes with the account and at the start and end of every save, so an answer of a previous account, or a read
+    // that started before a save finished, never lands.
+    let pc, pcSeq=0, pcFail=false, off=false;
     const pcEvent=()=>document.dispatchEvent(new CustomEvent('sn:personal'));
     function normPC(v){
       if(!v||typeof v!=='object'||Array.isArray(v)) return null;
@@ -184,21 +199,24 @@
     }
     async function start(u){
       const id=String(u.id), prev=ls.get(K.user,null), base=ls.get(K.base,null);
-      try{
-        if(prev!==id || !base){
-          const switched=prev!=null && prev!==id;
-          const L0=local(), seq=pcSeq;
-          const r=switched ? await fetch(API+'/me/prefs',{credentials:'same-origin',headers:{accept:'application/json'}})
-            : await send('POST','/me/prefs/merge',{stars:L0.stars, ...(L0.filters?{event_filters:L0.filters}:{}), ...(L0.askOff?{ask_calendar:'off'}:{})});
-          if(!check(r)||me!==u) return;
-          const j=await r.json(), S=fromServer(j);
-          ls.set(K.user,id); ready=true; lastRead=Date.now();
-          takePC(j,u,seq);
-          adopt(S, L0, switched);
-        } else {
-          ready=true; await refresh(true);
-        }
-      }catch(e){}
+      try{ await load(u,id,prev,base); }catch(e){}
+      // no answer for this account (5xx, 429, network): the home page offers a retry instead of the local filters
+      if(me===u&&pc===undefined){ pcFail=true; pcEvent(); }
+    }
+    async function load(u,id,prev,base){
+      if(prev!==id || !base){
+        const switched=prev!=null && prev!==id;
+        const L0=local(), seq=pcSeq;
+        const r=switched ? await fetch(API+'/me/prefs',{credentials:'same-origin',headers:{accept:'application/json'}})
+          : await send('POST','/me/prefs/merge',{stars:L0.stars, ...(L0.filters?{event_filters:L0.filters}:{}), ...(L0.askOff?{ask_calendar:'off'}:{})});
+        if(!check(r)||me!==u) return;
+        const j=await r.json(), S=fromServer(j);
+        ls.set(K.user,id); ready=true; lastRead=Date.now();
+        takePC(j,u,seq);
+        adopt(S, L0, switched);
+      } else {
+        ready=true; await refresh(true);
+      }
     }
     async function refresh(force){
       if(!ready||busy||(!force&&Date.now()-lastRead<30e3)) return;
@@ -237,27 +255,35 @@
     }
     document.addEventListener('visibilitychange',()=>{
       if(document.visibilityState==='hidden'){ if(timer) flush(true); }
-      else refresh(false);
+      else { verify(false); refresh(false); }
     });
+    // back to this tab (or from the back/forward cache): the session may belong to another account by now
+    window.addEventListener('pageshow',e=>{ if(e.persisted) verify(true); });
     window.addEventListener('pagehide',()=>{ if(timer) flush(true); });
     window.snPrefs={changed(){ schedule(1000); }};
-    // state(): 'wait' (account not known yet), 'out' (logged out), 'off' (login unavailable here), 'none' (logged in,
-    // no マイカレンダー), 'set'; get(): the setting while 'set'. save(v) PUTs it (null resets) and resolves with the
-    // saved value; it rejects (err.busy on 429) when the write failed or the account changed meanwhile.
+    // state(): 'wait' (account or its prefs not known yet), 'error' (the prefs did not load: retry()), 'out' (logged
+    // out), 'off' (login unavailable here), 'none' (logged in, no マイカレンダー), 'set'; get(): the setting while
+    // 'set'. save(v) PUTs it (null resets) for the account /me named (x-sn-user: the server answers 409 when the
+    // session is another account's now, then /me is checked again) and resolves with the saved value; it rejects
+    // (err.busy on 429, err.changed when the account changed) when nothing was saved.
     window.snPersonal={
-      state(){ return off?'off':me===undefined?'wait':me===null?'out':pc===undefined?'wait':pc?'set':'none'; },
+      state(){ return off?'off':me===undefined?'wait':me===null?'out':pc===undefined?(pcFail?'error':'wait'):pc?'set':'none'; },
       get(){ return pc?{location:pc.location, games:pc.games.slice()}:null; },
+      retry(){ if(me&&pc===undefined){ pcFail=false; ready=false; pcEvent(); start(me); } },
       async save(v){
         const u=me;
         if(!u||pc===undefined) throw new Error('not ready');
         if(Date.now()<holdUntil) throw Object.assign(new Error('busy'),{busy:true});
-        const seq=++pcSeq; lastWrite=Date.now();
-        const r=await send('PUT','/me/prefs',{personal_calendar:v});
-        if(me!==u) throw new Error('account changed');
+        pcSeq++; lastWrite=Date.now();
+        let r;
+        try{ r=await send('PUT','/me/prefs',{personal_calendar:v},false,{'x-sn-user':String(u.id)}); }
+        finally{ pcSeq++; }
+        if(me===u&&r.status===409){ await verify(true); throw Object.assign(new Error('account changed'),{changed:true}); }
+        if(me!==u) throw Object.assign(new Error('account changed'),{changed:true});
         if(!check(r)) throw Object.assign(new Error('HTTP '+r.status),{busy:r.status===429});
         const j=await r.json();
-        if(me!==u) throw new Error('account changed');
-        takePC(j,u,seq);
+        if(me!==u) throw Object.assign(new Error('account changed'),{changed:true});
+        takePC(j,u,pcSeq);
         return this.get();
       }
     };
@@ -267,8 +293,8 @@
       // a change of account (login, logout, 401, another account, deletion) first drops the personal view
       user(u){
         if(u===me) return;
-        const had=pc!==undefined;
-        me=u; pc=undefined; pcSeq++; ready=false; clearTimeout(timer); timer=0;
+        const had=pc!==undefined||pcFail;
+        me=u; pc=undefined; pcFail=false; pcSeq++; ready=false; clearTimeout(timer); timer=0;
         if(had) pcEvent();
         if(u) start(u);
       },

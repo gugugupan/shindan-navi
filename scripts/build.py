@@ -610,6 +610,8 @@ def render_home():
     if VOICES_ENABLED: home['voicesApi']=EVENTS_API_BASE+'/voices/latest'; home['voiceGames']=VOICE_GAME_BLOCK
     # code -> display name of the titles a saved /voices/ or /events/ game filter can hold (表示中 line, 今週のカレンダー)
     home['titles']={g['code']:g['label'] for g in HOME_REG}
+    # every registry title (those first): what a logged-in account's マイカレンダー can hold (LOGIN builds)
+    if LOGIN_ENABLED: home['regTitles']={g['code']:g['label'] for g in HOME_REG+[g for g in REG if g not in HOME_REG]}
     # event type names for 今日のイベント's per-type line (the API's TYPE_LABELS; /events/ gets them from /events/meta)
     if BUILD_EVENTS: home['types']=type_labels()
     for slot,val in (('/*SITE_CSS*/',site_css),('<!--BRAND-->',brand),('<!--CORNER-->',corner(None)),('<!--SITENAV-->',sitenav('/')),

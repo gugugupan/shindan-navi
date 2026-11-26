@@ -19,8 +19,9 @@
   マイカレンダー (LOGIN builds): a logged-in account's personal_calendar (src/corner.html window.snPersonal, in memory
   only, shown once /me and the prefs answered) replaces the saved titles and location everywhere on this page; the
   pill is marked マイカレンダー and #hsDlg edits the account (titles and location as one draft, one PUT; also for an
-  account without one yet, pre-filled from what is shown). It never writes the local filters, sends no GA event and
-  puts nothing of it in a page URL. Logged out, #hsDlg links the login.
+  account without one yet, pre-filled from what is shown; while the account's prefs load or failed, only a wait /
+  retry line). It never writes the local filters, sends no GA event and puts nothing of it in a page URL. Logged
+  out, #hsDlg links the login.
 -->
 <title>今日発売のTCG・トレカ新弾とイベント｜トレカカレンダー</title>
 <style>/*SITE_CSS*/</style>
@@ -256,6 +257,7 @@ div.none.err{border-color:var(--sun);border-style:solid}
 <dialog id="hsDlg" class="setdlg" aria-labelledby="hsTitle"><div class="dlg"><button type="button" class="ib close" id="hsClose" aria-label="閉じる">×</button><h2 class="dl-day" id="hsTitle">表示の設定</h2>
   <p class="note" id="hsNote">選んだタイトル<!--EVENTS-->と地域<!--/EVENTS-->で、このページの発売<!--EVENTS-->・イベント<!--/EVENTS--><!--VOICES-->・いま話題<!--/VOICES-->を表示します。<!--EVENTS-->イベントカレンダーと共通の設定です。<!--/EVENTS--></p>
   <p class="note" id="hsAcct" hidden></p>
+  <p class="note" id="hsRetryP" hidden><button type="button" class="go" id="hsRetry">再読み込み</button></p>
 <!--LOGIN-->  <p class="note" id="hsLogin" hidden><a class="rl" href="/api/v1/auth/google/start?return=%2F" rel="nofollow">ログインしてマイカレンダーを作成 ›</a></p>
 <!--/LOGIN-->
   <fieldset><legend>タイトル</legend><div class="fc" id="hsTitles"></div></fieldset>
@@ -366,8 +368,11 @@ const SAVED_KEY = 'tcg.ev.filters';
 const PS = window.snPersonal;
 const pState = () => PS ? PS.state() : 'off';
 let PC = null;
-// the dialog edits the account ('none': no setting yet, saving creates it)
-const acct = () => { const st=pState(); return st==='set'||st==='none'; };
+// What 表示の設定 edits: 'acct' the account's setting ('none': no setting yet, saving creates it); 'pending' a
+// logged-in account whose setting is not known yet or failed to load (nothing to edit: a wait / retry line, never the
+// local filters); 'local' the saved filters (logged out, or no login here).
+const mode = () => { const st=pState(); return st==='set'||st==='none' ? 'acct' : st==='wait'||st==='error' ? 'pending' : 'local'; };
+const userId = () => window.snUser ? String(window.snUser.id) : '';
 // the /events/ saved filters (one location; older saves with several keep the first). days is left out: today is today.
 // マイカレンダー: its location and its liked games that have events (none of them: noev, no event request; [] = all)
 function evFilters(){
@@ -567,52 +572,59 @@ function savedGames(ok){
 }
 
 // ---- 表示中: the saved titles (savedGames) and the /events/ location. #hsDlg changes them.
-const TITLES = H.titles||{}; // code -> release / event display name
+const TITLES = H.titles||{}; // code -> release / event display name: the titles the saved filters can hold
+// every registry title (data/games.json, H.titles first): what the account's setting can hold
+const ALL_TITLES = H.regTitles||TITLES;
 const VOICES = !!$('vtr');
 // what the saved filters can hold: tcg.voices any of H.titles; without いま話題 only /events/' filter is read (its games)
 const TITLE_OPTS = Object.keys(TITLES).filter(c=>VOICES||EVG[c]);
-// the account's setting can hold any of them (and any registry title; codes not offered here are kept on save)
-const opts = () => acct() ? Object.keys(TITLES) : TITLE_OPTS;
-const shortList = codes => codes.slice(0,4).map(c=>SHORT[TITLES[c]]||TITLES[c]).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
-function homeSel(){ const codes=savedGames(c=>TITLES[c]); return opts().filter(c=>codes.includes(c)); }
-function selNames(){ const sel=homeSel(); return sel.length ? new Set(sel.map(c=>TITLES[c])) : null; }
+const opts = () => mode()==='acct' ? Object.keys(ALL_TITLES) : TITLE_OPTS;
+const shortList = codes => codes.slice(0,4).map(c=>SHORT[ALL_TITLES[c]]||ALL_TITLES[c]).join('・')+(codes.length>4?` ほか${codes.length-4}`:'');
+function homeSel(){ const codes=savedGames(c=>(PC?ALL_TITLES:TITLES)[c]); return opts().filter(c=>codes.includes(c)); }
 function renderSet(){
   const sel=homeSel(), t=$('hsT');
   t.textContent = sel.length ? shortList(sel) : 'すべてのタイトル';
   const p=EVENTS?evFilters().pref:'';
   $('hsM').hidden=!PC; $('hsBtn').classList.toggle('mine',!!PC);
-  $('hsBtn').title = (PC?'マイカレンダー：':'')+(sel.length ? sel.map(c=>TITLES[c]).join('・') : 'すべてのタイトル')+(p?'・'+LOC.locName(p):'');
+  $('hsBtn').title = (PC?'マイカレンダー：':'')+(sel.length ? sel.map(c=>ALL_TITLES[c]).join('・') : 'すべてのタイトル')+(p?'・'+LOC.locName(p):'');
   if(EVENTS) $('hsL').innerHTML = p ? PIN+esc(LOC.locName(p)) : '';
 }
 // draft: the dialog's titles; edited: the visitor touched them (else confirming keeps whatever is saved, which account
 // sync may change while the dialog is open). In the account's dialog the location is part of the draft too (draftLoc,
-// '' = none), and both go to the account only through この内容で保存; dlgAcct: the mode the dialog was opened in.
-let draft=[], edited=false, draftLoc='', dlgAcct=false, saving=false;
+// '' = none), and both go to the account only through この内容で保存. dlgMode / dlgUser: the mode and account the
+// dialog was opened for (another account closes it); dlgId: which opening a pending save belongs to.
+let draft=[], edited=false, draftLoc='', dlgMode='local', dlgUser='', dlgId=0, saving=false;
 function initDraft(){
-  draft=homeSel(); dlgAcct=acct();
+  draft=homeSel(); dlgMode=mode(); dlgUser=userId();
   // マイカレンダー: its own location; no setting yet: what the page shows now
-  draftLoc = EVENTS&&dlgAcct ? evFilters().pref : '';
+  draftLoc = EVENTS&&dlgMode==='acct' ? evFilters().pref : '';
 }
 function renderSetDlg(){
   const box=$('hsTitles'), had=box.contains(document.activeElement)?document.activeElement.dataset.t:null, st=pState();
+  const acc=dlgMode==='acct', pend=dlgMode==='pending';
   box.innerHTML = `<button type="button" class="chip all" data-t="" aria-pressed="${!draft.length}">すべてのタイトル</button>`
-    + opts().map(c=>`<button type="button" class="chip" data-t="${c}" style="--h:${HUE[TITLES[c]]||0}" aria-pressed="${draft.includes(c)}">${gi(TITLES[c])}${esc(TITLES[c])}</button>`).join('');
+    + opts().map(c=>`<button type="button" class="chip" data-t="${c}" style="--h:${HUE[ALL_TITLES[c]]||0}" aria-pressed="${draft.includes(c)}">${gi(ALL_TITLES[c])}${esc(ALL_TITLES[c])}</button>`).join('');
   if(had!=null) box.querySelector(`[data-t="${had}"]`)?.focus();
-  $('hsNote').hidden=dlgAcct;
-  $('hsAcct').hidden=!dlgAcct;
-  $('hsAcct').textContent = st==='set' ? 'マイカレンダーの設定です。このアカウントに保存し、ログインしたこのページで表示します。'
+  // pending: nothing to edit until the account's setting is known
+  $('hsDlg').querySelectorAll('fieldset').forEach(f=>f.hidden=pend);
+  $('hsNote').hidden=dlgMode!=='local';
+  $('hsAcct').hidden=dlgMode==='local';
+  $('hsAcct').textContent = pend ? (st==='error' ? 'アカウントの設定を読み込めませんでした。' : 'アカウントの設定を読み込んでいます…')
+    : st==='set' ? 'マイカレンダーの設定です。このアカウントに保存し、ログインしたこのページで表示します。'
     : 'このアカウントに保存します。保存すると、ログインしているあいだ、このページは選んだタイトルと地域のマイカレンダーになります。';
+  $('hsRetryP').hidden=!(pend&&st==='error');
   if($('hsLogin')) $('hsLogin').hidden=st!=='out';
-  $('hsReset').hidden=!(dlgAcct&&st==='set');
-  $('hsOk').textContent = dlgAcct ? 'この内容で保存' : 'この内容で表示';
-  [$('hsOk'),$('hsReset'),$('hsCancel')].forEach(b=>b.disabled=saving);
+  $('hsReset').hidden=!(acc&&st==='set');
+  $('hsOk').hidden=pend;
+  $('hsOk').textContent = acc ? (saving ? '保存中…' : 'この内容で保存') : 'この内容で表示';
+  [$('hsOk'),$('hsReset')].forEach(b=>b.disabled=saving);
   if(!EVENTS) return;
-  const p=dlgAcct?draftLoc:evFilters().pref;
+  const p=acc?draftLoc:evFilters().pref;
   $('hsLoc').textContent = p ? LOC.locName(p) : '未設定';
   $('hsLocBtn').textContent = p ? '地域を変更' : '地域を設定';
 }
 function openSet(){
-  initDraft(); edited=false; $('hsMsg').textContent=''; renderSetDlg();
+  initDraft(); edited=false; dlgId++; $('hsMsg').textContent=''; renderSetDlg();
   const d=$('hsDlg'); if(d.showModal) d.showModal(); else d.setAttribute('open','');
   d.querySelector('.chip[aria-pressed="true"]')?.focus();
 }
@@ -620,6 +632,7 @@ function closeSet(){ const d=$('hsDlg'); if(d.open) d.close(); }
 // The titles go into /events/' game filter (its games only; synced when logged in) and, on VOICES builds, into
 // tcg.voices when it exists (it is read first) or the choice holds a title /events/ has not.
 function saveTitles(codes){
+  if(mode()!=='local') return;
   const s=store.get(SAVED_KEY,null), o=s&&typeof s==='object'?{...s}:{}, eg=codes.filter(c=>EVG[c]).join(',');
   if((o.game||'')!==eg){
     if(eg) o.game=eg; else delete o.game;
@@ -640,26 +653,29 @@ function applySet(){
   saveTitles(next); renderAll(); loadEvents();
   return true;
 }
-// the account's dialog: save the draft (or null: delete the setting); the dialog closes only once the account has it
+// the account's dialog: save the draft (or null: delete the setting). The dialog stays open until the answer; closed
+// meanwhile, the save goes on and its outcome shows beside the pill.
 let savedTimer=0;
+const status = t => { $('hsSaved').textContent=t; clearTimeout(savedTimer); savedTimer=setTimeout(()=>{ $('hsSaved').textContent=''; },4000); };
 async function saveAcct(reset){
-  const st=pState();
-  const keep=PC?PC.games.filter(c=>!TITLES[c]):[];
+  if(saving||mode()!=='acct'||dlgUser!==userId()) return;
+  const st=pState(), id=dlgId;
+  const keep=PC?PC.games.filter(c=>!ALL_TITLES[c]):[];
   const v=reset?null:{location:draftLoc||null, games:[...new Set(opts().filter(c=>draft.includes(c)).concat(keep))].sort()};
   // マイカレンダー unchanged: nothing to write
   if(!reset&&st==='set'&&PC&&JSON.stringify(v)===JSON.stringify({location:PC.location, games:[...PC.games].sort()})){ closeSet(); $('hsBtn').focus(); return; }
   saving=true; $('hsMsg').textContent=''; renderSetDlg();
+  const mine = () => $('hsDlg').open && dlgId===id;
   try{
     await PS.save(v);
-    saving=false; closeSet(); $('hsBtn').focus();
-    $('hsSaved').textContent = reset ? 'マイカレンダーを削除しました' : '保存しました';
-    clearTimeout(savedTimer); savedTimer=setTimeout(()=>{ $('hsSaved').textContent=''; },4000);
+    saving=false;
+    if(mine()){ closeSet(); $('hsBtn').focus(); } else if($('hsDlg').open) renderSetDlg();
+    status(reset ? 'マイカレンダーを削除しました' : '保存しました');
   }catch(e){
     saving=false;
-    if(!acct()){ closeSet(); return; }
-    if(!$('hsDlg').open) return;
-    $('hsMsg').textContent = e&&e.busy ? '混み合っています。1 分ほどおいて、もう一度保存してください。' : '保存できませんでした。通信状況を確認して、もう一度保存してください。';
-    renderSetDlg();
+    if(e&&e.changed){ closeSet(); status('アカウントが切り替わったため、保存しませんでした'); return; }
+    const t = e&&e.busy ? '混み合っています。1 分ほどおいて、もう一度保存してください。' : '保存できませんでした。通信状況を確認して、もう一度保存してください。';
+    if(mine()){ $('hsMsg').textContent=t; renderSetDlg(); } else { if($('hsDlg').open) renderSetDlg(); status('保存できませんでした'); }
   }
 }
 
@@ -667,7 +683,7 @@ async function saveAcct(reset){
 // panel. Strip event counts from this month's /days only (next-month days show –).
 let wkSel=0; // the panel's day (index in WEEK): today at first, this visit only
 function dayData(d,f,sel){
-  const names=sel.length?new Set(sel.map(c=>TITLES[c])):null, all=covered(d)?relsOn(d):null;
+  const names=sel.length?new Set(sel.map(c=>ALL_TITLES[c])):null, all=covered(d)?relsOn(d):null;
   const its=all&&(names?all.filter(x=>names.has(x.game)||isStar(x)):all);
   return {d, names, all, its, hidden:all?all.length-its.length:0, n:evOn(f)?dayCount(d):null};
 }
@@ -767,11 +783,14 @@ function locCounts(){
 function openLoc(back){
   if(!metaAsked){ metaAsked=true; api('/events/meta').then(m=>{ meta=m; LOC.refresh(); },()=>{}); }
   // the account's dialog: the pick only changes its draft (saved with the titles, dropped on cancel)
-  if($('hsDlg').open&&dlgAcct){
+  if($('hsDlg').open&&dlgMode==='acct'){
     LOC.open({current:()=>draftLoc, counts:locCounts, onPick:c=>{ if(draftLoc!==c){ draftLoc=c; edited=true; renderSetDlg(); } (back||$('hsLocBtn'))?.focus(); }});
     return;
   }
+  if(mode()!=='local') return;
   LOC.open({current:()=>evFilters().pref, counts:locCounts, onPick:c=>{
+    // (the account may have answered while the picker was open)
+    if(mode()!=='local') return;
     const s=store.get(SAVED_KEY,null), o=s&&typeof s==='object'?{...s}:{};
     if(o.pref!==c){
       o.pref=c; store.set(SAVED_KEY,o);
@@ -786,6 +805,7 @@ function openLoc(back){
 
 // ---- いま話題 (VOICES): the latest /voices/ snapshot, fetched once from H.voicesApi, read only. Games: the /voices/ saved
 // title filter (tcg.voices), else the /events/ one (tcg.ev.filters), each kept to games with topics now; else all.
+// マイカレンダー: its titles with topics; all only for an empty list, none (hidden) when none of them has topics.
 let VT = null;
 const VT_PAGE = '/voices/';
 const ATT = {positive:{l:'好意的',m:'＋'}, negative:{l:'否定的',m:'－'}, mixed:{l:'賛否両論',m:'±'}, neutral:{l:'中立',m:'・'}};
@@ -814,8 +834,10 @@ function renderVt(){
   const sec=$('vtr');
   // a snapshot older than a week is not "now": no block
   if(daysBetween(VT.date,TODAY)>7||!VT.topics.length){ sec.hidden=true; return; }
-  sec.hidden=false;
   const sel=vtGames(), all=!sel.length;
+  // マイカレンダー: all only when it names no title; liked titles without topics: no block
+  if(all&&PC&&PC.games.length){ sec.hidden=true; return; }
+  sec.hidden=false;
   $('vtSub').textContent = all ? 'すべてのタイトル'
     : sel.slice(0,4).map(c=>vtGame[c].short||vtGame[c].name).join('・')+(sel.length>4?` ほか${sel.length-4}`:'')+' の話題';
   // busiest first, then newer first_seen; at most 2 per game unless one game is chosen
@@ -848,16 +870,18 @@ document.addEventListener('click',e=>{
   if(gt){ const o=gt.getAttribute('aria-expanded')!=='true', b=$(gt.getAttribute('aria-controls')); evOpen[gt.dataset.g]=o; gt.setAttribute('aria-expanded',o); if(b) b.hidden=!o; return; }
   if(e.target.closest('#evRetry')) loadEvents(true);
   // the account's location is set in its dialog, with the titles
-  else if(e.target.closest('#hsLocSet')){ if(acct()) openSet(); else openLoc($('hsBtn')); }
+  else if(e.target.closest('#hsLocSet')){ if(mode()==='local') openLoc($('hsBtn')); else openSet(); }
   else if(e.target.closest('#hsBtn')) openSet();
 });
 // the settings dialog: chips change a draft, この内容で表示 saves it; キャンセル / × / Esc / the backdrop drop it
+// (also while a save is pending: it finishes in the background)
 $('hsDlg').addEventListener('click',e=>{
   const d=$('hsDlg');
-  if(saving) return;
   if(e.target===d||e.target.closest('#hsClose,#hsCancel')){ closeSet(); return; }
+  if(e.target.closest('#hsRetry')){ PS.retry(); return; }
+  if(dlgMode==='pending'||saving) return;
   if(e.target.closest('#hsReset')){ saveAcct(true); return; }
-  if(e.target.closest('#hsOk')){ if(dlgAcct){ saveAcct(false); return; } applySet(); closeSet(); $('hsBtn').focus(); return; }
+  if(e.target.closest('#hsOk')){ if(dlgMode==='acct'){ saveAcct(false); return; } if(mode()==='local') applySet(); closeSet(); $('hsBtn').focus(); return; }
   // the picker opens over this dialog and saves the location itself; the title draft stays pending
   if(e.target.closest('#hsLocBtn')){ openLoc($('hsLocBtn')); return; }
   const c=e.target.closest('[data-t]');
@@ -866,20 +890,20 @@ $('hsDlg').addEventListener('click',e=>{
   draft = !t ? [] : draft.includes(t) ? draft.filter(x=>x!==t) : [...draft,t]; edited=true;
   renderSetDlg();
 });
-// Esc while saving: the dialog stays until the answer (it keeps the draft on failure)
-$('hsDlg').addEventListener('cancel',e=>{ if(saving) e.preventDefault(); });
 // logged in, corner.html replaces the local favourites / saved filters with the account's: re-read them
 document.addEventListener('sn:prefs',()=>{
   readStars(); renderAll(); loadEvents(); if(LOC) LOC.refresh();
-  if($('hsDlg').open){ if(!edited&&!saving) initDraft(); renderSetDlg(); }
+  if($('hsDlg').open){ if(!edited&&!saving&&dlgMode!=='acct') initDraft(); renderSetDlg(); }
 });
 // the account changed (its setting arrived, was saved or reset; logout, 401, another account, deletion): the page
 // shows the new state at once; a dialog opened for another mode closes (its draft is dropped)
 function personal(){
   PC = pState()==='set' ? PS.get() : null;
-  if($('hsDlg').open && !saving && dlgAcct!==acct()) closeSet();
+  // the draft belongs to the account and mode it was opened for: another account or mode drops it first; a pending
+  // dialog turns into the account's editor once the setting is known
+  if($('hsDlg').open && (dlgUser!==userId() || (dlgMode!=='pending' && dlgMode!==mode()))) closeSet();
   renderAll(); loadEvents();
-  if($('hsDlg').open){ if(!edited&&!saving) initDraft(); renderSetDlg(); }
+  if($('hsDlg').open){ if(dlgMode==='pending'||(!edited&&!saving)) initDraft(); renderSetDlg(); }
 }
 if(PS){ document.addEventListener('sn:personal',personal); document.addEventListener('sn:user',personal); personal(); }
 })();
