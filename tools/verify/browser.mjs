@@ -1111,7 +1111,8 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
       const hdr = await headerProblem(page, opt.width);
       if (hdr) fail(where, hdr);
       for (const l of st.links) {
-        if (checked.has(l)) continue;
+        // /api/ paths are Worker routes (the login link of LOGIN_ENABLED builds), not served from dist/ here
+        if (checked.has(l) || l.startsWith('/api/')) continue;
         checked.add(l);
         const r = await page.request.get(BASE + l);
         if (r.status() !== 200) fail(where, `link ${l} answers ${r.status()}`);
@@ -1187,7 +1188,8 @@ for (const [vp, opt] of HAS_EVENTS ? Object.entries(VIEWPORTS) : []) {
       const hdr = await headerProblem(page, opt.width);
       if (hdr) fail(where, hdr);
       for (const l of st.links) {
-        if (checked.has(l)) continue;
+        // /api/ paths are Worker routes (the login link of LOGIN_ENABLED builds), not served from dist/ here
+        if (checked.has(l) || l.startsWith('/api/')) continue;
         checked.add(l);
         const r = await page.request.get(BASE + l);
         if (r.status() !== 200) fail(where, `link ${l} answers ${r.status()}`);
@@ -2465,6 +2467,285 @@ if (HAS_EVENTS) {
     });
     for (const b of [...new Set(bad)]) fail(`${vp} game links`, b);
     console.log(`  ${`${vp} game links`.padEnd(22)} checked`);
+    await ctx.close();
+  }
+}
+
+// マイカレンダー (LOGIN_ENABLED builds): a logged-in account's personal_calendar on / (src/corner.html window.snPersonal,
+// src/home.html). /api/v1/me, /me/prefs, logout and DELETE /me are stubbed per page. The personal view appears only once
+// /me and the prefs answered, and goes on logout, account deletion and a late answer of the previous account; the
+// dialog's titles and location are one draft (cancel / Esc drop both) saved by one PUT, a failed save keeps it; the
+// event requests use the account's location and liked games with events (none without a location or such a game);
+// いま話題 keeps to the liked games; nothing personal reaches localStorage, page URLs or analytics.
+if (fs.existsSync(path.join(DIST, 'index.html')) && fs.readFileSync(path.join(DIST, 'index.html'), 'utf8').includes('id="userBox"')) {
+  const REG = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/games.json'), 'utf8'));
+  const CHIP = Object.fromEntries(REG.map(g => [g.code, g.chip]));
+  const NAME = Object.fromEntries(REG.map(g => [g.code, g.label]));
+  const EVC = REG.filter(g => g.sources.events).sort((a, b) => a.sources.events.sort - b.sources.events.sort).map(g => g.code);
+  const evOrder = codes => EVC.filter(c => codes.includes(c));
+  const fx = [['MTG', 'MTG テストセット'], ['ONE PIECE', 'ONE PIECE テストパック'], ['DIVINE CROSS', 'DIVINE CROSS テストデッキ'], ['UNION ARENA', 'UNION ARENA テストパック']]
+    .map(([game, name], i) => ({ id: `ifxp${i}`, date: TODAY, game, name, pack: '500円' }));
+  const evs = ['OPCG', 'PTCG', 'UATCG', 'WS'].map((code, i) => ({ id: `p${i}`, name: `テスト大会 ${code}`, game_code: code, game_codes: [code], starts_on: TODAY,
+    time_precision: 'datetime', starts_at: `${TODAY}T20:00:00+09:00`, timezone: 'Asia/Tokyo', attendance_mode: 'offline', venue: { name: `店 ${i}` },
+    source_url: 'https://example.com/', event_status: 'scheduled' }));
+  const LOCAL = { 'tcg.ev.filters': JSON.stringify({ pref: 'JP-13', game: 'UATCG' }), 'tcg.sync.user': JSON.stringify('uA'),
+    'tcg.sync.base': JSON.stringify({ stars: [], filters: { pref: 'JP-13', game: 'UATCG' }, askOff: false }) };
+  const ACCTS = () => ({ uA: { prefs: { event_filters: { pref: 'JP-13', game: 'UATCG' }, personal_calendar: { location: 'JP-27', games: ['MTG', 'OPCG', 'PTCG'] } } },
+    uB: { prefs: { personal_calendar: { location: 'online', games: ['DM', 'WS'] } } }, uN: { prefs: { event_filters: { pref: 'JP-13', game: 'UATCG' } } } });
+  // s: { who (the /me account or null), accts, meDelay, prefsDelay, put (status), log (requests), puts (bodies) }
+  async function open(vp, s, { cookie = true, ls = LOCAL, scheme = 'light' } = {}) {
+    const opt = VIEWPORTS[vp];
+    const ctx = await browser.newContext({ viewport: { width: vp === 'desktop' ? 1366 : opt.width, height: opt.height }, isMobile: !!opt.isMobile, hasTouch: !!opt.hasTouch,
+      locale: 'ja-JP', timezoneId: 'Asia/Tokyo', colorScheme: scheme });
+    if (cookie) await ctx.addCookies([{ name: '__Host-sn_user', value: '1', domain: '127.0.0.1', path: '/', secure: true, sameSite: 'Lax' }]);
+    const page = await ctx.newPage();
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00+09:00`));
+    await page.addInitScript(ls => {
+      window.__gt = []; window.gtag = (...a) => window.__gt.push(a);
+      if (!sessionStorage.getItem('__seeded')) { sessionStorage.setItem('__seeded', '1'); localStorage.clear(); for (const [k, v] of Object.entries(ls)) localStorage.setItem(k, v); }
+    }, ls);
+    s.bad = [];
+    page.on('pageerror', e => s.bad.push(`pageerror: ${e.message}`));
+    await page.route(`${BASE}/`, async route => {
+      const r = await route.fetch(), html = await r.text(), m = /const H = (\{.*?\});\n/s.exec(html), H = JSON.parse(m[1]);
+      H.items = fx;
+      route.fulfill({ response: r, body: html.replace(m[1], JSON.stringify(H).replace(/</g, '\\u003c')) });
+    });
+    await page.route(EVENTS_API, async route => {
+      const req = route.request(), u = new URL(req.url()), p = u.pathname, who = s.who;
+      s.log.push(`${req.method()} ${p}${u.search}`);
+      const acct = who && s.accts[who];
+      if (p === '/api/v1/me' && req.method() === 'GET') {
+        if (s.meDelay) await new Promise(r => setTimeout(r, s.meDelay));
+        return who ? route.fulfill({ json: { user: { id: who, display_name: `User ${who}`, avatar_url: null, plan: 'free' } } }) : route.fulfill({ status: 401, json: { error: 'unauthenticated' } });
+      }
+      if (p === '/api/v1/me' && req.method() === 'DELETE') { delete s.accts[who]; s.who = null; return route.fulfill({ status: 204, body: '' }); }
+      if (p === '/api/v1/auth/logout') { s.who = null; return route.fulfill({ status: 204, body: '' }); }
+      if (p.startsWith('/api/v1/me/prefs')) {
+        if (!acct) return route.fulfill({ status: 401, json: { error: 'unauthenticated' } });
+        if (req.method() === 'PUT') {
+          const b = JSON.parse(req.postData() || '{}');
+          s.puts.push(b);
+          if (s.put !== 200) return route.fulfill({ status: s.put, json: { error: 'x' } });
+          if ('personal_calendar' in b) { if (b.personal_calendar === null) delete acct.prefs.personal_calendar; else acct.prefs.personal_calendar = { location: b.personal_calendar.location, games: [...new Set(b.personal_calendar.games)].sort() }; }
+        }
+        const body = JSON.parse(JSON.stringify({ prefs: acct.prefs, updated_at: {} }));
+        if (req.method() === 'GET' && s.prefsDelay) { const d = s.prefsDelay; s.prefsDelay = 0; await new Promise(r => setTimeout(r, d)); }
+        return route.fulfill({ json: body });
+      }
+      if (p.endsWith('/events/meta')) return route.fulfill({ json: { games: [], types: [], prefectures: [] } });
+      const games = u.searchParams.get('game') ? u.searchParams.get('game').split(',') : null, mine = evs.filter(e => !games || games.includes(e.game_code));
+      if (p.endsWith('/events/days')) return route.fulfill({ json: { days: [{ date: TODAY, count: mine.length, by_game: Object.fromEntries(mine.map(e => [e.game_code, 1])) }] } });
+      return route.fulfill({ json: { events: u.searchParams.get('from') > TODAY ? [] : mine, next_cursor: null } });
+    });
+    return { ctx, page };
+  }
+  const settle = page => page.waitForFunction(() => !document.getElementById('wkStrip').textContent.includes('…') && !document.querySelector('#wkPanel .sk'), null, { timeout: 5000 }).catch(() => {});
+  const view = page => page.evaluate(() => ({
+    mine: !document.getElementById('hsM').hidden, pill: document.getElementById('hsBtn').textContent.replace(/\s+/g, ' ').trim(),
+    groups: [...document.querySelectorAll('#wkPanel .rg')].map(g => g.dataset.game), legend: document.getElementById('wkLg').textContent,
+    ev: document.getElementById('evBody')?.textContent.trim() || '', topics: [...document.querySelectorAll('#vtBody .vt .vh .sr')].map(e => e.textContent),
+    vtOn: !!document.getElementById('vtr') && !document.getElementById('vtr').hidden,
+    hrefs: [...document.querySelectorAll('#wkPanel a[href], #vtr a[href], .htop a[href]')].map(a => a.getAttribute('href')),
+    ls: Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])), gt: window.__gt }));
+  const evReqs = (s, from = 0) => s.log.slice(from).filter(l => /^GET \/api\/v1\/events(\/days)?\?/.test(l)).map(l => new URL(l.slice(4), 'http://x').searchParams)
+    .map(q => `${q.get('pref')}|${q.get('game') || ''}`);
+  // nothing personal kept or sent: localStorage holds the seeded local filters only; no page link names the account's
+  // location or titles; no analytics event
+  const clean = (where, v, loc) => {
+    // (account sync may replace or drop the local filters as before; it never writes the personal ones)
+    const ls = JSON.stringify(v.ls), f = v.ls['tcg.ev.filters'] && JSON.parse(v.ls['tcg.ev.filters']);
+    if (ls.includes('personal') || (loc && ls.includes(loc)) || (f && JSON.stringify([f.pref, f.game]) !== '["JP-13","UATCG"]') || 'tcg.voices' in v.ls || 'tcg.sel' in v.ls)
+      fail(where, `personal data in localStorage ${ls}`);
+    const bad = v.mine ? v.hrefs.filter(h => h.includes('/events/') && /[?&](pref|game)=/.test(h)) : [];
+    if (bad.length) fail(where, `page links carry the account's filters ${JSON.stringify(bad.slice(0, 3))}`);
+    if (v.gt.some(a => /home_titles|home_location/.test(a[1]))) fail(where, `analytics with personal choices ${JSON.stringify(v.gt)}`);
+  };
+  const topicsOk = (where, v, codes) => {
+    if (!HAS_VOICES || !v.vtOn) return;
+    const want = new Set(codes.map(c => NAME[c]));
+    const used = new Set(VOICE_SNAPS.at(-1).topics.map(t => t.game)), any = codes.some(c => used.has(c));
+    if (any ? v.topics.some(t => !want.has(t)) || !v.topics.length : false) fail(where, `いま話題 not kept to the liked games ${JSON.stringify(v.topics)}`);
+  };
+  const label = codes => codes.length ? codes.slice(0, 4).map(c => CHIP[c]).join('・') + (codes.length > 4 ? ` ほか${codes.length - 4}` : '') : 'すべて';
+
+  for (const vp of Object.keys(VIEWPORTS)) {
+    const where = `${vp} マイカレンダー`;
+    const s = { who: 'uA', accts: ACCTS(), meDelay: 3000, put: 200, log: [], puts: [] };
+    const { ctx, page } = await open(vp, s);
+    try {
+      await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.getElementById('wkStrip').children.length === 7, null, { timeout: 2000 }).catch(() => {});
+      // before /me: the page's local view, no personal request
+      const v0 = await view(page);
+      if (v0.mine || evReqs(s).some(q => q.startsWith('JP-27'))) fail(where, 'personal view or request before /me answered');
+      await page.waitForFunction(() => !document.getElementById('hsM').hidden, null, { timeout: 5000 }).catch(() => fail(where, 'personal view never appeared'));
+      await settle(page);
+      let v = await view(page);
+      const want = ['MTG', 'ONE PIECE'];
+      if (JSON.stringify(v.groups) !== JSON.stringify(want)) fail(where, `releases ${JSON.stringify(v.groups)} (want ${JSON.stringify(want)})`);
+      if (!v.pill.includes('マイカレンダー') || !v.pill.includes('大阪府') || !v.pill.includes(CHIP.MTG)) fail(where, `pill "${v.pill}"`);
+      if (v.legend !== `発売数イベント数（${label(['OPCG', 'PTCG'])}）`) fail(where, `legend "${v.legend}"`);
+      const reqs = evReqs(s).filter(q => q.startsWith('JP-27'));
+      if (!reqs.length || reqs.some(q => q !== `JP-27|${evOrder(['OPCG', 'PTCG']).join(',')}`)) fail(where, `personal event requests ${JSON.stringify(evReqs(s))}`);
+      if (!v.ev.includes(NAME.OPCG) || !v.ev.includes(NAME.PTCG) || v.ev.includes(NAME.UATCG)) fail(where, `events "${v.ev.slice(0, 120)}"`);
+      topicsOk(where, v, ['MTG', 'OPCG', 'PTCG']);
+      clean(where, v, 'JP-27');
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme });
+        const ov = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        if (ov > 1) fail(where, `${scheme}: page scrolls sideways by ${ov}px`);
+        await page.screenshot({ path: path.join(OUT, `home-personal-${vp}${scheme === 'dark' ? '-dark' : ''}.png`), fullPage: true });
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
+
+      // the dialog: the account's draft; a picked location and toggled titles go with cancel, Esc and ×
+      const dlg = async () => page.evaluate(() => ({ open: document.getElementById('hsDlg').open, acct: !document.getElementById('hsAcct').hidden, ok: document.getElementById('hsOk').textContent,
+        on: [...document.querySelectorAll('#hsTitles [aria-pressed="true"]')].map(b => b.dataset.t), loc: document.getElementById('hsLoc')?.textContent, msg: document.getElementById('hsMsg').textContent }));
+      for (const how of ['cancel', 'Escape', 'close']) {
+        await page.locator('#hsBtn').click();
+        let d = await dlg();
+        if (!d.open || !d.acct || d.ok !== 'この内容で保存' || JSON.stringify(d.on) !== JSON.stringify(['OPCG', 'PTCG', 'MTG']) || d.loc !== '大阪府') fail(where, `dialog ${JSON.stringify(d)}`);
+        if (how === 'cancel') await page.screenshot({ path: path.join(OUT, `home-personal-dialog-${vp}.png`) });
+        await page.locator('#hsTitles [data-t="WS"]').click();
+        await page.locator('#hsLocBtn').click();
+        await page.locator('#prefDlg [data-pref="JP-40"]').click();
+        d = await dlg();
+        if (d.loc !== '福岡県' || !d.on.includes('WS')) fail(where, `draft ${JSON.stringify(d)}`);
+        if (how === 'cancel') await page.locator('#hsCancel').click(); else if (how === 'close') await page.locator('#hsClose').click(); else await page.keyboard.press('Escape');
+        v = await view(page);
+        if ((await dlg()).open || s.puts.length || !v.pill.includes('大阪府') || v.pill.includes('福岡県')) fail(where, `${how}: draft not dropped (${v.pill}, ${JSON.stringify(s.puts)})`);
+        clean(where, v, 'JP-40');
+      }
+      // a failed save keeps the dialog and its draft, says so, and shows no 保存しました
+      await page.locator('#hsBtn').click();
+      await page.locator('#hsTitles [data-t="WS"]').click();
+      await page.locator('#hsLocBtn').click();
+      await page.locator('#prefDlg [data-pref="JP-40"]').click();
+      s.put = 500;
+      await page.locator('#hsOk').click();
+      await page.waitForFunction(() => document.getElementById('hsMsg').textContent, null, { timeout: 5000 }).catch(() => {});
+      let d = await dlg();
+      if (!d.open || !d.msg || d.loc !== '福岡県' || !d.on.includes('WS') || await page.locator('#hsSaved').textContent()) fail(where, `failed save ${JSON.stringify(d)}`);
+      // retry: one PUT with the whole setting, sorted; closed, 保存しました, the new requests
+      s.put = 200; s.puts.length = 0; const from = s.log.length;
+      await page.locator('#hsOk').click();
+      await page.waitForFunction(() => !document.getElementById('hsDlg').open, null, { timeout: 5000 }).catch(() => {});
+      await settle(page);
+      const wantPut = { personal_calendar: { location: 'JP-40', games: ['MTG', 'OPCG', 'PTCG', 'WS'] } };
+      if (JSON.stringify(s.puts) !== JSON.stringify([wantPut])) fail(where, `PUT bodies ${JSON.stringify(s.puts)}`);
+      if (await page.locator('#hsSaved').textContent() !== '保存しました') fail(where, 'no 保存しました after the save');
+      v = await view(page);
+      const after = evReqs(s, from);
+      if (!after.length || after.some(q => q !== `JP-40|${evOrder(['OPCG', 'PTCG', 'WS']).join(',')}`)) fail(where, `requests after the save ${JSON.stringify(after)}`);
+      if (!v.pill.includes('福岡県')) fail(where, `pill after the save "${v.pill}"`);
+      clean(where, v, 'JP-40');
+      // unchanged: nothing written
+      s.puts.length = 0;
+      await page.locator('#hsBtn').click(); await page.locator('#hsOk').click();
+      if (s.puts.length || (await dlg()).open) fail(where, `unchanged save wrote ${JSON.stringify(s.puts)}`);
+
+      // logout: the local view at once
+      const lo = s.log.length;
+      await page.locator('#userBtn').click();
+      await page.locator('#userPop [data-acct="logout"]').click();
+      await page.waitForFunction(() => document.getElementById('hsM').hidden, null, { timeout: 5000 }).catch(() => fail(where, 'logout kept the personal view'));
+      await settle(page);
+      v = await view(page);
+      const lreq = evReqs(s, lo);
+      if (!v.pill.includes('東京都') || v.pill.includes('福岡県') || !lreq.length || lreq.some(q => q !== 'JP-13|UATCG')) fail(where, `after logout ${v.pill} ${JSON.stringify(lreq)}`);
+      if (JSON.stringify(v.groups) !== JSON.stringify(['UNION ARENA'])) fail(where, `after logout releases ${JSON.stringify(v.groups)}`);
+      // logged out: the dialog offers the login, and saves locally as before
+      await page.locator('#hsBtn').click();
+      d = await dlg();
+      const login = await page.locator('#hsLogin a').getAttribute('href').catch(() => null);
+      if (d.acct || d.ok !== 'この内容で表示' || !(await page.locator('#hsLogin').isVisible()) || login !== '/api/v1/auth/google/start?return=%2F') fail(where, `logged-out dialog ${JSON.stringify(d)} ${login}`);
+      await page.locator('#hsCancel').click();
+      clean(where, await view(page), 'JP-40');
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(s.bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
+    await ctx.close();
+  }
+
+  // other accounts and states (desktop)
+  const cases = [
+    // another account than the one this browser synced last: its own setting, nothing of uA's
+    ['switch', { who: 'uB' }, async (where, page, s) => {
+      const v = await view(page);
+      if (!v.mine || !v.pill.includes('オンライン') || v.pill.includes('大阪府')) fail(where, `pill "${v.pill}"`);
+      const r = evReqs(s).filter(q => q.startsWith('online'));
+      if (!r.length || r.some(q => q !== `online|${evOrder(['WS']).join(',')}`)) fail(where, `requests ${JSON.stringify(evReqs(s))}`);
+      if (evReqs(s).some(q => q.startsWith('JP-27'))) fail(where, 'requests with the previous account\'s location');
+      topicsOk(where, v, ['DM', 'WS']);
+    }],
+    // the previous account's answer arriving after logout is dropped
+    ['late answer', { who: 'uA', prefsDelay: 1500 }, async (where, page, s) => {
+      await page.locator('#userBtn').click();
+      await page.locator('#userPop [data-acct="logout"]').click();
+      await page.waitForTimeout(2000);
+      const v = await view(page);
+      if (v.mine || evReqs(s).some(q => q.startsWith('JP-27'))) fail(where, `late answer shown ${v.pill}`);
+    }],
+    // no location: releases only, a prompt, no event request
+    ['no location', { who: 'uA', set: { location: null, games: ['MTG', 'OPCG'] } }, async (where, page, s) => {
+      const v = await view(page);
+      if (!v.mine || evReqs(s).some(q => !q.startsWith('JP-13'))) fail(where, `requests ${JSON.stringify(evReqs(s))}`);
+      if (!v.ev.includes('地域を設定すると') || v.legend.includes('イベント')) fail(where, `events "${v.ev}" legend "${v.legend}"`);
+      if (JSON.stringify(v.groups) !== JSON.stringify(['MTG', 'ONE PIECE'])) fail(where, `releases ${JSON.stringify(v.groups)}`);
+      // the prompt opens the dialog (the location is part of its draft)
+      await page.locator('#hsLocSet').click();
+      if (!(await page.locator('#hsDlg').evaluate(d => d.open))) fail(where, '地域を設定 did not open 表示の設定');
+      await page.keyboard.press('Escape');
+    }],
+    // liked games without events: no event request (never an empty game filter meaning all)
+    ['no event games', { who: 'uA', set: { location: 'JP-13', games: ['MTG'] } }, async (where, page, s) => {
+      const v = await view(page);
+      const lateReqs = s.log.slice(s.mark).filter(l => /^GET \/api\/v1\/events/.test(l));
+      if (!v.mine || lateReqs.length) fail(where, `requests after the account answered ${JSON.stringify(lateReqs)}`);
+      if (!v.ev.includes('イベント情報はありません')) fail(where, `events "${v.ev}"`);
+      if (JSON.stringify(v.groups) !== JSON.stringify(['MTG'])) fail(where, `releases ${JSON.stringify(v.groups)}`);
+    }],
+    // logged in without a setting: the local view; saving the dialog creates the setting from what is shown
+    ['first save', { who: 'uN' }, async (where, page, s) => {
+      let v = await view(page);
+      if (v.mine) fail(where, 'personal view without a setting');
+      await page.locator('#hsBtn').click();
+      const note = await page.locator('#hsAcct').textContent();
+      if (!(await page.locator('#hsAcct').isVisible()) || !note.includes('このアカウントに保存します') || await page.locator('#hsOk').textContent() !== 'この内容で保存') fail(where, `dialog note "${note}"`);
+      await page.locator('#hsOk').click();
+      await page.waitForFunction(() => !document.getElementById('hsM').hidden, null, { timeout: 5000 }).catch(() => {});
+      if (JSON.stringify(s.puts) !== JSON.stringify([{ personal_calendar: { location: 'JP-13', games: ['UATCG'] } }])) fail(where, `PUT ${JSON.stringify(s.puts)}`);
+      v = await view(page);
+      if (!v.mine) fail(where, 'no personal view after the first save');
+      clean(where, v);
+    }],
+    // account deletion clears the personal view
+    ['delete', { who: 'uA' }, async (where, page, s) => {
+      await page.locator('#userBtn').click();
+      await page.locator('#userPop [data-acct="settings"]').click();
+      await page.locator('#acctDelOk').check();
+      await page.locator('[data-acct="delete-confirm"]').click();
+      await page.waitForFunction(() => document.getElementById('hsM').hidden, null, { timeout: 5000 }).catch(() => fail(where, 'deletion kept the personal view'));
+    }],
+  ];
+  for (const [name, init, run] of cases) {
+    const where = `マイカレンダー ${name}`;
+    const s = { accts: ACCTS(), put: 200, log: [], puts: [], ...init };
+    if (init.set) s.accts[init.who].prefs.personal_calendar = init.set;
+    const { ctx, page } = await open('desktop', s);
+    try {
+      await page.goto(`${BASE}/`);
+      if (name !== 'late answer') {
+        await page.waitForFunction(() => window.snPersonal && !['wait'].includes(window.snPersonal.state()), null, { timeout: 5000 }).catch(() => fail(where, 'the account never answered'));
+        s.mark = s.log.length;
+        await settle(page);
+      } else await page.waitForFunction(() => !document.getElementById('userBtn').hidden && window.snUser, null, { timeout: 5000 });
+      await run(where, page, s);
+      clean(where, await view(page), name === 'switch' ? 'online' : 'JP-27');
+    } catch (e) { fail(where, `interaction: ${e.message.split('\n')[0]}`); }
+    for (const b of [...new Set(s.bad)]) fail(where, b);
+    console.log(`  ${where.padEnd(22)} checked`);
     await ctx.close();
   }
 }

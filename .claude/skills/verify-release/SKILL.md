@@ -54,3 +54,4 @@ In Chinese: both RESULT lines, every WARN with what you checked, the data summar
 - Google's Rich Results Test has no API; for structured-data changes, offer the owner a manual paste of one built page into https://search.google.com/test/rich-results.
 - Search performance (indexing, impressions, CTR per page / query) can only be judged after Google recrawls; it is not part of this gate.
 - When a check is wrong rather than the site, fix the check in its own commit and say so in the report.
+- Login / account changes (corner sync, マイカレンダー, LOGIN parts of `/privacy/`): run steps 1 and 2 a second time with `LOGIN_ENABLED=1` added (`VOICES_ENABLED=1 LOGIN_ENABLED=1 …verify_release.py …`, then `browser.mjs`); only a LOGIN build has the user control, so only then does `browser.mjs` run its マイカレンダー checks (`/api/v1/me` and `/me/prefs` stubbed per page). Production's flag is a repo variable: run the default build too.
