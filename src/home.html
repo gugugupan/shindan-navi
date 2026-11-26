@@ -601,7 +601,7 @@ function renderWeek(){
     // loading, failed)
     const en = !f||!f.pref ? null : x.n==null ? '' : x.n;
     const said=[`${m}月${dd}日(${DOW[w]})${lb?' '+lb:''}`, rel==null?'発売は新弾カレンダーで':`発売${rel}件${star?'（お気に入りあり）':''}`]
-      .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):`イベント${en}件${evGamesLabel(f)?`（${evGamesLabel(f)}）`:''}`]);
+      .concat(en==null?[]:[en===''?(loading?'イベント読み込み中':'イベント数はイベントカレンダーで'):`イベント${en}件（${evGamesLabel(f)||'すべて'}）`]);
     // a count only where there is something; – where it is not known here, … while loading
     const relS = rel==null?'–':String(rel), evS = en==null?'':en===''?(loading?'…':'–'):String(en);
     const cr = rel==null ? '<span class="cr u">–</span>' : rel ? `<span class="cr">${rel}${star?'<span class="sm">★</span>':''}</span>` : '';

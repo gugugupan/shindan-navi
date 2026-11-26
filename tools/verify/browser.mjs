@@ -705,7 +705,7 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       // the shown badge and the tab's label say the same count as the data
       const shown = c => c === '0' ? null : c;
       const badBadge = st.tabs.filter(t => t.relB !== shown(t.rel) || t.evB !== (t.ev == null ? null : shown(t.ev))
-        || (t.rel !== '–' && !t.label.includes(`発売${t.rel}件`)) || (t.ev != null && /^\d+$/.test(t.ev) && !t.label.includes(`イベント${t.ev}件`)));
+        || (t.rel !== '–' && !t.label.includes(`発売${t.rel}件`)) || (t.ev != null && /^\d+$/.test(t.ev) && !/イベント\d+件（[^）]+）/.test(t.label)) || (t.ev != null && /^\d+$/.test(t.ev) && !t.label.includes(`イベント${t.ev}件（`)));
       if (badBadge.length) fail(where, `${label}: badge text / tab label ${JSON.stringify(badBadge.map(t => [t.rel, t.relB, t.ev, t.evB, t.label]))}`);
       // the event counts follow the /events/ game filter, not the pill: the legend always names it
       if (st.legend && st.legend.includes('イベント数') && !/イベント数（[^）]+）$/.test(st.legend)) fail(where, `${label}: legend "${st.legend}" does not name the event filter`);
@@ -825,6 +825,15 @@ for (const [vp, opt] of Object.entries(VIEWPORTS)) {
       if (HAS_EVENTS && st.evHead !== '') fail(where, `panel heading names "${st.evHead}"`);
       // the legend names the event filter
       if (HAS_EVENTS && st.legend !== '発売数イベント数（ワンピ・ポケカ）') fail(where, `legend "${st.legend}"`);
+      // the pill holds only a title /events/ has not (MTG): the counts cover every title, and both the legend and the tab labels say so
+      if (HAS_EVENTS && HAS_VOICES) {
+        await setStore({ 'tcg.voices': { game: 'MTG' }, 'tcg.ev.filters': { pref: 'JP-13' } });
+        await page.reload({ waitUntil: 'networkidle' });
+        st = await state();
+        const evTabs = st.tabs.filter(t => /^\d+$/.test(t.ev || ''));
+        if (st.legend !== '発売数イベント数（すべて）' || !evTabs.length || evTabs.some(t => !t.label.includes(`イベント${t.ev}件（すべて）`)))
+          fail(where, `MTG only: legend "${st.legend}", labels ${JSON.stringify(evTabs.map(t => t.label))}`);
+      }
     }
 
     // 変更: the dialog writes the titles (other saved filters kept), cancel writes nothing
