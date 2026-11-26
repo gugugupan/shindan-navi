@@ -229,7 +229,10 @@ Values:
 - `personal_calendar`: the home page's マイカレンダー, exactly `{ "location", "games" }`. `location`: one `/events/`
   `pref` value (`JP-01`..`JP-47` or `online`) or `null` (releases only). `games`: codes of `data/games.json` (any
   registry row, also titles without events such as `MTG`), stored sorted and deduplicated; `[]` = all titles. Absent
-  = never set; `null` in a PUT removes it. The page keeps it in memory only (never in localStorage).
+  = never set; `null` in a PUT removes it. A PUT carrying it (also `null`) must send `X-SN-User: <the user id from
+  /me>`; when the session belongs to another account (or the header is missing) → 409 `{ "error": "account changed" }`
+  and nothing is written, so a stale tab cannot save one account's draft into another. The page keeps it in memory
+  only (never in localStorage).
 - Request bodies at most 64 KB. Invalid values → 400 `{ "error": "<message>" }`; nothing is written.
 
 Merge semantics: `stars` = server ∪ client (server order first, capped at 2,000); `event_filters` and `ask_calendar`

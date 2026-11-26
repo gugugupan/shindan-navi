@@ -159,6 +159,8 @@ How it works:
   callback per client IP; `AUTH_WRITE_LIMIT` 5/min for PUT/merge/DELETE per user; `AUTH_READ_LIMIT` 60/min for GET
   `/me` and `/me/prefs` per session, checked after the HMAC and before the D1 read (a limited GET reads nothing).
   Keyed by session rather than user so the check costs no D1 read; with the session cap that is ≤ 600 GETs/min per user.
+- A PUT carrying `personal_calendar` must name the session's user in `X-SN-User` (the id the page got from `/me`), else
+  409 before any D1 read of the prefs: a tab still showing another account cannot write its draft into this one.
 - `requireEntitlement(db, userId, feature)` exists for paid features; nothing calls it yet. `POST /billing/webhook` is 501.
 
 Local: `npm run dev:node` reads the three secrets from `../.env` (`node --env-file-if-exists`; only those keys reach

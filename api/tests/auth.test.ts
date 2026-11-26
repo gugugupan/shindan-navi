@@ -62,8 +62,11 @@ async function call(path: string, init: RequestInit & { cookies?: string } = {},
   return res;
 }
 
-const send = (path: string, method: string, body?: unknown, cookies?: string) =>
-  call(path, { method, cookies, headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+const send = (path: string, method: string, body?: unknown, cookies?: string, extra: Record<string, string> = {}) =>
+  call(path, { method, cookies, headers: { origin: ORIGIN, 'content-type': 'application/json', ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
+/** The account id the page got from /me: personal_calendar writes carry it (x-sn-user). */
+const userId = async (cookies: string): Promise<string> => (await (await call('/api/v1/me', { cookies })).json()).user.id;
+const sendAs = async (path: string, method: string, body: unknown, cookies: string) => send(path, method, body, cookies, { 'x-sn-user': await userId(cookies) });
 
 /** name=value pairs of the Set-Cookie headers, for sending back. */
 const jar = (res: Res) => res.headers.getSetCookie().map((c) => c.split(';')[0]).filter((c) => !c.endsWith('=')).join('; ');
@@ -361,12 +364,12 @@ describe('prefs', () => {
   });
   it('personal_calendar: validated, normalised, reset by null, never merged', async () => {
     const cookies = await loggedIn();
-    let res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { games: ['PTCG', 'OPCG', 'MTG', 'OPCG'], location: 'JP-13' } }, cookies);
+    let res = await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: { games: ['PTCG', 'OPCG', 'MTG', 'OPCG'], location: 'JP-13' } }, cookies);
     expect(res.status).toBe(200);
     expect((await res.json()).prefs).toEqual({ personal_calendar: { location: 'JP-13', games: ['MTG', 'OPCG', 'PTCG'] } });
     expect(raw.db.prepare("SELECT value_json FROM user_prefs WHERE key = 'personal_calendar'").get()).toEqual({ value_json: '{"location":"JP-13","games":["MTG","OPCG","PTCG"]}' });
     for (const ok of [{ location: null, games: [] }, { location: 'online', games: ['LYCEE'] }, { location: 'JP-47', games: ['HOLOBEAT', 'YGO'] }]) {
-      res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: ok }, cookies);
+      res = await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: ok }, cookies);
       expect(res.status, JSON.stringify(ok)).toBe(200);
     }
     const bad: unknown[] = [
@@ -374,7 +377,7 @@ describe('prefs', () => {
       { games: [] }, { location: null }, { location: null, games: 'OPCG' }, { location: null, games: ['XXX'] }, { location: null, games: ['opcg'] },
       { location: null, games: [1] }, { location: null, games: [], extra: 1 }, [], 'JP-13', true,
     ];
-    for (const b of bad) expect((await send('/api/v1/me/prefs', 'PUT', { personal_calendar: b }, cookies)).status, JSON.stringify(b)).toBe(400);
+    for (const b of bad) expect((await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: b }, cookies)).status, JSON.stringify(b)).toBe(400);
     expect((await (await call('/api/v1/me/prefs', { cookies })).json()).prefs.personal_calendar).toEqual({ location: 'JP-47', games: ['HOLOBEAT', 'YGO'] });
     // merge (old and new clients after login) neither takes nor drops it
     expect((await send('/api/v1/me/prefs/merge', 'POST', { personal_calendar: { location: null, games: [] } }, cookies)).status).toBe(400);
@@ -383,16 +386,16 @@ describe('prefs', () => {
     // an old client's PUT carries only its own keys
     res = await send('/api/v1/me/prefs', 'PUT', { stars: { add: [STAR(2)] }, event_filters: null, ask_calendar: 'off' }, cookies);
     expect((await res.json()).prefs.personal_calendar).toEqual({ location: 'JP-47', games: ['HOLOBEAT', 'YGO'] });
-    res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, cookies);
+    res = await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, cookies);
     const body = await res.json();
     expect(body.prefs.personal_calendar).toBeUndefined();
     expect(body.updated_at.personal_calendar).toBeUndefined();
     expect(count("SELECT COUNT(*) AS n FROM user_prefs WHERE key = 'personal_calendar'")).toBe(0);
-    expect((await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, cookies)).status).toBe(200);
+    expect((await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, cookies)).status).toBe(200);
   });
   it('personal_calendar: the same value (in any order) writes nothing', async () => {
     const cookies = await loggedIn();
-    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'JP-27', games: ['WS', 'MTG'] } }, cookies);
+    await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'JP-27', games: ['WS', 'MTG'] } }, cookies);
     const other = await loggedIn({ sub: 'nobody-set-anything' });
     const before = raw.db.prepare('SELECT key, value_json, updated_at FROM user_prefs').all();
     const writes: string[] = [];
@@ -405,19 +408,32 @@ describe('prefs', () => {
       },
     });
     await new Promise((r) => setTimeout(r, 5));
-    const res = await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { games: ['MTG', 'WS', 'WS'], location: 'JP-27' } }, cookies);
+    const res = await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: { games: ['MTG', 'WS', 'WS'], location: 'JP-27' } }, cookies);
     expect(res.status).toBe(200);
-    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null, ask_calendar: null }, other);
+    await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: null, ask_calendar: null }, other);
     expect(writes).toEqual([]);
     expect(raw.db.prepare('SELECT key, value_json, updated_at FROM user_prefs').all()).toEqual(before);
+  });
+  it('personal_calendar writes need the account the page showed (x-sn-user), else 409 and nothing written', async () => {
+    const a = await loggedIn({ sub: 'user-a' });
+    const b = await loggedIn({ sub: 'user-b' });
+    const body = { personal_calendar: { location: 'JP-13', games: ['OPCG'] } };
+    expect((await send('/api/v1/me/prefs', 'PUT', body, b)).status).toBe(409);
+    expect((await send('/api/v1/me/prefs', 'PUT', body, b, { 'x-sn-user': await userId(a) })).status).toBe(409);
+    expect((await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, b, { 'x-sn-user': 'x' })).status).toBe(409);
+    expect(count('SELECT COUNT(*) AS n FROM user_prefs')).toBe(0);
+    expect((await send('/api/v1/me/prefs', 'PUT', body, b, { 'x-sn-user': await userId(b) })).status).toBe(200);
+    // the other keys (old clients) need no header
+    expect((await send('/api/v1/me/prefs', 'PUT', { ask_calendar: 'off' }, b)).status).toBe(200);
+    expect((await (await call('/api/v1/me/prefs', { cookies: a })).json()).prefs).toEqual({});
   });
   it('personal_calendar belongs to one user', async () => {
     const a = await loggedIn({ sub: 'user-a' });
     const b = await loggedIn({ sub: 'user-b' });
-    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'JP-13', games: ['OPCG'] } }, a);
+    await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'JP-13', games: ['OPCG'] } }, a);
     expect((await (await call('/api/v1/me/prefs', { cookies: b })).json()).prefs).toEqual({});
-    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'online', games: [] } }, b);
-    await send('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, b);
+    await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: { location: 'online', games: [] } }, b);
+    await sendAs('/api/v1/me/prefs', 'PUT', { personal_calendar: null }, b);
     expect((await (await call('/api/v1/me/prefs', { cookies: a })).json()).prefs.personal_calendar).toEqual({ location: 'JP-13', games: ['OPCG'] });
     expect((await (await call('/api/v1/me/prefs', { cookies: b })).json()).prefs).toEqual({});
   });
@@ -433,7 +449,7 @@ describe('account deletion', () => {
     const other = await loggedIn({ sub: 'other-sub' });
     await send('/api/v1/me/prefs', 'PUT', { ask_calendar: true }, other);
     const cookies = await loggedIn();
-    await send('/api/v1/me/prefs', 'PUT', { stars: { add: [STAR(1)] }, ask_calendar: 'off', personal_calendar: { location: 'JP-13', games: ['PTCG'] } }, cookies);
+    await sendAs('/api/v1/me/prefs', 'PUT', { stars: { add: [STAR(1)] }, ask_calendar: 'off', personal_calendar: { location: 'JP-13', games: ['PTCG'] } }, cookies);
     expect(count("SELECT COUNT(*) AS n FROM user_prefs WHERE key = 'personal_calendar'")).toBe(1);
     const { user } = await (await call('/api/v1/me', { cookies })).json();
     raw.db.prepare("INSERT INTO entitlements (user_id, feature, source, starts_at) VALUES (?, 'x', 'test', '2026-01-01')").run(user.id);

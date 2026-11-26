@@ -381,6 +381,10 @@ async function changePrefs(request: Request, env: AuthEnv, cfg: Config, mode: 'p
   const { user } = await requireUser(request, env, cfg);
   await limit(env.AUTH_WRITE_LIMIT, `user:${user.id}`);
   const body = await readJson(request);
+  // personal_calendar is written only for the account the page showed it for: a tab still showing another account
+  // (logged out and in elsewhere) gets 409 instead of saving its draft into this one
+  if (mode === 'put' && typeof body === 'object' && body !== null && 'personal_calendar' in body && request.headers.get('x-sn-user') !== user.id)
+    throw new HttpError(409, 'account changed');
   const rows = await readPrefRows(env.DB, user.id);
   const current = prefsBody(rows).prefs;
   const changes = mode === 'put' ? applyPut(current, body) : applyMerge(current, body);
