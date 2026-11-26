@@ -411,7 +411,8 @@ def check_items(head, ov, arch, calendar_pages):
                 fail(f'{p}: breadcrumbs should run from / to the page itself')
         og = re.search(r'<meta property="og:image" content="([^"]+)"', src)
         if not og or not os.path.exists(os.path.join(DIST, og[1].replace(SITE + '/', '', 1))): fail(f'{p}: og:image {og and og[1]} is not a built file')
-        hrefs = set(re.findall(r'href="(/[^"#?]*)', src))
+        # /api/ paths are Worker routes (the login link of LOGIN_ENABLED builds), not built files
+        hrefs = {h for h in re.findall(r'href="(/[^"#?]*)', src) if not h.startswith('/api/')}
         for h in hrefs:
             if not os.path.exists(os.path.join(DIST, h.strip('/'), 'index.html') if h.endswith('/') else os.path.join(DIST, h.strip('/'))):
                 fail(f'{p}: link {h} does not resolve')
